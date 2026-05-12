@@ -1,0 +1,28 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# Node / frontend
+node_modules/
+dist/
+build/
+
+# Local SQLite data and backups: real financial data, do not commit
+data/*.db
+data/*.db-*
+*.sqlite
+*.sqlite3
+backups/
+*.db.bak
+*.bak
+
+# Logs / temp
+*.log
+.tmp/
+tmp/

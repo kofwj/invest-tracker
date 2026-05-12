@@ -1,0 +1,2437 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>投资资产管理系统</title>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/element-plus"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="https://unpkg.com/echarts/dist/echarts.min.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; margin: 0; background-color: #f5f7fa; }
+        .sync-status { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 9999; padding: 10px 16px; border-radius: 6px; box-shadow: 0 2px 12px rgba(0,0,0,.12); background: #f0f9eb; color: #67c23a; font-size: 14px; max-width: 90%; }
+        .sync-status.warning { background: #fdf6ec; color: #e6a23c; }
+        .sync-status.error { background: #fef0f0; color: #f56c6c; }
+        .app-container { padding: 20px; max-width: 1200px; margin: 0 auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .top-stats { display: grid; grid-template-columns: 1.45fr repeat(4, 1fr); gap: 16px; }
+        .stat-card { border: 0; border-radius: 14px; overflow: hidden; }
+        .stat-card .el-card__body { padding: 18px 20px; }
+        .stat-card-inner { min-height: 78px; display: flex; flex-direction: column; justify-content: space-between; }
+        .stat-main { background: linear-gradient(135deg, #ecf5ff 0%, #ffffff 58%, #f0f9ff 100%); border-left: 4px solid #409EFF; }
+        .stat-profit { border-left: 4px solid #F56C6C; }
+        .stat-label { color: #909399; font-size: 13px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+        .stat-label::after { content: ''; flex: 1; height: 1px; background: #ebeef5; opacity: .75; }
+        .stat-value { margin-top: 10px; font-size: 22px; line-height: 1.15; font-weight: 750; color: #303133; letter-spacing: -0.3px; white-space: nowrap; }
+        .stat-main .stat-value { font-size: 30px; color: #409EFF; }
+        .stat-sub { margin-top: 8px; font-size: 12px; color: #909399; white-space: nowrap; }
+        @media (max-width: 1100px) { .top-stats { grid-template-columns: repeat(2, 1fr); } .stat-main { grid-column: span 2; } }
+        @media (max-width: 640px) { .top-stats { grid-template-columns: 1fr; } .stat-main { grid-column: span 1; } }
+        .mt-20 { margin-top: 20px; }
+        .chart-container { height: 400px; width: 100%; margin-top: 20px; }
+    
+        .asset-suggestion { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+        .asset-suggestion-main { font-weight: 500; color: #303133; }
+        .asset-suggestion-tag { font-size: 12px; color: #909399; }
+        .nowrap-cell { white-space: nowrap; }
+        .holdings-table .cell { white-space: nowrap; }
+        .transaction-table .cell { white-space: nowrap; }
+        .wide-number-input { width: 100%; }
+        .wide-number-input .el-input__wrapper { padding-left: 12px; padding-right: 12px; }
+        .wide-number-input .el-input__inner { text-align: left; }
+        .fee-hint { margin-top: -8px; margin-bottom: 12px; color: #909399; font-size: 12px; line-height: 1.5; }
+        .fee-settings-table .cell { white-space: nowrap; }
+        .fee-settings-native { border: 1px solid #ebeef5; border-radius: 8px; overflow-x: auto; }
+        .fee-settings-head, .fee-settings-row { display: grid; grid-template-columns: 110px repeat(4, minmax(130px, 1fr)); align-items: center; min-width: 650px; }
+        .fee-settings-head { background: #f5f7fa; color: #606266; font-weight: 600; font-size: 13px; }
+        .fee-settings-head > div, .fee-settings-row > * { padding: 10px 12px; border-bottom: 1px solid #ebeef5; }
+        .fee-settings-row:last-child > * { border-bottom: 0; }
+        .fee-cat { color: #303133; font-weight: 500; text-align: center; }
+        .fee-rate-input { width: 100%; }
+        .snapshot-metric-card { text-align: center; min-height: 92px; }
+        .snapshot-metric-value { font-size: 22px; font-weight: 700; color: #303133; white-space: nowrap; }
+        .snapshot-metric-label { margin-top: 6px; color: #909399; font-size: 13px; }
+        .snapshot-sub { margin-top: 4px; color: #606266; font-size: 12px; }
+        .snapshot-chart { height: 320px; width: 100%; }
+        .deposit-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+        .deposit-title { font-size: 18px; font-weight: 700; color: #303133; }
+        .deposit-subtitle { margin-top: 4px; font-size: 12px; color: #909399; }
+        .deposit-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 16px; }
+        .deposit-stat-card { border: 0; border-radius: 12px; }
+        .deposit-stat-card .el-card__body { padding: 16px 18px; }
+        .deposit-stat-label { font-size: 13px; color: #909399; }
+        .deposit-stat-value { margin-top: 8px; font-size: 22px; font-weight: 750; color: #303133; white-space: nowrap; }
+        .deposit-stat-sub { margin-top: 6px; font-size: 12px; color: #909399; white-space: nowrap; }
+        .deposit-progress { margin: 12px 0 18px; }
+        .deposit-bank-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 13px; color: #606266; }
+        .deposit-bank-name { font-weight: 600; color: #303133; }
+        .deposit-table .cell { white-space: nowrap; }
+        @media (max-width: 900px) { .deposit-stats { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 560px) { .deposit-stats { grid-template-columns: 1fr; } .deposit-toolbar { align-items: flex-start; flex-direction: column; } }
+
+        .allocation-hero { display: grid; grid-template-columns: 1.25fr 1fr 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+        .allocation-card { border: 0; border-radius: 12px; }
+        .allocation-card .el-card__body { padding: 16px 18px; }
+        .allocation-label { font-size: 13px; color: #909399; }
+        .allocation-value { margin-top: 8px; font-size: 22px; font-weight: 750; color: #303133; white-space: nowrap; }
+        .allocation-sub { margin-top: 6px; font-size: 12px; color: #909399; white-space: nowrap; }
+        .allocation-main-card { background: linear-gradient(135deg, #f0f9eb 0%, #ffffff 62%, #ecf5ff 100%); border-left: 4px solid #67C23A; }
+        .allocation-section-title { font-size: 16px; font-weight: 700; color: #303133; }
+        .allocation-risk-list { display: grid; gap: 10px; }
+        .allocation-risk-item { padding: 12px; border-radius: 10px; background: #f8fafc; border: 1px solid #ebeef5; }
+        .allocation-risk-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font-weight:600; color:#303133; }
+        .allocation-table .cell { white-space: nowrap; }
+        @media (max-width: 1000px) { .allocation-hero { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 560px) { .allocation-hero { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div id="app" class="app-container">
+        <div v-if="syncNotice.text" class="sync-status" :class="syncNotice.type">{{ syncNotice.text }}</div>
+        <div class="header">
+            <h2>投资资产管理系统</h2>
+            <div>
+                <el-button type="success" @click="fetchData">刷新数据</el-button>
+                <el-button type="primary" @click="syncPrices" :loading="syncing">同步最新价</el-button>
+                <el-button type="warning" plain @click="syncTrailingReturns" :loading="trailingSyncing">同步近一年收益率</el-button>
+            </div>
+        </div>
+
+        <!-- 顶部资产概览 -->
+        <div class="top-stats">
+            <el-card shadow="hover" class="stat-card stat-main">
+                <div class="stat-card-inner">
+                    <div class="stat-label">总资产</div>
+                    <div class="stat-value">{{ formatMoney(dashboard.total_assets) }}</div>
+                    <div class="stat-sub">市值 + 现金 + 存款 + 申购在途</div>
+                </div>
+            </el-card>
+            <el-card shadow="hover" class="stat-card">
+                <div class="stat-card-inner">
+                    <div class="stat-label">投资账户市值</div>
+                    <div class="stat-value">{{ formatMoney(dashboard.total_market_value) }}</div>
+                    <div class="stat-sub">已确认持仓</div>
+                </div>
+            </el-card>
+            <el-card shadow="hover" class="stat-card">
+                <div class="stat-card-inner">
+                    <div class="stat-label">证券现金</div>
+                    <div class="stat-value">{{ formatMoney(dashboard.securities_cash) }}</div>
+                    <div class="stat-sub">交易自动联动</div>
+                </div>
+            </el-card>
+            <el-card shadow="hover" class="stat-card">
+                <div class="stat-card-inner">
+                    <div class="stat-label">银行存款</div>
+                    <div class="stat-value">{{ formatMoney(dashboard.bank_balance) }}</div>
+                    <div class="stat-sub">表内存款合计</div>
+                </div>
+            </el-card>
+            <el-card shadow="hover" class="stat-card stat-profit">
+                <div class="stat-card-inner">
+                    <div class="stat-label">投资账户盈亏</div>
+                    <div class="stat-value" :style="{ color: dashboard.total_profit >= 0 ? '#F56C6C' : '#67C23A' }">
+                        {{ formatMoney(dashboard.total_profit) }}
+                    </div>
+                    <div class="stat-sub">不含申购在途盈亏</div>
+                </div>
+            </el-card>
+        </div>
+
+        <el-alert
+            v-if="Number(dashboard.pending_purchase || 0) > 0"
+            type="warning"
+            show-icon
+            :closable="false"
+            class="mt-20"
+        >
+            <template #title>
+                <span>
+                    当前有 {{ pendingTransactions.length || '' }} 笔申购在途，金额 {{ formatMoney(dashboard.pending_purchase) }}。确认份额/净值后，请到交易管理把对应记录从“申购待确认”改为“买入”。
+                </span>
+                <el-button type="warning" link style="margin-left: 12px;" @click="goPendingTransactions">查看在途交易</el-button>
+            </template>
+        </el-alert>
+
+        <el-tabs v-model="activeTab" class="mt-20">
+            <!-- 资产快照 -->
+            <el-tab-pane label="资产快照" name="snapshots">
+                <el-card>
+                    <template #header>
+                        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+                            <span>资产快照分析</span>
+                            <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+                                <el-date-picker
+                                    v-model="snapshotRange"
+                                    type="daterange"
+                                    range-separator="至"
+                                    start-placeholder="开始日期"
+                                    end-placeholder="结束日期"
+                                    value-format="YYYY-MM-DD"
+                                    @change="fetchSnapshots"
+                                    style="width: 300px"
+                                ></el-date-picker>
+                                <el-button type="primary" @click="createSnapshot" :loading="snapshotLoading">记录/更新今日快照</el-button>
+                            </div>
+                        </div>
+                    </template>
+
+                    <el-alert
+                        title="重复点击今天的快照会更新当天记录，不再因为已存在而丢掉最新价格/现金数据。"
+                        type="info"
+                        show-icon
+                        :closable="false"
+                        style="margin-bottom: 16px;"
+                    ></el-alert>
+
+                    <el-row :gutter="16" style="margin-bottom: 16px;">
+                        <el-col :span="6" v-for="m in snapshotMetrics" :key="m.key">
+                            <el-card shadow="hover" class="snapshot-metric-card">
+                                <div class="snapshot-metric-value" :style="{color: m.color || '#303133'}">{{ m.value }}</div>
+                                <div class="snapshot-metric-label">{{ m.label }}</div>
+                                <div class="snapshot-sub">{{ m.sub }}</div>
+                            </el-card>
+                        </el-col>
+                    </el-row>
+
+                    <el-row :gutter="20" style="margin-bottom: 18px;">
+                        <el-col :span="14">
+                            <el-card header="总资产趋势">
+                                <div id="snapshotTrendChart" class="snapshot-chart"></div>
+                            </el-card>
+                        </el-col>
+                        <el-col :span="10">
+                            <el-card header="当前资产结构">
+                                <div id="snapshotStructureChart" class="snapshot-chart"></div>
+                            </el-card>
+                        </el-col>
+                    </el-row>
+
+                    <el-row :gutter="20" style="margin-bottom: 18px;">
+                        <el-col :span="24">
+                            <el-card header="区间变化明细">
+                                <el-table :data="snapshotChangeRows" stripe style="width: 100%" empty-text="至少需要两条快照，或选择包含两条以上记录的日期范围">
+                                    <el-table-column prop="label" label="项目" width="120" align="center" header-align="center"></el-table-column>
+                                    <el-table-column label="期初" min-width="130" align="center" header-align="center">
+                                        <template #default="scope"><span class="nowrap-cell">{{ formatMoney(scope.row.start) }}</span></template>
+                                    </el-table-column>
+                                    <el-table-column label="期末" min-width="130" align="center" header-align="center">
+                                        <template #default="scope"><span class="nowrap-cell">{{ formatMoney(scope.row.end) }}</span></template>
+                                    </el-table-column>
+                                    <el-table-column label="变化额" min-width="130" align="center" header-align="center">
+                                        <template #default="scope">
+                                            <span class="nowrap-cell" :style="{color: scope.row.change >= 0 ? '#F56C6C' : '#67C23A'}">{{ formatMoney(scope.row.change, 2, true) }}</span>
+                                        </template>
+                                    </el-table-column>
+                                    <el-table-column label="变化率" width="110" align="center" header-align="center">
+                                        <template #default="scope">
+                                            <span :style="{color: scope.row.change >= 0 ? '#F56C6C' : '#67C23A'}">{{ scope.row.change_pct === null ? '—' : (scope.row.change_pct >= 0 ? '+' : '') + scope.row.change_pct.toFixed(2) + '%' }}</span>
+                                        </template>
+                                    </el-table-column>
+                                </el-table>
+                            </el-card>
+                        </el-col>
+                    </el-row>
+
+                    <el-table :data="snapshots" stripe style="width: 100%" empty-text="暂无快照记录">
+                        <el-table-column prop="date" label="日期" width="115" sortable align="center" header-align="center"></el-table-column>
+                        <el-table-column label="总资产" min-width="135" align="center" header-align="center">
+                            <template #default="scope"><span class="nowrap-cell">{{ formatMoney(scope.row.total_assets) }}</span></template>
+                        </el-table-column>
+                        <el-table-column label="投资账户市值" min-width="135" align="center" header-align="center">
+                            <template #default="scope"><span class="nowrap-cell">{{ formatMoney(scope.row.total_market_value) }}</span></template>
+                        </el-table-column>
+                        <el-table-column label="银行存款" min-width="125" align="center" header-align="center">
+                            <template #default="scope"><span class="nowrap-cell">{{ formatMoney(scope.row.bank_balance) }}</span></template>
+                        </el-table-column>
+                        <el-table-column label="证券现金" min-width="115" align="center" header-align="center">
+                            <template #default="scope"><span class="nowrap-cell">{{ formatMoney(scope.row.securities_cash) }}</span></template>
+                        </el-table-column>
+                        <el-table-column label="申购在途" min-width="115" align="center" header-align="center">
+                            <template #default="scope"><span class="nowrap-cell">{{ formatMoney(scope.row.pending_purchase || 0) }}</span></template>
+                        </el-table-column>
+                        <el-table-column label="投资盈亏" min-width="125" align="center" header-align="center">
+                            <template #default="scope">
+                                <span class="nowrap-cell" :style="{color: scope.row.total_profit >= 0 ? '#F56C6C' : '#67C23A'}">
+                                    {{ formatMoney(scope.row.total_profit, 2, true) }}
+                                </span>
+                            </template>
+                        </el-table-column>
+                        <el-table-column label="投资占比" width="100" align="center" header-align="center">
+                            <template #default="scope">{{ pct(scope.row.total_market_value, scope.row.total_assets) }}</template>
+                        </el-table-column>
+                        <el-table-column label="现金+存款+在途" min-width="145" align="center" header-align="center">
+                            <template #default="scope"><span class="nowrap-cell">{{ formatMoney((scope.row.bank_balance || 0) + (scope.row.securities_cash || 0) + (scope.row.pending_purchase || 0)) }}</span></template>
+                        </el-table-column>
+                        <el-table-column prop="holdings_count" label="持仓数" width="80" align="center" header-align="center"></el-table-column>
+                    </el-table>
+                </el-card>
+            </el-tab-pane>
+            <!-- 资产配置 -->
+            <el-tab-pane label="资产配置" name="allocation">
+                <el-card shadow="never">
+                    <template #header>
+                        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+                            <div>
+                                <div class="allocation-section-title">资产配置分析</div>
+                                <div style="font-size:12px;color:#909399;margin-top:4px;">按权益 / 固收 / 存款拆解风险暴露、收益贡献和预计年化</div>
+                            </div>
+                            <el-tag type="info" effect="plain">总资产 {{ formatMoney(dashboard.total_assets) }}</el-tag>
+                        </div>
+                    </template>
+
+                    <div class="allocation-hero">
+                        <el-card shadow="hover" class="allocation-card allocation-main-card">
+                            <div class="allocation-label">权益资产占比</div>
+                            <div class="allocation-value" :style="{color: allocationSummary.equityRatio > 55 ? '#E6A23C' : '#303133'}">{{ allocationSummary.equityRatio.toFixed(1) }}%</div>
+                            <div class="allocation-sub">权益金额 {{ formatMoney(allocationSummary.equityAmount) }}</div>
+                        </el-card>
+                        <el-card shadow="hover" class="allocation-card">
+                            <div class="allocation-label">固收 + 存款占比</div>
+                            <div class="allocation-value" style="color:#409EFF;">{{ allocationSummary.defensiveRatio.toFixed(1) }}%</div>
+                            <div class="allocation-sub">防守资产 {{ formatMoney(allocationSummary.defensiveAmount) }}</div>
+                        </el-card>
+                        <el-card shadow="hover" class="allocation-card">
+                            <div class="allocation-label">组合预计年化</div>
+                            <div class="allocation-value" style="color:#E6A23C;">{{ portfolioExpectedReturn?.toFixed(2) }}%</div>
+                            <div class="allocation-sub">按各资产预计收益加权</div>
+                        </el-card>
+                        <el-card shadow="hover" class="allocation-card">
+                            <div class="allocation-label">当前申购在途</div>
+                            <div class="allocation-value">{{ formatMoney(dashboard.pending_purchase || 0) }}</div>
+                            <div class="allocation-sub">计入固收，不计入持仓盈亏</div>
+                        </el-card>
+                    </div>
+
+                    <el-alert
+                        :title="allocationSummary.comment"
+                        type="info"
+                        show-icon
+                        :closable="false"
+                        style="margin-bottom: 16px;"
+                    ></el-alert>
+
+                    <el-row :gutter="20" style="margin-bottom: 18px;">
+                        <el-col :span="12">
+                            <el-card shadow="never" header="大类资产结构">
+                                <div id="allocationChart" class="chart-container"></div>
+                            </el-card>
+                        </el-col>
+                        <el-col :span="12">
+                            <el-card shadow="never" header="细分类别占比">
+                                <div id="categoryChart" class="chart-container"></div>
+                            </el-card>
+                        </el-col>
+                    </el-row>
+
+                    <el-row :gutter="20" style="margin-bottom: 18px;">
+                        <el-col :span="10">
+                            <el-card shadow="never" header="配置健康检查">
+                                <div class="allocation-risk-list">
+                                    <div v-for="item in allocationHealth" :key="item.label" class="allocation-risk-item">
+                                        <div class="allocation-risk-head">
+                                            <span>{{ item.label }}</span>
+                                            <el-tag :type="item.type" effect="light">{{ item.status }}</el-tag>
+                                        </div>
+                                        <div style="font-size:12px;color:#606266;line-height:1.5;">{{ item.text }}</div>
+                                    </div>
+                                </div>
+                            </el-card>
+                        </el-col>
+                        <el-col :span="14">
+                            <el-card shadow="never" header="资产大类汇总">
+                                <el-table :data="macroAllocationAnalysis" stripe class="allocation-table" style="width: 100%">
+                                    <el-table-column prop="group" label="大类" width="90" align="center" header-align="center"></el-table-column>
+                                    <el-table-column label="金额" min-width="125" align="right" header-align="right">
+                                        <template #default="scope">{{ formatMoney(scope.row.amount) }}</template>
+                                    </el-table-column>
+                                    <el-table-column label="占比" width="90" align="center" header-align="center">
+                                        <template #default="scope">{{ scope.row.percentage?.toFixed(1) }}%</template>
+                                    </el-table-column>
+                                    <el-table-column label="累计盈亏" min-width="120" align="right" header-align="right">
+                                        <template #default="scope"><span :style="{color: scope.row.profit >= 0 ? '#F56C6C' : '#67C23A'}">{{ formatMoney(scope.row.profit, 2, true) }}</span></template>
+                                    </el-table-column>
+                                    <el-table-column label="预计年化" width="100" align="center" header-align="center">
+                                        <template #default="scope"><span style="color:#409EFF;font-weight:bold;">{{ scope.row.expected_return?.toFixed(2) }}%</span></template>
+                                    </el-table-column>
+                                    <el-table-column prop="detail" label="包含资产" min-width="170" show-overflow-tooltip></el-table-column>
+                                </el-table>
+                            </el-card>
+                        </el-col>
+                    </el-row>
+
+                    <el-card shadow="never" header="细分类别明细">
+                        <el-table :data="allocationAnalysis" stripe class="allocation-table" style="width: 100%">
+                            <el-table-column prop="category" label="资产类别" width="110" align="center" header-align="center"></el-table-column>
+                            <el-table-column label="市值/金额" min-width="125" align="right" header-align="right">
+                                <template #default="scope">{{ formatMoney(scope.row.market_value) }}</template>
+                            </el-table-column>
+                            <el-table-column label="总资产占比" width="105" align="center" header-align="center">
+                                <template #default="scope">{{ scope.row.percentage?.toFixed(1) }}%</template>
+                            </el-table-column>
+                            <el-table-column label="盈亏" min-width="120" align="right" header-align="right">
+                                <template #default="scope"><span :style="{color: scope.row.profit >= 0 ? '#F56C6C' : '#67C23A'}">{{ formatMoney(scope.row.profit, 2, true) }}</span></template>
+                            </el-table-column>
+                            <el-table-column label="收益率" width="95" align="center" header-align="center">
+                                <template #default="scope"><span :style="{color: scope.row.profit_rate >= 0 ? '#F56C6C' : '#67C23A'}">{{ scope.row.profit_rate >= 0 ? '+' : '' }}{{ scope.row.profit_rate?.toFixed(2) }}%</span></template>
+                            </el-table-column>
+                            <el-table-column prop="count" label="标的数" width="80" align="center" header-align="center"></el-table-column>
+                            <el-table-column label="预计年化" width="100" align="center" header-align="center">
+                                <template #default="scope"><span style="color:#409EFF;font-weight:bold;">{{ scope.row.expected_annual_return?.toFixed(1) }}%</span></template>
+                            </el-table-column>
+                        </el-table>
+                    </el-card>
+                </el-card>
+            </el-tab-pane>
+
+            <!-- 持仓明细 -->
+            <el-tab-pane label="持仓明细" name="holdings">
+                <el-alert
+                    title="近一年标的收益率 = 标的自身过去一年价格/净值涨跌；不是你的账户实际持有收益。若为空，请点右上角“同步近一年收益率”。"
+                    type="info"
+                    show-icon
+                    :closable="false"
+                    style="margin-bottom: 12px;"
+                ></el-alert>
+                <el-table :data="holdings" stripe class="holdings-table" style="width: 100%" @row-click="showTransactions">
+                    <el-table-column prop="name" label="名称" width="150" align="center" header-align="center"></el-table-column>
+                    <el-table-column prop="category" label="分类" width="100" align="center" header-align="center"></el-table-column>
+                    <el-table-column prop="code" label="代码" width="100" align="center" header-align="center"></el-table-column>
+                    <el-table-column label="持仓数量" min-width="110" align="center" header-align="center">
+                        <template #default="scope"><span class="nowrap-cell">{{ scope.row.quantity }}</span></template>
+                    </el-table-column>
+                    <el-table-column label="普通成本" min-width="100" align="center" header-align="center">
+                        <template #header>
+                            <el-tooltip content="普通成本：剩余持仓按平均成本结转后的买入成本，不扣历史卖出回款。" placement="top">
+                                <span>普通成本</span>
+                            </el-tooltip>
+                        </template>
+                        <template #default="scope"><span class="nowrap-cell">{{ formatMoney(scope.row.avg_cost, 4) }}</span></template>
+                    </el-table-column>
+                    <el-table-column label="摊薄成本" min-width="110" align="center" header-align="center">
+                        <template #header>
+                            <el-tooltip content="券商口径：累计买入成本 - 卖出回款 - 累计分红，再除以剩余持仓；可能为负。" placement="top">
+                                <span>摊薄成本</span>
+                            </el-tooltip>
+                        </template>
+                        <template #default="scope">
+                            <span class="nowrap-cell" :style="{ color: Number(scope.row.diluted_cost || 0) < 0 ? '#67C23A' : '#303133' }">{{ formatMoney(scope.row.diluted_cost, 4) }}</span>
+                        </template>
+                    </el-table-column>
+                    <el-table-column label="最新价" min-width="100" align="center" header-align="center">
+                        <template #default="scope"><span class="nowrap-cell">{{ formatMoney(scope.row.last_price, 4) }}</span></template>
+                    </el-table-column>
+                    <el-table-column label="市值" min-width="120" align="center" header-align="center">
+                        <template #default="scope"><span class="nowrap-cell">{{ formatMoney(scope.row.quantity * scope.row.last_price) }}</span></template>
+                    </el-table-column>
+                    <el-table-column label="累计盈亏" min-width="120" align="center" header-align="center">
+                        <template #default="scope">
+                            <span class="nowrap-cell" :style="{ color: (((scope.row.last_price - scope.row.avg_cost) * scope.row.quantity) + (scope.row.total_dividend || 0)) >= 0 ? '#F56C6C' : '#67C23A' }">
+                                {{ formatMoney(((scope.row.last_price - scope.row.avg_cost) * scope.row.quantity) + (scope.row.total_dividend || 0)) }}
+                            </span>
+                        </template>
+                    </el-table-column>
+                    <el-table-column label="收益率" min-width="90" align="center" header-align="center">
+                        <template #default="scope">
+                            <span class="nowrap-cell" :style="{ color: ((((scope.row.last_price - scope.row.avg_cost) * scope.row.quantity) + (scope.row.total_dividend || 0)) / (scope.row.avg_cost * scope.row.quantity)) >= 0 ? '#F56C6C' : '#67C23A' }">
+                                {{ (((((scope.row.last_price - scope.row.avg_cost) * scope.row.quantity) + (scope.row.total_dividend || 0)) / (scope.row.avg_cost * scope.row.quantity)) * 100).toFixed(2) }}%
+                            </span>
+                        </template>
+                    </el-table-column>
+                    <el-table-column label="预计年化收益" width="120" align="center" header-align="center">
+                        <template #default="scope">
+                            <span>{{ scope.row.expected_return?.toFixed(1) }}%</span>
+                        </template>
+                    </el-table-column>
+                    <el-table-column label="近一年标的收益率" width="135" align="center" header-align="center">
+                        <template #header>
+                            <el-tooltip content="标的自身过去一年价格/净值回溯收益，不等于你的账户实际持有收益。" placement="top">
+                                <span>近一年收益</span>
+                            </el-tooltip>
+                        </template>
+                        <template #default="scope">
+                            <el-tooltip :content="scope.row.trailing_return_1y_source || '暂无数据，请同步近一年收益率'" placement="top">
+                                <span class="nowrap-cell" :style="{ color: Number(scope.row.trailing_return_1y || 0) >= 0 ? '#F56C6C' : '#67C23A' }">
+                                    {{ formatPercent(scope.row.trailing_return_1y) }}
+                                </span>
+                            </el-tooltip>
+                        </template>
+                    </el-table-column>
+                    <el-table-column label="操作" width="150" align="center" header-align="center" fixed="right">
+                        <template #default="scope">
+                            <el-space wrap :size="4" style="justify-content:center;">
+                                <el-button type="primary" link @click.stop="openExpectedReturnDialog(scope.row)">年化</el-button>
+                                <el-button type="warning" link @click.stop="openHoldingCorrectionDialog(scope.row)">校正</el-button>
+                                <el-button type="info" link @click.stop="openHoldingCorrectionHistory(scope.row)">记录</el-button>
+                            </el-space>
+                        </template>
+                    </el-table-column>
+                </el-table>
+            </el-tab-pane>
+            
+            <!-- 银行存款 -->
+            <el-tab-pane label="银行存款" name="deposits">
+                <el-card shadow="never">
+                    <div class="deposit-toolbar">
+                        <div>
+                            <div class="deposit-title">银行存款分析</div>
+                            <div class="deposit-subtitle">展示存款总额、加权利率、预计利息、到期分布和银行集中度</div>
+                        </div>
+                        <el-button type="primary" @click="openDepositDialog(null)">新增存款</el-button>
+                    </div>
+
+                    <div class="deposit-stats">
+                        <el-card shadow="hover" class="deposit-stat-card">
+                            <div class="deposit-stat-label">存款总额</div>
+                            <div class="deposit-stat-value">{{ formatMoney(depositSummary.total) }}</div>
+                            <div class="deposit-stat-sub">占总资产 {{ pct(depositSummary.total, dashboard.total_assets) }}</div>
+                        </el-card>
+                        <el-card shadow="hover" class="deposit-stat-card">
+                            <div class="deposit-stat-label">加权平均利率</div>
+                            <div class="deposit-stat-value" style="color:#409EFF;">{{ depositSummary.weightedRate.toFixed(2) }}%</div>
+                            <div class="deposit-stat-sub">按金额加权</div>
+                        </el-card>
+                        <el-card shadow="hover" class="deposit-stat-card">
+                            <div class="deposit-stat-label">预计年利息</div>
+                            <div class="deposit-stat-value" style="color:#E6A23C;">{{ formatMoney(depositSummary.annualInterest) }}</div>
+                            <div class="deposit-stat-sub">未考虑复利/提前支取</div>
+                        </el-card>
+                        <el-card shadow="hover" class="deposit-stat-card">
+                            <div class="deposit-stat-label">下一笔到期</div>
+                            <div class="deposit-stat-value" style="font-size:18px;">{{ depositSummary.nextDue ? depositSummary.nextDue.due_date : '—' }}</div>
+                            <div class="deposit-stat-sub">{{ depositSummary.nextDue ? `${depositSummary.nextDue.bank_name} ${formatMoney(depositSummary.nextDue.amount)}，${depositSummary.nextDue.daysLeft}天` : '暂无到期日' }}</div>
+                        </el-card>
+                    </div>
+
+                    <el-row :gutter="20" style="margin-bottom: 16px;">
+                        <el-col :span="12">
+                            <el-card shadow="never" header="银行集中度">
+                                <div v-for="item in depositBankBreakdown" :key="item.bank_name" class="deposit-progress">
+                                    <div class="deposit-bank-row">
+                                        <span class="deposit-bank-name">{{ item.bank_name }}</span>
+                                        <span>{{ formatMoney(item.amount) }} / {{ item.percentage.toFixed(1) }}%</span>
+                                    </div>
+                                    <el-progress :percentage="Number(item.percentage.toFixed(1))" :stroke-width="10" :show-text="false"></el-progress>
+                                </div>
+                                <el-empty v-if="!depositBankBreakdown.length" description="暂无存款" :image-size="60"></el-empty>
+                            </el-card>
+                        </el-col>
+                        <el-col :span="12">
+                            <el-card shadow="never" header="到期分布">
+                                <el-table :data="depositMaturityBuckets" size="small" style="width:100%;">
+                                    <el-table-column prop="bucket" label="期限"></el-table-column>
+                                    <el-table-column label="金额" align="right" header-align="right">
+                                        <template #default="scope">{{ formatMoney(scope.row.amount) }}</template>
+                                    </el-table-column>
+                                    <el-table-column label="占比" width="90" align="right" header-align="right">
+                                        <template #default="scope">{{ scope.row.percentage.toFixed(1) }}%</template>
+                                    </el-table-column>
+                                </el-table>
+                            </el-card>
+                        </el-col>
+                    </el-row>
+
+                    <el-table :data="depositRows" stripe class="deposit-table" style="width: 100%">
+                        <el-table-column prop="bank_name" label="银行名称" width="110" align="center" header-align="center"></el-table-column>
+                        <el-table-column label="金额" min-width="120" align="right" header-align="right">
+                            <template #default="scope">{{ formatMoney(scope.row.amount) }}</template>
+                        </el-table-column>
+                        <el-table-column label="组合占比" width="90" align="center" header-align="center">
+                            <template #default="scope">{{ scope.row.percentage.toFixed(1) }}%</template>
+                        </el-table-column>
+                        <el-table-column label="年利率" width="90" align="center" header-align="center">
+                            <template #default="scope">{{ Number(scope.row.interest_rate || 0).toFixed(2) }}%</template>
+                        </el-table-column>
+                        <el-table-column label="预计年利息" min-width="120" align="right" header-align="right">
+                            <template #default="scope">{{ formatMoney(scope.row.annual_interest) }}</template>
+                        </el-table-column>
+                        <el-table-column label="到期时间" width="120" align="center" header-align="center">
+                            <template #default="scope">{{ scope.row.due_date || '—' }}</template>
+                        </el-table-column>
+                        <el-table-column label="剩余天数" width="100" align="center" header-align="center">
+                            <template #default="scope">
+                                <el-tag :type="scope.row.daysLeft <= 30 ? 'danger' : (scope.row.daysLeft <= 90 ? 'warning' : 'info')" effect="light">
+                                    {{ scope.row.daysLeft === null ? '—' : `${scope.row.daysLeft}天` }}
+                                </el-tag>
+                            </template>
+                        </el-table-column>
+                        <el-table-column prop="remark" label="备注" min-width="120">
+                            <template #default="scope">{{ scope.row.remark || '—' }}</template>
+                        </el-table-column>
+                        <el-table-column label="操作" width="130" align="center" header-align="center">
+                            <template #default="scope">
+                                <el-button type="primary" link @click="openDepositDialog(scope.row, scope.$index)">编辑</el-button>
+                                <el-button type="danger" link @click="deleteDeposit(scope.row, scope.$index)">删除</el-button>
+                            </template>
+                        </el-table-column>
+                    </el-table>
+                </el-card>
+            </el-tab-pane>
+
+            <!-- 交易录入和管理 -->
+            <el-tab-pane label="交易录入/管理" name="transactions">
+                <el-card header="新增交易记录">
+                    <el-form :model="transForm" label-width="100px">
+                        <el-row :gutter="20">
+                            <el-col :span="8">
+                                <el-form-item label="日期">
+                                    <el-date-picker v-model="transForm.date" type="date" placeholder="选择日期" value-format="YYYY-MM-DD" style="width: 100%"></el-date-picker>
+                                </el-form-item>
+                            </el-col>
+                            <el-col :span="8">
+                                <el-form-item label="证券账户">
+                                    <el-select v-model="transForm.account" placeholder="证券账户" style="width: 100%">
+                                        <el-option v-for="acc in feeAccounts" :key="acc" :label="acc" :value="acc"></el-option>
+                                    </el-select>
+                                </el-form-item>
+                            </el-col>
+                            <el-col :span="8">
+                                <el-form-item label="方向">
+                                    <el-select v-model="transForm.direction" style="width: 100%">
+                                        <el-option label="买入" value="买入"></el-option>
+                                        <el-option label="卖出" value="卖出"></el-option>
+                                        <el-option label="分红" value="分红"></el-option>
+                                        <el-option label="申购待确认" value="申购待确认"></el-option>
+                                    </el-select>
+                                </el-form-item>
+                            </el-col>
+                        </el-row>
+                        <el-row :gutter="20">
+                            <el-col :span="12">
+                                <el-form-item label="代码">
+                                    <el-autocomplete
+                                        v-model="transForm.code"
+                                        :fetch-suggestions="queryAssetByCode"
+                                        placeholder="输入代码，如 601288"
+                                        clearable
+                                        style="width: 100%"
+                                        @select="selectTransAsset"
+                                        @input="(val) => autoMatchTransAsset('code', val)"
+                                        @change="autoMatchTransAsset('code')"
+                                    >
+                                        <template #default="{ item }">
+                                            <div class="asset-suggestion">
+                                                <span class="asset-suggestion-main">{{ item.code }} - {{ item.name }}</span>
+                                                <span class="asset-suggestion-tag">{{ item.category || '未分类' }}</span>
+                                            </div>
+                                        </template>
+                                    </el-autocomplete>
+                                </el-form-item>
+                            </el-col>
+                            <el-col :span="12">
+                                <el-form-item label="名称">
+                                    <el-autocomplete
+                                        v-model="transForm.name"
+                                        :fetch-suggestions="queryAssetByName"
+                                        placeholder="输入名称，如 农业银行"
+                                        clearable
+                                        style="width: 100%"
+                                        @select="selectTransAsset"
+                                        @input="(val) => autoMatchTransAsset('name', val)"
+                                        @change="autoMatchTransAsset('name')"
+                                    >
+                                        <template #default="{ item }">
+                                            <div class="asset-suggestion">
+                                                <span class="asset-suggestion-main">{{ item.name }} - {{ item.code }}</span>
+                                                <span class="asset-suggestion-tag">{{ item.category || '未分类' }}</span>
+                                            </div>
+                                        </template>
+                                    </el-autocomplete>
+                                </el-form-item>
+                            </el-col>
+                        </el-row>
+                        <el-row :gutter="20">
+                            <el-col :span="12">
+                                <el-form-item label="分类">
+                                    <el-select v-model="transForm.category" placeholder="自动识别，可手动改" clearable style="width: 100%">
+                                        <el-option label="A股权益" value="A股权益"></el-option>
+                                        <el-option label="A股ETF" value="A股ETF"></el-option>
+                                        <el-option label="港股ETF" value="港股ETF"></el-option>
+                                        <el-option label="债基" value="债基"></el-option>
+                                        <el-option label="REITs" value="REITs"></el-option>
+                                        <el-option label="黄金" value="黄金"></el-option>
+                                        <el-option label="其他" value="其他"></el-option>
+                                    </el-select>
+                                </el-form-item>
+                            </el-col>
+                            <el-col :span="12">
+                                <el-form-item label="匹配标的">
+                                    <span v-if="transForm.code || transForm.name">{{ transForm.name || '—' }} {{ transForm.code ? '(' + transForm.code + ')' : '' }}</span>
+                                    <span v-else style="color: #909399;">—</span>
+                                </el-form-item>
+                            </el-col>
+                        </el-row>
+                        <el-row :gutter="20">
+                            <el-col :span="12">
+                                <el-form-item label="数量">
+                                    <el-input-number v-model="transForm.quantity" :controls="false" class="wide-number-input"></el-input-number>
+                                </el-form-item>
+                            </el-col>
+                            <el-col :span="12">
+                                <el-form-item label="单价">
+                                    <el-input-number v-model="transForm.price" :precision="4" :controls="false" class="wide-number-input"></el-input-number>
+                                </el-form-item>
+                            </el-col>
+                        </el-row>
+                        <el-alert
+                            v-if="transForm.direction === '申购待确认'"
+                            title="申购待确认：只填总金额即可，数量/单价可保持 0；证券现金会自动扣减，金额进入申购在途；不进入持仓份额和盈亏。份额确认后再编辑为‘买入’并补充份额/单价。"
+                            type="info"
+                            show-icon
+                            :closable="false"
+                            style="margin-bottom: 12px;"
+                        ></el-alert>
+                        <el-row :gutter="20">
+                            <el-col :span="12">
+                                <el-form-item label="手续费">
+                                    <el-input-number v-model="transForm.fee" :precision="2" :controls="false" class="wide-number-input" @input="markFeeManual"></el-input-number>
+                                </el-form-item>
+                            </el-col>
+                            <el-col :span="12">
+                                <el-form-item label="总金额">
+                                    <el-input-number v-model="transForm.amount" :precision="2" :controls="false" class="wide-number-input"></el-input-number>
+                                </el-form-item>
+                            </el-col>
+                        </el-row>
+                        <div class="fee-hint">手续费会按当前费率自动估算，但保留手动输入；最终以券商实际成交单为准。{{ feeAutoHint }}</div>
+                        <el-form-item>
+                            <el-button type="primary" @click="submitTrans">提交记录</el-button>
+                            <el-button @click="resetForm">重置</el-button>
+                        </el-form-item>
+                    </el-form>
+                </el-card>
+
+
+                <el-divider content-position="left">交易管理</el-divider>
+                <el-alert
+                    v-if="pendingTransactions.length > 0"
+                    type="warning"
+                    show-icon
+                    :closable="false"
+                    style="margin-bottom: 12px;"
+                >
+                    <template #title>
+                        申购在途提醒：{{ pendingTransactions.length }} 笔，合计 {{ formatMoney(pendingPurchaseTotal) }}。份额/净值确认后，点击对应记录“编辑”，把方向改为“买入”并补充数量/单价。
+                    </template>
+                </el-alert>
+                <el-card header="交易记录查询">
+                    <!-- 筛选条件 -->
+                    <el-row :gutter="20" style="margin-bottom: 20px;">
+                        <el-col :span="8">
+                            <el-date-picker
+                                v-model="transQuery.dateRange"
+                                type="daterange"
+                                range-separator="至"
+                                start-placeholder="开始日期"
+                                end-placeholder="结束日期"
+                                value-format="YYYY-MM-DD"
+                                style="width: 100%"
+                            ></el-date-picker>
+                        </el-col>
+                        <el-col :span="4">
+                            <el-input v-model="transQuery.code" placeholder="代码" clearable></el-input>
+                        </el-col>
+                        <el-col :span="4">
+                            <el-input v-model="transQuery.name" placeholder="名称" clearable></el-input>
+                        </el-col>
+                        <el-col :span="4">
+                            <el-select v-model="transQuery.direction" placeholder="方向" clearable style="width: 100%">
+                                <el-option label="买入" value="买入"></el-option>
+                                <el-option label="卖出" value="卖出"></el-option>
+                                <el-option label="分红" value="分红"></el-option>
+                                <el-option label="申购待确认" value="申购待确认"></el-option>
+                            </el-select>
+                        </el-col>
+                        <el-col :span="4">
+                            <el-button type="primary" @click="queryTransactions">查询</el-button>
+                            <el-button @click="resetTransQuery">重置</el-button>
+                        </el-col>
+                    </el-row>
+                    
+                    <!-- 交易记录表格 -->
+                    <el-table :data="filteredTransactions" stripe class="transaction-table" style="width: 100%" max-height="500">
+                        <el-table-column prop="date" label="日期" width="115" sortable></el-table-column>
+                        <el-table-column prop="code" label="代码" width="95"></el-table-column>
+                        <el-table-column prop="name" label="名称" min-width="130"></el-table-column>
+                        <el-table-column prop="category" label="分类" width="90"></el-table-column>
+                        <el-table-column prop="account" label="账户" width="95"></el-table-column>
+                        <el-table-column prop="direction" label="方向" width="80">
+                            <template #default="scope">
+                                <el-tag :type="scope.row.direction === '买入' ? 'danger' : (scope.row.direction === '卖出' ? 'success' : (scope.row.direction === '申购待确认' ? 'info' : 'warning'))">
+                                    {{ scope.row.direction }}
+                                </el-tag>
+                            </template>
+                        </el-table-column>
+                        <el-table-column label="数量" min-width="130">
+                            <template #default="scope"><span class="nowrap-cell">{{ scope.row.quantity?.toLocaleString() }}</span></template>
+                        </el-table-column>
+                        <el-table-column label="单价" min-width="115">
+                            <template #default="scope"><span class="nowrap-cell">{{ formatMoney(scope.row.price, 4) }}</span></template>
+                        </el-table-column>
+                        <el-table-column label="金额" min-width="140">
+                            <template #default="scope"><span class="nowrap-cell">{{ formatMoney(scope.row.amount) }}</span></template>
+                        </el-table-column>
+                        <el-table-column label="手续费" min-width="100">
+                            <template #default="scope"><span class="nowrap-cell">{{ formatMoney(scope.row.fee) }}</span></template>
+                        </el-table-column>
+                        <el-table-column prop="remark" label="备注" min-width="120" show-overflow-tooltip></el-table-column>
+                        <el-table-column label="操作" width="170" fixed="right">
+                            <template #default="scope">
+                                <el-button type="primary" size="small" @click="openTransEditDialog(scope.row)">编辑</el-button>
+                                <el-button type="danger" size="small" @click="deleteTransaction(scope.row)">删除</el-button>
+                            </template>
+                        </el-table-column>
+                    </el-table>
+                    
+                    <div style="margin-top: 10px; color: #909399;">
+                        共 {{ filteredTransactions.length }} 条记录
+                    </div>
+                </el-card>
+            </el-tab-pane>
+
+            <!-- 证券现金设置 -->
+            <el-tab-pane label="现金设置" name="cash">
+                <el-card header="证券账户现金余额">
+                    <el-alert
+                        title="证券现金已改为自动联动：买入/申购待确认自动扣减，卖出/分红自动增加；银证转账或券商余额校准时，在这里手动更新当前余额即可。"
+                        type="info"
+                        show-icon
+                        :closable="false"
+                        style="margin-bottom: 16px;"
+                    ></el-alert>
+                    <el-form label-width="130px">
+                        <el-form-item label="当前自动余额">
+                            <span style="font-size: 20px; font-weight: bold;">{{ formatMoney(dashboard.securities_cash) }}</span>
+                        </el-form-item>
+                        <el-form-item label="手动校准余额">
+                            <el-input-number v-model="cashForm.amount" :precision="2" :min="0" style="width: 300px"></el-input-number>
+                            <span style="margin-left: 12px; color: #909399;">仅用于银证转账/券商现金余额校准</span>
+                        </el-form-item>
+                        <el-form-item>
+                            <el-button type="primary" @click="updateCash">保存校准</el-button>
+                        </el-form-item>
+                    </el-form>
+                </el-card>
+
+                <el-card header="证券资金流水" class="mt-20">
+                    <el-alert
+                        title="银证转入、银证转出、现金校准会在这里留痕；买入/卖出/分红/申购待确认仍在交易记录里查询。证券现金 = 现金基准 + 资金流水 + 交易现金流。"
+                        type="info"
+                        show-icon
+                        :closable="false"
+                        style="margin-bottom: 16px;"
+                    ></el-alert>
+                    <el-form :model="cashFlowForm" label-width="90px">
+                        <el-row :gutter="16">
+                            <el-col :span="5">
+                                <el-form-item label="日期">
+                                    <el-date-picker v-model="cashFlowForm.date" type="date" value-format="YYYY-MM-DD" style="width: 100%"></el-date-picker>
+                                </el-form-item>
+                            </el-col>
+                            <el-col :span="5">
+                                <el-form-item label="证券账户">
+                                    <el-select v-model="cashFlowForm.account" style="width: 100%">
+                                        <el-option v-for="acc in feeAccounts" :key="acc" :label="acc" :value="acc"></el-option>
+                                    </el-select>
+                                </el-form-item>
+                            </el-col>
+                            <el-col :span="5">
+                                <el-form-item label="类型">
+                                    <el-select v-model="cashFlowForm.flow_type" style="width: 100%">
+                                        <el-option label="银证转入" value="银证转入"></el-option>
+                                        <el-option label="银证转出" value="银证转出"></el-option>
+                                        <el-option label="现金校准" value="现金校准"></el-option>
+                                        <el-option label="其他调整" value="其他调整"></el-option>
+                                    </el-select>
+                                </el-form-item>
+                            </el-col>
+                            <el-col :span="5">
+                                <el-form-item label="金额">
+                                    <el-input-number v-model="cashFlowForm.amount" :precision="2" :controls="false" class="wide-number-input"></el-input-number>
+                                </el-form-item>
+                            </el-col>
+                            <el-col :span="4">
+                                <el-form-item label=" ">
+                                    <el-button type="primary" @click="addCashFlow">新增流水</el-button>
+                                </el-form-item>
+                            </el-col>
+                        </el-row>
+                        <el-form-item label="备注">
+                            <el-input v-model="cashFlowForm.remark" placeholder="如：银行卡转入、转出到银行、券商余额校准"></el-input>
+                        </el-form-item>
+                    </el-form>
+                    <el-row :gutter="16" style="margin-bottom: 14px;">
+                        <el-col :span="6"><el-statistic title="区间转入" :value="cashFlowSummary.inflow" :precision="2" prefix="¥"></el-statistic></el-col>
+                        <el-col :span="6"><el-statistic title="区间转出" :value="cashFlowSummary.outflowAbs" :precision="2" prefix="¥"></el-statistic></el-col>
+                        <el-col :span="6"><el-statistic title="区间净额" :value="cashFlowSummary.net" :precision="2" prefix="¥"></el-statistic></el-col>
+                        <el-col :span="6"><el-statistic title="当前证券现金" :value="dashboard.securities_cash || 0" :precision="2" prefix="¥"></el-statistic></el-col>
+                    </el-row>
+                    <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px; flex-wrap:wrap;">
+                        <el-date-picker v-model="cashFlowQuery.dateRange" type="daterange" range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期" value-format="YYYY-MM-DD" style="width:260px" @change="queryCashFlows"></el-date-picker>
+                        <el-select v-model="cashFlowQuery.account" placeholder="账户" clearable style="width:150px" @change="queryCashFlows">
+                            <el-option v-for="acc in feeAccounts" :key="acc" :label="acc" :value="acc"></el-option>
+                        </el-select>
+                        <el-select v-model="cashFlowQuery.flow_type" placeholder="类型" clearable style="width:150px" @change="queryCashFlows">
+                            <el-option label="银证转入" value="银证转入"></el-option>
+                            <el-option label="银证转出" value="银证转出"></el-option>
+                            <el-option label="现金校准" value="现金校准"></el-option>
+                            <el-option label="其他调整" value="其他调整"></el-option>
+                        </el-select>
+                        <el-button @click="queryCashFlows">查询</el-button>
+                        <el-button @click="resetCashFlowQuery">重置</el-button>
+                    </div>
+                    <el-table :data="cashFlows" stripe style="width: 100%">
+                        <el-table-column prop="date" label="日期" width="110"></el-table-column>
+                        <el-table-column prop="account" label="账户" width="100"></el-table-column>
+                        <el-table-column prop="flow_type" label="类型" width="100">
+                            <template #default="scope">
+                                <el-tag :type="cashFlowTagType(scope.row.flow_type)">{{ scope.row.flow_type }}</el-tag>
+                            </template>
+                        </el-table-column>
+                        <el-table-column label="金额" width="130">
+                            <template #default="scope"><span :style="{ color: Number(scope.row.amount || 0) >= 0 ? '#F56C6C' : '#67C23A' }">{{ formatMoney(scope.row.amount, 2, true) }}</span></template>
+                        </el-table-column>
+                        <el-table-column label="调整前" width="130"><template #default="scope">{{ formatMoney(scope.row.balance_before) }}</template></el-table-column>
+                        <el-table-column label="调整后" width="130"><template #default="scope">{{ formatMoney(scope.row.balance_after) }}</template></el-table-column>
+                        <el-table-column prop="remark" label="备注" show-overflow-tooltip></el-table-column>
+                        <el-table-column label="操作" width="150" fixed="right">
+                            <template #default="scope">
+                                <el-button type="primary" link @click="openCashFlowEditDialog(scope.row)">编辑</el-button>
+                                <el-button type="danger" link @click="deleteCashFlow(scope.row)">删除</el-button>
+                            </template>
+                        </el-table-column>
+                    </el-table>
+                </el-card>
+
+                <el-card header="交易费率设置" class="mt-20">
+                    <el-alert
+                        title="支持多个证券账户分别设置费率。交易录入会按所选账户和分类自动估算手续费，但手续费输入框仍可手动覆盖，最终以券商实际成交单为准。费率单位为 %，例如万2.5填 0.025。"
+                        type="info"
+                        show-icon
+                        :closable="false"
+                        style="margin-bottom: 16px;"
+                    ></el-alert>
+                    <div style="display:flex; align-items:center; gap:12px; margin-bottom:14px; flex-wrap:wrap;">
+                        <span style="color:#606266;">当前费率账户</span>
+                        <el-select v-model="activeFeeAccount" style="width:180px" @change="onActiveFeeAccountChange">
+                            <el-option v-for="acc in feeAccounts" :key="acc" :label="acc" :value="acc"></el-option>
+                        </el-select>
+                        <el-input v-model="newFeeAccountName" placeholder="新增账户名称，如 招商证券" style="width:220px" clearable></el-input>
+                        <el-button @click="addFeeAccount">新增账户</el-button>
+                        <el-button type="danger" plain @click="removeFeeAccount" :disabled="feeAccounts.length <= 1">删除当前账户</el-button>
+                    </div>
+                    <div class="fee-settings-native" v-if="feeSettings[activeFeeAccount]">
+                        <div class="fee-settings-head">
+                            <div>类别</div><div>佣金率(%)</div><div>印花税(%)</div><div>过户费(%)</div><div>最低佣金(元)</div>
+                        </div>
+                        <div class="fee-settings-row" v-for="cat in feeCategories" :key="cat">
+                            <div class="fee-cat">{{ cat }}</div>
+                            <el-input-number v-model="feeSettings[activeFeeAccount][cat].commission_rate_pct" :precision="4" :min="0" :controls="false" class="fee-rate-input"></el-input-number>
+                            <el-input-number v-model="feeSettings[activeFeeAccount][cat].stamp_tax_rate_pct" :precision="4" :min="0" :controls="false" class="fee-rate-input"></el-input-number>
+                            <el-input-number v-model="feeSettings[activeFeeAccount][cat].transfer_fee_rate_pct" :precision="4" :min="0" :controls="false" class="fee-rate-input"></el-input-number>
+                            <el-input-number v-model="feeSettings[activeFeeAccount][cat].min_commission" :precision="2" :min="0" :controls="false" class="fee-rate-input"></el-input-number>
+                        </div>
+                    </div>
+                    <div style="margin-top: 14px; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+                        <el-button type="primary" @click="saveFeeSettings">保存费率设置</el-button>
+                        <el-button @click="resetFeeSettings">恢复默认费率</el-button>
+                        <span style="color:#909399;font-size:12px;">每个账户独立保存；默认：A股佣金万2.5、卖出印花税万5、过户费万0.1；ETF/REITs/黄金默认只收佣金；债基默认0。</span>
+                    </div>
+                </el-card>
+            </el-tab-pane>
+            
+        </el-tabs>
+        <!-- 交易记录弹窗 -->
+        <el-dialog v-model="transDialog.visible" :title="transDialog.title" width="800px">
+            <el-table :data="transDialog.transactions" stripe style="width: 100%">
+                <el-table-column prop="date" label="日期" width="120"></el-table-column>
+                <el-table-column prop="direction" label="方向" width="80"></el-table-column>
+                <el-table-column label="数量">
+                    <template #default="scope">{{ scope.row.quantity }}</template>
+                </el-table-column>
+                <el-table-column label="单价">
+                    <template #default="scope">{{ formatMoney(scope.row.price, 4) }}</template>
+                </el-table-column>
+                <el-table-column label="金额">
+                    <template #default="scope">{{ formatMoney(scope.row.amount) }}</template>
+                </el-table-column>
+                <el-table-column label="手续费">
+                    <template #default="scope">{{ formatMoney(scope.row.fee) }}</template>
+                </el-table-column>
+                <el-table-column prop="remark" label="备注"></el-table-column>
+            </el-table>
+        </el-dialog>
+
+        <!-- 存款编辑弹窗 -->
+        <el-dialog v-model="depositDialog.visible" :title="depositDialog.isEdit ? '编辑存款' : '新增存款'" width="500px">
+            <el-form :model="depositDialog.form" label-width="100px">
+                <el-form-item label="银行名称">
+                    <el-input v-model="depositDialog.form.bank_name"></el-input>
+                </el-form-item>
+                <el-form-item label="金额">
+                    <el-input-number v-model="depositDialog.form.amount" :precision="2" :min="0" style="width: 100%"></el-input-number>
+                </el-form-item>
+                <el-form-item label="年利率(%)">
+                    <el-input-number v-model="depositDialog.form.interest_rate" :precision="2" :min="0" style="width: 100%"></el-input-number>
+                </el-form-item>
+                <el-form-item label="到期时间">
+                    <el-date-picker v-model="depositDialog.form.due_date" type="date" placeholder="选择到期日" value-format="YYYY-MM-DD" style="width: 100%"></el-date-picker>
+                </el-form-item>
+                <el-form-item label="备注">
+                    <el-input v-model="depositDialog.form.remark"></el-input>
+                </el-form-item>
+            </el-form>
+            <template #footer>
+                <el-button @click="depositDialog.visible = false">取消</el-button>
+                <el-button type="primary" @click="saveDeposit">确定</el-button>
+            </template>
+        </el-dialog>
+
+        <!-- 交易编辑弹窗 -->
+        <el-dialog v-model="transEditDialog.visible" title="编辑交易记录" width="820px">
+            <el-form :model="transEditDialog.form" label-width="90px">
+                <el-row :gutter="20">
+                    <el-col :span="12">
+                        <el-form-item label="日期">
+                            <el-date-picker v-model="transEditDialog.form.date" type="date" placeholder="选择日期" value-format="YYYY-MM-DD" style="width: 100%"></el-date-picker>
+                        </el-form-item>
+                    </el-col>
+                    <el-col :span="12">
+                        <el-form-item label="方向">
+                            <el-select v-model="transEditDialog.form.direction" style="width: 100%">
+                                <el-option label="买入" value="买入"></el-option>
+                                <el-option label="卖出" value="卖出"></el-option>
+                                <el-option label="分红" value="分红"></el-option>
+                                <el-option label="申购待确认" value="申购待确认"></el-option>
+                            </el-select>
+                        </el-form-item>
+                    </el-col>
+                </el-row>
+                <el-row :gutter="20">
+                    <el-col :span="12">
+                        <el-form-item label="证券账户">
+                            <el-select v-model="transEditDialog.form.account" style="width: 100%">
+                                <el-option v-for="acc in feeAccounts" :key="acc" :label="acc" :value="acc"></el-option>
+                            </el-select>
+                        </el-form-item>
+                    </el-col>
+                    <el-col :span="12"></el-col>
+                </el-row>
+                <el-row :gutter="20">
+                    <el-col :span="8">
+                        <el-form-item label="代码">
+                            <el-input v-model="transEditDialog.form.code"></el-input>
+                        </el-form-item>
+                    </el-col>
+                    <el-col :span="10">
+                        <el-form-item label="名称">
+                            <el-input v-model="transEditDialog.form.name"></el-input>
+                        </el-form-item>
+                    </el-col>
+                    <el-col :span="6">
+                        <el-form-item label="分类">
+                            <el-select v-model="transEditDialog.form.category" clearable style="width: 100%">
+                                <el-option label="A股权益" value="A股权益"></el-option>
+                                <el-option label="A股ETF" value="A股ETF"></el-option>
+                                <el-option label="港股ETF" value="港股ETF"></el-option>
+                                <el-option label="债基" value="债基"></el-option>
+                                <el-option label="REITs" value="REITs"></el-option>
+                                <el-option label="黄金" value="黄金"></el-option>
+                                <el-option label="其他" value="其他"></el-option>
+                            </el-select>
+                        </el-form-item>
+                    </el-col>
+                </el-row>
+                <el-row :gutter="20">
+                    <el-col :span="12">
+                        <el-form-item label="数量">
+                            <el-input-number v-model="transEditDialog.form.quantity" :controls="false" class="wide-number-input"></el-input-number>
+                        </el-form-item>
+                    </el-col>
+                    <el-col :span="12">
+                        <el-form-item label="单价">
+                            <el-input-number v-model="transEditDialog.form.price" :precision="4" :controls="false" class="wide-number-input"></el-input-number>
+                        </el-form-item>
+                    </el-col>
+                </el-row>
+                <el-row :gutter="20">
+                    <el-col :span="12">
+                        <el-form-item label="手续费">
+                            <el-input-number v-model="transEditDialog.form.fee" :precision="2" :controls="false" class="wide-number-input"></el-input-number>
+                        </el-form-item>
+                    </el-col>
+                    <el-col :span="12">
+                        <el-form-item label="金额">
+                            <el-input-number v-model="transEditDialog.form.amount" :precision="2" :controls="false" class="wide-number-input"></el-input-number>
+                        </el-form-item>
+                    </el-col>
+                </el-row>
+                <el-form-item label="备注">
+                    <el-input v-model="transEditDialog.form.remark" type="textarea" :rows="2"></el-input>
+                </el-form-item>
+            </el-form>
+            <template #footer>
+                <el-button @click="transEditDialog.visible = false">取消</el-button>
+                <el-button type="primary" @click="saveTransactionEdit">确定</el-button>
+            </template>
+        </el-dialog>
+
+        <!-- 证券资金流水编辑弹窗 -->
+        <el-dialog v-model="cashFlowEditDialog.visible" title="编辑资金流水" width="520px">
+            <el-form :model="cashFlowEditDialog.form" label-width="90px">
+                <el-form-item label="日期">
+                    <el-date-picker v-model="cashFlowEditDialog.form.date" type="date" value-format="YYYY-MM-DD" style="width: 100%"></el-date-picker>
+                </el-form-item>
+                <el-form-item label="证券账户">
+                    <el-select v-model="cashFlowEditDialog.form.account" style="width: 100%">
+                        <el-option v-for="acc in feeAccounts" :key="acc" :label="acc" :value="acc"></el-option>
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="类型">
+                    <el-select v-model="cashFlowEditDialog.form.flow_type" style="width: 100%">
+                        <el-option label="银证转入" value="银证转入"></el-option>
+                        <el-option label="银证转出" value="银证转出"></el-option>
+                        <el-option label="现金校准" value="现金校准"></el-option>
+                        <el-option label="其他调整" value="其他调整"></el-option>
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="金额">
+                    <el-input-number v-model="cashFlowEditDialog.form.amount" :precision="2" :controls="false" class="wide-number-input"></el-input-number>
+                </el-form-item>
+                <el-form-item label="备注">
+                    <el-input v-model="cashFlowEditDialog.form.remark"></el-input>
+                </el-form-item>
+            </el-form>
+            <template #footer>
+                <el-button @click="cashFlowEditDialog.visible = false">取消</el-button>
+                <el-button type="primary" @click="saveCashFlowEdit">保存</el-button>
+            </template>
+        </el-dialog>
+
+        <!-- 持仓强制校正弹窗 -->
+        <el-dialog v-model="holdingCorrectionDialog.visible" title="持仓强制校正" width="620px">
+            <el-alert
+                title="校正会作为新的持仓锚点：校正日及之前交易不再追溯，校正日之后交易继续滚动计算。历史交易不会被修改。"
+                type="warning"
+                show-icon
+                :closable="false"
+                style="margin-bottom: 14px;"
+            ></el-alert>
+            <el-form :model="holdingCorrectionDialog.form" label-width="120px">
+                <el-form-item label="标的">
+                    <span>{{ holdingCorrectionDialog.form.name }} ({{ holdingCorrectionDialog.form.code }})</span>
+                </el-form-item>
+                <el-form-item label="校正日期">
+                    <el-date-picker v-model="holdingCorrectionDialog.form.date" type="date" value-format="YYYY-MM-DD" style="width: 100%"></el-date-picker>
+                </el-form-item>
+                <el-row :gutter="16">
+                    <el-col :span="12">
+                        <el-form-item label="券商实际数量">
+                            <el-input-number v-model="holdingCorrectionDialog.form.actual_quantity" :precision="2" :controls="false" class="wide-number-input"></el-input-number>
+                        </el-form-item>
+                    </el-col>
+                    <el-col :span="12">
+                        <el-form-item label="普通成本价">
+                            <el-input-number v-model="holdingCorrectionDialog.form.actual_avg_cost" :precision="6" :controls="false" class="wide-number-input"></el-input-number>
+                        </el-form-item>
+                    </el-col>
+                </el-row>
+                <el-form-item label="累计分红">
+                    <el-input-number v-model="holdingCorrectionDialog.form.actual_total_dividend" :precision="2" :controls="false" class="wide-number-input"></el-input-number>
+                </el-form-item>
+                <el-form-item label="备注">
+                    <el-input v-model="holdingCorrectionDialog.form.remark" placeholder="例如：按华泰持仓页强制校正"></el-input>
+                </el-form-item>
+                <el-form-item label="当前系统值">
+                    <span style="color:#909399;">
+                        数量 {{ holdingCorrectionDialog.current.quantity }}，普通成本 {{ formatMoney(holdingCorrectionDialog.current.avg_cost, 4) }}，摊薄成本 {{ formatMoney(holdingCorrectionDialog.current.diluted_cost, 4) }}，累计分红 {{ formatMoney(holdingCorrectionDialog.current.total_dividend || 0) }}
+                    </span>
+                </el-form-item>
+            </el-form>
+            <template #footer>
+                <el-button @click="holdingCorrectionDialog.visible = false">取消</el-button>
+                <el-button type="primary" @click="saveHoldingCorrection">保存校正</el-button>
+            </template>
+        </el-dialog>
+
+        <!-- 持仓校正记录弹窗 -->
+        <el-dialog v-model="holdingCorrectionHistoryDialog.visible" :title="holdingCorrectionHistoryDialog.title" width="760px">
+            <el-table :data="holdingCorrectionHistoryDialog.records" stripe style="width:100%;">
+                <el-table-column prop="date" label="日期" width="105" align="center"></el-table-column>
+                <el-table-column label="数量" width="115" align="right" header-align="right">
+                    <template #default="scope">{{ Number(scope.row.actual_quantity || 0).toLocaleString() }}</template>
+                </el-table-column>
+                <el-table-column label="普通成本" width="115" align="right" header-align="right">
+                    <template #default="scope">{{ formatMoney(scope.row.actual_avg_cost, 4) }}</template>
+                </el-table-column>
+                <el-table-column label="累计分红" width="115" align="right" header-align="right">
+                    <template #default="scope">{{ formatMoney(scope.row.actual_total_dividend || 0) }}</template>
+                </el-table-column>
+                <el-table-column prop="remark" label="备注" min-width="160" show-overflow-tooltip></el-table-column>
+                <el-table-column label="操作" width="80" align="center">
+                    <template #default="scope">
+                        <el-button type="danger" link @click="deleteHoldingCorrection(scope.row)">删除</el-button>
+                    </template>
+                </el-table-column>
+            </el-table>
+            <template #footer>
+                <el-button @click="holdingCorrectionHistoryDialog.visible = false">关闭</el-button>
+            </template>
+        </el-dialog>
+
+        <!-- 预计年化收益编辑弹窗 -->
+        <el-dialog v-model="expectedReturnDialog.visible" title="编辑预计年化收益" width="400px">
+            <el-form :model="expectedReturnDialog.form" label-width="100px">
+                <el-form-item label="标的名称">
+                    <span>{{ expectedReturnDialog.form.name }} ({{ expectedReturnDialog.form.code }})</span>
+                </el-form-item>
+                <el-form-item label="预计年化收益(%)">
+                    <el-input-number v-model="expectedReturnDialog.form.expected_return" :precision="1" :min="0" :max="100" style="width: 100%"></el-input-number>
+                </el-form-item>
+            </el-form>
+            <template #footer>
+                <el-button @click="expectedReturnDialog.visible = false">取消</el-button>
+                <el-button type="primary" @click="saveExpectedReturn">确定</el-button>
+            </template>
+        </el-dialog>
+    </div>
+
+    <script>
+        const { createApp, ref, onMounted, nextTick, watch, computed } = Vue;
+        const API = 'http://localhost:8000';
+
+        const app = createApp({
+            setup() {
+                const activeTab = ref('snapshots');
+                const dashboard = ref({});
+                const holdings = ref([]);
+                const deposits = ref([]);
+                const syncing = ref(false);
+                const trailingSyncing = ref(false);
+                const syncNotice = ref({ text: '', type: '' });
+                let syncNoticeTimer = null;
+                const showSyncNotice = (text, type = '') => {
+                    syncNotice.value.text = text;
+                    syncNotice.value.type = type;
+                    if (syncNoticeTimer) clearTimeout(syncNoticeTimer);
+                    syncNoticeTimer = setTimeout(() => {
+                        syncNotice.value.text = '';
+                        syncNotice.value.type = '';
+                    }, 6000);
+                };
+                const cashForm = ref({ amount: 0 });
+                const cashFlows = ref([]);
+                const cashFlowForm = ref({ date: new Date().toISOString().split('T')[0], account: '华泰证券', flow_type: '银证转入', amount: 0, remark: '' });
+                const cashFlowQuery = ref({ dateRange: [], account: '', flow_type: '' });
+                const cashFlowEditDialog = ref({ visible: false, editId: null, form: { date: '', account: '', flow_type: '', amount: 0, remark: '' } });
+                const snapshots = ref([]);
+                const snapshotRange = ref([]);
+                const snapshotSummary = ref(null);
+                const snapshotMetrics = ref([]);
+                const snapshotChangeRows = ref([]);
+                const snapshotLoading = ref(false);
+
+                const transForm = ref({
+                    date: new Date().toISOString().split('T')[0],
+                    code: '', name: '', category: '', account: '华泰证券', direction: '买入',
+                    quantity: 0, price: 0, amount: 0, fee: 0
+                });
+                const feeManuallyEdited = ref(false);
+                const feeSettings = ref({});
+                const feeAccounts = ref(['华泰证券']);
+                const activeFeeAccount = ref('华泰证券');
+                const newFeeAccountName = ref('');
+                const feeCategories = ['A股权益', 'A股ETF', '港股ETF', 'REITs', '黄金', '债基', '其他'];
+                const feeAutoHint = ref('');
+
+                const depositDialog = ref({
+                    visible: false, isEdit: false, editId: null,
+                    form: { bank_name: '', amount: 0, interest_rate: 0, due_date: '', remark: '' }
+                });
+
+                const transDialog = ref({
+                    visible: false,
+                    title: '',
+                    transactions: []
+                });
+
+                // 交易管理相关
+                const allTransactions = ref([]);
+                const filteredTransactions = ref([]);
+                const pendingTransactions = ref([]);
+                const pendingPurchaseTotal = ref(0);
+                const transQuery = ref({
+                    dateRange: [],
+                    code: '',
+                    name: '',
+                    direction: ''
+                });
+                const transEditDialog = ref({
+                    visible: false,
+                    editId: null,
+                    form: { date: '', code: '', name: '', category: '', account: '', direction: '', quantity: 0, price: 0, amount: 0, fee: 0, remark: '' }
+                });
+
+                const expectedReturnDialog = ref({
+                    visible: false,
+                    form: { code: '', name: '', expected_return: 0 }
+                });
+                const holdingCorrectionDialog = ref({
+                    visible: false,
+                    current: {},
+                    form: { date: new Date().toISOString().split('T')[0], code: '', name: '', category: '', actual_quantity: 0, actual_avg_cost: 0, actual_total_dividend: 0, remark: '' }
+                });
+                const holdingCorrectionHistoryDialog = ref({ visible: false, title: '持仓校正记录', records: [] });
+
+                const allocationAnalysis = ref([]);
+                const macroAllocationAnalysis = ref([]);
+                const portfolioExpectedReturn = ref(0);
+
+                const allocationSummary = computed(() => {
+                    const total = Number(dashboard.value.total_assets || 0);
+                    const getGroup = (name) => macroAllocationAnalysis.value.find(x => x.group === name) || { amount: 0, percentage: 0, expected_return: 0 };
+                    const equity = getGroup('权益');
+                    const fixed = getGroup('固收');
+                    const deposit = getGroup('存款');
+                    const defensiveAmount = Number(fixed.amount || 0) + Number(deposit.amount || 0);
+                    const equityRatio = Number(equity.percentage || 0);
+                    const defensiveRatio = total > 0 ? defensiveAmount / total * 100 : 0;
+                    let comment = '当前配置以稳健防守为主，权益、固收和存款比例可在这里快速核对。';
+                    if (equityRatio > 55) comment = '权益资产占比偏高，若市场回撤，组合波动会明显放大。';
+                    else if (equityRatio < 35) comment = '权益资产占比较低，组合更稳，但长期收益弹性可能不足。';
+                    else comment = '权益占比处于相对均衡区间，固收和存款仍能提供较强缓冲。';
+                    return { total, equityAmount: Number(equity.amount || 0), equityRatio, defensiveAmount, defensiveRatio, fixedAmount: Number(fixed.amount || 0), depositAmount: Number(deposit.amount || 0), comment };
+                });
+
+                const allocationHealth = computed(() => {
+                    const eq = allocationSummary.value.equityRatio;
+                    const defensive = allocationSummary.value.defensiveRatio;
+                    const maxCat = allocationAnalysis.value.length ? allocationAnalysis.value[0] : null;
+                    const pending = Number(dashboard.value.pending_purchase || 0);
+                    return [
+                        {
+                            label: '权益波动暴露',
+                            status: eq > 55 ? '偏高' : (eq < 35 ? '偏低' : '适中'),
+                            type: eq > 55 ? 'warning' : 'success',
+                            text: `权益占总资产 ${eq.toFixed(1)}%，用于判断组合对股市波动的敏感度。`
+                        },
+                        {
+                            label: '防守缓冲',
+                            status: defensive >= 40 ? '充足' : '偏少',
+                            type: defensive >= 40 ? 'success' : 'warning',
+                            text: `固收、证券现金、银行存款和申购在途合计 ${defensive.toFixed(1)}%，是组合回撤缓冲。`
+                        },
+                        {
+                            label: '单类集中度',
+                            status: maxCat && maxCat.percentage > 35 ? '集中' : '分散',
+                            type: maxCat && maxCat.percentage > 35 ? 'warning' : 'success',
+                            text: maxCat ? `${maxCat.category} 占 ${maxCat.percentage.toFixed(1)}%，金额 ${formatMoney(maxCat.market_value)}。` : '暂无资产分类数据。'
+                        },
+                        {
+                            label: '申购在途',
+                            status: pending > 0 ? '待确认' : '无',
+                            type: pending > 0 ? 'info' : 'success',
+                            text: pending > 0 ? `当前申购在途 ${formatMoney(pending)}，已计入固收/总资产，但不计入持仓盈亏。` : '当前没有申购待确认资产。'
+                        }
+                    ];
+                });
+
+                const daysUntil = (dateStr) => {
+                    if (!dateStr) return null;
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const due = new Date(dateStr + 'T00:00:00');
+                    if (Number.isNaN(due.getTime())) return null;
+                    return Math.ceil((due - today) / 86400000);
+                };
+
+                const depositRows = computed(() => {
+                    const total = deposits.value.reduce((sum, d) => sum + Number(d.amount || 0), 0);
+                    return [...deposits.value]
+                        .map(d => {
+                            const amount = Number(d.amount || 0);
+                            const rate = Number(d.interest_rate || 0);
+                            return {
+                                ...d,
+                                amount,
+                                interest_rate: rate,
+                                annual_interest: amount * rate / 100,
+                                percentage: total > 0 ? amount / total * 100 : 0,
+                                daysLeft: daysUntil(d.due_date)
+                            };
+                        })
+                        .sort((a, b) => {
+                            if (a.daysLeft === null && b.daysLeft === null) return 0;
+                            if (a.daysLeft === null) return 1;
+                            if (b.daysLeft === null) return -1;
+                            return a.daysLeft - b.daysLeft;
+                        });
+                });
+
+                const depositSummary = computed(() => {
+                    const rows = depositRows.value;
+                    const total = rows.reduce((sum, d) => sum + d.amount, 0);
+                    const annualInterest = rows.reduce((sum, d) => sum + d.annual_interest, 0);
+                    const weightedRate = total > 0 ? annualInterest / total * 100 : 0;
+                    const nextDue = rows.find(d => d.daysLeft !== null && d.daysLeft >= 0) || null;
+                    return { total, annualInterest, weightedRate, count: rows.length, nextDue };
+                });
+
+                const depositBankBreakdown = computed(() => {
+                    const map = {};
+                    depositRows.value.forEach(d => {
+                        const key = d.bank_name || '未命名';
+                        map[key] = (map[key] || 0) + d.amount;
+                    });
+                    const total = depositSummary.value.total;
+                    return Object.keys(map)
+                        .map(bank_name => ({ bank_name, amount: map[bank_name], percentage: total > 0 ? map[bank_name] / total * 100 : 0 }))
+                        .sort((a, b) => b.amount - a.amount);
+                });
+
+                const depositMaturityBuckets = computed(() => {
+                    const buckets = [
+                        { bucket: '30天内', amount: 0 },
+                        { bucket: '31-90天', amount: 0 },
+                        { bucket: '91-180天', amount: 0 },
+                        { bucket: '180天以上', amount: 0 },
+                        { bucket: '未设置到期', amount: 0 }
+                    ];
+                    depositRows.value.forEach(d => {
+                        const days = d.daysLeft;
+                        if (days === null) buckets[4].amount += d.amount;
+                        else if (days <= 30) buckets[0].amount += d.amount;
+                        else if (days <= 90) buckets[1].amount += d.amount;
+                        else if (days <= 180) buckets[2].amount += d.amount;
+                        else buckets[3].amount += d.amount;
+                    });
+                    const total = depositSummary.value.total;
+                    return buckets.map(b => ({ ...b, percentage: total > 0 ? b.amount / total * 100 : 0 }));
+                });
+
+                let allocationChart = null, categoryChart = null, snapshotTrendChart = null, snapshotStructureChart = null;
+
+                const formatMoney = (value, digits = 2, showSign = false) => {
+                    if (value === null || value === undefined || value === '') return '—';
+                    const num = Number(value);
+                    if (Number.isNaN(num)) return '—';
+                    const sign = showSign && num > 0 ? '+' : (num < 0 ? '-' : '');
+                    const absValue = Math.abs(num).toLocaleString(undefined, {
+                        minimumFractionDigits: digits,
+                        maximumFractionDigits: digits
+                    });
+                    return `${sign}¥${absValue}`;
+                };
+
+                const formatPercent = (value, digits = 2) => {
+                    if (value === null || value === undefined || value === '') return '—';
+                    const num = Number(value);
+                    if (Number.isNaN(num)) return '—';
+                    return `${num >= 0 ? '+' : ''}${num.toFixed(digits)}%`;
+                };
+
+                const fetchData = async () => {
+                    const [dashRes, holdRes, depRes, cashRes, feeRes] = await Promise.all([
+                        axios.get(API + '/dashboard'),
+                        axios.get(API + '/holdings'),
+                        axios.get(API + '/deposits'),
+                        axios.get(API + '/securities-cash'),
+                        axios.get(API + '/fee-settings')
+                    ]);
+                    dashboard.value = dashRes.data;
+                    holdings.value = holdRes.data;
+                    deposits.value = depRes.data;
+                    cashForm.value.amount = cashRes.data.amount;
+                    loadFeeSettingsToForm(feeRes.data || {});
+                    if (!cashFlowForm.value.account) cashFlowForm.value.account = activeFeeAccount.value || '华泰证券';
+                    calculateAllocationAnalysis();
+                    if (activeTab.value === 'allocation') renderAllocationCharts();
+                };
+
+                const syncPrices = async () => {
+                    syncing.value = true;
+                    const loading = ElementPlus.ElLoading.service({ text: '正在同步最新价...', background: 'rgba(255, 255, 255, 0.65)' });
+                    try {
+                        const res = await axios.get(API + '/sync-prices', { timeout: 120000 });
+                        await fetchData();
+                        const data = res.data || {};
+                        const failedCount = Array.isArray(data.failed) ? data.failed.length : 0;
+                        const msg = `同步完成：检查 ${data.checked || 0} 个，价格变化 ${data.updated || 0} 个，无变化 ${data.unchanged || 0} 个，失败 ${failedCount} 个`;
+                        if (failedCount > 0) {
+                            const failedText = data.failed.slice(0, 3).map(x => `${x.code} ${x.name || ''}: ${x.reason || '失败'}`).join('；');
+                            showSyncNotice(msg + '。' + failedText, 'warning');
+                            ElementPlus.ElMessage.warning(msg + '。' + failedText);
+                        } else {
+                            showSyncNotice(msg, '');
+                            ElementPlus.ElMessage.success(msg);
+                        }
+                    } catch (e) {
+                        const detail = e?.response?.data?.detail || e?.message || '未知错误';
+                        showSyncNotice('同步失败：' + detail, 'error');
+                        ElementPlus.ElMessage.error('同步失败：' + detail);
+                    } finally {
+                        loading.close();
+                        syncing.value = false;
+                    }
+                };
+
+                const syncTrailingReturns = async () => {
+                    trailingSyncing.value = true;
+                    const loading = ElementPlus.ElLoading.service({ text: '正在同步近一年标的收益率...', background: 'rgba(255, 255, 255, 0.65)' });
+                    try {
+                        const res = await axios.get(API + '/sync-trailing-returns', { timeout: 180000 });
+                        await fetchData();
+                        const data = res.data || {};
+                        const failedCount = Array.isArray(data.failed) ? data.failed.length : 0;
+                        const msg = `近一年收益率同步完成：检查 ${data.checked || 0} 个，成功 ${data.updated || 0} 个，失败 ${failedCount} 个`;
+                        if (failedCount > 0) {
+                            const failedText = data.failed.slice(0, 3).map(x => `${x.code} ${x.name || ''}: ${x.reason || '失败'}`).join('；');
+                            showSyncNotice(msg + '。' + failedText, 'warning');
+                            ElementPlus.ElMessage.warning(msg + '。' + failedText);
+                        } else {
+                            showSyncNotice(msg, '');
+                            ElementPlus.ElMessage.success(msg);
+                        }
+                    } catch (e) {
+                        const detail = e?.response?.data?.detail || e?.message || '未知错误';
+                        showSyncNotice('近一年收益率同步失败：' + detail, 'error');
+                        ElementPlus.ElMessage.error('近一年收益率同步失败：' + detail);
+                    } finally {
+                        loading.close();
+                        trailingSyncing.value = false;
+                    }
+                };
+
+                const normalizeText = (v) => String(v || '').trim().toLowerCase();
+
+                const assetOptions = () => holdings.value.map(h => ({
+                    value: `${h.code} ${h.name} ${h.category || ''}`,
+                    code: h.code,
+                    name: h.name,
+                    category: h.category || '',
+                    label: `${h.code} - ${h.name} - ${h.category || '未分类'}`
+                }));
+
+                const queryAssetByCode = (queryString, cb) => {
+                    const q = normalizeText(queryString);
+                    const results = assetOptions()
+                        .filter(a => !q || normalizeText(a.code).includes(q) || normalizeText(a.name).includes(q))
+                        .map(a => ({ ...a, value: a.code, label: a.label }));
+                    cb(results);
+                };
+
+                const queryAssetByName = (queryString, cb) => {
+                    const q = normalizeText(queryString);
+                    const results = assetOptions()
+                        .filter(a => !q || normalizeText(a.name).includes(q) || normalizeText(a.code).includes(q))
+                        .map(a => ({ ...a, value: a.name, label: a.label }));
+                    cb(results);
+                };
+
+                const selectTransAsset = (asset) => {
+                    transForm.value.code = asset.code;
+                    transForm.value.name = asset.name;
+                    transForm.value.category = asset.category || '';
+                };
+
+                const autoMatchTransAsset = (field, rawValue = null) => {
+                    const codeQ = normalizeText(field === 'code' && rawValue !== null ? rawValue : transForm.value.code);
+                    const nameQ = normalizeText(field === 'name' && rawValue !== null ? rawValue : transForm.value.name);
+                    if (!codeQ && !nameQ) {
+                        transForm.value.category = '';
+                        return;
+                    }
+
+                    let match = null;
+                    if (field === 'code' && codeQ) {
+                        // 输入代码时只做“精确代码”自动填充；新代码不强行匹配旧持仓，避免误覆盖
+                        match = holdings.value.find(h => normalizeText(h.code) === codeQ);
+                    } else if (field === 'name' && nameQ) {
+                        // 输入名称时：精确匹配优先；若只有一个名称包含结果，再自动对应
+                        match = holdings.value.find(h => normalizeText(h.name) === nameQ);
+                        if (!match) {
+                            const candidates = holdings.value.filter(h => normalizeText(h.name).includes(nameQ));
+                            if (candidates.length === 1) match = candidates[0];
+                        }
+                    }
+
+                    if (match) {
+                        transForm.value.code = match.code;
+                        transForm.value.name = match.name;
+                        transForm.value.category = match.category || inferCategoryByCode(match.code, match.name);
+                    } else {
+                        // 新标的：保留用户输入的代码/名称，只按规则推断分类；分类可手动改
+                        transForm.value.category = inferCategoryByCode(transForm.value.code, transForm.value.name);
+                    }
+                };
+
+                const inferCategoryByCode = (code, name) => {
+                    const c = String(code || '').trim().toLowerCase();
+                    const n = String(name || '');
+                    if (c.startsWith('f')) return '债基';
+                    if (c === '513530') return '港股ETF';
+                    if (c === '518880') return '黄金';
+                    if (c.startsWith('508') || /reit/i.test(n)) return 'REITs';
+                    if (c.startsWith('159') || c.startsWith('51')) return 'A股ETF';
+                    if (/短债|债|丰享/.test(n)) return '债基';
+                    if (/黄金/.test(n)) return '黄金';
+                    if (/港股|恒生|红利ETF/.test(n)) return '港股ETF';
+                    if (/ETF/i.test(n)) return 'A股ETF';
+                    if (/^\d{6}$/.test(c)) return 'A股权益';
+                    return '';
+                };
+
+                const defaultFeeRulePct = () => ({
+                    commission_rate_pct: 0,
+                    stamp_tax_rate_pct: 0,
+                    transfer_fee_rate_pct: 0,
+                    min_commission: 0
+                });
+
+                const defaultFeeRulesPct = () => {
+                    const defaults = {
+                        'A股权益': { commission_rate_pct: 0.025, stamp_tax_rate_pct: 0.05, transfer_fee_rate_pct: 0.001, min_commission: 0 },
+                        'A股ETF': { commission_rate_pct: 0.025, stamp_tax_rate_pct: 0, transfer_fee_rate_pct: 0, min_commission: 0 },
+                        '港股ETF': { commission_rate_pct: 0.025, stamp_tax_rate_pct: 0, transfer_fee_rate_pct: 0, min_commission: 0 },
+                        'REITs': { commission_rate_pct: 0.025, stamp_tax_rate_pct: 0, transfer_fee_rate_pct: 0, min_commission: 0 },
+                        '黄金': { commission_rate_pct: 0.025, stamp_tax_rate_pct: 0, transfer_fee_rate_pct: 0, min_commission: 0 },
+                        '债基': { commission_rate_pct: 0, stamp_tax_rate_pct: 0, transfer_fee_rate_pct: 0, min_commission: 0 },
+                        '其他': { commission_rate_pct: 0.025, stamp_tax_rate_pct: 0, transfer_fee_rate_pct: 0, min_commission: 0 }
+                    };
+                    feeCategories.forEach(cat => defaults[cat] = { ...defaultFeeRulePct(), ...(defaults[cat] || {}) });
+                    return defaults;
+                };
+
+                const rateToPctRule = (rule = {}) => ({
+                    commission_rate_pct: Number(rule.commission_rate || 0) * 100,
+                    stamp_tax_rate_pct: Number(rule.stamp_tax_rate || 0) * 100,
+                    transfer_fee_rate_pct: Number(rule.transfer_fee_rate || 0) * 100,
+                    min_commission: Number(rule.min_commission || 0)
+                });
+
+                const pctRuleToRate = (rule = {}) => ({
+                    commission_rate: Number(rule.commission_rate_pct || 0) / 100,
+                    stamp_tax_rate: Number(rule.stamp_tax_rate_pct || 0) / 100,
+                    transfer_fee_rate: Number(rule.transfer_fee_rate_pct || 0) / 100,
+                    min_commission: Number(rule.min_commission || 0)
+                });
+
+                const ensureFeeAccount = (account) => {
+                    const acc = account || activeFeeAccount.value || '华泰证券';
+                    if (!feeAccounts.value.includes(acc)) feeAccounts.value.push(acc);
+                    if (!feeSettings.value[acc]) feeSettings.value[acc] = defaultFeeRulesPct();
+                    feeCategories.forEach(cat => {
+                        if (!feeSettings.value[acc][cat]) feeSettings.value[acc][cat] = defaultFeeRulePct();
+                    });
+                    return acc;
+                };
+
+                const normalizeFeeApiData = (data = {}) => {
+                    // compatible with old API shape: {settings:{category:rule}}
+                    if (data.settings && !data.accounts && feeCategories.some(cat => data.settings[cat])) {
+                        return { accounts: ['华泰证券'], active_account: '华泰证券', settings: { '华泰证券': data.settings } };
+                    }
+                    return data;
+                };
+
+                const loadFeeSettingsToForm = (data) => {
+                    const normalized = normalizeFeeApiData(data || {});
+                    const accounts = (normalized.accounts || Object.keys(normalized.settings || {}) || ['华泰证券']).filter(Boolean);
+                    feeAccounts.value = accounts.length ? [...new Set(accounts)] : ['华泰证券'];
+                    activeFeeAccount.value = normalized.active_account && feeAccounts.value.includes(normalized.active_account) ? normalized.active_account : feeAccounts.value[0];
+                    const next = {};
+                    feeAccounts.value.forEach(acc => {
+                        next[acc] = {};
+                        const rules = (normalized.settings || {})[acc] || {};
+                        feeCategories.forEach(cat => next[acc][cat] = rateToPctRule(rules[cat] || pctRuleToRate(defaultFeeRulesPct()[cat])));
+                    });
+                    feeSettings.value = next;
+                    if (!transForm.value.account) transForm.value.account = activeFeeAccount.value;
+                    estimateFeeIfAuto();
+                };
+
+                const feeSettingRows = computed(() => feeCategories.map(category => ({ category })));
+
+                const onActiveFeeAccountChange = () => {
+                    ensureFeeAccount(activeFeeAccount.value);
+                    transForm.value.account = activeFeeAccount.value;
+                    feeManuallyEdited.value = false;
+                    estimateFeeIfAuto();
+                };
+
+                const addFeeAccount = () => {
+                    const name = String(newFeeAccountName.value || '').trim();
+                    if (!name) return ElementPlus.ElMessage.warning('请输入账户名称');
+                    if (feeAccounts.value.includes(name)) return ElementPlus.ElMessage.warning('账户已存在');
+                    feeAccounts.value.push(name);
+                    feeSettings.value[name] = JSON.parse(JSON.stringify(feeSettings.value[activeFeeAccount.value] || defaultFeeRulesPct()));
+                    activeFeeAccount.value = name;
+                    transForm.value.account = name;
+                    newFeeAccountName.value = '';
+                    feeManuallyEdited.value = false;
+                    estimateFeeIfAuto();
+                };
+
+                const removeFeeAccount = async () => {
+                    if (feeAccounts.value.length <= 1) return;
+                    const acc = activeFeeAccount.value;
+                    try {
+                        await ElementPlus.ElMessageBox.confirm(`确定删除账户「${acc}」的费率配置？交易记录不会删除。`, '确认删除', { type: 'warning' });
+                        feeAccounts.value = feeAccounts.value.filter(x => x !== acc);
+                        const nextSettings = { ...feeSettings.value };
+                        delete nextSettings[acc];
+                        feeSettings.value = nextSettings;
+                        activeFeeAccount.value = feeAccounts.value[0];
+                        transForm.value.account = activeFeeAccount.value;
+                        feeManuallyEdited.value = false;
+                        estimateFeeIfAuto();
+                        await saveFeeSettings();
+                    } catch (e) {}
+                };
+
+                const calculateEstimatedFee = (form = transForm.value) => {
+                    const direction = form.direction || '';
+                    if (direction === '分红') return 0;
+                    const category = form.category || inferCategoryByCode(form.code, form.name) || '其他';
+                    const account = form.account || activeFeeAccount.value || feeAccounts.value[0] || '华泰证券';
+                    ensureFeeAccount(account);
+                    const rulePct = (feeSettings.value[account] || {})[category] || (feeSettings.value[account] || {})['其他'] || defaultFeeRulePct();
+                    const rule = pctRuleToRate(rulePct);
+                    const amount = Number(form.amount || 0);
+                    if (!amount || amount <= 0) return 0;
+                    const commissionRaw = amount * Number(rule.commission_rate || 0);
+                    const commission = commissionRaw > 0 ? Math.max(commissionRaw, Number(rule.min_commission || 0)) : 0;
+                    const stampTax = direction === '卖出' ? amount * Number(rule.stamp_tax_rate || 0) : 0;
+                    const transferFee = (category === 'A股权益' && (direction === '买入' || direction === '卖出')) ? amount * Number(rule.transfer_fee_rate || 0) : 0;
+                    return Math.round((commission + stampTax + transferFee) * 100) / 100;
+                };
+
+                const estimateFeeIfAuto = () => {
+                    const estimated = calculateEstimatedFee();
+                    const category = transForm.value.category || inferCategoryByCode(transForm.value.code, transForm.value.name) || '其他';
+                    const account = transForm.value.account || activeFeeAccount.value || '华泰证券';
+                    if (!feeManuallyEdited.value) transForm.value.fee = estimated;
+                    feeAutoHint.value = transForm.value.amount ? `当前按 ${account} / ${category} / ${transForm.value.direction} 估算：${formatMoney(estimated)}${feeManuallyEdited.value ? '（已手动覆盖，不自动改写）' : ''}` : '';
+                };
+
+                const markFeeManual = (val) => {
+                    const estimated = calculateEstimatedFee();
+                    if (Math.abs(Number(val || 0) - estimated) > 0.005) feeManuallyEdited.value = true;
+                };
+
+                const saveFeeSettings = async () => {
+                    try {
+                        const payload = {};
+                        feeAccounts.value.forEach(acc => {
+                            ensureFeeAccount(acc);
+                            payload[acc] = {};
+                            feeCategories.forEach(cat => payload[acc][cat] = pctRuleToRate(feeSettings.value[acc][cat] || {}));
+                        });
+                        const res = await axios.put(API + '/fee-settings', { accounts: feeAccounts.value, active_account: activeFeeAccount.value, settings: payload });
+                        loadFeeSettingsToForm(res.data || { accounts: feeAccounts.value, active_account: activeFeeAccount.value, settings: payload });
+                        feeManuallyEdited.value = false;
+                        estimateFeeIfAuto();
+                        ElementPlus.ElMessage.success('费率设置已保存');
+                    } catch (e) { ElementPlus.ElMessage.error('费率保存失败'); }
+                };
+
+                const resetFeeSettings = async () => {
+                    try {
+                        const res = await axios.post(API + '/fee-settings/reset');
+                        loadFeeSettingsToForm(res.data || {});
+                        feeManuallyEdited.value = false;
+                        estimateFeeIfAuto();
+                        ElementPlus.ElMessage.success('已恢复默认费率');
+                    } catch (e) { ElementPlus.ElMessage.error('恢复默认失败'); }
+                };
+
+                watch(() => [transForm.value.account, transForm.value.amount, transForm.value.direction, transForm.value.category, transForm.value.code, transForm.value.name], () => {
+                    estimateFeeIfAuto();
+                });
+
+                const submitTrans = async () => {
+                    autoMatchTransAsset(transForm.value.code ? 'code' : 'name');
+                    estimateFeeIfAuto();
+                    try {
+                        const payload = { ...transForm.value };
+                        await axios.post(API + '/transactions', payload);
+                        ElementPlus.ElMessage.success('录入成功');
+                        await fetchData();
+                        resetForm();
+                    } catch (e) { ElementPlus.ElMessage.error('录入失败'); }
+                };
+
+                const resetForm = () => {
+                    transForm.value = {
+                        date: new Date().toISOString().split('T')[0],
+                        code: '', name: '', category: '', account: activeFeeAccount.value || feeAccounts.value[0] || '华泰证券', direction: '买入',
+                        quantity: 0, price: 0, amount: 0, fee: 0
+                    };
+                    feeManuallyEdited.value = false;
+                    feeAutoHint.value = '';
+                };
+
+                // 存款 CRUD
+                const openDepositDialog = (row, idx) => {
+                    if (row) {
+                        depositDialog.value = {
+                            visible: true, isEdit: true, editId: row.id,
+                            form: { bank_name: row.bank_name, amount: row.amount, interest_rate: row.interest_rate || 0, due_date: row.due_date || '', remark: row.remark || '' }
+                        };
+                    } else {
+                        depositDialog.value = {
+                            visible: true, isEdit: false, editId: null,
+                            form: { bank_name: '', amount: 0, interest_rate: 0, due_date: '', remark: '' }
+                        };
+                    }
+                };
+
+                const saveDeposit = async () => {
+                    const f = depositDialog.value.form;
+                    try {
+                        if (depositDialog.value.isEdit) {
+                            await axios.put(API + '/deposits/' + depositDialog.value.editId, f);
+                            ElementPlus.ElMessage.success('更新成功');
+                        } else {
+                            await axios.post(API + '/deposits', f);
+                            ElementPlus.ElMessage.success('新增成功');
+                        }
+                        depositDialog.value.visible = false;
+                        await fetchData();
+                    } catch (e) { ElementPlus.ElMessage.error('操作失败'); }
+                };
+
+                const deleteDeposit = async (row, idx) => {
+                    try {
+                        await ElementPlus.ElMessageBox.confirm('确定删除 ' + row.bank_name + ' 的 ' + formatMoney(row.amount) + '？', '确认删除', { type: 'warning' });
+                        await axios.delete(API + '/deposits/' + row.id);
+                        ElementPlus.ElMessage.success('已删除');
+                        await fetchData();
+                    } catch (e) { /* 用户取消 */ }
+                };
+
+                // 证券现金
+                const updateCash = async () => {
+                    try {
+                        const before = Number(dashboard.value.securities_cash || 0);
+                        const after = Number(cashForm.value.amount || 0);
+                        await axios.put(API + '/securities-cash', { amount: after });
+                        ElementPlus.ElMessage.success(`证券现金已校准，差额 ${formatMoney(after - before, 2, true)} 已写入资金流水`);
+                        await fetchData();
+                        await queryCashFlows();
+                    } catch (e) { ElementPlus.ElMessage.error('更新失败'); }
+                };
+
+                const queryCashFlows = async () => {
+                    try {
+                        const params = [];
+                        const q = cashFlowQuery.value;
+                        if (q.dateRange && q.dateRange.length === 2) {
+                            params.push(`start_date=${q.dateRange[0]}`);
+                            params.push(`end_date=${q.dateRange[1]}`);
+                        }
+                        if (q.account) params.push(`account=${encodeURIComponent(q.account)}`);
+                        if (q.flow_type) params.push(`flow_type=${encodeURIComponent(q.flow_type)}`);
+                        const url = API + '/cash-flows' + (params.length ? '?' + params.join('&') : '');
+                        const res = await axios.get(url);
+                        cashFlows.value = res.data || [];
+                    } catch (e) { ElementPlus.ElMessage.error('获取资金流水失败'); }
+                };
+
+                const resetCashFlowQuery = async () => {
+                    cashFlowQuery.value = { dateRange: [], account: '', flow_type: '' };
+                    await queryCashFlows();
+                };
+
+                const cashFlowSummary = computed(() => {
+                    const inflow = cashFlows.value.filter(x => Number(x.amount || 0) > 0).reduce((s, x) => s + Number(x.amount || 0), 0);
+                    const outflow = cashFlows.value.filter(x => Number(x.amount || 0) < 0).reduce((s, x) => s + Number(x.amount || 0), 0);
+                    return { inflow, outflow, outflowAbs: Math.abs(outflow), net: inflow + outflow };
+                });
+
+                const cashFlowTagType = (type) => {
+                    if (type === '银证转入') return 'success';
+                    if (type === '银证转出') return 'warning';
+                    if (type === '现金校准') return 'info';
+                    return '';
+                };
+
+                const addCashFlow = async () => {
+                    try {
+                        if (!cashFlowForm.value.date) return ElementPlus.ElMessage.warning('请选择日期');
+                        if (!cashFlowForm.value.amount) return ElementPlus.ElMessage.warning('请输入金额');
+                        await axios.post(API + '/cash-flows', cashFlowForm.value);
+                        ElementPlus.ElMessage.success('资金流水已新增');
+                        cashFlowForm.value = { date: new Date().toISOString().split('T')[0], account: cashFlowForm.value.account || activeFeeAccount.value || '华泰证券', flow_type: '银证转入', amount: 0, remark: '' };
+                        await fetchData();
+                        await queryCashFlows();
+                    } catch (e) { ElementPlus.ElMessage.error('新增资金流水失败'); }
+                };
+
+                const openCashFlowEditDialog = (row) => {
+                    cashFlowEditDialog.value = {
+                        visible: true,
+                        editId: row.id,
+                        form: { date: row.date, account: row.account || '华泰证券', flow_type: row.flow_type, amount: row.amount, remark: row.remark || '' }
+                    };
+                };
+
+                const saveCashFlowEdit = async () => {
+                    try {
+                        await axios.put(API + '/cash-flows/' + cashFlowEditDialog.value.editId, cashFlowEditDialog.value.form);
+                        ElementPlus.ElMessage.success('资金流水已更新');
+                        cashFlowEditDialog.value.visible = false;
+                        await fetchData();
+                        await queryCashFlows();
+                    } catch (e) { ElementPlus.ElMessage.error('更新资金流水失败'); }
+                };
+
+                const deleteCashFlow = async (row) => {
+                    try {
+                        await ElementPlus.ElMessageBox.confirm(`确定删除 ${row.date} ${row.flow_type} ${formatMoney(row.amount, 2, true)}？`, '确认删除', { type: 'warning' });
+                        await axios.delete(API + '/cash-flows/' + row.id);
+                        ElementPlus.ElMessage.success('资金流水已删除');
+                        await fetchData();
+                        await queryCashFlows();
+                    } catch (e) {}
+                };
+
+                // 交易记录查看
+                const showTransactions = async (row) => {
+                    try {
+                        const res = await axios.get(API + '/transactions?code=' + row.code);
+                        transDialog.value = {
+                            visible: true,
+                            title: `${row.name} (${row.code}) 交易记录`,
+                            transactions: res.data
+                        };
+                    } catch (e) {
+                        ElementPlus.ElMessage.error('获取交易记录失败');
+                    }
+                };
+
+                // 交易管理功能
+                const updatePendingTransactions = () => {
+                    pendingTransactions.value = allTransactions.value.filter(t => t.direction === '申购待确认' || t.direction === '待确认申购');
+                    pendingPurchaseTotal.value = pendingTransactions.value.reduce((sum, t) => sum + Number(t.amount || 0) + Number(t.fee || 0), 0);
+                };
+
+                const queryTransactions = async () => {
+                    try {
+                        const res = await axios.get(API + '/transactions');
+                        allTransactions.value = res.data;
+                        updatePendingTransactions();
+                        applyTransFilter();
+                    } catch (e) {
+                        ElementPlus.ElMessage.error('获取交易记录失败');
+                    }
+                };
+
+                const applyTransFilter = () => {
+                    let result = [...allTransactions.value];
+                    const q = transQuery.value;
+                    
+                    // 日期范围筛选
+                    if (q.dateRange && q.dateRange.length === 2) {
+                        result = result.filter(t => t.date >= q.dateRange[0] && t.date <= q.dateRange[1]);
+                    }
+                    // 代码筛选
+                    if (q.code) {
+                        result = result.filter(t => t.code.includes(q.code));
+                    }
+                    // 名称筛选
+                    if (q.name) {
+                        result = result.filter(t => t.name.includes(q.name));
+                    }
+                    // 方向筛选
+                    if (q.direction) {
+                        result = result.filter(t => t.direction === q.direction);
+                    }
+                    
+                    filteredTransactions.value = result;
+                };
+
+                const resetTransQuery = () => {
+                    transQuery.value = { dateRange: [], code: '', name: '', direction: '' };
+                    filteredTransactions.value = [...allTransactions.value];
+                };
+
+                const goPendingTransactions = async () => {
+                    activeTab.value = 'transactions';
+                    transQuery.value.direction = '申购待确认';
+                    await queryTransactions();
+                };
+
+                const openTransEditDialog = (row) => {
+                    transEditDialog.value = {
+                        visible: true,
+                        editId: row.id,
+                        form: {
+                            date: row.date,
+                            code: row.code,
+                            name: row.name,
+                            category: row.category || '',
+                            account: row.account || activeFeeAccount.value || feeAccounts.value[0] || '华泰证券',
+                            direction: row.direction,
+                            quantity: row.quantity,
+                            price: row.price,
+                            amount: row.amount,
+                            fee: row.fee || 0,
+                            remark: row.remark || ''
+                        }
+                    };
+                };
+
+                const saveTransactionEdit = async () => {
+                    try {
+                        await axios.put(API + '/transactions/' + transEditDialog.value.editId, transEditDialog.value.form);
+                        ElementPlus.ElMessage.success('更新成功');
+                        transEditDialog.value.visible = false;
+                        await queryTransactions();
+                        await fetchData();
+                    } catch (e) {
+                        ElementPlus.ElMessage.error('更新失败');
+                    }
+                };
+
+                const deleteTransaction = async (row) => {
+                    try {
+                        await ElementPlus.ElMessageBox.confirm(
+                            `确定删除 ${row.date} ${row.name} ${row.direction} ${row.quantity}股的记录？`,
+                            '确认删除',
+                            { type: 'warning' }
+                        );
+                        await axios.delete(API + '/transactions/' + row.id);
+                        ElementPlus.ElMessage.success('已删除');
+                        await queryTransactions();
+                        await fetchData();
+                    } catch (e) { /* 用户取消 */ }
+                };
+
+                // 预计年化收益编辑
+                const openExpectedReturnDialog = (row) => {
+                    expectedReturnDialog.value = {
+                        visible: true,
+                        form: {
+                            code: row.code,
+                            name: row.name,
+                            expected_return: row.expected_return || 0
+                        }
+                    };
+                };
+
+                const saveExpectedReturn = async () => {
+                    try {
+                        const code = expectedReturnDialog.value.form.code;
+                        const expected_return = expectedReturnDialog.value.form.expected_return;
+                        await axios.put(API + '/holdings/' + code, { expected_return });
+                        ElementPlus.ElMessage.success('更新成功');
+                        expectedReturnDialog.value.visible = false;
+                        await fetchData();
+                    } catch (e) {
+                        ElementPlus.ElMessage.error('更新失败');
+                    }
+                };
+
+                const openHoldingCorrectionDialog = (row) => {
+                    holdingCorrectionDialog.value = {
+                        visible: true,
+                        current: { ...row },
+                        form: {
+                            date: new Date().toISOString().split('T')[0],
+                            code: row.code,
+                            name: row.name,
+                            category: row.category || '',
+                            actual_quantity: Number(row.quantity || 0),
+                            actual_avg_cost: Number(row.avg_cost || 0),
+                            actual_total_dividend: Number(row.total_dividend || 0),
+                            remark: '按券商持仓页面强制校正'
+                        }
+                    };
+                };
+
+                const saveHoldingCorrection = async () => {
+                    try {
+                        const f = holdingCorrectionDialog.value.form;
+                        if (!f.date || !f.code) return ElementPlus.ElMessage.warning('校正日期和代码不能为空');
+                        await axios.post(API + '/holding-corrections', f);
+                        ElementPlus.ElMessage.success('持仓校正已保存，并已重新计算持仓');
+                        holdingCorrectionDialog.value.visible = false;
+                        await fetchData();
+                    } catch (e) {
+                        ElementPlus.ElMessage.error(e?.response?.data?.detail || '保存持仓校正失败');
+                    }
+                };
+
+                const openHoldingCorrectionHistory = async (row) => {
+                    try {
+                        const res = await axios.get(API + '/holding-corrections?code=' + encodeURIComponent(row.code));
+                        holdingCorrectionHistoryDialog.value = {
+                            visible: true,
+                            title: `${row.name} (${row.code}) 持仓校正记录`,
+                            records: res.data || []
+                        };
+                    } catch (e) {
+                        ElementPlus.ElMessage.error('获取校正记录失败');
+                    }
+                };
+
+                const deleteHoldingCorrection = async (row) => {
+                    try {
+                        await ElementPlus.ElMessageBox.confirm(`确定删除 ${row.date} ${row.code} 的持仓校正？删除后会按交易记录重新计算。`, '确认删除', { type: 'warning' });
+                        await axios.delete(API + '/holding-corrections/' + row.id);
+                        ElementPlus.ElMessage.success('校正记录已删除，并已重新计算持仓');
+                        holdingCorrectionHistoryDialog.value.records = holdingCorrectionHistoryDialog.value.records.filter(x => x.id !== row.id);
+                        await fetchData();
+                    } catch (e) {}
+                };
+
+                // 监听交易管理标签页切换
+                watch(activeTab, (val) => {
+                    if (val === 'transactions') {
+                        queryTransactions();
+                    }
+                });
+
+                // 资产快照
+                const pct = (part, total, digits = 1) => {
+                    const p = Number(part || 0);
+                    const t = Number(total || 0);
+                    return t > 0 ? `${(p / t * 100).toFixed(digits)}%` : '—';
+                };
+
+                const createSnapshot = async () => {
+                    snapshotLoading.value = true;
+                    try {
+                        const res = await axios.post(API + '/snapshots');
+                        const action = res.data?.action === 'updated' ? '已更新今日快照' : '今日快照已记录';
+                        ElementPlus.ElMessage.success(action);
+                        await fetchData();
+                        await fetchSnapshots();
+                    } catch (e) {
+                        const detail = e?.response?.data?.detail || e?.message || '记录失败';
+                        ElementPlus.ElMessage.error(detail);
+                    } finally {
+                        snapshotLoading.value = false;
+                    }
+                };
+
+                const buildSnapshotAnalysis = () => {
+                    const rowsAsc = [...snapshots.value].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+                    if (!rowsAsc.length) {
+                        snapshotMetrics.value = [];
+                        snapshotChangeRows.value = [];
+                        return;
+                    }
+                    const first = rowsAsc[0];
+                    const last = rowsAsc[rowsAsc.length - 1];
+                    const change = (key) => Number(last[key] || 0) - Number(first[key] || 0);
+                    const changePct = (key) => Number(first[key] || 0) ? (Number(last[key] || 0) / Number(first[key]) - 1) * 100 : null;
+                    const totalChange = change('total_assets');
+                    const profitChange = change('total_profit');
+                    const investRatio = Number(last.total_assets || 0) ? Number(last.total_market_value || 0) / Number(last.total_assets) * 100 : 0;
+                    const liquidRatio = Number(last.total_assets || 0) ? (Number(last.bank_balance || 0) + Number(last.securities_cash || 0) + Number(last.pending_purchase || 0)) / Number(last.total_assets) * 100 : 0;
+                    snapshotMetrics.value = [
+                        { key: 'latest', label: '最新总资产', value: formatMoney(last.total_assets), sub: `${last.date}，${last.holdings_count || 0} 个持仓` },
+                        { key: 'change', label: '区间总资产变化', value: formatMoney(totalChange, 2, true), sub: changePct('total_assets') === null ? '无期初基数' : `${changePct('total_assets') >= 0 ? '+' : ''}${changePct('total_assets').toFixed(2)}%`, color: totalChange >= 0 ? '#F56C6C' : '#67C23A' },
+                        { key: 'profit', label: '投资盈亏变化', value: formatMoney(profitChange, 2, true), sub: `当前累计 ${formatMoney(last.total_profit)}`, color: profitChange >= 0 ? '#F56C6C' : '#67C23A' },
+                        { key: 'ratio', label: '当前投资 / 流动占比', value: `${investRatio.toFixed(1)}%`, sub: `现金+存款+在途 ${liquidRatio.toFixed(1)}%` }
+                    ];
+                    const labels = {
+                        total_assets: '总资产',
+                        total_market_value: '投资账户市值',
+                        bank_balance: '银行存款',
+                        securities_cash: '证券现金',
+                        total_profit: '投资盈亏',
+                        pending_purchase: '申购在途'
+                    };
+                    snapshotChangeRows.value = rowsAsc.length >= 2 ? Object.keys(labels).map(key => ({
+                        label: labels[key],
+                        start: Number(first[key] || 0),
+                        end: Number(last[key] || 0),
+                        change: change(key),
+                        change_pct: changePct(key)
+                    })) : [];
+                };
+
+                const renderSnapshotCharts = () => {
+                    const trendDom = document.getElementById('snapshotTrendChart');
+                    const structDom = document.getElementById('snapshotStructureChart');
+                    if (!trendDom || !structDom) return;
+                    if (!snapshotTrendChart) snapshotTrendChart = echarts.init(trendDom);
+                    if (!snapshotStructureChart) snapshotStructureChart = echarts.init(structDom);
+                    const rowsAsc = [...snapshots.value].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+                    const dates = rowsAsc.map(r => r.date);
+                    snapshotTrendChart.setOption({
+                        tooltip: { trigger: 'axis', valueFormatter: v => formatMoney(v) },
+                        legend: { top: 0 },
+                        grid: { left: 70, right: 24, top: 48, bottom: 36 },
+                        xAxis: { type: 'category', data: dates },
+                        yAxis: { type: 'value', axisLabel: { formatter: v => (v / 10000).toFixed(0) + '万' } },
+                        series: [
+                            { name: '总资产', type: 'line', smooth: true, data: rowsAsc.map(r => r.total_assets) },
+                            { name: '投资账户市值', type: 'line', smooth: true, data: rowsAsc.map(r => r.total_market_value) },
+                            { name: '现金+存款+在途', type: 'line', smooth: true, data: rowsAsc.map(r => Number(r.bank_balance || 0) + Number(r.securities_cash || 0) + Number(r.pending_purchase || 0)) }
+                        ]
+                    });
+                    const latest = rowsAsc[rowsAsc.length - 1] || {};
+                    snapshotStructureChart.setOption({
+                        tooltip: { trigger: 'item', formatter: p => `${p.name}: ${formatMoney(p.value)} (${p.percent}%)` },
+                        series: [{
+                            type: 'pie',
+                            radius: ['38%', '68%'],
+                            data: [
+                                { name: '投资账户市值', value: Number(latest.total_market_value || 0) },
+                                { name: '银行存款', value: Number(latest.bank_balance || 0) },
+                                { name: '证券现金', value: Number(latest.securities_cash || 0) },
+                                { name: '申购在途', value: Number(latest.pending_purchase || 0) }
+                            ]
+                        }]
+                    });
+                };
+
+                const fetchSnapshots = async () => {
+                    try {
+                        let url = API + '/snapshots';
+                        if (snapshotRange.value && snapshotRange.value.length === 2) {
+                            url += `?start_date=${snapshotRange.value[0]}&end_date=${snapshotRange.value[1]}`;
+                        }
+                        const res = await axios.get(url);
+                        snapshots.value = res.data;
+                        if (snapshotRange.value && snapshotRange.value.length === 2) {
+                            const summaryRes = await axios.get(API + `/snapshots/summary?start_date=${snapshotRange.value[0]}&end_date=${snapshotRange.value[1]}`);
+                            snapshotSummary.value = summaryRes.data;
+                        } else {
+                            snapshotSummary.value = null;
+                        }
+                        buildSnapshotAnalysis();
+                        if (activeTab.value === 'snapshots') nextTick(renderSnapshotCharts);
+                    } catch (e) { console.error('获取快照失败', e); }
+                };
+
+                // 计算资产配置分析
+                const calculateAllocationAnalysis = () => {
+                    const categories = {};
+                    const macroGroups = {
+                        '权益': { amount: 0, cost: 0, profit: 0, weighted_expected_return_sum: 0, total_weight: 0, details: new Set() },
+                        '固收': { amount: 0, cost: 0, profit: 0, weighted_expected_return_sum: 0, total_weight: 0, details: new Set() },
+                        '存款': { amount: 0, cost: 0, profit: 0, weighted_expected_return_sum: 0, total_weight: 0, details: new Set() }
+                    };
+                    let totalValue = 0;
+                    
+                    const defaultExpectedReturns = {
+                        'A股权益': 6.0,
+                        'A股ETF': 5.0,
+                        '港股ETF': 5.0,
+                        '债基': 2.5,
+                        'REITs': 4.5,
+                        '黄金': 4.0,
+                        '银行存款': 2.0,
+                        '证券现金': 0.0,
+                        '未分类': 3.0
+                    };
+
+                    const getMacroGroup = (cat) => {
+                        if (cat === '债基') return '固收';
+                        if (cat === '银行存款') return '存款';
+                        return '权益';
+                    };
+                    
+                    holdings.value.forEach(h => {
+                        const cat = h.category || '未分类';
+                        const value = h.quantity * h.last_price;
+                        const cost = h.quantity * h.avg_cost;
+                        const profit = value - cost + (h.total_dividend || 0);
+                        
+                        totalValue += value;
+                        
+                        if (!categories[cat]) {
+                            categories[cat] = {
+                                market_value: 0,
+                                cost: 0,
+                                profit: 0,
+                                count: 0,
+                                weighted_expected_return_sum: 0,
+                                total_weight: 0
+                            };
+                        }
+                        
+                        categories[cat].market_value += value;
+                        categories[cat].cost += cost;
+                        categories[cat].profit += profit;
+                        categories[cat].count += 1;
+                        
+                        const expectedReturn = h.expected_return || defaultExpectedReturns[cat] || defaultExpectedReturns['未分类'];
+                        categories[cat].weighted_expected_return_sum += expectedReturn * value;
+                        categories[cat].total_weight += value;
+
+                        const macro = macroGroups[getMacroGroup(cat)];
+                        macro.amount += value;
+                        macro.cost += cost;
+                        macro.profit += profit;
+                        macro.weighted_expected_return_sum += expectedReturn * value;
+                        macro.total_weight += value;
+                        macro.details.add(cat);
+                    });
+
+                    const addSyntheticCategory = (cat, value, expectedReturn, detailCount = 1) => {
+                        if (value <= 0) return;
+                        if (!categories[cat]) {
+                            categories[cat] = { market_value: 0, cost: 0, profit: 0, count: 0, weighted_expected_return_sum: 0, total_weight: 0 };
+                        }
+                        categories[cat].market_value += value;
+                        categories[cat].cost += value;
+                        categories[cat].profit += 0;
+                        categories[cat].count += detailCount;
+                        categories[cat].weighted_expected_return_sum += expectedReturn * value;
+                        categories[cat].total_weight += value;
+                    };
+                    
+                    const bankBalance = Number(dashboard.value.bank_balance || 0);
+                    if (bankBalance > 0) {
+                        addSyntheticCategory('银行存款', bankBalance, defaultExpectedReturns['银行存款'], deposits.value.length || 1);
+                        macroGroups['存款'].amount += bankBalance;
+                        macroGroups['存款'].cost += bankBalance;
+                        macroGroups['存款'].weighted_expected_return_sum += defaultExpectedReturns['银行存款'] * bankBalance;
+                        macroGroups['存款'].total_weight += bankBalance;
+                        macroGroups['存款'].details.add('银行存款');
+                    }
+
+                    const securitiesCash = Number(dashboard.value.securities_cash || 0);
+                    if (securitiesCash > 0) {
+                        addSyntheticCategory('证券现金', securitiesCash, defaultExpectedReturns['证券现金'], 1);
+                        macroGroups['固收'].amount += securitiesCash;
+                        macroGroups['固收'].cost += securitiesCash;
+                        macroGroups['固收'].weighted_expected_return_sum += defaultExpectedReturns['证券现金'] * securitiesCash;
+                        macroGroups['固收'].total_weight += securitiesCash;
+                        macroGroups['固收'].details.add('证券现金');
+                    }
+
+                    const pendingPurchase = Number(dashboard.value.pending_purchase || 0);
+                    if (pendingPurchase > 0) {
+                        addSyntheticCategory('基金申购在途', pendingPurchase, defaultExpectedReturns['债基'], pendingTransactions.value.length || 1);
+                        macroGroups['固收'].amount += pendingPurchase;
+                        macroGroups['固收'].cost += pendingPurchase;
+                        macroGroups['固收'].weighted_expected_return_sum += defaultExpectedReturns['债基'] * pendingPurchase;
+                        macroGroups['固收'].total_weight += pendingPurchase;
+                        macroGroups['固收'].details.add('基金申购在途');
+                    }
+                    
+                    if (dashboard.value.total_assets) {
+                        totalValue = dashboard.value.total_assets;
+                    }
+                    
+                    allocationAnalysis.value = Object.keys(categories).map(cat => {
+                        const data = categories[cat];
+                        const expectedReturn = data.total_weight > 0
+                            ? data.weighted_expected_return_sum / data.total_weight
+                            : (defaultExpectedReturns[cat] || defaultExpectedReturns['未分类']);
+                        
+                        return {
+                            category: cat,
+                            market_value: data.market_value,
+                            percentage: (data.market_value / totalValue) * 100,
+                            profit: data.profit,
+                            profit_rate: data.cost > 0 ? (data.profit / data.cost) * 100 : 0,
+                            count: data.count,
+                            expected_annual_return: expectedReturn
+                        };
+                    }).sort((a, b) => b.market_value - a.market_value);
+
+                    macroAllocationAnalysis.value = ['权益', '固收', '存款'].map(group => {
+                        const data = macroGroups[group];
+                        return {
+                            group,
+                            amount: data.amount,
+                            percentage: totalValue > 0 ? (data.amount / totalValue) * 100 : 0,
+                            profit: data.profit,
+                            profit_rate: data.cost > 0 ? (data.profit / data.cost) * 100 : 0,
+                            expected_return: data.total_weight > 0 ? data.weighted_expected_return_sum / data.total_weight : 0,
+                            detail: Array.from(data.details).join('、') || '—'
+                        };
+                    });
+                    
+                    let weightedSum = 0;
+                    let totalWeight = 0;
+                    macroAllocationAnalysis.value.forEach(item => {
+                        weightedSum += item.expected_return * item.amount;
+                        totalWeight += item.amount;
+                    });
+                    portfolioExpectedReturn.value = totalWeight > 0 ? weightedSum / totalWeight : 0;
+                };
+
+                const renderAllocationCharts = () => {
+                    if (!allocationChart) {
+                        const chartDom = document.getElementById('allocationChart');
+                        if (chartDom) allocationChart = echarts.init(chartDom);
+                    }
+                    if (!categoryChart) {
+                        const catDom = document.getElementById('categoryChart');
+                        if (catDom) categoryChart = echarts.init(catDom);
+                    }
+                    
+                    const macroData = macroAllocationAnalysis.value.map(x => ({
+                        name: x.group,
+                        value: Number(x.amount || 0)
+                    })).filter(x => x.value > 0);
+
+                    const categoryData = allocationAnalysis.value.map(x => ({
+                        name: x.category,
+                        value: Number(x.market_value || 0)
+                    })).filter(x => x.value > 0);
+
+                    if (allocationChart) {
+                        allocationChart.setOption({
+                            title: { text: '权益 / 固收 / 存款', left: 'center' },
+                            tooltip: { trigger: 'item', formatter: (params) => `${params.name}: ${formatMoney(params.value)} (${params.percent}%)` },
+                            legend: { bottom: 0 },
+                            series: [{ type: 'pie', radius: ['38%', '66%'], center: ['50%', '46%'], data: macroData }]
+                        });
+                    }
+                    if (categoryChart) {
+                        categoryChart.setOption({
+                            title: { text: '细分类别占比', left: 'center' },
+                            tooltip: { trigger: 'item', formatter: (params) => `${params.name}: ${formatMoney(params.value)} (${params.percent}%)` },
+                            legend: { bottom: 0 },
+                            series: [{ type: 'pie', radius: ['34%', '64%'], center: ['50%', '46%'], data: categoryData }]
+                        });
+                    }
+                };
+
+                watch(activeTab, (val) => {
+                    if (val === 'allocation') nextTick(renderAllocationCharts);
+                    if (val === 'snapshots') {
+                        fetchSnapshots().then(() => nextTick(renderSnapshotCharts));
+                    }
+                });
+
+                onMounted(() => {
+                    fetchData();
+                    queryTransactions();
+                    queryCashFlows();
+                    fetchSnapshots();
+                });
+
+                return {
+                    activeTab, dashboard, holdings, deposits, depositRows, depositSummary, depositBankBreakdown, depositMaturityBuckets, syncing, trailingSyncing, syncNotice,
+                    snapshots, snapshotRange, snapshotSummary, snapshotMetrics, snapshotChangeRows, snapshotLoading,
+                    transForm, feeSettings, feeAccounts, activeFeeAccount, newFeeAccountName, feeCategories, feeSettingRows, feeAutoHint, depositDialog, cashForm, cashFlows, cashFlowForm, cashFlowQuery, cashFlowSummary, cashFlowEditDialog, transDialog, allocationAnalysis, macroAllocationAnalysis,
+                    allocationSummary, allocationHealth, portfolioExpectedReturn, expectedReturnDialog, holdingCorrectionDialog, holdingCorrectionHistoryDialog,
+                    // 交易管理相关
+                    allTransactions, filteredTransactions, pendingTransactions, pendingPurchaseTotal, transQuery, transEditDialog,
+                    syncPrices, syncTrailingReturns, submitTrans, resetForm, fetchData, markFeeManual, saveFeeSettings, resetFeeSettings, addFeeAccount, removeFeeAccount, onActiveFeeAccountChange,
+                    queryAssetByCode, queryAssetByName, selectTransAsset, autoMatchTransAsset,
+                    openDepositDialog, saveDeposit, deleteDeposit, updateCash, queryCashFlows, resetCashFlowQuery, addCashFlow, openCashFlowEditDialog, saveCashFlowEdit, deleteCashFlow, cashFlowTagType,
+                    createSnapshot, fetchSnapshots, showTransactions,
+                    queryTransactions, resetTransQuery, goPendingTransactions, openTransEditDialog, saveTransactionEdit, deleteTransaction,
+                    openExpectedReturnDialog, saveExpectedReturn, openHoldingCorrectionDialog, saveHoldingCorrection, openHoldingCorrectionHistory, deleteHoldingCorrection, formatMoney, formatPercent, pct
+                };
+            }
+        });
+        app.use(ElementPlus);
+        app.mount('#app');
+    </script>
+</body>
+</html>
