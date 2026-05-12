@@ -1452,17 +1452,40 @@
 
                 const syncPrices = async () => {
                     syncing.value = true;
-                    const loading = ElementPlus.ElLoading.service({ text: '正在同步最新价...', background: 'rgba(255, 255, 255, 0.65)' });
+                    const loading = ElementPlus.ElLoading.service({ text: '正在同步最新价（并自动刷新近一年收益率）...', background: 'rgba(255, 255, 255, 0.65)' });
                     try {
-                        const res = await axios.get(API + '/sync-prices', { timeout: 120000 });
+                        const priceRes = await axios.get(API + '/sync-prices', { timeout: 120000 });
+                        const priceData = priceRes.data || {};
+                        const priceFailedCount = Array.isArray(priceData.failed) ? priceData.failed.length : 0;
+
+                        let trailingData = null;
+                        let trailingFailedText = '';
+                        try {
+                            const trailingRes = await axios.get(API + '/sync-trailing-returns', { timeout: 180000 });
+                            trailingData = trailingRes.data || {};
+                            const trailingFailedCount = Array.isArray(trailingData.failed) ? trailingData.failed.length : 0;
+                            if (trailingFailedCount > 0) {
+                                trailingFailedText = trailingData.failed.slice(0, 3).map(x => `${x.code} ${x.name || ''}: ${x.reason || '失败'}`).join('；');
+                            }
+                        } catch (trailingErr) {
+                            const trailingDetail = trailingErr?.response?.data?.detail || trailingErr?.message || '未知错误';
+                            trailingData = { checked: 0, updated: 0, failed: [{ code: 'TRAILING', name: '近一年收益率', reason: trailingDetail }] };
+                            trailingFailedText = `近一年收益率同步失败：${trailingDetail}`;
+                        }
+
                         await fetchData();
-                        const data = res.data || {};
-                        const failedCount = Array.isArray(data.failed) ? data.failed.length : 0;
-                        const msg = `同步完成：检查 ${data.checked || 0} 个，价格变化 ${data.updated || 0} 个，无变化 ${data.unchanged || 0} 个，失败 ${failedCount} 个`;
-                        if (failedCount > 0) {
-                            const failedText = data.failed.slice(0, 3).map(x => `${x.code} ${x.name || ''}: ${x.reason || '失败'}`).join('；');
-                            showSyncNotice(msg + '。' + failedText, 'warning');
-                            ElementPlus.ElMessage.warning(msg + '。' + failedText);
+
+                        const trailingFailedCount = Array.isArray(trailingData?.failed) ? trailingData.failed.length : 0;
+                        const msg = `同步完成：最新价检查 ${priceData.checked || 0} 个，价格变化 ${priceData.updated || 0} 个，无变化 ${priceData.unchanged || 0} 个，价格失败 ${priceFailedCount} 个；近一年收益率检查 ${trailingData?.checked || 0} 个，成功 ${trailingData?.updated || 0} 个，失败 ${trailingFailedCount} 个`;
+
+                        const priceFailedText = priceFailedCount > 0
+                            ? priceData.failed.slice(0, 3).map(x => `${x.code} ${x.name || ''}: ${x.reason || '失败'}`).join('；')
+                            : '';
+                        const detailParts = [priceFailedText, trailingFailedText].filter(Boolean);
+                        if (detailParts.length > 0) {
+                            const detailText = detailParts.join('；');
+                            showSyncNotice(msg + '。' + detailText, 'warning');
+                            ElementPlus.ElMessage.warning(msg + '。' + detailText);
                         } else {
                             showSyncNotice(msg, '');
                             ElementPlus.ElMessage.success(msg);
