@@ -96,7 +96,7 @@ This system manages a personal investment portfolio, including A-share equities,
    - 支持按日期、证券账户、流水类型查询；
    - 手动校准证券现金时会自动生成一条现金校准流水，后续可追溯。
 
-11. **同步最新价优化**
+12. **同步最新价优化**
    - A股 / ETF / REIT 价格同步改为更快的东方财富批量行情；
    - 场外基金如 `f002864`、`f004388` 使用天天基金净值；
    - 前端增加同步 loading 和完成提示，即使价格无变化也会明确反馈。
