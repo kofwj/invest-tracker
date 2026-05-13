@@ -1,6 +1,6 @@
 # 投资资产管理系统说明文档 / Investment Tracker Guide
 
-> 更新时间 / Last updated：2026-05-12 07:40 CST  
+> 更新时间 / Last updated：2026-05-13 08:35 CST  
 > 本文档适用于本地运行的 `invest-tracker` 投资资产管理系统。  
 > This guide describes the local `invest-tracker` investment portfolio web app.
 
@@ -18,7 +18,8 @@
 - 每个持仓标的可维护「预计年化收益」，用于计算组合预计年化；
 - 支持场外基金「申购待确认」状态，解决只知道申购金额、份额/净值尚未确认的问题；
 - 支持多证券账户交易费率设置，并按账户/分类/方向自动估算手续费，同时保留手动覆盖；
-- 支持持仓强制校正/对账锚点，解决历史交易不完整或券商成本口径不一致的问题。
+- 支持持仓强制校正/对账锚点，解决历史交易不完整或券商成本口径不一致的问题；
+- 支持交易记录和银行存款 CSV 模板下载、导出和导入，导入前自动备份数据库。
 
 当前版本为本地 MVP：前端 Vue 3 + Element Plus + ECharts，后端 FastAPI + SQLite。
 
@@ -115,7 +116,13 @@ This system manages a personal investment portfolio, including A-share equities,
    - 手续费按证券账户 + 资产分类 + 交易方向 + 成交金额自动估算；
    - 手续费输入框仍可手动覆盖，最终以券商实际成交单为准。
 
-15. **安全垫 / 回退机制**
+15. **交易记录/银行存款导入导出**
+   - 交易录入/管理页新增「下载交易模板」「导出交易」「导入交易」；
+   - 银行存款页新增「下载存款模板」「导出存款」「导入存款」；
+   - 目前支持 CSV，导入前自动生成数据库备份；
+   - 交易导入成功后会自动重算持仓和证券现金。
+
+16. **安全垫 / 回退机制**
    - 项目已初始化 Git，代码和文档可按提交回退；
    - 真实数据库 `data/invest.db` 不进入 Git，避免泄露和误提交；
    - 新增 `scripts/backup_db.py`、`scripts/restore_db.py`、`scripts/safety_snapshot.py`；
@@ -252,7 +259,20 @@ URLs: frontend `http://localhost:8080`, backend API `http://localhost:8000`, dat
 - 到期分布：30天内、31-90天、91-180天、180天以上、未设置到期；
 - 存款明细：银行、金额、组合占比、利率、预计年利息、到期时间、剩余天数、备注、操作。
 
-支持新增、编辑、删除。
+支持新增、编辑、删除、下载 CSV 模板、CSV 导出、CSV 导入。
+
+存款导入模板字段：
+
+```text
+bank_name, amount, interest_rate, due_date, remark
+```
+
+导入说明：
+
+- 目前支持 `.csv`；
+- `due_date` 日期格式为 `YYYY-MM-DD`，可为空；
+- 导入前系统自动备份 `data/invest.db` 到 `backups/`；
+- 成功行会写入真实存款表，失败行会在结果中提示。
 
 ### 4.5 交易录入/管理 / Transaction Entry & Management
 
@@ -283,7 +303,25 @@ URLs: frontend `http://localhost:8080`, backend API `http://localhost:8000`, dat
 - 按日期范围、代码、名称、方向筛选；
 - 编辑交易；
 - 删除交易；
-- 查看申购待确认记录。
+- 查看申购待确认记录；
+- 下载交易 CSV 模板；
+- 导出交易 CSV；
+- 导入交易 CSV。
+
+交易导入模板字段：
+
+```text
+date, account, code, name, category, direction, quantity, price, amount, fee, remark
+```
+
+导入说明：
+
+- 目前支持 `.csv`；
+- `date` 日期格式为 `YYYY-MM-DD`；
+- `direction` 必须是 `买入`、`卖出`、`分红`、`申购待确认`；
+- `amount` 填正数，买入/卖出方向由 `direction` 表示；
+- 导入前系统自动备份数据库；
+- 导入成功后自动重算持仓、摊薄成本、证券现金和申购在途。
 
 ### 4.6 现金设置 / Cash Settings
 
@@ -524,10 +562,16 @@ One-year trailing return = one-year price/NAV change of the instrument itself
 | GET | `/sync-prices` | 同步最新价 |
 | GET | `/sync-trailing-returns` | 同步近一年标的收益率 |
 | GET | `/transactions` | 获取交易记录，可按 `code` 查询 |
+| GET | `/transactions/template` | 下载交易导入 CSV 模板 |
+| GET | `/transactions/export` | 导出交易记录 CSV |
+| POST | `/transactions/import` | 导入交易记录 CSV，导入前自动备份并重算持仓 |
 | POST | `/transactions` | 新增交易 |
 | PUT | `/transactions/{id}` | 更新交易 |
 | DELETE | `/transactions/{id}` | 删除交易 |
 | GET | `/deposits` | 获取银行存款 |
+| GET | `/deposits/template` | 下载银行存款导入 CSV 模板 |
+| GET | `/deposits/export` | 导出银行存款 CSV |
+| POST | `/deposits/import` | 导入银行存款 CSV，导入前自动备份 |
 | POST | `/deposits` | 新增银行存款 |
 | PUT | `/deposits/{id}` | 更新银行存款 |
 | DELETE | `/deposits/{id}` | 删除银行存款 |
@@ -615,7 +659,27 @@ One-year trailing return = one-year price/NAV change of the instrument itself
 
 注意：如果实际成交单手续费不同，直接在交易录入中手动改手续费即可，系统不会再次覆盖手动值。
 
-### 8.7 修改持仓预计年化收益
+### 8.8 导入/导出交易记录和银行存款
+
+交易记录：
+
+1. 打开「交易录入/管理」。
+2. 点击「下载交易模板」，按模板填写 CSV。
+3. 点击「导出交易」可备份当前全部交易记录。
+4. 点击「导入交易」上传 CSV。
+5. 系统导入前会自动备份数据库，导入成功后自动重算持仓和证券现金。
+
+银行存款：
+
+1. 打开「银行存款」。
+2. 点击「下载存款模板」，按模板填写 CSV。
+3. 点击「导出存款」可备份当前存款明细。
+4. 点击「导入存款」上传 CSV。
+5. 系统导入前会自动备份数据库。
+
+注意：导入是真实写入数据；如果只是试填模板，建议先用导出备份或安全快照。
+
+### 8.9 修改持仓预计年化收益
 
 1. 打开「持仓明细」。
 2. 在目标持仓右侧点击「编辑」。

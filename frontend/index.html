@@ -479,7 +479,20 @@
                             <div class="deposit-title">银行存款分析</div>
                             <div class="deposit-subtitle">展示存款总额、加权利率、预计利息、到期分布和银行集中度</div>
                         </div>
-                        <el-button type="primary" @click="openDepositDialog(null)">新增存款</el-button>
+                        <el-space wrap>
+                            <el-button @click="downloadDepositsTemplate">下载存款模板</el-button>
+                            <el-button @click="exportDeposits">导出存款</el-button>
+                            <el-upload
+                                action="#"
+                                :auto-upload="false"
+                                :show-file-list="false"
+                                accept=".csv"
+                                :on-change="importDeposits"
+                            >
+                                <el-button type="warning">导入存款</el-button>
+                            </el-upload>
+                            <el-button type="primary" @click="openDepositDialog(null)">新增存款</el-button>
+                        </el-space>
                     </div>
 
                     <div class="deposit-stats">
@@ -716,7 +729,25 @@
                         申购在途提醒：{{ pendingTransactions.length }} 笔，合计 {{ formatMoney(pendingPurchaseTotal) }}。份额/净值确认后，点击对应记录“编辑”，把方向改为“买入”并补充数量/单价。
                     </template>
                 </el-alert>
-                <el-card header="交易记录查询">
+                <el-card>
+                    <template #header>
+                        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+                            <span>交易记录查询</span>
+                            <el-space wrap>
+                                <el-button @click="downloadTransactionsTemplate">下载交易模板</el-button>
+                                <el-button @click="exportTransactions">导出交易</el-button>
+                                <el-upload
+                                    action="#"
+                                    :auto-upload="false"
+                                    :show-file-list="false"
+                                    accept=".csv"
+                                    :on-change="importTransactions"
+                                >
+                                    <el-button type="warning">导入交易</el-button>
+                                </el-upload>
+                            </el-space>
+                        </div>
+                    </template>
                     <!-- 筛选条件 -->
                     <el-row :gutter="20" style="margin-bottom: 20px;">
                         <el-col :span="8">
@@ -1796,6 +1827,53 @@
                     feeAutoHint.value = '';
                 };
 
+
+                const downloadFile = async (url, filename) => {
+                    try {
+                        const res = await axios.get(API + url, { responseType: 'blob' });
+                        const blobUrl = window.URL.createObjectURL(new Blob([res.data], { type: 'text/csv;charset=utf-8;' }));
+                        const link = document.createElement('a');
+                        link.href = blobUrl;
+                        link.download = filename;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        window.URL.revokeObjectURL(blobUrl);
+                    } catch (e) {
+                        ElementPlus.ElMessage.error('下载失败：' + (e?.response?.data?.detail || e?.message || '未知错误'));
+                    }
+                };
+
+                const downloadTransactionsTemplate = () => downloadFile('/transactions/template', 'transactions_template.csv');
+                const exportTransactions = () => downloadFile('/transactions/export', `transactions_${new Date().toISOString().slice(0,10)}.csv`);
+                const downloadDepositsTemplate = () => downloadFile('/deposits/template', 'deposits_template.csv');
+                const exportDeposits = () => downloadFile('/deposits/export', `deposits_${new Date().toISOString().slice(0,10)}.csv`);
+
+                const uploadCsv = async (url, file, label, afterSuccess) => {
+                    const raw = file?.raw || file;
+                    if (!raw) return;
+                    if (!String(raw.name || '').toLowerCase().endsWith('.csv')) {
+                        return ElementPlus.ElMessage.warning('请上传 CSV 文件');
+                    }
+                    try {
+                        await ElementPlus.ElMessageBox.confirm(`确认导入 ${raw.name}？导入前系统会自动备份数据库，成功行会写入真实数据。`, `导入${label}`, { type: 'warning' });
+                        const fd = new FormData();
+                        fd.append('file', raw);
+                        const res = await axios.post(API + url, fd, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 180000 });
+                        const data = res.data || {};
+                        const errorText = data.failed ? `，失败 ${data.failed} 行：${(data.errors || []).slice(0, 3).map(e => `第${e.row}行 ${e.error}`).join('；')}` : '';
+                        ElementPlus.ElMessage.success(`${label}导入完成：成功 ${data.imported || 0} 行${errorText}`);
+                        if (afterSuccess) await afterSuccess();
+                    } catch (e) {
+                        if (e === 'cancel') return;
+                        const detail = e?.response?.data?.detail || e?.message || '未知错误';
+                        ElementPlus.ElMessage.error(`${label}导入失败：${detail}`);
+                    }
+                };
+
+                const importTransactions = (file) => uploadCsv('/transactions/import', file, '交易记录', async () => { await queryTransactions(); await fetchData(); });
+                const importDeposits = (file) => uploadCsv('/deposits/import', file, '银行存款', async () => { await fetchData(); });
+
                 // 存款 CRUD
                 const openDepositDialog = (row, idx) => {
                     if (row) {
@@ -2445,6 +2523,7 @@
                     // 交易管理相关
                     allTransactions, filteredTransactions, pendingTransactions, pendingPurchaseTotal, transQuery, transEditDialog,
                     syncPrices, syncTrailingReturns, submitTrans, resetForm, fetchData, markFeeManual, saveFeeSettings, resetFeeSettings, addFeeAccount, removeFeeAccount, onActiveFeeAccountChange,
+                    downloadTransactionsTemplate, exportTransactions, importTransactions, downloadDepositsTemplate, exportDeposits, importDeposits,
                     queryAssetByCode, queryAssetByName, selectTransAsset, autoMatchTransAsset,
                     openDepositDialog, saveDeposit, deleteDeposit, updateCash, queryCashFlows, resetCashFlowQuery, addCashFlow, openCashFlowEditDialog, saveCashFlowEdit, deleteCashFlow, cashFlowTagType,
                     createSnapshot, fetchSnapshots, showTransactions,
