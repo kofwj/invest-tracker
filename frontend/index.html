@@ -16,6 +16,16 @@
         .sync-status.error { background: #fef0f0; color: #f56c6c; }
         .app-container { padding: 20px; max-width: 1200px; margin: 0 auto; }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+
+        .perf-metric-card { text-align: center; padding: 8px 0; min-height: 90px; display: flex; flex-direction: column; justify-content: center; }
+        .perf-metric-card .el-card__body { padding: 12px 8px; }
+        .perf-metric-label { font-size: 12px; color: #909399; margin-bottom: 4px; }
+        .perf-metric-value { font-size: 18px; font-weight: 700; line-height: 1.3; }
+        .perf-metric-sub { font-size: 11px; color: #C0C4CC; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .perf-cards-row { display: flex; flex-wrap: wrap; }
+        .perf-cards-row > .el-col { display: flex; margin-bottom: 12px; }
+        .perf-cards-row > .el-col > .el-card { width: 100%; }
+
         .top-stats { display: grid; grid-template-columns: 1.45fr repeat(4, 1fr); gap: 16px; }
         .stat-card { border: 0; border-radius: 14px; overflow: hidden; }
         .stat-card .el-card__body { padding: 18px 20px; }
@@ -385,6 +395,118 @@
                     </el-card>
                 </el-card>
             </el-tab-pane>
+
+
+            <!-- 收益分析 -->
+            <el-tab-pane label="收益分析" name="performance">
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
+                    <h3 style="margin:0;font-size:18px;font-weight:700;color:#303133;">收益分析</h3>
+                    <div style="display:flex;gap:12px;align-items:center;">
+                        <el-tag :type="perfSummary?.xirr_status === 'ok' ? 'success' : 'info'" size="small">
+                            {{ perfSummary?.xirr_status === 'ok' ? 'XIRR已计算' : perfSummary?.xirr_message || '无数据' }}
+                        </el-tag>
+                        <el-button size="small" @click="fetchPerformance" :loading="perfLoading">刷新</el-button>
+                    </div>
+                </div>
+
+                <el-alert v-if="!perfSummary?.flow_count" title="尚未录入组合外部现金流。请在下方「组合资金流水」中添加投入/取出记录，系统才能计算 XIRR 年化收益。" type="warning" show-icon :closable="false" style="margin-bottom: 16px;"></el-alert>
+
+                <el-row :gutter="12" class="perf-cards-row" style="margin-bottom: 18px;">
+                    <el-col :xs="12" :sm="8" :md="4" v-for="m in perfCards" :key="m.label">
+                        <el-card shadow="hover" class="perf-metric-card">
+                            <div class="perf-metric-label">{{ m.label }}</div>
+                            <div class="perf-metric-value" :style="{ color: m.color || '#303133' }">{{ m.value }}</div>
+                            <div class="perf-metric-sub">{{ m.sub }}</div>
+                        </el-card>
+                    </el-col>
+                </el-row>
+
+                    <el-row :gutter="20" style="margin-bottom: 18px;" v-if="perfTimeline.length > 1">
+                        <el-col :span="24">
+                            <el-card shadow="never" header="资产 vs 净投入">
+                                <div id="perfTimelineChart" style="height: 280px;"></div>
+                            </el-card>
+                        </el-col>
+                    </el-row>
+
+                    <el-card shadow="never" header="标的收益贡献" style="margin-bottom: 18px;">
+                        <el-table :data="perfContribution" stripe size="small" style="width: 100%">
+                            <el-table-column prop="name" label="名称" width="120" fixed="left"></el-table-column>
+                            <el-table-column prop="category" label="分类" width="90"></el-table-column>
+                            <el-table-column label="市值" width="110" align="right">
+                                <template #default="s">{{ formatMoney(s.row.market_value) }}</template>
+                            </el-table-column>
+                            <el-table-column label="浮动盈亏" width="110" align="right">
+                                <template #default="s"><span :style="{color: s.row.unrealized_profit >= 0 ? '#F56C6C' : '#67C23A'}">{{ formatMoney(s.row.unrealized_profit) }}</span></template>
+                            </el-table-column>
+                            <el-table-column label="累计分红" width="100" align="right">
+                                <template #default="s">{{ formatMoney(s.row.dividend_income) }}</template>
+                            </el-table-column>
+                            <el-table-column label="总贡献" width="110" align="right">
+                                <template #default="s"><span :style="{color: s.row.total_contribution >= 0 ? '#F56C6C' : '#67C23A'}">{{ formatMoney(s.row.total_contribution) }}</span></template>
+                            </el-table-column>
+                        </el-table>
+                    </el-card>
+
+                    <el-card shadow="never">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                            <span style="font-weight:700;font-size:16px;color:#303133;">组合资金流水</span>
+                            <el-tag size="small">共 {{ perfFlows.length }} 笔</el-tag>
+                        </div>
+                        <el-alert title="这里记录的是「组合外部」资金进出（如新增投入、提取离场），不是银证转账或买卖交易。用于计算 XIRR 年化收益。" type="info" show-icon :closable="false" style="margin-bottom: 12px;"></el-alert>
+                        <el-form :inline="true" size="small" style="margin-bottom: 12px;">
+                            <el-form-item label="日期">
+                                <el-date-picker v-model="perfFlowForm.date" type="date" value-format="YYYY-MM-DD" style="width:140px;"></el-date-picker>
+                            </el-form-item>
+                            <el-form-item label="类型">
+                                <el-select v-model="perfFlowForm.flow_type" style="width:90px;">
+                                    <el-option label="投入" value="投入"></el-option>
+                                    <el-option label="取出" value="取出"></el-option>
+                                </el-select>
+                            </el-form-item>
+                            <el-form-item label="金额">
+                                <el-input-number v-model="perfFlowForm.amount" :min="0" :step="10000" style="width:140px;"></el-input-number>
+                            </el-form-item>
+                            <el-form-item label="来源">
+                                <el-input v-model="perfFlowForm.source" placeholder="银行卡/工资" style="width:100px;"></el-input>
+                            </el-form-item>
+                            <el-form-item label="备注">
+                                <el-input v-model="perfFlowForm.remark" style="width:120px;"></el-input>
+                            </el-form-item>
+                            <el-form-item>
+                                <el-button type="primary" @click="addPerfFlow">新增</el-button>
+                            </el-form-item>
+                        </el-form>
+                        <el-table :data="perfFlows" stripe size="small" style="width:100%;">
+                            <el-table-column prop="date" label="日期" width="110"></el-table-column>
+                            <el-table-column prop="flow_type" label="类型" width="70">
+                                <template #default="s"><el-tag :type="s.row.flow_type === '投入' ? 'danger' : 'success'" size="small">{{ s.row.flow_type }}</el-tag></template>
+                            </el-table-column>
+                            <el-table-column label="金额" width="130" align="right">
+                                <template #default="s">{{ formatMoney(s.row.amount) }}</template>
+                            </el-table-column>
+                            <el-table-column prop="source" label="来源" width="100"></el-table-column>
+                            <el-table-column prop="remark" label="备注" min-width="120"></el-table-column>
+                            <el-table-column label="操作" width="80" align="center">
+                                <template #default="s">
+                                    <el-button type="danger" size="small" text @click="deletePerfFlow(s.row.id)">删除</el-button>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                    </el-card>
+
+                    <el-card shadow="never" header="口径说明" style="margin-top: 12px;">
+                        <el-descriptions :column="1" size="small" border>
+                            <el-descriptions-item label="累计净投入">所有「投入」流水合计 - 所有「取出」流水合计</el-descriptions-item>
+                            <el-descriptions-item label="累计总收益">当前总资产 - 累计净投入</el-descriptions-item>
+                            <el-descriptions-item label="XIRR 年化">按组合外部现金流（投入/取出）+ 当前总资产计算的资金加权年化收益率</el-descriptions-item>
+                            <el-descriptions-item label="浮动盈亏">Σ[(最新价 - 普通成本) × 持仓数量]</el-descriptions-item>
+                            <el-descriptions-item label="累计分红">所有持仓累计分红合计</el-descriptions-item>
+                            <el-descriptions-item label="YTD">年初至今收益，基于年初快照和期间外部现金流调整</el-descriptions-item>
+                        </el-descriptions>
+                    </el-card>
+            </el-tab-pane>
+
 
             <!-- 持仓明细 -->
             <el-tab-pane label="持仓明细" name="holdings">
@@ -2501,8 +2623,95 @@
                     }
                 };
 
+
+                // === 收益分析 ===
+                const perfSummary = ref(null);
+                const perfTimeline = ref([]);
+                const perfContribution = ref([]);
+                const perfFlows = ref([]);
+                const perfLoading = ref(false);
+                const perfFlowForm = ref({
+                    date: new Date().toISOString().split('T')[0],
+                    flow_type: '投入',
+                    amount: 100000,
+                    source: '',
+                    remark: ''
+                });
+
+                const perfCards = computed(() => {
+                    const s = perfSummary.value;
+                    if (!s) return [];
+                    return [
+                        { label: '当前总资产', value: formatMoney(s.total_assets), sub: '市值+现金+存款+在途', color: '#303133' },
+                        { label: '累计净投入', value: formatMoney(s.net_contribution), sub: `投入${formatMoney(s.total_in)} / 取出${formatMoney(s.total_out)}` },
+                        { label: '累计总收益', value: formatMoney(s.total_gain), sub: `${s.total_gain_pct?.toFixed(2)}%`, color: s.total_gain >= 0 ? '#F56C6C' : '#67C23A' },
+                        { label: 'XIRR 年化', value: s.xirr != null ? s.xirr.toFixed(2) + '%' : '--', sub: s.xirr_status === 'ok' ? '资金加权' : s.xirr_message || '暂无', color: (s.xirr || 0) >= 0 ? '#F56C6C' : '#67C23A' },
+                        { label: '浮盈 + 分红', value: formatMoney(s.current_unrealized_profit + s.total_dividend_income), sub: `浮盈${formatMoney(s.current_unrealized_profit)} / 分红${formatMoney(s.total_dividend_income)}`, color: (s.current_unrealized_profit + s.total_dividend_income) >= 0 ? '#F56C6C' : '#67C23A' },
+                        { label: 'YTD 收益', value: formatMoney(s.ytd_gain), sub: `${s.ytd_gain_pct?.toFixed(2)}%`, color: s.ytd_gain >= 0 ? '#F56C6C' : '#67C23A' },
+                    ];
+                });
+
+                async function fetchPerformance() {
+                    perfLoading.value = true;
+                    try {
+                        const [sumR, tlR, ctR, flR] = await Promise.all([
+                            axios.get(API + '/performance/summary'),
+                            axios.get(API + '/performance/timeline'),
+                            axios.get(API + '/performance/contribution'),
+                            axios.get(API + '/portfolio-cash-flows'),
+                        ]);
+                        perfSummary.value = sumR.data;
+                        perfTimeline.value = tlR.data;
+                        perfContribution.value = ctR.data;
+                        perfFlows.value = flR.data;
+                        nextTick(renderPerfChart);
+                    } catch (e) {
+                        console.error('fetchPerformance', e);
+                    } finally {
+                        perfLoading.value = false;
+                    }
+                }
+
+                async function addPerfFlow() {
+                    try {
+                        await axios.post(API + '/portfolio-cash-flows', perfFlowForm.value);
+                        showSyncNotice('新增成功');
+                        fetchPerformance();
+                    } catch (e) { showSyncNotice('新增失败: ' + (e.response?.data?.detail || e.message), 'error'); }
+                }
+
+                async function deletePerfFlow(id) {
+                    try {
+                        await axios.delete(API + '/portfolio-cash-flows/' + id);
+                        showSyncNotice('已删除');
+                        fetchPerformance();
+                    } catch (e) { showSyncNotice('删除失败', 'error'); }
+                }
+
+                function renderPerfChart() {
+                    const el = document.getElementById('perfTimelineChart');
+                    if (!el || !perfTimeline.value.length) return;
+                    if (el._chart) el._chart.dispose();
+                    const chart = echarts.init(el);
+                    el._chart = chart;
+                    const data = perfTimeline.value;
+                    chart.setOption({
+                        tooltip: { trigger: 'axis' },
+                        legend: { data: ['总资产', '净投入', '总收益'], top: 0 },
+                        grid: { left: 60, right: 30, top: 40, bottom: 30 },
+                        xAxis: { type: 'category', data: data.map(d => d.date) },
+                        yAxis: { type: 'value', axisLabel: { formatter: v => (v / 10000).toFixed(0) + '万' } },
+                        series: [
+                            { name: '总资产', type: 'line', data: data.map(d => d.total_assets), smooth: true, lineStyle: { width: 2 }, itemStyle: { color: '#409EFF' } },
+                            { name: '净投入', type: 'line', data: data.map(d => d.net_contribution), smooth: true, lineStyle: { width: 2, type: 'dashed' }, itemStyle: { color: '#909399' } },
+                            { name: '总收益', type: 'line', data: data.map(d => d.total_gain), smooth: true, lineStyle: { width: 1.5 }, itemStyle: { color: '#E6A23C' } },
+                        ]
+                    });
+                }
+
                 watch(activeTab, (val) => {
                     if (val === 'allocation') nextTick(renderAllocationCharts);
+                    if (val === 'performance') fetchPerformance();
                     if (val === 'snapshots') {
                         fetchSnapshots().then(() => nextTick(renderSnapshotCharts));
                     }
@@ -2528,7 +2737,9 @@
                     openDepositDialog, saveDeposit, deleteDeposit, updateCash, queryCashFlows, resetCashFlowQuery, addCashFlow, openCashFlowEditDialog, saveCashFlowEdit, deleteCashFlow, cashFlowTagType,
                     createSnapshot, fetchSnapshots, showTransactions,
                     queryTransactions, resetTransQuery, goPendingTransactions, openTransEditDialog, saveTransactionEdit, deleteTransaction,
-                    openExpectedReturnDialog, saveExpectedReturn, openHoldingCorrectionDialog, saveHoldingCorrection, openHoldingCorrectionHistory, deleteHoldingCorrection, formatMoney, formatPercent, pct
+                    openExpectedReturnDialog, saveExpectedReturn, openHoldingCorrectionDialog, saveHoldingCorrection, openHoldingCorrectionHistory, deleteHoldingCorrection, formatMoney, formatPercent, pct,
+                    perfSummary, perfTimeline, perfContribution, perfFlows, perfLoading, perfFlowForm, perfCards,
+                    fetchPerformance, addPerfFlow, deletePerfFlow
                 };
             }
         });

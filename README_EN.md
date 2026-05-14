@@ -142,7 +142,35 @@ Actions:
 
 Note: `pending purchase` transactions do not create confirmed holdings and do not affect holding-level profit/loss.
 
-### 3.5 Bank Deposits
+### 3.5 Performance Analysis
+
+Used to evaluate the real investment return of the portfolio.
+
+Key metrics:
+
+| Metric | Description |
+|---|---|
+| Current Total Assets | Market value + brokerage cash + bank deposits + pending purchase |
+| Net Contribution | Sum of all "deposit" flows - sum of all "withdrawal" flows |
+| Total Gain | Current total assets - net contribution |
+| XIRR Annualized | Money-weighted annualized return from external cash flows + current total assets |
+| Unrealized P/L + Dividends | Holding unrealized P/L + cumulative dividends |
+| YTD Gain | Year-to-date gain, adjusted for period cash flows |
+
+Charts:
+
+- Assets vs. net contribution trend chart;
+- Per-holding contribution table (sorted by contribution).
+
+Portfolio cash flows:
+
+- Records external capital entering/leaving the portfolio (new deposits, withdrawals);
+- Different from brokerage transfers (which are internal);
+- Buy/sell/dividend transactions are internal asset conversions and should NOT be recorded here.
+
+First use: record your historical cumulative investment as an initial baseline.
+
+### 3.6 Bank Deposits
 
 Used to maintain and analyze bank deposits.
 
@@ -422,6 +450,7 @@ Rules:
 | `deposits` | Bank deposits |
 | `settings` | System settings, such as cash base and fee settings |
 | `daily_snapshots` | Daily asset snapshots |
+| `portfolio_cash_flows` | Portfolio external cash flows for XIRR analysis |
 
 ### 5.1 `holdings`
 
@@ -467,6 +496,16 @@ date, total_assets, total_market_value, bank_balance, securities_cash,
 pending_purchase, total_profit, holdings_count, created_at
 ```
 
+### 5.6 `portfolio_cash_flows`
+
+Main fields:
+
+```text
+date, flow_type (deposit/withdrawal), amount, source, remark, created_at
+```
+
+Purpose: Records portfolio-level external capital flows for XIRR annualized return calculation. Different from brokerage transfers (internal) and buy/sell/dividend transactions (asset conversion).
+
 ---
 
 ## 6. API Endpoints
@@ -498,228 +537,13 @@ pending_purchase, total_profit, holdings_count, created_at
 | GET | `/securities-cash` | Get brokerage cash and cash-flow breakdown |
 | PUT | `/securities-cash` | Calibrate current brokerage cash and create a cash calibration record |
 | GET | `/cash-flows` | Query brokerage cash flows |
-| POST | `/cash-flows` | Create brokerage cash flow |
-| PUT | `/cash-flows/{id}` | Update brokerage cash flow |
+| POST | `/cash-flows` | Add brokerage cash flow |
+| PUT | `/cash-flows/{id}` | Edit brokerage cash flow |
 | DELETE | `/cash-flows/{id}` | Delete brokerage cash flow |
-| GET | `/fee-settings` | Get multi-broker fee settings |
-| PUT | `/fee-settings` | Save multi-broker fee settings |
-| POST | `/fee-settings/reset` | Reset fee settings to defaults |
-| POST | `/snapshots` | Record or update today’s asset snapshot |
-| GET | `/snapshots` | Query asset snapshots |
-| GET | `/snapshots/summary` | Query snapshot period summary |
-
----
-
-## 7. Common Operations
-
-### 7.1 Record or Update Today’s Asset Snapshot
-
-1. Open Asset Snapshots.
-2. Click “Record/Update Today’s Snapshot”.
-3. If no snapshot exists today, the system creates one. If one already exists, the system updates it.
-
-### 7.2 Enter a Normal Buy Transaction
-
-1. Open Transaction Entry & Management.
-2. Select direction `买入`.
-3. Select brokerage account.
-4. Enter code, name, and category.
-5. Manually enter quantity, price, and amount.
-6. The system estimates fee automatically. If it differs from the broker confirmation, override it manually.
-7. Submit the transaction.
-
-### 7.3 Enter a Pending Fund Subscription
-
-1. Open Transaction Entry & Management.
-2. Select direction `申购待确认`.
-3. Select category `债基`.
-4. Quantity and price may remain `0`.
-5. Enter the actual subscription amount.
-6. After submission, the amount becomes pending purchase and brokerage cash is reduced automatically.
-7. After shares/NAV are confirmed, edit the same transaction, change direction to `买入`, and fill in actual shares and confirmed NAV.
-
-### 7.4 Calibrate Brokerage Cash
-
-1. Open Cash Settings.
-2. Check the current automatically calculated balance.
-3. If bank-securities transfers happened or the displayed balance differs from the brokerage app, enter the brokerage app’s current cash balance.
-4. Click Save Calibration.
-5. The system creates a cash calibration flow record automatically.
-
-### 7.5 Record Bank-Securities Transfers
-
-1. Open Cash Settings.
-2. In Brokerage Cash Flows, select date, brokerage account, and type.
-3. Choose `银证转入` or `银证转出`.
-4. Enter amount and remark.
-5. Click Add Flow.
-6. The system updates brokerage cash and keeps the flow record.
-
-### 7.6 Create Holding Correction
-
-1. Open Holdings.
-2. Click Correction on the target holding row.
-3. Select correction date and enter the actual brokerage quantity, cost, and cumulative dividends.
-4. Save it. The system uses this record as the new holding anchor and recalculates holdings.
-5. Click Records to view historical corrections. Incorrect records can be deleted.
-
-### 7.7 Configure Multi-Broker Fee Settings
-
-1. Open Cash Settings.
-2. Select the current fee account in Trading Fee Settings.
-3. To add a broker, enter the account name and click Add Account.
-4. Edit commission, stamp tax, transfer fee, and minimum commission by category.
-5. Click Save Fee Settings.
-6. Future transaction entry will estimate fees based on the selected account.
-
-### 7.8 Import/Export Transactions
-
-1. Open Transaction Entry & Management.
-2. Click Download Transaction Template and fill in the CSV.
-3. Click Export Transactions to back up all existing transactions.
-4. Click Import Transactions and upload the CSV.
-5. The system backs up the database before import and recalculates holdings and brokerage cash after successful import.
-
-### 7.9 Import/Export Bank Deposits
-
-1. Open Bank Deposits.
-2. Click Download Deposit Template and fill in the CSV.
-3. Click Export Deposits to back up current deposit records.
-4. Click Import Deposits and upload the CSV.
-5. The system backs up the database before import.
-
-### 7.10 Edit Expected Annual Return
-
-1. Open Holdings.
-2. Click Annual Return or Edit on the target row.
-3. Enter the new expected annual return.
-4. After saving, the portfolio expected annual return in Asset Allocation is recalculated.
-
-### 7.11 Sync One-Year Instrument Trailing Returns
-
-1. Open Holdings.
-2. Click Sync One-Year Returns.
-3. The system fetches historical price/NAV data for each holding.
-4. Successful rows show percentages. Failed or insufficient-data rows show no data.
-
----
-
-## 8. Maintenance Notes
-
-### 8.1 Main Files
-
-| File | Description |
-|---|---|
-| `frontend/index.html` | Single-file frontend page |
-| `backend/main.py` | Main FastAPI logic |
-| `backend/models.py` | Model definitions / historical structure |
-| `data/invest.db` | Real SQLite database |
-| `docker-compose.yml` | Docker configuration |
-| `README_CN.md` | Chinese guide |
-| `README_EN.md` | English guide |
-| `README_BILINGUAL.md` | Legacy bilingual guide |
-
-### 8.2 Create a Safety Snapshot Before Risky Changes
-
-Run before high-risk changes:
-
-```bash
-cd ~/invest-tracker
-python3 scripts/safety_snapshot.py --label before_some_change
-```
-
-It will:
-
-1. Create a timestamped database backup under `backups/`;
-2. Create a Git commit if code/docs have changed.
-
-### 8.3 Database-Only Backup
-
-```bash
-cd ~/invest-tracker
-python3 scripts/backup_db.py --label manual
-```
-
-The backup script runs SQLite integrity check:
-
-```sql
-PRAGMA integrity_check
-```
-
-A backup is considered valid only if the integrity check passes.
-
-### 8.4 Restore Database
-
-```bash
-cd ~/invest-tracker
-python3 scripts/restore_db.py backups/invest_YYYYMMDD_HHMMSS_label.db.bak
-```
-
-Before restoring, the script backs up the current database as `before_restore` to avoid irreversible mistakes.
-
-### 8.5 Verify Backend After Changes
-
-```bash
-cd /Users/jian/invest-tracker
-python3 -m py_compile backend/main.py
-```
-
-Recommended checks:
-
-- `GET /dashboard`
-- `GET /holdings`
-- `GET /transactions`
-- `GET /snapshots`
-
----
-
-## 9. Notes
-
-1. This is a local single-user tool, not a production multi-user system.
-2. `data/invest.db` is the core real data file. Back it up regularly.
-3. Transaction price is never auto-filled and must be entered from the real trade confirmation.
-4. Dividends, fees, and transaction amounts should follow brokerage records. System fee estimation is only a convenience.
-5. Latest-price sync and one-year-return sync depend on external market data sources. Some instruments may fail.
-6. Expected annual return is a personal assumption, not a return guarantee.
-7. One-year instrument trailing return is a historical price/NAV metric, not account-specific return.
-8. `申购待确认` should only be used before shares/NAV are confirmed. Once confirmed, edit it to `买入`.
-9. Same-day asset snapshots are updated instead of duplicated.
-10. Brokerage cash is derived from cash-flow records and transaction cash flows.
-11. Bank-securities transfers should be recorded in Brokerage Cash Flows. Buys/sells/dividends/pending purchases should be recorded in Transaction Entry & Management.
-12. Multi-broker accounts affect transaction ownership and fee estimation only. Deleting a fee account does not delete transactions.
-13. CSV import writes real data. The system backs up automatically before import, but exporting current data first is still recommended.
-14. Before high-risk changes, run `python3 scripts/safety_snapshot.py --label xxx`.
-
----
-
-## 10. Current Feature Status
-
-Implemented:
-
-- Top asset overview cards;
-- Asset Snapshots as default home page;
-- Snapshot trend chart, structure chart, and period change details;
-- Same-day snapshot update;
-- Asset allocation analysis and health checks;
-- Equity / fixed income / deposit macro allocation summaries;
-- Bank deposit analysis, concentration, maturity distribution, and CRUD;
-- Bank deposit CSV template, export, and import;
-- Holdings, transaction detail view, expected annual return editing;
-- One-year instrument trailing return sync and display;
-- Combined transaction entry and management;
-- New instrument entry, auto-category inference, manual category editing;
-- Manual transaction price entry;
-- Buy, sell, dividend, and pending purchase;
-- Transaction CSV template, export, and import;
-- Pending purchase included in total assets and fixed-income allocation;
-- Pending purchase excluded from confirmed holding profit/loss;
-- Brokerage cash automatically linked to transaction cash flows;
-- Ordinary cost and broker-style diluted cost;
-- Brokerage cash flows: transfer in/out, cash calibration, query, edit, delete;
-- Holding corrections: anchors, record query, recalculation after deletion;
-- Latest-price sync with frontend feedback;
-- Multi-broker fee settings;
-- Fee estimation by brokerage account / category / direction;
-- Manual fee override protection;
-- Git code baseline;
-- Database backup, restore, and safety snapshot scripts.
+| GET | `/portfolio-cash-flows` | List portfolio external cash flows |
+| POST | `/portfolio-cash-flows` | Add portfolio external cash flow |
+| PUT | `/portfolio-cash-flows/{id}` | Edit portfolio external cash flow |
+| DELETE | `/portfolio-cash-flows/{id}` | Delete portfolio external cash flow |
+| GET | `/performance/summary` | Performance analysis summary (XIRR, net contribution, total gain) |
+| GET | `/performance/timeline` | Performance timeline (assets vs net contribution) |
+| GET | `/performance/contribution` | Per-holding contribution table |
