@@ -25,6 +25,30 @@
         .perf-cards-row { display: flex; flex-wrap: wrap; }
         .perf-cards-row > .el-col { display: flex; margin-bottom: 12px; }
         .perf-cards-row > .el-col > .el-card { width: 100%; }
+        .perf-contrib-toolbar { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+        .perf-contrib-title { font-size:16px; font-weight:700; color:#303133; }
+        .perf-contrib-sub { margin-top:4px; font-size:12px; color:#909399; }
+        .perf-contrib-controls { display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+        .perf-contrib-summary { display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:12px; margin-bottom:12px; }
+        .perf-summary-pill { border:1px solid #ebeef5; border-radius:12px; padding:12px 14px; background:#fafafa; min-width:0; }
+        .perf-summary-pill.is-positive { background:linear-gradient(135deg,#fff5f5 0%,#fff 100%); border-color:#fde2e2; }
+        .perf-summary-pill.is-negative { background:linear-gradient(135deg,#f4fbf1 0%,#fff 100%); border-color:#d9f2cc; }
+        .perf-summary-pill.is-neutral { background:linear-gradient(135deg,#f5f7fa 0%,#fff 100%); }
+        .perf-summary-label { font-size:12px; color:#909399; margin-bottom:6px; }
+        .perf-summary-main { font-size:15px; font-weight:700; color:#303133; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .perf-summary-sub { margin-top:4px; font-size:11px; color:#909399; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .perf-contrib-table .cell { white-space: nowrap; }
+        .perf-name-cell { display:flex; align-items:center; gap:8px; min-width:0; }
+        .perf-rank-badge { width:22px; height:22px; border-radius:999px; display:inline-flex; align-items:center; justify-content:center; background:#f5f7fa; color:#606266; font-size:12px; font-weight:700; flex-shrink:0; }
+        .perf-rank-top { background:#fdf6ec; color:#E6A23C; }
+        .perf-name-main { min-width:0; }
+        .perf-name-title { font-size:13px; font-weight:600; color:#303133; overflow:hidden; text-overflow:ellipsis; }
+        .perf-name-code { font-size:11px; color:#909399; margin-top:2px; }
+        .perf-contrib-value { font-weight:700; }
+        .perf-contrib-share { font-size:11px; color:#909399; margin-top:2px; }
+        .perf-bar-track { width:100%; height:8px; border-radius:999px; background:#ebeef5; overflow:hidden; }
+        .perf-bar-fill { height:100%; border-radius:999px; }
+        @media (max-width: 900px) { .perf-contrib-summary { grid-template-columns: 1fr; } .perf-contrib-controls { justify-content:flex-start; } }
 
         .top-stats { display: grid; grid-template-columns: 1.45fr repeat(4, 1fr); gap: 16px; }
         .stat-card { border: 0; border-radius: 14px; overflow: hidden; }
@@ -60,11 +84,29 @@
         .fee-settings-row:last-child > * { border-bottom: 0; }
         .fee-cat { color: #303133; font-weight: 500; text-align: center; }
         .fee-rate-input { width: 100%; }
-        .snapshot-metric-card { text-align: center; min-height: 92px; }
+        .snapshot-toolbar { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+        .snapshot-title { font-size:18px; font-weight:700; color:#303133; }
+        .snapshot-subtitle { margin-top:4px; font-size:12px; color:#909399; }
+        .snapshot-controls { display:flex; gap:12px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
+        .snapshot-hero { display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:14px; margin-bottom:16px; }
+        .snapshot-metric-card { text-align: center; min-height: 92px; border:0; border-radius:12px; }
+        .snapshot-metric-card .el-card__body { padding:16px 14px; }
+        .snapshot-metric-card.is-highlight { background: linear-gradient(135deg, #ecf5ff 0%, #ffffff 70%, #f0f9ff 100%); border-left:4px solid #409EFF; }
         .snapshot-metric-value { font-size: 22px; font-weight: 700; color: #303133; white-space: nowrap; }
         .snapshot-metric-label { margin-top: 6px; color: #909399; font-size: 13px; }
         .snapshot-sub { margin-top: 4px; color: #606266; font-size: 12px; }
+        .snapshot-insights { display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:12px; margin-bottom:16px; }
+        .snapshot-pill { border:1px solid #ebeef5; border-radius:12px; padding:12px 14px; background:#fafafa; min-width:0; }
+        .snapshot-pill.is-blue { background:linear-gradient(135deg,#ecf5ff 0%,#fff 100%); border-color:#d9ecff; }
+        .snapshot-pill.is-orange { background:linear-gradient(135deg,#fdf6ec 0%,#fff 100%); border-color:#faecd8; }
+        .snapshot-pill.is-green { background:linear-gradient(135deg,#f0f9eb 0%,#fff 100%); border-color:#e1f3d8; }
+        .snapshot-pill-label { font-size:12px; color:#909399; margin-bottom:6px; }
+        .snapshot-pill-main { font-size:15px; font-weight:700; color:#303133; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .snapshot-pill-sub { margin-top:4px; font-size:11px; color:#909399; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .snapshot-chart { height: 320px; width: 100%; }
+        .snapshot-table .cell { white-space: nowrap; }
+        @media (max-width: 1000px) { .snapshot-hero { grid-template-columns: repeat(2, minmax(0, 1fr)); } .snapshot-insights { grid-template-columns: 1fr; } }
+        @media (max-width: 560px) { .snapshot-hero { grid-template-columns: 1fr; } .snapshot-controls { justify-content:flex-start; } }
         .deposit-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
         .deposit-title { font-size: 18px; font-weight: 700; color: #303133; }
         .deposit-subtitle { margin-top: 4px; font-size: 12px; color: #909399; }
@@ -168,25 +210,26 @@
         <el-tabs v-model="activeTab" class="mt-20">
             <!-- 资产快照 -->
             <el-tab-pane label="资产快照" name="snapshots">
-                <el-card>
-                    <template #header>
-                        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
-                            <span>资产快照分析</span>
-                            <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
-                                <el-date-picker
-                                    v-model="snapshotRange"
-                                    type="daterange"
-                                    range-separator="至"
-                                    start-placeholder="开始日期"
-                                    end-placeholder="结束日期"
-                                    value-format="YYYY-MM-DD"
-                                    @change="fetchSnapshots"
-                                    style="width: 300px"
-                                ></el-date-picker>
-                                <el-button type="primary" @click="createSnapshot" :loading="snapshotLoading">记录/更新今日快照</el-button>
-                            </div>
+                <el-card shadow="never">
+                    <div class="snapshot-toolbar">
+                        <div>
+                            <div class="snapshot-title">资产快照分析</div>
+                            <div class="snapshot-subtitle">看总资产、投资仓位、现金缓冲和区间变化，不只是一张快照流水表</div>
                         </div>
-                    </template>
+                        <div class="snapshot-controls">
+                            <el-date-picker
+                                v-model="snapshotRange"
+                                type="daterange"
+                                range-separator="至"
+                                start-placeholder="开始日期"
+                                end-placeholder="结束日期"
+                                value-format="YYYY-MM-DD"
+                                @change="fetchSnapshots"
+                                style="width: 300px"
+                            ></el-date-picker>
+                            <el-button type="primary" @click="createSnapshot" :loading="snapshotLoading">记录/更新今日快照</el-button>
+                        </div>
+                    </div>
 
                     <el-alert
                         title="重复点击今天的快照会更新当天记录，不再因为已存在而丢掉最新价格/现金数据。"
@@ -196,24 +239,40 @@
                         style="margin-bottom: 16px;"
                     ></el-alert>
 
-                    <el-row :gutter="16" style="margin-bottom: 16px;">
-                        <el-col :span="6" v-for="m in snapshotMetrics" :key="m.key">
-                            <el-card shadow="hover" class="snapshot-metric-card">
-                                <div class="snapshot-metric-value" :style="{color: m.color || '#303133'}">{{ m.value }}</div>
-                                <div class="snapshot-metric-label">{{ m.label }}</div>
-                                <div class="snapshot-sub">{{ m.sub }}</div>
-                            </el-card>
-                        </el-col>
-                    </el-row>
+                    <div class="snapshot-hero">
+                        <el-card shadow="hover" v-for="(m, idx) in snapshotMetrics" :key="m.key" class="snapshot-metric-card" :class="{ 'is-highlight': idx === 0 }">
+                            <div class="snapshot-metric-value" :style="{color: m.color || '#303133'}">{{ m.value }}</div>
+                            <div class="snapshot-metric-label">{{ m.label }}</div>
+                            <div class="snapshot-sub">{{ m.sub }}</div>
+                        </el-card>
+                    </div>
+
+                    <div class="snapshot-insights" v-if="snapshotInsights.length">
+                        <div class="snapshot-pill is-blue">
+                            <div class="snapshot-pill-label">最新快照锚点</div>
+                            <div class="snapshot-pill-main">{{ snapshotInsights[0]?.main || '—' }}</div>
+                            <div class="snapshot-pill-sub">{{ snapshotInsights[0]?.sub || '暂无快照数据' }}</div>
+                        </div>
+                        <div class="snapshot-pill is-orange">
+                            <div class="snapshot-pill-label">区间波动焦点</div>
+                            <div class="snapshot-pill-main">{{ snapshotInsights[1]?.main || '—' }}</div>
+                            <div class="snapshot-pill-sub">{{ snapshotInsights[1]?.sub || '至少需要两条快照' }}</div>
+                        </div>
+                        <div class="snapshot-pill is-green">
+                            <div class="snapshot-pill-label">当前防守缓冲</div>
+                            <div class="snapshot-pill-main">{{ snapshotInsights[2]?.main || '—' }}</div>
+                            <div class="snapshot-pill-sub">{{ snapshotInsights[2]?.sub || '暂无数据' }}</div>
+                        </div>
+                    </div>
 
                     <el-row :gutter="20" style="margin-bottom: 18px;">
                         <el-col :span="14">
-                            <el-card header="总资产趋势">
+                            <el-card shadow="never" header="总资产趋势">
                                 <div id="snapshotTrendChart" class="snapshot-chart"></div>
                             </el-card>
                         </el-col>
                         <el-col :span="10">
-                            <el-card header="当前资产结构">
+                            <el-card shadow="never" header="当前资产结构">
                                 <div id="snapshotStructureChart" class="snapshot-chart"></div>
                             </el-card>
                         </el-col>
@@ -221,8 +280,8 @@
 
                     <el-row :gutter="20" style="margin-bottom: 18px;">
                         <el-col :span="24">
-                            <el-card header="区间变化明细">
-                                <el-table :data="snapshotChangeRows" stripe style="width: 100%" empty-text="至少需要两条快照，或选择包含两条以上记录的日期范围">
+                            <el-card shadow="never" header="区间变化明细">
+                                <el-table :data="snapshotChangeRows" stripe class="snapshot-table" style="width: 100%" empty-text="至少需要两条快照，或选择包含两条以上记录的日期范围">
                                     <el-table-column prop="label" label="项目" width="120" align="center" header-align="center"></el-table-column>
                                     <el-table-column label="期初" min-width="130" align="center" header-align="center">
                                         <template #default="scope"><span class="nowrap-cell">{{ formatMoney(scope.row.start) }}</span></template>
@@ -245,38 +304,40 @@
                         </el-col>
                     </el-row>
 
-                    <el-table :data="snapshots" stripe style="width: 100%" empty-text="暂无快照记录">
-                        <el-table-column prop="date" label="日期" width="115" sortable align="center" header-align="center"></el-table-column>
-                        <el-table-column label="总资产" min-width="135" align="center" header-align="center">
-                            <template #default="scope"><span class="nowrap-cell">{{ formatMoney(scope.row.total_assets) }}</span></template>
-                        </el-table-column>
-                        <el-table-column label="投资账户市值" min-width="135" align="center" header-align="center">
-                            <template #default="scope"><span class="nowrap-cell">{{ formatMoney(scope.row.total_market_value) }}</span></template>
-                        </el-table-column>
-                        <el-table-column label="银行存款" min-width="125" align="center" header-align="center">
-                            <template #default="scope"><span class="nowrap-cell">{{ formatMoney(scope.row.bank_balance) }}</span></template>
-                        </el-table-column>
-                        <el-table-column label="证券现金" min-width="115" align="center" header-align="center">
-                            <template #default="scope"><span class="nowrap-cell">{{ formatMoney(scope.row.securities_cash) }}</span></template>
-                        </el-table-column>
-                        <el-table-column label="申购在途" min-width="115" align="center" header-align="center">
-                            <template #default="scope"><span class="nowrap-cell">{{ formatMoney(scope.row.pending_purchase || 0) }}</span></template>
-                        </el-table-column>
-                        <el-table-column label="投资盈亏" min-width="125" align="center" header-align="center">
-                            <template #default="scope">
-                                <span class="nowrap-cell" :style="{color: scope.row.total_profit >= 0 ? '#F56C6C' : '#67C23A'}">
-                                    {{ formatMoney(scope.row.total_profit, 2, true) }}
-                                </span>
-                            </template>
-                        </el-table-column>
-                        <el-table-column label="投资占比" width="100" align="center" header-align="center">
-                            <template #default="scope">{{ pct(scope.row.total_market_value, scope.row.total_assets) }}</template>
-                        </el-table-column>
-                        <el-table-column label="现金+存款+在途" min-width="145" align="center" header-align="center">
-                            <template #default="scope"><span class="nowrap-cell">{{ formatMoney((scope.row.bank_balance || 0) + (scope.row.securities_cash || 0) + (scope.row.pending_purchase || 0)) }}</span></template>
-                        </el-table-column>
-                        <el-table-column prop="holdings_count" label="持仓数" width="80" align="center" header-align="center"></el-table-column>
-                    </el-table>
+                    <el-card shadow="never" header="快照历史记录">
+                        <el-table :data="snapshots" stripe class="snapshot-table" style="width: 100%" empty-text="暂无快照记录">
+                            <el-table-column prop="date" label="日期" width="115" sortable align="center" header-align="center"></el-table-column>
+                            <el-table-column label="总资产" min-width="135" align="center" header-align="center">
+                                <template #default="scope"><span class="nowrap-cell">{{ formatMoney(scope.row.total_assets) }}</span></template>
+                            </el-table-column>
+                            <el-table-column label="投资账户市值" min-width="135" align="center" header-align="center">
+                                <template #default="scope"><span class="nowrap-cell">{{ formatMoney(scope.row.total_market_value) }}</span></template>
+                            </el-table-column>
+                            <el-table-column label="银行存款" min-width="125" align="center" header-align="center">
+                                <template #default="scope"><span class="nowrap-cell">{{ formatMoney(scope.row.bank_balance) }}</span></template>
+                            </el-table-column>
+                            <el-table-column label="证券现金" min-width="115" align="center" header-align="center">
+                                <template #default="scope"><span class="nowrap-cell">{{ formatMoney(scope.row.securities_cash) }}</span></template>
+                            </el-table-column>
+                            <el-table-column label="申购在途" min-width="115" align="center" header-align="center">
+                                <template #default="scope"><span class="nowrap-cell">{{ formatMoney(scope.row.pending_purchase || 0) }}</span></template>
+                            </el-table-column>
+                            <el-table-column label="投资盈亏" min-width="125" align="center" header-align="center">
+                                <template #default="scope">
+                                    <span class="nowrap-cell" :style="{color: scope.row.total_profit >= 0 ? '#F56C6C' : '#67C23A'}">
+                                        {{ formatMoney(scope.row.total_profit, 2, true) }}
+                                    </span>
+                                </template>
+                            </el-table-column>
+                            <el-table-column label="投资占比" width="100" align="center" header-align="center">
+                                <template #default="scope">{{ pct(scope.row.total_market_value, scope.row.total_assets) }}</template>
+                            </el-table-column>
+                            <el-table-column label="现金+存款+在途" min-width="145" align="center" header-align="center">
+                                <template #default="scope"><span class="nowrap-cell">{{ formatMoney((scope.row.bank_balance || 0) + (scope.row.securities_cash || 0) + (scope.row.pending_purchase || 0)) }}</span></template>
+                            </el-table-column>
+                            <el-table-column prop="holdings_count" label="持仓数" width="80" align="center" header-align="center"></el-table-column>
+                        </el-table>
+                    </el-card>
                 </el-card>
             </el-tab-pane>
             <!-- 资产配置 -->
@@ -429,21 +490,79 @@
                         </el-col>
                     </el-row>
 
-                    <el-card shadow="never" header="标的收益贡献" style="margin-bottom: 18px;">
-                        <el-table :data="perfContribution" stripe size="small" style="width: 100%">
-                            <el-table-column prop="name" label="名称" width="120" fixed="left"></el-table-column>
-                            <el-table-column prop="category" label="分类" width="90"></el-table-column>
-                            <el-table-column label="市值" width="110" align="right">
-                                <template #default="s">{{ formatMoney(s.row.market_value) }}</template>
+                    <el-card shadow="never" style="margin-bottom: 18px;">
+                        <div class="perf-contrib-toolbar">
+                            <div>
+                                <div class="perf-contrib-title">标的收益贡献</div>
+                                <div class="perf-contrib-sub">按「浮动盈亏 + 累计分红」排序，直观看哪个标的在拉收益、哪个在拖后腿</div>
+                            </div>
+                            <div class="perf-contrib-controls">
+                                <el-tag size="small" type="info">共 {{ perfContribution.length }} 个标的</el-tag>
+                                <el-select v-model="perfContributionFilter" size="small" style="width: 110px;">
+                                    <el-option label="全部标的" value="all"></el-option>
+                                    <el-option label="只看正贡献" value="positive"></el-option>
+                                    <el-option label="只看负贡献" value="negative"></el-option>
+                                </el-select>
+                                <el-select v-model="perfContributionSort" size="small" style="width: 138px;">
+                                    <el-option label="按总贡献排序" value="contribution"></el-option>
+                                    <el-option label="按收益占比排序" value="share"></el-option>
+                                    <el-option label="按市值排序" value="market_value"></el-option>
+                                </el-select>
+                            </div>
+                        </div>
+                        <div class="perf-contrib-summary">
+                            <div class="perf-summary-pill is-positive">
+                                <div class="perf-summary-label">头号收益来源</div>
+                                <div class="perf-summary-main">{{ perfContributionHeadline.best?.name || '—' }}</div>
+                                <div class="perf-summary-sub">{{ perfContributionHeadline.best ? `${formatMoney(perfContributionHeadline.best.total_contribution, 2, true)} · 占总收益 ${pct(perfContributionHeadline.best.total_contribution, perfSummary?.total_gain || 0)}` : '暂无数据' }}</div>
+                            </div>
+                            <div class="perf-summary-pill is-negative">
+                                <div class="perf-summary-label">当前拖累最大</div>
+                                <div class="perf-summary-main">{{ perfContributionHeadline.worst?.name || '—' }}</div>
+                                <div class="perf-summary-sub">{{ perfContributionHeadline.worst ? `${formatMoney(perfContributionHeadline.worst.total_contribution, 2, true)} · 占总收益 ${pct(perfContributionHeadline.worst.total_contribution, perfSummary?.total_gain || 0)}` : '暂无回撤标的' }}</div>
+                            </div>
+                            <div class="perf-summary-pill is-neutral">
+                                <div class="perf-summary-label">结构概览</div>
+                                <div class="perf-summary-main">正贡献 {{ perfContributionMix.positiveCount }} 个 / 负贡献 {{ perfContributionMix.negativeCount }} 个</div>
+                                <div class="perf-summary-sub">前 3 大贡献合计 {{ formatMoney(perfContributionMix.top3Contribution, 2, true) }}</div>
+                            </div>
+                        </div>
+                        <el-table :data="displayedPerfContribution" stripe size="small" class="perf-contrib-table" style="width: 100%">
+                            <el-table-column label="标的" min-width="190" fixed="left">
+                                <template #default="s">
+                                    <div class="perf-name-cell">
+                                        <span class="perf-rank-badge" :class="{ 'perf-rank-top': s.$index < 3 }">{{ s.$index + 1 }}</span>
+                                        <div class="perf-name-main">
+                                            <div class="perf-name-title">{{ s.row.name }}</div>
+                                            <div class="perf-name-code">{{ s.row.code }} · {{ s.row.category || '未分类' }}</div>
+                                        </div>
+                                    </div>
+                                </template>
                             </el-table-column>
-                            <el-table-column label="浮动盈亏" width="110" align="right">
-                                <template #default="s"><span :style="{color: s.row.unrealized_profit >= 0 ? '#F56C6C' : '#67C23A'}">{{ formatMoney(s.row.unrealized_profit) }}</span></template>
+                            <el-table-column label="市值 / 仓位" min-width="130" align="right" header-align="right">
+                                <template #default="s">
+                                    <div>{{ formatMoney(s.row.market_value) }}</div>
+                                    <div class="perf-contrib-share">{{ pct(s.row.market_value, perfSummary?.total_assets || 0) }}</div>
+                                </template>
                             </el-table-column>
-                            <el-table-column label="累计分红" width="100" align="right">
-                                <template #default="s">{{ formatMoney(s.row.dividend_income) }}</template>
+                            <el-table-column label="浮动盈亏" min-width="120" align="right" header-align="right">
+                                <template #default="s"><span :style="{color: s.row.unrealized_profit >= 0 ? '#F56C6C' : '#67C23A'}">{{ formatMoney(s.row.unrealized_profit, 2, true) }}</span></template>
                             </el-table-column>
-                            <el-table-column label="总贡献" width="110" align="right">
-                                <template #default="s"><span :style="{color: s.row.total_contribution >= 0 ? '#F56C6C' : '#67C23A'}">{{ formatMoney(s.row.total_contribution) }}</span></template>
+                            <el-table-column label="累计分红" min-width="110" align="right" header-align="right">
+                                <template #default="s"><span>{{ formatMoney(s.row.dividend_income, 2, true) }}</span></template>
+                            </el-table-column>
+                            <el-table-column label="总贡献" min-width="140" align="right" header-align="right">
+                                <template #default="s">
+                                    <div class="perf-contrib-value" :style="{color: s.row.total_contribution >= 0 ? '#F56C6C' : '#67C23A'}">{{ formatMoney(s.row.total_contribution, 2, true) }}</div>
+                                    <div class="perf-contrib-share">占总收益 {{ pct(s.row.total_contribution, perfSummary?.total_gain || 0) }}</div>
+                                </template>
+                            </el-table-column>
+                            <el-table-column label="贡献强度" min-width="180">
+                                <template #default="s">
+                                    <div class="perf-bar-track">
+                                        <div class="perf-bar-fill" :style="contributionBarStyle(s.row.total_contribution)"></div>
+                                    </div>
+                                </template>
                             </el-table-column>
                         </el-table>
                     </el-card>
@@ -1564,6 +1683,35 @@
                     return buckets.map(b => ({ ...b, percentage: total > 0 ? b.amount / total * 100 : 0 }));
                 });
 
+                const snapshotInsights = computed(() => {
+                    const rowsAsc = [...snapshots.value].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+                    const latest = rowsAsc[rowsAsc.length - 1] || null;
+                    const first = rowsAsc[0] || null;
+                    const total = Number(latest?.total_assets || 0);
+                    const liquid = Number(latest?.bank_balance || 0) + Number(latest?.securities_cash || 0) + Number(latest?.pending_purchase || 0);
+                    const latestMain = latest ? `${latest.date} · ${latest.holdings_count || 0} 个持仓` : '暂无快照';
+                    const latestSub = latest ? `总资产 ${formatMoney(latest.total_assets)}，投资市值 ${formatMoney(latest.total_market_value)}` : '请先记录快照';
+
+                    let focusMain = '至少需要两条快照';
+                    let focusSub = '区间变化需要期初与期末对比';
+                    if (rowsAsc.length >= 2 && first && latest) {
+                        const totalDelta = Number(latest.total_assets || 0) - Number(first.total_assets || 0);
+                        const profitDelta = Number(latest.total_profit || 0) - Number(first.total_profit || 0);
+                        focusMain = `总资产 ${formatMoney(totalDelta, 2, true)}`;
+                        focusSub = `投资盈亏 ${formatMoney(profitDelta, 2, true)} · 区间 ${first.date} → ${latest.date}`;
+                    }
+
+                    const defensiveRatio = total > 0 ? liquid / total * 100 : 0;
+                    const bufferMain = total > 0 ? `缓冲资产 ${defensiveRatio.toFixed(1)}%` : '暂无缓冲数据';
+                    const bufferSub = total > 0 ? `现金+存款+在途 ${formatMoney(liquid)}，总资产 ${formatMoney(total)}` : '请先记录快照';
+
+                    return [
+                        { main: latestMain, sub: latestSub },
+                        { main: focusMain, sub: focusSub },
+                        { main: bufferMain, sub: bufferSub }
+                    ];
+                });
+
                 let allocationChart = null, categoryChart = null, snapshotTrendChart = null, snapshotStructureChart = null;
 
                 const formatMoney = (value, digits = 2, showSign = false) => {
@@ -2630,6 +2778,8 @@
                 const perfContribution = ref([]);
                 const perfFlows = ref([]);
                 const perfLoading = ref(false);
+                const perfContributionFilter = ref('all');
+                const perfContributionSort = ref('contribution');
                 const perfFlowForm = ref({
                     date: new Date().toISOString().split('T')[0],
                     flow_type: '投入',
@@ -2651,6 +2801,52 @@
                     ];
                 });
 
+                const displayedPerfContribution = computed(() => {
+                    const totalGain = Number(perfSummary.value?.total_gain || 0);
+                    let rows = [...(perfContribution.value || [])];
+                    if (perfContributionFilter.value === 'positive') rows = rows.filter(item => Number(item.total_contribution || 0) >= 0);
+                    if (perfContributionFilter.value === 'negative') rows = rows.filter(item => Number(item.total_contribution || 0) < 0);
+                    if (perfContributionSort.value === 'market_value') {
+                        rows.sort((a, b) => Number(b.market_value || 0) - Number(a.market_value || 0));
+                    } else if (perfContributionSort.value === 'share') {
+                        rows.sort((a, b) => {
+                            const shareB = totalGain ? Number(b.total_contribution || 0) / totalGain : 0;
+                            const shareA = totalGain ? Number(a.total_contribution || 0) / totalGain : 0;
+                            return shareB - shareA;
+                        });
+                    } else {
+                        rows.sort((a, b) => Number(b.total_contribution || 0) - Number(a.total_contribution || 0));
+                    }
+                    return rows;
+                });
+
+                const perfContributionHeadline = computed(() => {
+                    const rows = [...(perfContribution.value || [])].sort((a, b) => Number(b.total_contribution || 0) - Number(a.total_contribution || 0));
+                    return {
+                        best: rows[0] || null,
+                        worst: rows.length ? rows[rows.length - 1] : null
+                    };
+                });
+
+                const perfContributionMix = computed(() => {
+                    const rows = perfContribution.value || [];
+                    const sorted = [...rows].sort((a, b) => Number(b.total_contribution || 0) - Number(a.total_contribution || 0));
+                    return {
+                        positiveCount: rows.filter(item => Number(item.total_contribution || 0) >= 0).length,
+                        negativeCount: rows.filter(item => Number(item.total_contribution || 0) < 0).length,
+                        top3Contribution: sorted.slice(0, 3).reduce((sum, item) => sum + Number(item.total_contribution || 0), 0)
+                    };
+                });
+
+                const contributionBarStyle = (value) => {
+                    const maxAbs = Math.max(...(perfContribution.value || []).map(item => Math.abs(Number(item.total_contribution || 0))), 0);
+                    const ratio = maxAbs > 0 ? Math.max(Math.abs(Number(value || 0)) / maxAbs, 0.04) : 0;
+                    return {
+                        width: `${Math.min(ratio * 100, 100)}%`,
+                        background: Number(value || 0) >= 0 ? 'linear-gradient(90deg, #f89898 0%, #F56C6C 100%)' : 'linear-gradient(90deg, #95d475 0%, #67C23A 100%)'
+                    };
+                };
+
                 async function fetchPerformance() {
                     perfLoading.value = true;
                     try {
@@ -2667,6 +2863,7 @@
                         nextTick(renderPerfChart);
                     } catch (e) {
                         console.error('fetchPerformance', e);
+                        showSyncNotice('获取收益分析失败：' + (e?.response?.data?.detail || e?.message || '未知错误'), 'error');
                     } finally {
                         perfLoading.value = false;
                     }
@@ -2726,7 +2923,7 @@
 
                 return {
                     activeTab, dashboard, holdings, deposits, depositRows, depositSummary, depositBankBreakdown, depositMaturityBuckets, syncing, trailingSyncing, syncNotice,
-                    snapshots, snapshotRange, snapshotSummary, snapshotMetrics, snapshotChangeRows, snapshotLoading,
+                    snapshots, snapshotRange, snapshotSummary, snapshotMetrics, snapshotChangeRows, snapshotInsights, snapshotLoading,
                     transForm, feeSettings, feeAccounts, activeFeeAccount, newFeeAccountName, feeCategories, feeSettingRows, feeAutoHint, depositDialog, cashForm, cashFlows, cashFlowForm, cashFlowQuery, cashFlowSummary, cashFlowEditDialog, transDialog, allocationAnalysis, macroAllocationAnalysis,
                     allocationSummary, allocationHealth, portfolioExpectedReturn, expectedReturnDialog, holdingCorrectionDialog, holdingCorrectionHistoryDialog,
                     // 交易管理相关
@@ -2739,7 +2936,8 @@
                     queryTransactions, resetTransQuery, goPendingTransactions, openTransEditDialog, saveTransactionEdit, deleteTransaction,
                     openExpectedReturnDialog, saveExpectedReturn, openHoldingCorrectionDialog, saveHoldingCorrection, openHoldingCorrectionHistory, deleteHoldingCorrection, formatMoney, formatPercent, pct,
                     perfSummary, perfTimeline, perfContribution, perfFlows, perfLoading, perfFlowForm, perfCards,
-                    fetchPerformance, addPerfFlow, deletePerfFlow
+                    displayedPerfContribution, perfContributionFilter, perfContributionSort, perfContributionHeadline, perfContributionMix,
+                    fetchPerformance, addPerfFlow, deletePerfFlow, contributionBarStyle
                 };
             }
         });
