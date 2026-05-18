@@ -1,6 +1,6 @@
 # Investment Tracker Guide
 
-> Last updated: 2026-05-13 08:45 CST  
+> Last updated: 2026-05-19 06:45 CST  
 > Project: local `invest-tracker` investment portfolio management app
 
 ---
@@ -18,8 +18,9 @@ Current version: local single-user MVP.
 
 - Frontend: Vue 3 + Element Plus + ECharts, single file `frontend/index.html`;
 - Backend: FastAPI;
-- Database: SQLite, `data/invest.db`;
-- Frontend is served by Docker nginx, backend runs directly on the host.
+- Database: SQLite, default path `data/invest.db`;
+- Deployment: both frontend and backend can be started with `docker compose`; nginx serves the frontend and forwards a unified `/api` reverse proxy to the backend;
+- The backend database path now works in both host and container environments and defaults to the project-local `data/invest.db`.
 
 ---
 
@@ -31,27 +32,34 @@ Project path:
 /Users/jian/invest-tracker
 ```
 
-Start backend:
+Recommended startup:
 
 ```bash
 cd /Users/jian/invest-tracker
-python3 -m uvicorn backend.main:app --host 0.0.0.0 --port 8000
+docker compose up -d --build
 ```
 
-Start frontend:
+If you only need to restart frontend or backend individually:
 
 ```bash
 cd /Users/jian/invest-tracker
-docker compose up -d frontend
+docker compose up -d --build frontend
+docker compose up -d --build backend
 ```
 
 URLs:
 
 - Frontend: http://localhost:8080
-- Backend API: http://localhost:8000
+- Proxied API via frontend: http://localhost:8080/api
+- Backend API (direct host access): http://localhost:8000
 - SQLite database: `/Users/jian/invest-tracker/data/invest.db`
 
-Note: `frontend/index.html` is mounted into the nginx container, so frontend changes usually take effect after a browser refresh. Backend changes in `backend/main.py` require restarting FastAPI.
+Notes:
+
+- The frontend now talks to the backend through `/api`, so the page no longer hardcodes `8000/8001` ports;
+- `frontend/index.html` and `frontend/nginx.conf` are bind-mounted into the nginx container, so changes usually take effect after restarting the frontend container or doing a hard refresh;
+- Backend code changes require rebuilding/restarting the backend container;
+- The backend database path now works in both host and container environments and uses the project-local `data/invest.db` unless `DB_PATH` is explicitly set.
 
 ---
 
@@ -78,6 +86,8 @@ Features:
 
 - Record/update today's snapshot;
 - Same-day snapshots are updated instead of duplicated;
+- “Today” is calculated using the backend local timezone, defaulting to `Asia/Shanghai`;
+- You can override the backend timezone with the `APP_TIMEZONE` environment variable;
 - Total asset trend chart;
 - Current asset structure chart;
 - Period change details;

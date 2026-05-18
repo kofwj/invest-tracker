@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import date as dt_date, datetime
+from zoneinfo import ZoneInfo
 import sqlite3
 import pandas as pd
 import akshare as ak
@@ -28,7 +29,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-DB_PATH = "/Users/jian/invest-tracker/data/invest.db"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_DIR = os.path.dirname(BASE_DIR) if os.path.basename(BASE_DIR) == "backend" else BASE_DIR
+DB_PATH = os.environ.get("DB_PATH", os.path.join(PROJECT_DIR, "data", "invest.db"))
+os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+
+LOCAL_TZ = ZoneInfo(os.environ.get("APP_TIMEZONE", "Asia/Shanghai"))
+
+def local_today_iso():
+    return datetime.now(LOCAL_TZ).date().isoformat()
 
 class TransactionBase(BaseModel):
     date: dt_date
@@ -1483,7 +1492,7 @@ def create_snapshot():
     # 获取当前dashboard数据
     dash = get_dashboard()
     
-    today = dt_date.today().isoformat()
+    today = local_today_iso()
     existing = conn.execute("SELECT id FROM daily_snapshots WHERE date = ?", (today,)).fetchone()
     if existing:
         conn.execute("""

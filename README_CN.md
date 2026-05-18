@@ -1,6 +1,6 @@
 # 投资资产管理系统说明文档
 
-> 更新时间：2026-05-13 08:45 CST  
+> 更新时间：2026-05-19 06:45 CST  
 > 适用项目：本地运行的 `invest-tracker` 投资资产管理系统
 
 ---
@@ -18,8 +18,9 @@
 
 - 前端：Vue 3 + Element Plus + ECharts，单文件 `frontend/index.html`；
 - 后端：FastAPI；
-- 数据库：SQLite，路径 `data/invest.db`；
-- 前端通过 Docker nginx 提供静态页面，后端直接在主机运行。
+- 数据库：SQLite，默认路径 `data/invest.db`；
+- 部署方式：前端与后端都可通过 `docker compose` 启动；前端由 nginx 提供静态页面，并通过统一的 `/api` 反向代理转发到后端；
+- 后端数据库路径支持宿主机与容器环境，默认都会落到项目目录下的 `data/invest.db`。
 
 ---
 
@@ -31,27 +32,34 @@
 /Users/jian/invest-tracker
 ```
 
-启动后端：
+推荐启动方式：
 
 ```bash
 cd /Users/jian/invest-tracker
-python3 -m uvicorn backend.main:app --host 0.0.0.0 --port 8000
+docker compose up -d --build
 ```
 
-启动前端：
+如只需单独重启前端或后端：
 
 ```bash
 cd /Users/jian/invest-tracker
-docker compose up -d frontend
+docker compose up -d --build frontend
+docker compose up -d --build backend
 ```
 
 访问地址：
 
 - 前端页面：http://localhost:8080
-- 后端 API：http://localhost:8000
+- 前端代理 API：http://localhost:8080/api
+- 后端 API（宿主机直连）：http://localhost:8000
 - SQLite 数据库：`/Users/jian/invest-tracker/data/invest.db`
 
-说明：前端文件通过 nginx bind mount 挂载，通常修改 `frontend/index.html` 后刷新浏览器即可；后端 `backend/main.py` 修改后需要重启 FastAPI。
+说明：
+
+- 前端统一通过 `/api` 访问后端，不再在页面代码中写死 `8000/8001` 端口；
+- `frontend/index.html` 和 `frontend/nginx.conf` 通过 bind mount 挂载到 nginx 容器，修改后通常重启前端容器或强刷浏览器即可生效；
+- 后端代码修改后需要重建/重启 backend 容器；
+- 后端数据库路径默认兼容宿主机和容器环境，未显式设置 `DB_PATH` 时使用项目目录下的 `data/invest.db`。
 
 ---
 
@@ -78,6 +86,8 @@ docker compose up -d frontend
 
 - 记录/更新今日快照；
 - 同日快照自动更新，不重复新增；
+- “今日”按后端本地时区计算，默认使用 `Asia/Shanghai`；
+- 可通过环境变量 `APP_TIMEZONE` 调整后端时区；
 - 总资产趋势图；
 - 当前资产结构图；
 - 区间变化明细；
