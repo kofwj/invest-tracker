@@ -1,28 +1,31 @@
-# macOS
-.DS_Store
-
 # Python
 __pycache__/
 *.py[cod]
-.venv/
-venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local data and env
 .env
-
-# Node / frontend
-node_modules/
-dist/
-build/
-
-# Local SQLite data and backups: real financial data, do not commit
-data/*.db
-data/*.db-*
-*.sqlite
+.env.*
 *.sqlite3
-backups/
-*.db.bak
-*.bak
+*.db-journal
+*.db-wal
 
-# Logs / temp
-*.log
-.tmp/
-tmp/
+# Project runtime data
+backend/__pycache__/
+tests/__pycache__/
+backend/tests/__pycache__/
+data/
+backups/
+
+# Frontend dependencies/build
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+.worktrees/

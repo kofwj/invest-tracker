@@ -99,3 +99,46 @@ def test_delete_transaction_recalculates_holdings(client, app_module):
     count = conn.execute("SELECT COUNT(*) FROM holdings WHERE code = ?", ('600001',)).fetchone()[0]
     conn.close()
     assert count == 0
+
+
+def test_dividend_reinvestment_updates_holdings_without_cash_change(client, app_module):
+    conn = sqlite3.connect(app_module.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    app_module.set_setting(conn, 'securities_cash_base', 10000)
+    conn.commit()
+    conn.close()
+
+    resp = client.post('/transactions', json={
+        'date': '2026-05-28',
+        'code': 'f002864',
+        'name': '广发安泽短债债券A',
+        'category': '债基',
+        'account': '支付宝',
+        'direction': '分红再投资',
+        'quantity': 623.5524,
+        'price': 1.05,
+        'amount': 654.73,
+        'fee': 0,
+        'remark': 'test dividend reinvestment'
+    })
+    assert resp.status_code == 200
+
+    conn = sqlite3.connect(app_module.DB_PATH)
+    conn.row_factory = sqlite3.Row
+    row = conn.execute(
+        "SELECT quantity, avg_cost, diluted_cost, total_dividend FROM holdings WHERE code = ?",
+        ('f002864',)
+    ).fetchone()
+    conn.close()
+
+    assert row is not None
+    assert round(row['quantity'], 4) == 623.5524
+    assert round(row['avg_cost'], 4) == 1.05
+    assert round(row['diluted_cost'], 4) == 0.0
+    assert round(row['total_dividend'], 2) == 654.73
+
+    dashboard = client.get('/dashboard')
+    assert dashboard.status_code == 200
+    data = dashboard.json()
+    assert data['securities_cash'] == 10000.0
+    assert data['holdings_count'] == 1
