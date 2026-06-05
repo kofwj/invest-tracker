@@ -1153,10 +1153,11 @@
                             <template #default="scope">{{ (Number(scope.row.size || 0) / 1024 / 1024).toFixed(2) }} MB</template>
                         </el-table-column>
                         <el-table-column prop="created_at" label="创建时间" width="180"></el-table-column>
-                        <el-table-column label="操作" width="180" align="center" header-align="center">
+                        <el-table-column label="操作" width="230" align="center" header-align="center">
                             <template #default="scope">
                                 <el-button type="primary" link @click="downloadBackup(scope.row)">下载</el-button>
-                                <el-button type="danger" link @click="restoreBackup(scope.row)">恢复</el-button>
+                                <el-button type="warning" link @click="restoreBackup(scope.row)">恢复</el-button>
+                                <el-button type="danger" link @click="deleteBackup(scope.row)">删除</el-button>
                             </template>
                         </el-table-column>
                     </el-table>

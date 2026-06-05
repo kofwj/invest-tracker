@@ -59,6 +59,7 @@ const api = {
     listBackups: () => axios.get(API + '/maintenance/backups'),
     createBackup: () => axios.post(API + '/maintenance/backups'),
     restoreBackup: (filename) => axios.post(API + '/maintenance/restore', { filename }),
+    deleteBackup: (filename) => axios.delete(API + '/maintenance/backups/' + encodeURIComponent(filename)),
 
     performanceSummary: () => axios.get(API + '/performance/summary'),
     performanceTimeline: () => axios.get(API + '/performance/timeline'),

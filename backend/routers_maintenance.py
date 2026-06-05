@@ -87,6 +87,17 @@ def download_backup(filename: str):
     return FileResponse(str(path), filename=path.name, media_type="application/octet-stream")
 
 
+@router.delete("/maintenance/backups/{filename}")
+def delete_backup(filename: str):
+    path = safe_backup_path(filename)
+    deleted = path.name
+    try:
+        path.unlink()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"删除备份失败：{e}")
+    return {"status": "success", "deleted": deleted}
+
+
 @router.post("/maintenance/restore")
 def restore_backup(payload: RestoreRequest):
     backup = safe_backup_path(payload.filename)

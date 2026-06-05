@@ -745,6 +745,22 @@ const app = createApp({
             }
         };
 
+        const deleteBackup = async (row) => {
+            if (!row?.filename) return;
+            try {
+                await ElementPlus.ElMessageBox.confirm(`确定删除备份 ${row.filename}？删除后无法从系统内恢复。`, '删除备份', { type: 'warning' });
+                maintenanceLoading.value = true;
+                await api.deleteBackup(row.filename);
+                ElMessage.success(`备份已删除：${row.filename}`);
+                await fetchMaintenance();
+            } catch (e) {
+                if (e === 'cancel') return;
+                ElMessage.error('删除备份失败：' + (e?.response?.data?.detail || e?.message || '未知错误'));
+            } finally {
+                maintenanceLoading.value = false;
+            }
+        };
+
         // 预计年化收益编辑
         const openExpectedReturnDialog = (row) => {
             expectedReturnDialog.value = {
@@ -1074,7 +1090,7 @@ const app = createApp({
             openExpectedReturnDialog, saveExpectedReturn, openHoldingCorrectionDialog, saveHoldingCorrection, openHoldingCorrectionHistory, deleteHoldingCorrection, formatMoney, formatPercent, pct,
             perfSummary, perfTimeline, perfContribution, perfFlows, perfLoading, perfFlowForm, perfCards,
             displayedPerfContribution, perfContributionFilter, perfContributionSort, perfContributionHeadline, perfContributionMix,
-            fetchPerformance, addPerfFlow, deletePerfFlow, contributionBarStyle, fetchMaintenance, createDbBackup, downloadBackup, restoreBackup
+            fetchPerformance, addPerfFlow, deletePerfFlow, contributionBarStyle, fetchMaintenance, createDbBackup, downloadBackup, restoreBackup, deleteBackup
         };
     }
 });
