@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+from contextlib import asynccontextmanager
 from datetime import datetime
 
 from fastapi import FastAPI
@@ -50,7 +51,14 @@ except ImportError:  # Allows tests to load this file directly via importlib.
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Investment Tracker API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    run_startup_migrations()
+    yield
+
+
+app = FastAPI(title="Investment Tracker API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -84,11 +92,6 @@ def health_check():
         "timezone": str(APP_CONFIG.local_timezone),
         "db_path": DB_PATH,
     }
-
-
-@app.on_event("startup")
-def startup():
-    run_startup_migrations()
 
 
 if __name__ == "__main__":

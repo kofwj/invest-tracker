@@ -1,0 +1,53 @@
+const API = '/api';
+
+const api = {
+    getDashboard: () => axios.get(API + '/dashboard'),
+    getHoldings: () => axios.get(API + '/holdings'),
+    getDeposits: () => axios.get(API + '/deposits'),
+    getSecuritiesCash: () => axios.get(API + '/securities-cash'),
+    getFeeSettings: () => axios.get(API + '/fee-settings'),
+    updateFeeSettings: (payload) => axios.put(API + '/fee-settings', payload),
+    resetFeeSettings: () => axios.post(API + '/fee-settings/reset'),
+
+    syncPrices: () => axios.get(API + '/sync-prices', { timeout: 120000 }),
+    syncTrailingReturns: () => axios.get(API + '/sync-trailing-returns', { timeout: 180000 }),
+
+    addTransaction: (payload) => axios.post(API + '/transactions', payload),
+    listTransactions: () => axios.get(API + '/transactions'),
+    listTransactionsByCode: (code) => axios.get(API + '/transactions?code=' + encodeURIComponent(code)),
+    updateTransaction: (id, payload) => axios.put(API + '/transactions/' + id, payload),
+    deleteTransaction: (id) => axios.delete(API + '/transactions/' + id),
+
+    addDeposit: (payload) => axios.post(API + '/deposits', payload),
+    updateDeposit: (id, payload) => axios.put(API + '/deposits/' + id, payload),
+    deleteDeposit: (id) => axios.delete(API + '/deposits/' + id),
+
+    updateSecuritiesCash: (amount) => axios.put(API + '/securities-cash', { amount }),
+    listCashFlows: (params = []) => axios.get(API + '/cash-flows' + (params.length ? '?' + params.join('&') : '')),
+    addCashFlow: (payload) => axios.post(API + '/cash-flows', payload),
+    updateCashFlow: (id, payload) => axios.put(API + '/cash-flows/' + id, payload),
+    deleteCashFlow: (id) => axios.delete(API + '/cash-flows/' + id),
+
+    updateExpectedReturn: (code, expected_return) => axios.put(API + '/holdings/' + encodeURIComponent(code), { expected_return }),
+    addHoldingCorrection: (payload) => axios.post(API + '/holding-corrections', payload),
+    listHoldingCorrections: (code) => axios.get(API + '/holding-corrections?code=' + encodeURIComponent(code)),
+    deleteHoldingCorrection: (id) => axios.delete(API + '/holding-corrections/' + id),
+
+    createSnapshot: () => axios.post(API + '/snapshots'),
+    listSnapshots: (range = []) => {
+        let url = API + '/snapshots';
+        if (range && range.length === 2) url += `?start_date=${range[0]}&end_date=${range[1]}`;
+        return axios.get(url);
+    },
+    snapshotSummary: (range = []) => axios.get(API + `/snapshots/summary?start_date=${range[0]}&end_date=${range[1]}`),
+
+    performanceSummary: () => axios.get(API + '/performance/summary'),
+    performanceTimeline: () => axios.get(API + '/performance/timeline'),
+    performanceContribution: () => axios.get(API + '/performance/contribution'),
+    listPortfolioCashFlows: () => axios.get(API + '/portfolio-cash-flows'),
+    addPortfolioCashFlow: (payload) => axios.post(API + '/portfolio-cash-flows', payload),
+    deletePortfolioCashFlow: (id) => axios.delete(API + '/portfolio-cash-flows/' + id),
+
+    download: (url) => axios.get(API + url, { responseType: 'blob' }),
+    uploadCsv: (url, formData) => axios.post(API + url, formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 180000 }),
+};

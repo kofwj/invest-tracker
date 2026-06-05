@@ -13,6 +13,48 @@ echo "==> Checking health endpoint wiring"
 grep -q 'api/health' backend/main.py
 grep -q 'api/health' docker-compose.yml
 
+echo "==> Checking split frontend assets"
+test -f frontend/index.html
+test -f frontend/assets/styles.css
+test -f frontend/assets/app.js
+test -f frontend/assets/utils.js
+test -f frontend/assets/charts.js
+test -f frontend/assets/api.js
+test -f frontend/assets/modules/transactions.js
+test -f frontend/assets/modules/deposits.js
+test -f frontend/assets/modules/cash.js
+grep -q 'assets/styles.css' frontend/index.html
+grep -q 'assets/utils.js' frontend/index.html
+grep -q 'assets/api.js' frontend/index.html
+grep -q 'assets/charts.js' frontend/index.html
+grep -q 'assets/modules/transactions.js' frontend/index.html
+grep -q 'assets/modules/deposits.js' frontend/index.html
+grep -q 'assets/modules/cash.js' frontend/index.html
+grep -q 'assets/app.js' frontend/index.html
+grep -q 'COPY assets' frontend/Dockerfile
+"$python_bin" - <<'PY'
+from pathlib import Path
+html = Path('frontend/index.html').read_text(encoding='utf-8')
+for asset in ['styles.css', 'utils.js', 'api.js', 'charts.js', 'modules/transactions.js', 'modules/deposits.js', 'modules/cash.js', 'app.js']:
+    assert f'/assets/{asset}' in html, f'missing frontend asset reference: {asset}'
+script_order = [html.index('/assets/utils.js'), html.index('/assets/api.js'), html.index('/assets/charts.js'), html.index('/assets/modules/transactions.js'), html.index('/assets/modules/deposits.js'), html.index('/assets/modules/cash.js'), html.index('/assets/app.js')]
+assert script_order == sorted(script_order), 'frontend scripts must load as utils -> api -> charts -> modules -> app'
+assert '<el-date-picker\n                            <el-date-picker' not in html, 'duplicate el-date-picker tag found'
+PY
+
+echo "==> Checking frontend JavaScript syntax"
+if command -v node >/dev/null 2>&1; then
+  node --check frontend/assets/utils.js
+  node --check frontend/assets/api.js
+  node --check frontend/assets/charts.js
+  node --check frontend/assets/modules/transactions.js
+  node --check frontend/assets/modules/deposits.js
+  node --check frontend/assets/modules/cash.js
+  node --check frontend/assets/app.js
+else
+  echo "node not found; skipping frontend JavaScript syntax check"
+fi
+
 echo "==> Checking split backend modules"
 required_backend_files=(
   backend/main.py
