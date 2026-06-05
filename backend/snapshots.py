@@ -1,6 +1,11 @@
 import sqlite3
-from datetime import date as dt_date
+from datetime import date as dt_date, datetime
 from typing import Optional
+
+try:
+    from .database import LOCAL_TZ
+except ImportError:
+    from database import LOCAL_TZ
 
 
 def ensure_snapshot_columns(conn):
@@ -23,12 +28,13 @@ def ensure_portfolio_cash_flows_table(conn):
 
 def create_snapshot_record(conn, today_iso, dashboard):
     ensure_snapshot_columns(conn)
+    now = datetime.now(LOCAL_TZ).replace(tzinfo=None)
     existing = conn.execute("SELECT id FROM daily_snapshots WHERE date = ?", (today_iso,)).fetchone()
     if existing:
         conn.execute("""
             UPDATE daily_snapshots
             SET total_assets = ?, total_market_value = ?, bank_balance = ?, securities_cash = ?,
-                pending_purchase = ?, total_profit = ?, holdings_count = ?, created_at = CURRENT_TIMESTAMP
+                pending_purchase = ?, total_profit = ?, holdings_count = ?, created_at = ?
             WHERE date = ?
         """, (
             dashboard['total_assets'],
@@ -38,14 +44,15 @@ def create_snapshot_record(conn, today_iso, dashboard):
             dashboard.get('pending_purchase', 0),
             dashboard['total_profit'],
             dashboard['holdings_count'],
+            now,
             today_iso,
         ))
         return existing['id'], 'updated'
 
     conn.execute("""
         INSERT INTO daily_snapshots
-        (date, total_assets, total_market_value, bank_balance, securities_cash, pending_purchase, total_profit, holdings_count)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        (date, total_assets, total_market_value, bank_balance, securities_cash, pending_purchase, total_profit, holdings_count, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         today_iso,
         dashboard['total_assets'],
@@ -55,6 +62,7 @@ def create_snapshot_record(conn, today_iso, dashboard):
         dashboard.get('pending_purchase', 0),
         dashboard['total_profit'],
         dashboard['holdings_count'],
+        now,
     ))
     snapshot_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
     return snapshot_id, 'created'

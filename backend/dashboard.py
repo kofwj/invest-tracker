@@ -20,6 +20,9 @@ def build_dashboard(conn):
     pending_purchase = float(pending_row['total'] or 0) if pending_row else 0
     total_profit = sum((h['last_price'] - h['avg_cost']) * h['quantity'] + h['total_dividend'] for h in holdings)
 
+    price_row = conn.execute("SELECT MAX(updated_at) AS latest FROM holdings WHERE quantity > 0 AND updated_at IS NOT NULL").fetchone()
+    snapshot_row = conn.execute("SELECT MAX(date) AS latest FROM daily_snapshots").fetchone()
+
     return {
         "total_market_value": total_market_value,
         "bank_balance": bank_balance,
@@ -28,4 +31,6 @@ def build_dashboard(conn):
         "total_assets": total_market_value + bank_balance + securities_cash + pending_purchase,
         "total_profit": total_profit,
         "holdings_count": len(holdings),
+        "latest_price_updated_at": price_row["latest"] if price_row else None,
+        "latest_snapshot_date": snapshot_row["latest"] if snapshot_row else None,
     }

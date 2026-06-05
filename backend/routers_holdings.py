@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 try:
     from .csv_utils import create_safety_backup
+    from .database import LOCAL_TZ
     from .database import db_session, open_db
     from .holdings import (
         calculate_trailing_return_1y,
@@ -17,6 +18,7 @@ try:
     )
 except ImportError:
     from csv_utils import create_safety_backup
+    from database import LOCAL_TZ
     from database import db_session, open_db
     from holdings import (
         calculate_trailing_return_1y,
@@ -66,7 +68,7 @@ def sync_trailing_returns(backup: bool = False):
     updated = 0
     failed = []
     details = []
-    now = datetime.now()
+    now = datetime.now(LOCAL_TZ).replace(tzinfo=None)
     for row in rows:
         code = str(row["code"]).strip()
         pct, source = calculate_trailing_return_1y(code, row["last_price"])
@@ -94,7 +96,7 @@ def sync_prices(backup: bool = False):
     unchanged = 0
     failed = []
     details = []
-    now = datetime.now()
+    now = datetime.now(LOCAL_TZ).replace(tzinfo=None)
 
     codes = [row["code"] for row in rows]
     em_prices = {}

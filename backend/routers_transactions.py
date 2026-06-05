@@ -87,14 +87,43 @@ def download_transactions_template():
     return csv_response("transactions_template.csv", TRANSACTION_CSV_COLUMNS, rows)
 
 
+def build_transaction_where(code=None, name=None, direction=None, start_date=None, end_date=None):
+    where = []
+    params = []
+    if code:
+        where.append("code LIKE ?")
+        params.append(f"%{str(code).strip()}%")
+    if name:
+        where.append("name LIKE ?")
+        params.append(f"%{str(name).strip()}%")
+    if direction:
+        where.append("direction = ?")
+        params.append(str(direction).strip())
+    if start_date:
+        where.append("date >= ?")
+        params.append(start_date)
+    if end_date:
+        where.append("date <= ?")
+        params.append(end_date)
+    return (" WHERE " + " AND ".join(where)) if where else "", params
+
+
 @router.get("/transactions/export")
-def export_transactions():
+def export_transactions(
+    code: Optional[str] = None,
+    name: Optional[str] = None,
+    direction: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+):
     conn = open_db(row_factory=sqlite3.Row)
-    rows = conn.execute("""
+    where_sql, params = build_transaction_where(code, name, direction, start_date, end_date)
+    rows = conn.execute(f"""
         SELECT date, COALESCE(account, '华泰证券') AS account, code, name, category, direction, quantity, price, amount, fee, remark
         FROM transactions
+        {where_sql}
         ORDER BY date DESC, id DESC
-    """).fetchall()
+    """, params).fetchall()
     conn.close()
     data = [[r[k] for k in TRANSACTION_CSV_COLUMNS] for r in rows]
     return csv_response(f"transactions_{dt_date.today().isoformat()}.csv", TRANSACTION_CSV_COLUMNS, data)

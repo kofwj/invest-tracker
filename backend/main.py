@@ -26,6 +26,7 @@ try:
     from .routers_deposits import router as deposits_router
     from .routers_holdings import router as holdings_router
     from .routers_performance import router as performance_router
+    from .routers_maintenance import router as maintenance_router
     from .routers_snapshots import router as snapshots_router
     from .routers_transactions import router as transactions_router
     from .schema import ensure_app_schema, ensure_core_tables, initialize_database, run_startup_migrations
@@ -44,6 +45,7 @@ except ImportError:  # Allows tests to load this file directly via importlib.
     from routers_deposits import router as deposits_router
     from routers_holdings import router as holdings_router
     from routers_performance import router as performance_router
+    from routers_maintenance import router as maintenance_router
     from routers_snapshots import router as snapshots_router
     from routers_transactions import router as transactions_router
     from schema import ensure_app_schema, ensure_core_tables, initialize_database, run_startup_migrations
@@ -74,6 +76,7 @@ app.include_router(snapshots_router)
 app.include_router(holdings_router)
 app.include_router(dashboard_router)
 app.include_router(performance_router)
+app.include_router(maintenance_router)
 
 
 def local_today_iso():

@@ -8,9 +8,9 @@ from fastapi import HTTPException
 from fastapi.responses import Response
 
 try:
-    from .database import DB_PATH, db_session
+    from .database import DB_PATH, LOCAL_TZ, db_session
 except ImportError:
-    from database import DB_PATH, db_session
+    from database import DB_PATH, LOCAL_TZ, db_session
 
 
 TRANSACTION_CSV_COLUMNS = ["date", "account", "code", "name", "category", "direction", "quantity", "price", "amount", "fee", "remark"]
@@ -101,7 +101,7 @@ def create_safety_backup(label: str):
     """Create an integrity-checked SQLite backup before risky data mutations."""
     backup_dir = os.path.join(os.path.dirname(os.path.dirname(DB_PATH)), "backups")
     os.makedirs(backup_dir, exist_ok=True)
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    ts = datetime.now(LOCAL_TZ).strftime("%Y%m%d_%H%M%S")
     backup_path = os.path.join(backup_dir, f"invest_{ts}_{_safe_backup_label(label)}.db.bak")
     with db_session() as src, sqlite3.connect(backup_path) as dst:
         src.backup(dst)

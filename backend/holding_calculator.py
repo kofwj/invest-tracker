@@ -1,3 +1,4 @@
+from database import LOCAL_TZ
 import sqlite3
 from datetime import datetime
 
@@ -181,7 +182,7 @@ def recalc_holdings(conn):
         if code not in active_codes:
             conn.execute("DELETE FROM holdings WHERE code = ?", (code,))
 
-    now = datetime.now()
+    now = datetime.now(LOCAL_TZ).replace(tzinfo=None)
     for code, s in state.items():
         old = old_holdings.get(code, {})
         if code == "513530" and not s.get("corrected"):

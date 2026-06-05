@@ -15,17 +15,19 @@ import os
 import sqlite3
 from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DB = ROOT / "data" / "invest.db"
 DEFAULT_BACKUP_DIR = ROOT / "backups"
+LOCAL_TZ = ZoneInfo(os.environ.get("APP_TIMEZONE", "Asia/Shanghai"))
 
 
 def backup_db(source: Path, backup_dir: Path, label: str | None = None) -> Path:
     if not source.exists():
         raise FileNotFoundError(f"database not found: {source}")
     backup_dir.mkdir(parents=True, exist_ok=True)
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    ts = datetime.now(LOCAL_TZ).strftime("%Y%m%d_%H%M%S")
     safe_label = ""
     if label:
         safe = "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in label.strip())

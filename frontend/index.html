@@ -58,6 +58,24 @@
             </el-card>
         </div>
 
+        <div class="home-status-strip">
+            <el-card shadow="never" class="home-status-card">
+                <div class="home-status-label">最新价同步</div>
+                <div class="home-status-main">{{ latestPriceStatusText }}</div>
+                <div class="home-status-sub">取持仓最新更新时间</div>
+            </el-card>
+            <el-card shadow="never" class="home-status-card">
+                <div class="home-status-label">今日快照</div>
+                <div class="home-status-main" :class="todaySnapshotDone ? 'is-ok' : 'is-warn'">{{ todaySnapshotDone ? '已记录' : '未记录' }}</div>
+                <div class="home-status-sub">最新快照：{{ dashboard.latest_snapshot_date || '暂无' }}</div>
+            </el-card>
+            <el-card shadow="never" class="home-status-card">
+                <div class="home-status-label">最近备份</div>
+                <div class="home-status-main">{{ latestBackupText }}</div>
+                <div class="home-status-sub">备份数：{{ maintenanceStatus.backup_count || 0 }}</div>
+            </el-card>
+        </div>
+
         <el-alert
             v-if="Number(dashboard.pending_purchase || 0) > 0"
             type="warning"
@@ -1099,6 +1117,49 @@
                         <el-button @click="resetFeeSettings">恢复默认费率</el-button>
                         <span style="color:#909399;font-size:12px;">每个账户独立保存；默认：A股佣金万2.5、卖出印花税万5、过户费万0.1；ETF/REITs/黄金默认只收佣金；债基默认0。</span>
                     </div>
+                </el-card>
+            </el-tab-pane>
+
+            <!-- 数据维护 -->
+            <el-tab-pane label="数据维护" name="maintenance">
+                <el-card shadow="never">
+                    <template #header>
+                        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+                            <div>
+                                <div class="allocation-section-title">数据维护</div>
+                                <div style="font-size:12px;color:#909399;margin-top:4px;">数据库备份、下载和恢复。恢复前会自动创建当前数据库备份。</div>
+                            </div>
+                            <el-space wrap>
+                                <el-button @click="fetchMaintenance">刷新列表</el-button>
+                                <el-button type="primary" :loading="maintenanceLoading" @click="createDbBackup">创建备份</el-button>
+                            </el-space>
+                        </div>
+                    </template>
+                    <el-descriptions :column="3" border style="margin-bottom:16px;">
+                        <el-descriptions-item label="数据库状态">{{ maintenanceStatus.db_exists ? '正常' : '未找到' }}</el-descriptions-item>
+                        <el-descriptions-item label="数据库大小">{{ ((maintenanceStatus.db_size || 0) / 1024 / 1024).toFixed(2) }} MB</el-descriptions-item>
+                        <el-descriptions-item label="最近备份">{{ maintenanceStatus.latest_backup || '暂无' }}</el-descriptions-item>
+                    </el-descriptions>
+                    <el-alert
+                        title="恢复数据库属于高风险操作：系统会先自动备份当前数据库，但仍建议先下载关键备份文件。"
+                        type="warning"
+                        show-icon
+                        :closable="false"
+                        style="margin-bottom: 16px;"
+                    ></el-alert>
+                    <el-table :data="backups" stripe style="width:100%;" empty-text="暂无备份文件">
+                        <el-table-column prop="filename" label="备份文件" min-width="260" show-overflow-tooltip></el-table-column>
+                        <el-table-column label="大小" width="110" align="right" header-align="right">
+                            <template #default="scope">{{ (Number(scope.row.size || 0) / 1024 / 1024).toFixed(2) }} MB</template>
+                        </el-table-column>
+                        <el-table-column prop="created_at" label="创建时间" width="180"></el-table-column>
+                        <el-table-column label="操作" width="180" align="center" header-align="center">
+                            <template #default="scope">
+                                <el-button type="primary" link @click="downloadBackup(scope.row)">下载</el-button>
+                                <el-button type="danger" link @click="restoreBackup(scope.row)">恢复</el-button>
+                            </template>
+                        </el-table-column>
+                    </el-table>
                 </el-card>
             </el-tab-pane>
             

@@ -21,6 +21,13 @@ const api = {
         return axios.get(API + '/transactions' + (qs.toString() ? '?' + qs.toString() : ''));
     },
     listTransactionsByCode: (code) => axios.get(API + '/transactions?legacy=1&code=' + encodeURIComponent(code)),
+    exportTransactions: (params = {}) => {
+        const qs = new URLSearchParams();
+        Object.entries(params || {}).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && value !== '') qs.set(key, value);
+        });
+        return axios.get(API + '/transactions/export' + (qs.toString() ? '?' + qs.toString() : ''), { responseType: 'blob' });
+    },
     updateTransaction: (id, payload) => axios.put(API + '/transactions/' + id, payload),
     deleteTransaction: (id) => axios.delete(API + '/transactions/' + id),
 
@@ -47,6 +54,11 @@ const api = {
     },
     snapshotSummary: (range = []) => axios.get(API + `/snapshots/summary?start_date=${range[0]}&end_date=${range[1]}`),
     compactSnapshots: () => axios.post(API + '/snapshots/compact'),
+
+    maintenanceStatus: () => axios.get(API + '/maintenance/status'),
+    listBackups: () => axios.get(API + '/maintenance/backups'),
+    createBackup: () => axios.post(API + '/maintenance/backups'),
+    restoreBackup: (filename) => axios.post(API + '/maintenance/restore', { filename }),
 
     performanceSummary: () => axios.get(API + '/performance/summary'),
     performanceTimeline: () => axios.get(API + '/performance/timeline'),

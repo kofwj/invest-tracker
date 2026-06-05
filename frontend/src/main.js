@@ -17,6 +17,14 @@ window.axios = axios;
 window.echarts = echarts;
 window.ElementPlus = Object.assign({}, ElementPlus, { ElMessage, ElLoading, ElMessageBox });
 
+const todayLocalIso = () => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+};
+
 const app = createApp({
     setup() {
         const screenshotParams = new URLSearchParams(window.location.search);
@@ -45,7 +53,7 @@ const app = createApp({
         };
         const cashForm = ref({ amount: 0 });
         const cashFlows = ref([]);
-        const cashFlowForm = ref({ date: new Date().toISOString().split('T')[0], account: '华泰证券', flow_type: '银证转入', amount: 0, remark: '' });
+        const cashFlowForm = ref({ date: todayLocalIso(), account: '华泰证券', flow_type: '银证转入', amount: 0, remark: '' });
         const cashFlowQuery = ref({ dateRange: [], account: '', flow_type: '' });
         const cashFlowEditDialog = ref({ visible: false, editId: null, form: { date: '', account: '', flow_type: '', amount: 0, remark: '' } });
         const snapshots = ref([]);
@@ -54,9 +62,12 @@ const app = createApp({
         const snapshotMetrics = ref([]);
         const snapshotChangeRows = ref([]);
         const snapshotLoading = ref(false);
+        const maintenanceStatus = ref({});
+        const backups = ref([]);
+        const maintenanceLoading = ref(false);
 
         const transForm = ref({
-            date: new Date().toISOString().split('T')[0],
+            date: todayLocalIso(),
             code: '', name: '', category: '', account: '华泰证券', direction: '买入',
             quantity: 0, price: 0, amount: 0, fee: 0
         });
@@ -104,7 +115,7 @@ const app = createApp({
         const holdingCorrectionDialog = ref({
             visible: false,
             current: {},
-            form: { date: new Date().toISOString().split('T')[0], code: '', name: '', category: '', actual_quantity: 0, actual_avg_cost: 0, actual_total_dividend: 0, remark: '' }
+            form: { date: todayLocalIso(), code: '', name: '', category: '', actual_quantity: 0, actual_avg_cost: 0, actual_total_dividend: 0, remark: '' }
         });
         const holdingCorrectionHistoryDialog = ref({ visible: false, title: '持仓校正记录', records: [] });
 
@@ -637,9 +648,33 @@ const app = createApp({
         };
 
         const downloadTransactionsTemplate = () => downloadFile('/transactions/template', 'transactions_template.csv');
-        const exportTransactions = () => downloadFile('/transactions/export', `transactions_${new Date().toISOString().slice(0,10)}.csv`);
+        const buildTransactionExportParams = () => {
+            const q = transQuery.value || {};
+            const params = { code: q.code || '', name: q.name || '', direction: q.direction || '' };
+            if (q.dateRange && q.dateRange.length === 2) {
+                params.start_date = q.dateRange[0];
+                params.end_date = q.dateRange[1];
+            }
+            return params;
+        };
+
+        const exportTransactions = async () => {
+            try {
+                const res = await api.exportTransactions(buildTransactionExportParams());
+                const blobUrl = window.URL.createObjectURL(new Blob([res.data], { type: 'text/csv;charset=utf-8;' }));
+                const link = document.createElement('a');
+                link.href = blobUrl;
+                link.download = `transactions_${todayLocalIso()}.csv`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                window.URL.revokeObjectURL(blobUrl);
+            } catch (e) {
+                ElMessage.error('导出交易失败：' + (e?.response?.data?.detail || e?.message || '未知错误'));
+            }
+        };
         const downloadDepositsTemplate = () => downloadFile('/deposits/template', 'deposits_template.csv');
-        const exportDeposits = () => downloadFile('/deposits/export', `deposits_${new Date().toISOString().slice(0,10)}.csv`);
+        const exportDeposits = () => downloadFile('/deposits/export', `deposits_${todayLocalIso()}.csv`);
 
         const uploadCsv = async (url, file, label, afterSuccess) => {
             const raw = file?.raw || file;
@@ -665,6 +700,50 @@ const app = createApp({
 
         const importTransactions = (file) => uploadCsv('/transactions/import', file, '交易记录', async () => { await queryTransactions(); await fetchData(); });
         const importDeposits = (file) => uploadCsv('/deposits/import', file, '银行存款', async () => { await fetchData(); });
+
+        const fetchMaintenance = async () => {
+            try {
+                const [statusRes, backupsRes] = await Promise.all([api.maintenanceStatus(), api.listBackups()]);
+                maintenanceStatus.value = statusRes.data || {};
+                backups.value = backupsRes.data || [];
+            } catch (e) {
+                console.error('获取维护状态失败', e);
+            }
+        };
+
+        const createDbBackup = async () => {
+            maintenanceLoading.value = true;
+            try {
+                const res = await api.createBackup();
+                ElMessage.success(`备份已创建：${res.data?.filename || ''}`);
+                await fetchMaintenance();
+            } catch (e) {
+                ElMessage.error('创建备份失败：' + (e?.response?.data?.detail || e?.message || '未知错误'));
+            } finally {
+                maintenanceLoading.value = false;
+            }
+        };
+
+        const downloadBackup = (row) => {
+            if (!row?.filename) return;
+            window.location.href = `${API}/maintenance/backups/${encodeURIComponent(row.filename)}/download`;
+        };
+
+        const restoreBackup = async (row) => {
+            if (!row?.filename) return;
+            try {
+                await ElementPlus.ElMessageBox.confirm(`确定恢复备份 ${row.filename}？系统会先自动备份当前数据库。`, '恢复数据库', { type: 'warning' });
+                maintenanceLoading.value = true;
+                const res = await api.restoreBackup(row.filename);
+                ElMessage.success(`恢复完成，恢复前备份：${res.data?.pre_restore_backup || ''}`);
+                await Promise.all([fetchData(), fetchSnapshots(), queryTransactions(), fetchMaintenance()]);
+            } catch (e) {
+                if (e === 'cancel') return;
+                ElMessage.error('恢复备份失败：' + (e?.response?.data?.detail || e?.message || '未知错误'));
+            } finally {
+                maintenanceLoading.value = false;
+            }
+        };
 
         // 预计年化收益编辑
         const openExpectedReturnDialog = (row) => {
@@ -696,7 +775,7 @@ const app = createApp({
                 visible: true,
                 current: { ...row },
                 form: {
-                    date: new Date().toISOString().split('T')[0],
+                    date: todayLocalIso(),
                     code: row.code,
                     name: row.name,
                     category: row.category || '',
@@ -914,6 +993,11 @@ const app = createApp({
             portfolioExpectedReturn.value = totalWeight > 0 ? weightedSum / totalWeight : 0;
         };
 
+        const todayIso = computed(() => todayLocalIso());
+        const todaySnapshotDone = computed(() => dashboard.value.latest_snapshot_date === todayIso.value);
+        const latestPriceStatusText = computed(() => dashboard.value.latest_price_updated_at ? String(dashboard.value.latest_price_updated_at).replace('T', ' ').slice(0, 19) : '暂无同步记录');
+        const latestBackupText = computed(() => maintenanceStatus.value.latest_backup_at ? String(maintenanceStatus.value.latest_backup_at).replace('T', ' ').slice(0, 19) : '暂无备份');
+
         const renderAllocationCharts = () => renderAllocationChartsView(macroAllocationAnalysis.value, allocationAnalysis.value);
 
 
@@ -926,7 +1010,7 @@ const app = createApp({
         const perfContributionFilter = ref('all');
         const perfContributionSort = ref('contribution');
         const perfFlowForm = ref({
-            date: new Date().toISOString().split('T')[0],
+            date: todayLocalIso(),
             flow_type: '投入',
             amount: 100000,
             source: '',
@@ -963,6 +1047,7 @@ const app = createApp({
             if (val === 'snapshots') {
                 fetchSnapshots().then(() => nextTick(renderSnapshotCharts));
             }
+            if (val === 'maintenance') fetchMaintenance();
         });
 
         onMounted(() => {
@@ -970,11 +1055,12 @@ const app = createApp({
             queryTransactions();
             queryCashFlows();
             fetchSnapshots();
+            fetchMaintenance();
         });
 
         return {
             activeTab, dashboard, holdings, deposits, depositRows, depositSummary, depositBankBreakdown, depositMaturityBuckets, syncing, trailingSyncing, syncNotice,
-            snapshots, snapshotRange, snapshotSummary, snapshotMetrics, snapshotChangeRows, snapshotInsights, snapshotLoading,
+            snapshots, snapshotRange, snapshotSummary, snapshotMetrics, snapshotChangeRows, snapshotInsights, snapshotLoading, maintenanceStatus, backups, maintenanceLoading, todayIso, todaySnapshotDone, latestPriceStatusText, latestBackupText,
             transForm, feeSettings, feeAccounts, activeFeeAccount, newFeeAccountName, feeCategories, feeSettingRows, feeAutoHint, depositDialog, cashForm, cashFlows, cashFlowForm, cashFlowQuery, cashFlowSummary, cashFlowEditDialog, transDialog, allocationAnalysis, macroAllocationAnalysis,
             allocationSummary, allocationHealth, portfolioExpectedReturn, expectedReturnDialog, holdingCorrectionDialog, holdingCorrectionHistoryDialog,
             // 交易管理相关
@@ -988,7 +1074,7 @@ const app = createApp({
             openExpectedReturnDialog, saveExpectedReturn, openHoldingCorrectionDialog, saveHoldingCorrection, openHoldingCorrectionHistory, deleteHoldingCorrection, formatMoney, formatPercent, pct,
             perfSummary, perfTimeline, perfContribution, perfFlows, perfLoading, perfFlowForm, perfCards,
             displayedPerfContribution, perfContributionFilter, perfContributionSort, perfContributionHeadline, perfContributionMix,
-            fetchPerformance, addPerfFlow, deletePerfFlow, contributionBarStyle
+            fetchPerformance, addPerfFlow, deletePerfFlow, contributionBarStyle, fetchMaintenance, createDbBackup, downloadBackup, restoreBackup
         };
     }
 });
