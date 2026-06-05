@@ -499,7 +499,7 @@ const app = createApp({
             if (feeAccounts.value.length <= 1) return;
             const acc = activeFeeAccount.value;
             try {
-                await ElementPlus.ElMessageBox.confirm(`确定删除账户「${acc}」的费率配置？交易记录不会删除。`, '确认删除', { type: 'warning' });
+                await ElMessageBox.confirm(`确定删除账户「${acc}」的费率配置？交易记录不会删除。`, '确认删除', { type: 'warning' });
                 feeAccounts.value = feeAccounts.value.filter(x => x !== acc);
                 const nextSettings = { ...feeSettings.value };
                 delete nextSettings[acc];
@@ -683,7 +683,7 @@ const app = createApp({
                 return ElMessage.warning('请上传 CSV 文件');
             }
             try {
-                await ElementPlus.ElMessageBox.confirm(`确认导入 ${raw.name}？导入前系统会自动备份数据库，成功行会写入真实数据。`, `导入${label}`, { type: 'warning' });
+                await ElMessageBox.confirm(`确认导入 ${raw.name}？导入前系统会自动备份数据库，成功行会写入真实数据。`, `导入${label}`, { type: 'warning' });
                 const fd = new FormData();
                 fd.append('file', raw);
                 const res = await api.uploadCsv(url, fd);
@@ -732,7 +732,7 @@ const app = createApp({
         const restoreBackup = async (row) => {
             if (!row?.filename) return;
             try {
-                await ElementPlus.ElMessageBox.confirm(`确定恢复备份 ${row.filename}？系统会先自动备份当前数据库。`, '恢复数据库', { type: 'warning' });
+                await ElMessageBox.confirm(`确定恢复备份 ${row.filename}？系统会先自动备份当前数据库。`, '恢复数据库', { type: 'warning' });
                 maintenanceLoading.value = true;
                 const res = await api.restoreBackup(row.filename);
                 ElMessage.success(`恢复完成，恢复前备份：${res.data?.pre_restore_backup || ''}`);
@@ -748,7 +748,7 @@ const app = createApp({
         const deleteBackup = async (row) => {
             if (!row?.filename) return;
             try {
-                await ElementPlus.ElMessageBox.confirm(`确定删除备份 ${row.filename}？删除后无法从系统内恢复。`, '删除备份', { type: 'warning' });
+                await ElMessageBox.confirm(`确定删除备份 ${row.filename}？删除后无法从系统内恢复。`, '删除备份', { type: 'warning' });
                 maintenanceLoading.value = true;
                 await api.deleteBackup(row.filename);
                 ElMessage.success(`备份已删除：${row.filename}`);
@@ -831,7 +831,7 @@ const app = createApp({
 
         const deleteHoldingCorrection = async (row) => {
             try {
-                await ElementPlus.ElMessageBox.confirm(`确定删除 ${row.date} ${row.code} 的持仓校正？删除后会按交易记录重新计算。`, '确认删除', { type: 'warning' });
+                await ElMessageBox.confirm(`确定删除 ${row.date} ${row.code} 的持仓校正？删除后会按交易记录重新计算。`, '确认删除', { type: 'warning' });
                 await api.deleteHoldingCorrection(row.id);
                 ElMessage.success('校正记录已删除，并已重新计算持仓');
                 holdingCorrectionHistoryDialog.value.records = holdingCorrectionHistoryDialog.value.records.filter(x => x.id !== row.id);
