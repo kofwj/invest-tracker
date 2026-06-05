@@ -87,7 +87,7 @@ invest-tracker/
 ### 推荐：Docker Compose
 
 ```bash
-cd /Users/jian/invest-tracker
+cd invest-tracker
 docker compose up -d --build
 ```
 
@@ -136,7 +136,7 @@ make check    # 运行完整检查
 安装依赖：
 
 ```bash
-cd /Users/jian/invest-tracker/frontend
+cd invest-tracker/frontend
 npm install
 ```
 
@@ -245,7 +245,7 @@ python3 scripts/safety_snapshot.py
 完整检查：
 
 ```bash
-cd /Users/jian/invest-tracker
+cd invest-tracker
 bash scripts/check.sh
 ```
 
