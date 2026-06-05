@@ -1,5 +1,5 @@
 import { createApp, ref, onMounted, nextTick, watch, computed } from 'vue/dist/vue.esm-bundler.js';
-import ElementPlus from 'element-plus';
+import ElementPlus, { ElLoading, ElMessage, ElMessageBox } from 'element-plus';
 import 'element-plus/dist/index.css';
 import axios from 'axios';
 import * as echarts from 'echarts';
@@ -15,7 +15,7 @@ import './modules/performance.js';
 
 window.axios = axios;
 window.echarts = echarts;
-window.ElementPlus = ElementPlus;
+window.ElementPlus = Object.assign({}, ElementPlus, { ElMessage, ElLoading, ElMessageBox });
 
 const app = createApp({
     setup() {
@@ -41,7 +41,7 @@ const app = createApp({
             syncNoticeTimer = setTimeout(() => {
                 syncNotice.value.text = '';
                 syncNotice.value.type = '';
-            }, 6000);
+            }, 12000);
         };
         const cashForm = ref({ amount: 0 });
         const cashFlows = ref([]);
@@ -84,6 +84,7 @@ const app = createApp({
         const filteredTransactions = ref([]);
         const pendingTransactions = ref([]);
         const pendingPurchaseTotal = ref(0);
+        const transPage = ref({ page: 1, pageSize: 100, total: 0 });
         const transQuery = ref({
             dateRange: [],
             code: '',
@@ -274,57 +275,38 @@ const app = createApp({
 
         const syncPrices = async () => {
             syncing.value = true;
-            const loading = ElementPlus.ElLoading.service({ text: '正在同步最新价（并自动刷新近一年收益率）...', background: 'rgba(255, 255, 255, 0.65)' });
+            showSyncNotice('正在同步最新价...', 'success');
             try {
                 const priceRes = await api.syncPrices();
                 const priceData = priceRes.data || {};
                 const priceFailedCount = Array.isArray(priceData.failed) ? priceData.failed.length : 0;
-
-                let trailingData = null;
-                let trailingFailedText = '';
-                try {
-                    const trailingRes = await api.syncTrailingReturns();
-                    trailingData = trailingRes.data || {};
-                    const trailingFailedCount = Array.isArray(trailingData.failed) ? trailingData.failed.length : 0;
-                    if (trailingFailedCount > 0) {
-                        trailingFailedText = trailingData.failed.slice(0, 3).map(x => `${x.code} ${x.name || ''}: ${x.reason || '失败'}`).join('；');
-                    }
-                } catch (trailingErr) {
-                    const trailingDetail = trailingErr?.response?.data?.detail || trailingErr?.message || '未知错误';
-                    trailingData = { checked: 0, updated: 0, failed: [{ code: 'TRAILING', name: '近一年收益率', reason: trailingDetail }] };
-                    trailingFailedText = `近一年收益率同步失败：${trailingDetail}`;
-                }
-
-                await fetchData();
-
-                const trailingFailedCount = Array.isArray(trailingData?.failed) ? trailingData.failed.length : 0;
-                const msg = `同步完成：最新价检查 ${priceData.checked || 0} 个，价格变化 ${priceData.updated || 0} 个，无变化 ${priceData.unchanged || 0} 个，价格失败 ${priceFailedCount} 个；近一年收益率检查 ${trailingData?.checked || 0} 个，成功 ${trailingData?.updated || 0} 个，失败 ${trailingFailedCount} 个`;
-
+                const msg = `最新价同步完成：检查 ${priceData.checked || 0} 个，价格变化 ${priceData.updated || 0} 个，无变化 ${priceData.unchanged || 0} 个，失败 ${priceFailedCount} 个`;
                 const priceFailedText = priceFailedCount > 0
                     ? priceData.failed.slice(0, 3).map(x => `${x.code} ${x.name || ''}: ${x.reason || '失败'}`).join('；')
                     : '';
-                const detailParts = [priceFailedText, trailingFailedText].filter(Boolean);
-                if (detailParts.length > 0) {
-                    const detailText = detailParts.join('；');
-                    showSyncNotice(msg + '。' + detailText, 'warning');
-                    ElementPlus.ElMessage.warning(msg + '。' + detailText);
+
+                syncing.value = false;
+                if (priceFailedText) {
+                    showSyncNotice(msg + '。' + priceFailedText, 'warning');
                 } else {
-                    showSyncNotice(msg, '');
-                    ElementPlus.ElMessage.success(msg);
+                    showSyncNotice(msg, 'success');
                 }
+
+                fetchData().catch(refreshErr => {
+                    const refreshDetail = refreshErr?.response?.data?.detail || refreshErr?.message || '未知错误';
+                    showSyncNotice(msg + `。但刷新页面数据失败：${refreshDetail}`, 'warning');
+                });
             } catch (e) {
                 const detail = e?.response?.data?.detail || e?.message || '未知错误';
-                showSyncNotice('同步失败：' + detail, 'error');
-                ElementPlus.ElMessage.error('同步失败：' + detail);
+                showSyncNotice('最新价同步失败：' + detail, 'error');
             } finally {
-                loading.close();
                 syncing.value = false;
             }
         };
 
         const syncTrailingReturns = async () => {
             trailingSyncing.value = true;
-            const loading = ElementPlus.ElLoading.service({ text: '正在同步近一年标的收益率...', background: 'rgba(255, 255, 255, 0.65)' });
+            const loading = ElLoading.service({ text: '正在同步近一年标的收益率...', background: 'rgba(255, 255, 255, 0.65)' });
             try {
                 const res = await api.syncTrailingReturns();
                 await fetchData();
@@ -334,15 +316,14 @@ const app = createApp({
                 if (failedCount > 0) {
                     const failedText = data.failed.slice(0, 3).map(x => `${x.code} ${x.name || ''}: ${x.reason || '失败'}`).join('；');
                     showSyncNotice(msg + '。' + failedText, 'warning');
-                    ElementPlus.ElMessage.warning(msg + '。' + failedText);
+                    ElMessage.warning(msg + '。' + failedText);
                 } else {
                     showSyncNotice(msg, '');
-                    ElementPlus.ElMessage.success(msg);
                 }
             } catch (e) {
                 const detail = e?.response?.data?.detail || e?.message || '未知错误';
                 showSyncNotice('近一年收益率同步失败：' + detail, 'error');
-                ElementPlus.ElMessage.error('近一年收益率同步失败：' + detail);
+                ElMessage.error('近一年收益率同步失败：' + detail);
             } finally {
                 loading.close();
                 trailingSyncing.value = false;
@@ -492,8 +473,8 @@ const app = createApp({
 
         const addFeeAccount = () => {
             const name = String(newFeeAccountName.value || '').trim();
-            if (!name) return ElementPlus.ElMessage.warning('请输入账户名称');
-            if (feeAccounts.value.includes(name)) return ElementPlus.ElMessage.warning('账户已存在');
+            if (!name) return ElMessage.warning('请输入账户名称');
+            if (feeAccounts.value.includes(name)) return ElMessage.warning('账户已存在');
             feeAccounts.value.push(name);
             feeSettings.value[name] = JSON.parse(JSON.stringify(feeSettings.value[activeFeeAccount.value] || defaultFeeRulesPct()));
             activeFeeAccount.value = name;
@@ -562,8 +543,8 @@ const app = createApp({
                 loadFeeSettingsToForm(res.data || { accounts: feeAccounts.value, active_account: activeFeeAccount.value, settings: payload });
                 feeManuallyEdited.value = false;
                 estimateFeeIfAuto();
-                ElementPlus.ElMessage.success('费率设置已保存');
-            } catch (e) { ElementPlus.ElMessage.error('费率保存失败'); }
+                ElMessage.success('费率设置已保存');
+            } catch (e) { ElMessage.error('费率保存失败'); }
         };
 
         const resetFeeSettings = async () => {
@@ -572,8 +553,8 @@ const app = createApp({
                 loadFeeSettingsToForm(res.data || {});
                 feeManuallyEdited.value = false;
                 estimateFeeIfAuto();
-                ElementPlus.ElMessage.success('已恢复默认费率');
-            } catch (e) { ElementPlus.ElMessage.error('恢复默认失败'); }
+                ElMessage.success('已恢复默认费率');
+            } catch (e) { ElMessage.error('恢复默认失败'); }
         };
 
         watch(() => [transForm.value.account, transForm.value.amount, transForm.value.direction, transForm.value.category, transForm.value.code, transForm.value.name], () => {
@@ -588,6 +569,8 @@ const app = createApp({
             queryTransactions,
             applyTransFilter,
             resetTransQuery,
+            handleTransPageChange,
+            handleTransPageSizeChange,
             goPendingTransactions,
             openTransEditDialog,
             saveTransactionEdit,
@@ -602,6 +585,7 @@ const app = createApp({
             transEditDialog,
             transForm,
             transQuery,
+            transPage,
             activeFeeAccount,
             feeAccounts,
             feeManuallyEdited,
@@ -648,7 +632,7 @@ const app = createApp({
                 document.body.removeChild(link);
                 window.URL.revokeObjectURL(blobUrl);
             } catch (e) {
-                ElementPlus.ElMessage.error('下载失败：' + (e?.response?.data?.detail || e?.message || '未知错误'));
+                ElMessage.error('下载失败：' + (e?.response?.data?.detail || e?.message || '未知错误'));
             }
         };
 
@@ -661,7 +645,7 @@ const app = createApp({
             const raw = file?.raw || file;
             if (!raw) return;
             if (!String(raw.name || '').toLowerCase().endsWith('.csv')) {
-                return ElementPlus.ElMessage.warning('请上传 CSV 文件');
+                return ElMessage.warning('请上传 CSV 文件');
             }
             try {
                 await ElementPlus.ElMessageBox.confirm(`确认导入 ${raw.name}？导入前系统会自动备份数据库，成功行会写入真实数据。`, `导入${label}`, { type: 'warning' });
@@ -670,12 +654,12 @@ const app = createApp({
                 const res = await api.uploadCsv(url, fd);
                 const data = res.data || {};
                 const errorText = data.failed ? `，失败 ${data.failed} 行：${(data.errors || []).slice(0, 3).map(e => `第${e.row}行 ${e.error}`).join('；')}` : '';
-                ElementPlus.ElMessage.success(`${label}导入完成：成功 ${data.imported || 0} 行${errorText}`);
+                ElMessage.success(`${label}导入完成：成功 ${data.imported || 0} 行${errorText}`);
                 if (afterSuccess) await afterSuccess();
             } catch (e) {
                 if (e === 'cancel') return;
                 const detail = e?.response?.data?.detail || e?.message || '未知错误';
-                ElementPlus.ElMessage.error(`${label}导入失败：${detail}`);
+                ElMessage.error(`${label}导入失败：${detail}`);
             }
         };
 
@@ -699,11 +683,11 @@ const app = createApp({
                 const code = expectedReturnDialog.value.form.code;
                 const expected_return = expectedReturnDialog.value.form.expected_return;
                 await api.updateExpectedReturn(code, expected_return);
-                ElementPlus.ElMessage.success('更新成功');
+                ElMessage.success('更新成功');
                 expectedReturnDialog.value.visible = false;
                 await fetchData();
             } catch (e) {
-                ElementPlus.ElMessage.error('更新失败');
+                ElMessage.error('更新失败');
             }
         };
 
@@ -727,13 +711,13 @@ const app = createApp({
         const saveHoldingCorrection = async () => {
             try {
                 const f = holdingCorrectionDialog.value.form;
-                if (!f.date || !f.code) return ElementPlus.ElMessage.warning('校正日期和代码不能为空');
+                if (!f.date || !f.code) return ElMessage.warning('校正日期和代码不能为空');
                 await api.addHoldingCorrection(f);
-                ElementPlus.ElMessage.success('持仓校正已保存，并已重新计算持仓');
+                ElMessage.success('持仓校正已保存，并已重新计算持仓');
                 holdingCorrectionDialog.value.visible = false;
                 await fetchData();
             } catch (e) {
-                ElementPlus.ElMessage.error(e?.response?.data?.detail || '保存持仓校正失败');
+                ElMessage.error(e?.response?.data?.detail || '保存持仓校正失败');
             }
         };
 
@@ -746,7 +730,7 @@ const app = createApp({
                     records: res.data || []
                 };
             } catch (e) {
-                ElementPlus.ElMessage.error('获取校正记录失败');
+                ElMessage.error('获取校正记录失败');
             }
         };
 
@@ -754,7 +738,7 @@ const app = createApp({
             try {
                 await ElementPlus.ElMessageBox.confirm(`确定删除 ${row.date} ${row.code} 的持仓校正？删除后会按交易记录重新计算。`, '确认删除', { type: 'warning' });
                 await api.deleteHoldingCorrection(row.id);
-                ElementPlus.ElMessage.success('校正记录已删除，并已重新计算持仓');
+                ElMessage.success('校正记录已删除，并已重新计算持仓');
                 holdingCorrectionHistoryDialog.value.records = holdingCorrectionHistoryDialog.value.records.filter(x => x.id !== row.id);
                 await fetchData();
             } catch (e) {}
@@ -767,7 +751,7 @@ const app = createApp({
             }
         });
 
-        const { createSnapshot, buildSnapshotAnalysis, renderSnapshotCharts, fetchSnapshots } = createSnapshotsModule({
+        const { createSnapshot, buildSnapshotAnalysis, renderSnapshotCharts, fetchSnapshots, exportSnapshots, compactSnapshots } = createSnapshotsModule({
             activeTab,
             snapshots,
             snapshotRange,
@@ -994,13 +978,13 @@ const app = createApp({
             transForm, feeSettings, feeAccounts, activeFeeAccount, newFeeAccountName, feeCategories, feeSettingRows, feeAutoHint, depositDialog, cashForm, cashFlows, cashFlowForm, cashFlowQuery, cashFlowSummary, cashFlowEditDialog, transDialog, allocationAnalysis, macroAllocationAnalysis,
             allocationSummary, allocationHealth, portfolioExpectedReturn, expectedReturnDialog, holdingCorrectionDialog, holdingCorrectionHistoryDialog,
             // 交易管理相关
-            allTransactions, filteredTransactions, pendingTransactions, pendingPurchaseTotal, transQuery, transEditDialog,
+            allTransactions, filteredTransactions, pendingTransactions, pendingPurchaseTotal, transQuery, transPage, transEditDialog,
             syncPrices, syncTrailingReturns, submitTrans, resetForm, fetchData, markFeeManual, saveFeeSettings, resetFeeSettings, addFeeAccount, removeFeeAccount, onActiveFeeAccountChange,
             downloadTransactionsTemplate, exportTransactions, importTransactions, downloadDepositsTemplate, exportDeposits, importDeposits,
             queryAssetByCode, queryAssetByName, selectTransAsset, autoMatchTransAsset,
             openDepositDialog, saveDeposit, deleteDeposit, updateCash, queryCashFlows, resetCashFlowQuery, addCashFlow, openCashFlowEditDialog, saveCashFlowEdit, deleteCashFlow, cashFlowTagType,
-            createSnapshot, fetchSnapshots, showTransactions,
-            queryTransactions, resetTransQuery, goPendingTransactions, openTransEditDialog, saveTransactionEdit, deleteTransaction,
+            createSnapshot, fetchSnapshots, exportSnapshots, compactSnapshots, showTransactions,
+            queryTransactions, applyTransFilter, resetTransQuery, handleTransPageChange, handleTransPageSizeChange, goPendingTransactions, openTransEditDialog, saveTransactionEdit, deleteTransaction,
             openExpectedReturnDialog, saveExpectedReturn, openHoldingCorrectionDialog, saveHoldingCorrection, openHoldingCorrectionHistory, deleteHoldingCorrection, formatMoney, formatPercent, pct,
             perfSummary, perfTimeline, perfContribution, perfFlows, perfLoading, perfFlowForm, perfCards,
             displayedPerfContribution, perfContributionFilter, perfContributionSort, perfContributionHeadline, perfContributionMix,

@@ -7,13 +7,13 @@
 </head>
 <body>
     <div id="app" class="app-container">
-        <div v-if="syncNotice.text" class="sync-status" :class="syncNotice.type">{{ syncNotice.text }}</div>
         <div class="header">
             <h2>投资资产管理系统</h2>
-            <div>
+            <div class="header-actions">
                 <el-button type="success" @click="fetchData">刷新数据</el-button>
                 <el-button type="primary" @click="syncPrices" :loading="syncing">同步最新价</el-button>
                 <el-button type="warning" plain @click="syncTrailingReturns" :loading="trailingSyncing">同步近一年收益率</el-button>
+                <span v-if="syncNotice.text" class="inline-sync-status" :class="syncNotice.type">{{ syncNotice.text }}</span>
             </div>
         </div>
 
@@ -94,6 +94,8 @@
                                 style="width: 300px"
                             ></el-date-picker>
                             <el-button type="primary" @click="createSnapshot" :loading="snapshotLoading">记录/更新今日快照</el-button>
+                            <el-button @click="exportSnapshots">导出快照</el-button>
+                            <el-button type="warning" plain @click="compactSnapshots">压缩历史快照</el-button>
                         </div>
                     </div>
 
@@ -893,7 +895,7 @@
                             </el-select>
                         </el-col>
                         <el-col :span="4">
-                            <el-button type="primary" @click="queryTransactions">查询</el-button>
+                            <el-button type="primary" @click="applyTransFilter">查询</el-button>
                             <el-button @click="resetTransQuery">重置</el-button>
                         </el-col>
                     </el-row>
@@ -933,8 +935,18 @@
                         </el-table-column>
                     </el-table>
                     
-                    <div style="margin-top: 10px; color: #909399;">
-                        共 {{ filteredTransactions.length }} 条记录
+                    <div style="margin-top: 12px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
+                        <span style="color: #909399;">当前页 {{ filteredTransactions.length }} 条 / 共 {{ transPage.total }} 条记录</span>
+                        <el-pagination
+                            background
+                            layout="sizes, prev, pager, next, jumper"
+                            :current-page="transPage.page"
+                            :page-size="transPage.pageSize"
+                            :page-sizes="[50, 100, 200, 500]"
+                            :total="transPage.total"
+                            @current-change="handleTransPageChange"
+                            @size-change="handleTransPageSizeChange"
+                        ></el-pagination>
                     </div>
                 </el-card>
             </el-tab-pane>

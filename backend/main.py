@@ -84,14 +84,25 @@ def check_database_health():
     return _check_database_health(DB_PATH)
 
 
-@app.get("/api/health")
-def health_check():
+def health_payload():
     return {
         "status": "ok",
         "database": check_database_health(),
         "timezone": str(APP_CONFIG.local_timezone),
         "db_path": DB_PATH,
     }
+
+
+@app.get("/api/health")
+def health_check():
+    return health_payload()
+
+
+@app.get("/health")
+def proxied_health_check():
+    # Nginx strips the /api prefix before proxying to the backend,
+    # so /api/health on the frontend reaches /health here.
+    return health_payload()
 
 
 if __name__ == "__main__":

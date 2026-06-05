@@ -8,6 +8,7 @@ const createTransactionsModule = ({
     transEditDialog,
     transForm,
     transQuery,
+    transPage,
     activeFeeAccount,
     feeAccounts,
     feeManuallyEdited,
@@ -50,28 +51,54 @@ const createTransactionsModule = ({
         pendingPurchaseTotal.value = pendingTransactions.value.reduce((sum, t) => sum + Number(t.amount || 0) + Number(t.fee || 0), 0);
     };
 
-    const applyTransFilter = () => {
-        let result = [...allTransactions.value];
-        const q = transQuery.value;
-        if (q.dateRange && q.dateRange.length === 2) result = result.filter(t => t.date >= q.dateRange[0] && t.date <= q.dateRange[1]);
-        if (q.code) result = result.filter(t => t.code.includes(q.code));
-        if (q.name) result = result.filter(t => t.name.includes(q.name));
-        if (q.direction) result = result.filter(t => t.direction === q.direction);
-        filteredTransactions.value = result;
+    const buildTransQueryParams = () => {
+        const q = transQuery.value || {};
+        const params = {
+            page: transPage.value.page,
+            page_size: transPage.value.pageSize,
+            code: q.code || '',
+            name: q.name || '',
+            direction: q.direction || '',
+        };
+        if (q.dateRange && q.dateRange.length === 2) {
+            params.start_date = q.dateRange[0];
+            params.end_date = q.dateRange[1];
+        }
+        return params;
+    };
+
+    const applyTransFilter = async () => {
+        transPage.value.page = 1;
+        await queryTransactions();
     };
 
     const queryTransactions = async () => {
         try {
-            const res = await api.listTransactions();
-            allTransactions.value = res.data;
+            const res = await api.listTransactions(buildTransQueryParams());
+            const data = res.data || {};
+            const items = Array.isArray(data) ? data : (data.items || []);
+            allTransactions.value = items;
+            filteredTransactions.value = items;
+            transPage.value.total = Array.isArray(data) ? items.length : Number(data.total || 0);
             updatePendingTransactions();
-            applyTransFilter();
         } catch (e) { ElementPlus.ElMessage.error('获取交易记录失败'); }
     };
 
-    const resetTransQuery = () => {
+    const resetTransQuery = async () => {
         transQuery.value = { dateRange: [], code: '', name: '', direction: '' };
-        filteredTransactions.value = [...allTransactions.value];
+        transPage.value.page = 1;
+        await queryTransactions();
+    };
+
+    const handleTransPageChange = async (page) => {
+        transPage.value.page = page;
+        await queryTransactions();
+    };
+
+    const handleTransPageSizeChange = async (size) => {
+        transPage.value.pageSize = size;
+        transPage.value.page = 1;
+        await queryTransactions();
     };
 
     const goPendingTransactions = async () => {
@@ -120,7 +147,7 @@ const createTransactionsModule = ({
         } catch (e) { /* 用户取消 */ }
     };
 
-    return { submitTrans, resetForm, showTransactions, updatePendingTransactions, queryTransactions, applyTransFilter, resetTransQuery, goPendingTransactions, openTransEditDialog, saveTransactionEdit, deleteTransaction };
+    return { submitTrans, resetForm, showTransactions, updatePendingTransactions, queryTransactions, applyTransFilter, resetTransQuery, handleTransPageChange, handleTransPageSizeChange, goPendingTransactions, openTransEditDialog, saveTransactionEdit, deleteTransaction };
 };
 
 window.createTransactionsModule = createTransactionsModule;

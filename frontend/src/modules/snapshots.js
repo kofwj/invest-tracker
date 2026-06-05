@@ -65,6 +65,39 @@ const createSnapshotsModule = ({
 
     const renderSnapshotCharts = () => renderSnapshotChartsView(snapshots.value);
 
+    const exportSnapshots = async () => {
+        try {
+            let url = '/snapshots/export';
+            if (snapshotRange.value && snapshotRange.value.length === 2) {
+                url += `?start_date=${snapshotRange.value[0]}&end_date=${snapshotRange.value[1]}`;
+            }
+            const res = await api.download(url);
+            const blobUrl = window.URL.createObjectURL(new Blob([res.data], { type: 'text/csv;charset=utf-8;' }));
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = `snapshots_${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (e) {
+            ElementPlus.ElMessage.error('导出快照失败：' + (e?.response?.data?.detail || e?.message || '未知错误'));
+        }
+    };
+
+    const compactSnapshots = async () => {
+        try {
+            await ElementPlus.ElMessageBox.confirm('压缩会自动备份数据库：最近365天保留每日快照，更早保留每周/每月代表快照。确定继续？', '压缩历史快照', { type: 'warning' });
+            const res = await api.compactSnapshots();
+            const data = res.data || {};
+            ElementPlus.ElMessage.success(`快照压缩完成：删除 ${data.deleted || 0} 条，剩余 ${data.after || 0} 条`);
+            await fetchSnapshots();
+        } catch (e) {
+            if (e === 'cancel') return;
+            ElementPlus.ElMessage.error('压缩快照失败：' + (e?.response?.data?.detail || e?.message || '未知错误'));
+        }
+    };
+
     const fetchSnapshots = async () => {
         try {
             const res = await api.listSnapshots(snapshotRange.value);
@@ -80,7 +113,7 @@ const createSnapshotsModule = ({
         } catch (e) { console.error('获取快照失败', e); }
     };
 
-    return { createSnapshot, buildSnapshotAnalysis, renderSnapshotCharts, fetchSnapshots };
+    return { createSnapshot, buildSnapshotAnalysis, renderSnapshotCharts, fetchSnapshots, exportSnapshots, compactSnapshots };
 };
 
 window.createSnapshotsModule = createSnapshotsModule;

@@ -2,7 +2,7 @@ import sqlite3
 from datetime import date as dt_date
 from typing import Optional
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel
 
 try:
@@ -71,6 +71,10 @@ def ensure_transaction_columns(conn):
         conn.execute("ALTER TABLE transactions ADD COLUMN category TEXT")
     if "account" not in cols:
         conn.execute("ALTER TABLE transactions ADD COLUMN account TEXT")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_date_id ON transactions(date DESC, id DESC)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_code ON transactions(code)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_name ON transactions(name)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_transactions_direction ON transactions(direction)")
 
 
 @router.get("/transactions/template")
@@ -151,14 +155,48 @@ async def import_transactions(file: UploadFile = File(...)):
 
 
 @router.get("/transactions")
-def list_transactions(code: Optional[str] = None):
+def list_transactions(
+    request: Request,
+    code: Optional[str] = None,
+    name: Optional[str] = None,
+    direction: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(100, ge=1, le=1000),
+    legacy: bool = False,
+):
     conn = open_db(row_factory=sqlite3.Row)
+    ensure_transaction_columns(conn)
+    where = []
+    params = []
     if code:
-        rows = conn.execute("SELECT * FROM transactions WHERE code = ? ORDER BY date DESC, id DESC", (code,)).fetchall()
-    else:
-        rows = conn.execute("SELECT * FROM transactions ORDER BY date DESC, id DESC").fetchall()
+        where.append("code LIKE ?")
+        params.append(f"%{code.strip()}%")
+    if name:
+        where.append("name LIKE ?")
+        params.append(f"%{name.strip()}%")
+    if direction:
+        where.append("direction = ?")
+        params.append(direction.strip())
+    if start_date:
+        where.append("date >= ?")
+        params.append(start_date)
+    if end_date:
+        where.append("date <= ?")
+        params.append(end_date)
+    where_sql = (" WHERE " + " AND ".join(where)) if where else ""
+    total = conn.execute(f"SELECT COUNT(*) FROM transactions{where_sql}", params).fetchone()[0]
+    offset = (page - 1) * page_size
+    rows = conn.execute(
+        f"SELECT * FROM transactions{where_sql} ORDER BY date DESC, id DESC LIMIT ? OFFSET ?",
+        params + [page_size, offset],
+    ).fetchall()
     conn.close()
-    return [dict(row) for row in rows]
+    items = [dict(row) for row in rows]
+    if legacy or not request.query_params:
+        return items
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
 @router.post("/transactions")

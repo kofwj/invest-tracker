@@ -13,8 +13,14 @@ const api = {
     syncTrailingReturns: () => axios.get(API + '/sync-trailing-returns', { timeout: 180000 }),
 
     addTransaction: (payload) => axios.post(API + '/transactions', payload),
-    listTransactions: () => axios.get(API + '/transactions'),
-    listTransactionsByCode: (code) => axios.get(API + '/transactions?code=' + encodeURIComponent(code)),
+    listTransactions: (params = {}) => {
+        const qs = new URLSearchParams();
+        Object.entries(params || {}).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && value !== '') qs.set(key, value);
+        });
+        return axios.get(API + '/transactions' + (qs.toString() ? '?' + qs.toString() : ''));
+    },
+    listTransactionsByCode: (code) => axios.get(API + '/transactions?legacy=1&code=' + encodeURIComponent(code)),
     updateTransaction: (id, payload) => axios.put(API + '/transactions/' + id, payload),
     deleteTransaction: (id) => axios.delete(API + '/transactions/' + id),
 
@@ -40,6 +46,7 @@ const api = {
         return axios.get(url);
     },
     snapshotSummary: (range = []) => axios.get(API + `/snapshots/summary?start_date=${range[0]}&end_date=${range[1]}`),
+    compactSnapshots: () => axios.post(API + '/snapshots/compact'),
 
     performanceSummary: () => axios.get(API + '/performance/summary'),
     performanceTimeline: () => axios.get(API + '/performance/timeline'),
