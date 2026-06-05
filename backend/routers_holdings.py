@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 try:
+    from .csv_utils import create_safety_backup
     from .database import db_session, open_db
     from .holdings import (
         calculate_trailing_return_1y,
@@ -15,6 +16,7 @@ try:
         fetch_open_fund_nav,
     )
 except ImportError:
+    from csv_utils import create_safety_backup
     from database import db_session, open_db
     from holdings import (
         calculate_trailing_return_1y,
@@ -55,8 +57,9 @@ def list_holdings():
 
 
 @router.get("/sync-trailing-returns")
-def sync_trailing_returns():
+def sync_trailing_returns(backup: bool = False):
     """同步当前持仓近一年标的收益率。该收益率是标的自身价格/净值回溯，不等于账户实际持有收益。"""
+    backup_path = create_safety_backup("before_sync_trailing_returns") if backup else None
     conn = open_db(row_factory=sqlite3.Row)
     ensure_holding_return_columns(conn)
     rows = conn.execute("SELECT code, name, last_price FROM holdings WHERE quantity > 0").fetchall()
@@ -79,11 +82,12 @@ def sync_trailing_returns():
         details.append({"code": code, "name": row["name"], "trailing_return_1y": pct, "source": source})
     conn.commit()
     conn.close()
-    return {"status": "success", "checked": len(rows), "updated": updated, "failed": failed, "details": details}
+    return {"status": "success", "checked": len(rows), "updated": updated, "failed": failed, "details": details, "backup": backup_path}
 
 
 @router.get("/sync-prices")
-def sync_prices():
+def sync_prices(backup: bool = False):
+    backup_path = create_safety_backup("before_sync_prices") if backup else None
     conn = open_db(row_factory=sqlite3.Row)
     rows = conn.execute("SELECT code, name, last_price FROM holdings WHERE quantity > 0").fetchall()
     updated = 0
@@ -129,4 +133,4 @@ def sync_prices():
 
     conn.commit()
     conn.close()
-    return {"status": "success", "updated": updated, "unchanged": unchanged, "failed": failed, "details": details, "checked": len(rows)}
+    return {"status": "success", "updated": updated, "unchanged": unchanged, "failed": failed, "details": details, "checked": len(rows), "backup": backup_path}

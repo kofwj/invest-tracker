@@ -12,8 +12,36 @@ except ImportError:
     from snapshots import ensure_snapshot_columns, ensure_portfolio_cash_flows_table
 
 
+SCHEMA_VERSION = 4
+SCHEMA_VERSION_KEY = "schema_version"
+
+
 def table_columns(conn, table_name):
     return [row[1] for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()]
+
+
+def ensure_metadata_table(conn):
+    """Create the key-value metadata/settings table used by migrations and app config."""
+    conn.execute("""CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT
+    )""")
+
+
+def get_schema_version(conn):
+    ensure_metadata_table(conn)
+    row = conn.execute("SELECT value FROM settings WHERE key = ?", (SCHEMA_VERSION_KEY,)).fetchone()
+    if not row:
+        return 0
+    value = row["value"] if isinstance(row, sqlite3.Row) else row[0]
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def set_schema_version(conn, version):
+    set_setting(conn, SCHEMA_VERSION_KEY, int(version))
 
 
 def ensure_core_tables(conn):
@@ -53,15 +81,12 @@ def ensure_core_tables(conn):
         due_date TEXT,
         remark TEXT
     )""")
-    ensure_holding_return_columns(conn)
 
 
-def ensure_app_schema(conn):
+def ensure_app_tables(conn):
+    """Create all current tables. Column backfills are handled by versioned migrations."""
     ensure_core_tables(conn)
-    conn.execute("""CREATE TABLE IF NOT EXISTS settings (
-        key TEXT PRIMARY KEY,
-        value TEXT
-    )""")
+    ensure_metadata_table(conn)
     conn.execute("""CREATE TABLE IF NOT EXISTS cash_flows (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         date DATE,
@@ -98,7 +123,59 @@ def ensure_app_schema(conn):
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )""")
     ensure_portfolio_cash_flows_table(conn)
+
+
+def migrate_to_v1_core_compat(conn):
+    """Backfill columns introduced while moving to the current core table shape."""
+    transaction_cols = table_columns(conn, "transactions")
+    if "category" not in transaction_cols:
+        conn.execute("ALTER TABLE transactions ADD COLUMN category TEXT")
+    if "account" not in transaction_cols:
+        conn.execute("ALTER TABLE transactions ADD COLUMN account TEXT")
+    conn.execute("UPDATE transactions SET account = '华泰证券' WHERE account IS NULL OR TRIM(account) = ''")
+
+
+def migrate_to_v2_holdings_and_snapshots(conn):
+    """Ensure derived holding return fields and snapshot pending purchase field exist."""
+    ensure_holding_return_columns(conn)
     ensure_snapshot_columns(conn)
+
+
+def migrate_to_v3_performance_cash_flows(conn):
+    """Ensure portfolio-level external cash flow table exists for performance analysis."""
+    ensure_portfolio_cash_flows_table(conn)
+
+
+def migrate_to_v4_cash_settings(conn):
+    """Ensure securities cash settings use the newer cash-base model."""
+    row = conn.execute("SELECT value FROM settings WHERE key='securities_cash'").fetchone()
+    if not row:
+        set_setting(conn, "securities_cash", 0)
+    ensure_cash_base(conn)
+
+
+MIGRATIONS = [
+    (1, migrate_to_v1_core_compat),
+    (2, migrate_to_v2_holdings_and_snapshots),
+    (3, migrate_to_v3_performance_cash_flows),
+    (4, migrate_to_v4_cash_settings),
+]
+
+
+def apply_schema_migrations(conn):
+    """Run pending schema/data migrations once, tracked by settings.schema_version."""
+    current = get_schema_version(conn)
+    for version, migration in MIGRATIONS:
+        if current < version:
+            migration(conn)
+            set_schema_version(conn, version)
+            current = version
+    return current
+
+
+def ensure_app_schema(conn):
+    ensure_app_tables(conn)
+    apply_schema_migrations(conn)
 
 
 def initialize_database():
@@ -108,16 +185,5 @@ def initialize_database():
 
 
 def run_startup_migrations():
-    """Initialize schema and run lightweight migrations needed by older local databases."""
+    """Initialize schema and run versioned migrations needed by older local databases."""
     initialize_database()
-    conn = open_db(row_factory=sqlite3.Row)
-    cols = table_columns(conn, "transactions")
-    if "account" not in cols:
-        conn.execute("ALTER TABLE transactions ADD COLUMN account TEXT")
-        conn.execute("UPDATE transactions SET account = '华泰证券' WHERE account IS NULL OR TRIM(account) = ''")
-    row = conn.execute("SELECT value FROM settings WHERE key='securities_cash'").fetchone()
-    if not row:
-        set_setting(conn, 'securities_cash', 0)
-    ensure_cash_base(conn)
-    conn.commit()
-    conn.close()

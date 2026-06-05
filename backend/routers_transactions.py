@@ -11,6 +11,7 @@ try:
         TRANSACTION_CSV_COLUMNS,
         TRANSACTION_HEADER_ALIASES,
         create_import_backup,
+        create_safety_backup,
         csv_response,
         normalize_csv_row,
         normalize_date_string,
@@ -24,6 +25,7 @@ except ImportError:
         TRANSACTION_CSV_COLUMNS,
         TRANSACTION_HEADER_ALIASES,
         create_import_backup,
+        create_safety_backup,
         csv_response,
         normalize_csv_row,
         normalize_date_string,
@@ -175,6 +177,7 @@ def add_transaction(trans: TransactionBase):
 
 @router.put("/transactions/{transaction_id}")
 def update_transaction(transaction_id: int, trans: TransactionUpdate):
+    backup_path = create_safety_backup("before_update_transaction")
     conn = open_db()
     ensure_transaction_columns(conn)
     updates = []
@@ -195,11 +198,12 @@ def update_transaction(transaction_id: int, trans: TransactionUpdate):
     recalc_holdings(conn)
     conn.commit()
     conn.close()
-    return {"status": "success"}
+    return {"status": "success", "backup": backup_path}
 
 
 @router.delete("/transactions/{transaction_id}")
 def delete_transaction(transaction_id: int):
+    backup_path = create_safety_backup("before_delete_transaction")
     conn = open_db()
     conn.execute("DELETE FROM transactions WHERE id = ?", (transaction_id,))
     if conn.total_changes == 0:
@@ -208,4 +212,4 @@ def delete_transaction(transaction_id: int):
     recalc_holdings(conn)
     conn.commit()
     conn.close()
-    return {"status": "success"}
+    return {"status": "success", "backup": backup_path}

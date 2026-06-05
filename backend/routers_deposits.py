@@ -11,6 +11,7 @@ try:
         DEPOSIT_CSV_COLUMNS,
         DEPOSIT_HEADER_ALIASES,
         create_import_backup,
+        create_safety_backup,
         csv_response,
         normalize_csv_row,
         normalize_date_string,
@@ -23,6 +24,7 @@ except ImportError:
         DEPOSIT_CSV_COLUMNS,
         DEPOSIT_HEADER_ALIASES,
         create_import_backup,
+        create_safety_backup,
         csv_response,
         normalize_csv_row,
         normalize_date_string,
@@ -134,6 +136,7 @@ def add_deposit(dep: DepositSchema):
 
 @router.put("/deposits/{deposit_id}")
 def update_deposit(deposit_id: int, dep: DepositUpdate):
+    backup_path = create_safety_backup("before_update_deposit")
     conn = open_db()
     updates = []
     vals = []
@@ -152,11 +155,12 @@ def update_deposit(deposit_id: int, dep: DepositUpdate):
         raise HTTPException(status_code=404, detail="Deposit not found")
     conn.commit()
     conn.close()
-    return {"status": "success"}
+    return {"status": "success", "backup": backup_path}
 
 
 @router.delete("/deposits/{deposit_id}")
 def delete_deposit(deposit_id: int):
+    backup_path = create_safety_backup("before_delete_deposit")
     conn = open_db()
     conn.execute("DELETE FROM deposits WHERE id = ?", (deposit_id,))
     if conn.total_changes == 0:
@@ -164,4 +168,4 @@ def delete_deposit(deposit_id: int):
         raise HTTPException(status_code=404, detail="Deposit not found")
     conn.commit()
     conn.close()
-    return {"status": "success"}
+    return {"status": "success", "backup": backup_path}

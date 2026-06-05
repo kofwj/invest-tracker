@@ -93,14 +93,23 @@ def read_upload_csv(content: bytes):
     return list(reader)
 
 
-def create_import_backup(label: str):
-    os.makedirs(os.path.join(os.path.dirname(os.path.dirname(DB_PATH)), "backups"), exist_ok=True)
+def _safe_backup_label(label: str):
+    return "".join(ch if ch.isalnum() or ch in "-_" else "_" for ch in str(label or "manual").strip()) or "manual"
+
+
+def create_safety_backup(label: str):
+    """Create an integrity-checked SQLite backup before risky data mutations."""
     backup_dir = os.path.join(os.path.dirname(os.path.dirname(DB_PATH)), "backups")
+    os.makedirs(backup_dir, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_path = os.path.join(backup_dir, f"invest_{ts}_{label}.db.bak")
+    backup_path = os.path.join(backup_dir, f"invest_{ts}_{_safe_backup_label(label)}.db.bak")
     with db_session() as src, sqlite3.connect(backup_path) as dst:
         src.backup(dst)
         ok = dst.execute("PRAGMA integrity_check").fetchone()[0]
     if ok != "ok":
-        raise HTTPException(status_code=500, detail=f"导入前备份完整性检查失败：{ok}")
+        raise HTTPException(status_code=500, detail=f"操作前备份完整性检查失败：{ok}")
     return backup_path
+
+
+def create_import_backup(label: str):
+    return create_safety_backup(label)
