@@ -19,11 +19,13 @@ required_backend_files=(
   backend/csv_utils.py
   backend/holdings.py
   backend/cash.py
+  backend/dashboard.py
   backend/snapshots.py
   backend/performance.py
   backend/routers_deposits.py
   backend/routers_transactions.py
   backend/routers_cash.py
+  backend/routers_snapshots.py
 )
 for file in "${required_backend_files[@]}"; do
   test -f "$file"

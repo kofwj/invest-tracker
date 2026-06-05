@@ -93,6 +93,8 @@ try:
     from .routers_deposits import router as deposits_router
     from .routers_transactions import router as transactions_router
     from .routers_cash import router as cash_router
+    from .routers_snapshots import router as snapshots_router
+    from .dashboard import build_dashboard
 except ImportError:  # Allows tests to load this file directly via importlib.
     from csv_utils import (
         DEPOSIT_CSV_COLUMNS,
@@ -144,6 +146,8 @@ except ImportError:  # Allows tests to load this file directly via importlib.
     from routers_deposits import router as deposits_router
     from routers_transactions import router as transactions_router
     from routers_cash import router as cash_router
+    from routers_snapshots import router as snapshots_router
+    from dashboard import build_dashboard
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -160,6 +164,7 @@ app.add_middleware(
 app.include_router(deposits_router)
 app.include_router(transactions_router)
 app.include_router(cash_router)
+app.include_router(snapshots_router)
 
 def local_today_iso():
     return datetime.now(LOCAL_TZ).date().isoformat()
@@ -420,34 +425,11 @@ def sync_prices():
 
 @app.get("/dashboard")
 def get_dashboard():
-    conn = open_db()
-    conn.row_factory = sqlite3.Row
-    ensure_cash_base(conn)
-    holdings = conn.execute("SELECT * FROM holdings WHERE quantity > 0").fetchall()
-    deposits = conn.execute("SELECT SUM(amount) as total FROM deposits").fetchone()
-    pending_row = conn.execute("""
-        SELECT SUM(amount + COALESCE(fee, 0)) as total
-        FROM transactions
-        WHERE direction IN ('申购待确认', '待确认申购')
-    """).fetchone()
-    securities_cash, _, _ = calculated_securities_cash(conn)
+    conn = open_db(row_factory=sqlite3.Row)
+    data = build_dashboard(conn)
     conn.commit()
     conn.close()
-    
-    total_market_value = sum(h['quantity'] * h['last_price'] for h in holdings)
-    bank_balance = deposits['total'] or 0
-    pending_purchase = float(pending_row['total'] or 0) if pending_row else 0
-    total_profit = sum((h['last_price'] - h['avg_cost']) * h['quantity'] + h['total_dividend'] for h in holdings)
-    
-    return {
-        "total_market_value": total_market_value,
-        "bank_balance": bank_balance,
-        "securities_cash": securities_cash,
-        "pending_purchase": pending_purchase,
-        "total_assets": total_market_value + bank_balance + securities_cash + pending_purchase,
-        "total_profit": total_profit,
-        "holdings_count": len(holdings)
-    }
+    return data
 
 if __name__ == "__main__":
     import uvicorn
@@ -476,52 +458,6 @@ def startup():
     ensure_cash_base(conn)
     conn.commit()
     conn.close()
-
-# === 新增：每日资产快照 ===
-class SnapshotSchema(BaseModel):
-    date: dt_date
-    total_assets: float
-    total_market_value: float
-    bank_balance: float
-    securities_cash: float
-    pending_purchase: float = 0.0
-    total_profit: float
-    holdings_count: int
-
-
-def ensure_snapshot_columns(conn):
-    return ensure_snapshot_columns_impl(conn)
-
-
-@app.post("/snapshots")
-def create_snapshot():
-    """记录当前资产快照。同一天重复点击时更新当天记录，避免价格/现金变化后仍保留旧数据。"""
-    conn = open_db()
-    conn.row_factory = sqlite3.Row
-    dash = get_dashboard()
-    today = local_today_iso()
-    snapshot_id, action = create_snapshot_record(conn, today, dash)
-    conn.commit()
-    conn.close()
-    return {"status": "success", "action": action, "id": snapshot_id, "date": today, "snapshot": dash}
-
-
-@app.get("/snapshots")
-def list_snapshots(start_date: Optional[str] = None, end_date: Optional[str] = None):
-    conn = open_db()
-    conn.row_factory = sqlite3.Row
-    rows = list_snapshots_rows(conn, start_date, end_date)
-    conn.close()
-    return rows
-
-
-@app.get("/snapshots/summary")
-def snapshots_summary(start_date: Optional[str] = None, end_date: Optional[str] = None):
-    conn = open_db()
-    conn.row_factory = sqlite3.Row
-    changes = snapshots_summary_data(conn, start_date, end_date)
-    conn.close()
-    return changes
 
 # === 收益分析 v1：组合外部现金流 + XIRR + 组合收益 ===
 
