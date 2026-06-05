@@ -23,6 +23,7 @@ required_backend_files=(
   backend/performance.py
   backend/routers_deposits.py
   backend/routers_transactions.py
+  backend/routers_cash.py
 )
 for file in "${required_backend_files[@]}"; do
   test -f "$file"
