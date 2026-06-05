@@ -8,6 +8,7 @@ htmlcov/
 # Local data and env
 .env
 .env.*
+!.env.example
 *.sqlite3
 *.db-journal
 *.db-wal

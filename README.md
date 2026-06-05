@@ -82,6 +82,10 @@ invest-tracker/
 
 ---
 
+## VPS 部署
+
+VPS/生产部署配置在 `deploy/vps` 分支维护，详见 [`docs/deploy-vps.md`](docs/deploy-vps.md)。
+
 ## 3. 启动方式
 
 ### 推荐：Docker Compose
