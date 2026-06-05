@@ -30,3 +30,7 @@ frontend/.vite/
 .vscode/
 .idea/
 .worktrees/
+
+# Caddy runtime data for VPS deployment
+caddy/data/
+caddy/config/

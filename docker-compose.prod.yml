@@ -31,3 +31,46 @@ services:
       backend:
         condition: service_healthy
     restart: unless-stopped
+
+
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.15.2
+    command:
+      - --http-address=0.0.0.0:4180
+      - --provider=github
+      - --client-id=${GITHUB_OAUTH_CLIENT_ID:-replace-with-github-oauth-client-id}
+      - --client-secret=${GITHUB_OAUTH_CLIENT_SECRET:-replace-with-github-oauth-client-secret}
+      - --redirect-url=https://${APP_DOMAIN:-invest.example.com}/oauth2/callback
+      - --github-user=${GITHUB_OAUTH_ALLOWED_USER:-your-github-username}
+      - --email-domain=*
+      - --upstream=static://202
+      - --reverse-proxy=true
+      - --set-xauthrequest=true
+      - --pass-user-headers=true
+      - --cookie-secret=${OAUTH2_PROXY_COOKIE_SECRET:-replace-with-32-byte-base64-secret}
+      - --cookie-secure=true
+      - --cookie-samesite=lax
+      - --cookie-expire=168h
+      - --cookie-refresh=1h
+      - --skip-provider-button=true
+    expose:
+      - "4180"
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:-invest.example.com}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy/data:/data
+      - ./caddy/config:/config
+    depends_on:
+      frontend:
+        condition: service_started
+      oauth2-proxy:
+        condition: service_started
+    restart: unless-stopped
