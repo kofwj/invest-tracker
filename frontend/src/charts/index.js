@@ -90,3 +90,5 @@ const renderPerfTimelineChartView = (perfTimeline = []) => {
         ],
     });
 };
+
+Object.assign(window, { renderSnapshotChartsView, renderAllocationChartsView, renderPerfTimelineChartView });

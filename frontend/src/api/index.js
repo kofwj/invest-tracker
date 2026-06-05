@@ -51,3 +51,5 @@ const api = {
     download: (url) => axios.get(API + url, { responseType: 'blob' }),
     uploadCsv: (url, formData) => axios.post(API + url, formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 180000 }),
 };
+
+Object.assign(window, { API, api });

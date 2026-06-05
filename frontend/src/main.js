@@ -1,4 +1,22 @@
-const { createApp, ref, onMounted, nextTick, watch, computed } = Vue;
+import { createApp, ref, onMounted, nextTick, watch, computed } from 'vue/dist/vue.esm-bundler.js';
+import ElementPlus from 'element-plus';
+import 'element-plus/dist/index.css';
+import axios from 'axios';
+import * as echarts from 'echarts';
+import './styles/styles.css';
+import './utils/index.js';
+import './api/index.js';
+import './charts/index.js';
+import './modules/transactions.js';
+import './modules/deposits.js';
+import './modules/cash.js';
+import './modules/snapshots.js';
+import './modules/performance.js';
+
+window.axios = axios;
+window.echarts = echarts;
+window.ElementPlus = ElementPlus;
+
 const app = createApp({
     setup() {
         const activeTab = ref('snapshots');
@@ -742,78 +760,17 @@ const app = createApp({
             }
         });
 
-        // 资产快照
-
-        const createSnapshot = async () => {
-            snapshotLoading.value = true;
-            try {
-                const res = await api.createSnapshot();
-                const action = res.data?.action === 'updated' ? '已更新今日快照' : '今日快照已记录';
-                ElementPlus.ElMessage.success(action);
-                await fetchData();
-                await fetchSnapshots();
-            } catch (e) {
-                const detail = e?.response?.data?.detail || e?.message || '记录失败';
-                ElementPlus.ElMessage.error(detail);
-            } finally {
-                snapshotLoading.value = false;
-            }
-        };
-
-        const buildSnapshotAnalysis = () => {
-            const rowsAsc = [...snapshots.value].sort((a, b) => String(a.date).localeCompare(String(b.date)));
-            if (!rowsAsc.length) {
-                snapshotMetrics.value = [];
-                snapshotChangeRows.value = [];
-                return;
-            }
-            const first = rowsAsc[0];
-            const last = rowsAsc[rowsAsc.length - 1];
-            const change = (key) => Number(last[key] || 0) - Number(first[key] || 0);
-            const changePct = (key) => Number(first[key] || 0) ? (Number(last[key] || 0) / Number(first[key]) - 1) * 100 : null;
-            const totalChange = change('total_assets');
-            const profitChange = change('total_profit');
-            const investRatio = Number(last.total_assets || 0) ? Number(last.total_market_value || 0) / Number(last.total_assets) * 100 : 0;
-            const liquidRatio = Number(last.total_assets || 0) ? (Number(last.bank_balance || 0) + Number(last.securities_cash || 0) + Number(last.pending_purchase || 0)) / Number(last.total_assets) * 100 : 0;
-            snapshotMetrics.value = [
-                { key: 'latest', label: '最新总资产', value: formatMoney(last.total_assets), sub: `${last.date}，${last.holdings_count || 0} 个持仓` },
-                { key: 'change', label: '区间总资产变化', value: formatMoney(totalChange, 2, true), sub: changePct('total_assets') === null ? '无期初基数' : `${changePct('total_assets') >= 0 ? '+' : ''}${changePct('total_assets').toFixed(2)}%`, color: totalChange >= 0 ? '#F56C6C' : '#67C23A' },
-                { key: 'profit', label: '投资盈亏变化', value: formatMoney(profitChange, 2, true), sub: `当前累计 ${formatMoney(last.total_profit)}`, color: profitChange >= 0 ? '#F56C6C' : '#67C23A' },
-                { key: 'ratio', label: '当前投资 / 流动占比', value: `${investRatio.toFixed(1)}%`, sub: `现金+存款+在途 ${liquidRatio.toFixed(1)}%` }
-            ];
-            const labels = {
-                total_assets: '总资产',
-                total_market_value: '投资账户市值',
-                bank_balance: '银行存款',
-                securities_cash: '证券现金',
-                total_profit: '投资盈亏',
-                pending_purchase: '申购在途'
-            };
-            snapshotChangeRows.value = rowsAsc.length >= 2 ? Object.keys(labels).map(key => ({
-                label: labels[key],
-                start: Number(first[key] || 0),
-                end: Number(last[key] || 0),
-                change: change(key),
-                change_pct: changePct(key)
-            })) : [];
-        };
-
-        const renderSnapshotCharts = () => renderSnapshotChartsView(snapshots.value);
-
-        const fetchSnapshots = async () => {
-            try {
-                const res = await api.listSnapshots(snapshotRange.value);
-                snapshots.value = res.data;
-                if (snapshotRange.value && snapshotRange.value.length === 2) {
-                    const summaryRes = await api.snapshotSummary(snapshotRange.value);
-                    snapshotSummary.value = summaryRes.data;
-                } else {
-                    snapshotSummary.value = null;
-                }
-                buildSnapshotAnalysis();
-                if (activeTab.value === 'snapshots') nextTick(renderSnapshotCharts);
-            } catch (e) { console.error('获取快照失败', e); }
-        };
+        const { createSnapshot, buildSnapshotAnalysis, renderSnapshotCharts, fetchSnapshots } = createSnapshotsModule({
+            activeTab,
+            snapshots,
+            snapshotRange,
+            snapshotSummary,
+            snapshotMetrics,
+            snapshotChangeRows,
+            snapshotLoading,
+            fetchData,
+            nextTick,
+        });
 
         // 计算资产配置分析
         const calculateAllocationAnalysis = () => {
@@ -985,106 +942,29 @@ const app = createApp({
             remark: ''
         });
 
-        const perfCards = computed(() => {
-            const s = perfSummary.value;
-            if (!s) return [];
-            return [
-                { label: '当前总资产', value: formatMoney(s.total_assets), sub: '市值+现金+存款+在途', color: '#303133' },
-                { label: '累计净投入', value: formatMoney(s.net_contribution), sub: `投入${formatMoney(s.total_in)} / 取出${formatMoney(s.total_out)}` },
-                { label: '累计总收益', value: formatMoney(s.total_gain), sub: `${s.total_gain_pct?.toFixed(2)}%`, color: s.total_gain >= 0 ? '#F56C6C' : '#67C23A' },
-                { label: 'XIRR 年化', value: s.xirr != null ? s.xirr.toFixed(2) + '%' : '--', sub: s.xirr_status === 'ok' ? '资金加权' : s.xirr_message || '暂无', color: (s.xirr || 0) >= 0 ? '#F56C6C' : '#67C23A' },
-                { label: '浮盈 + 分红', value: formatMoney(s.current_unrealized_profit + s.total_dividend_income), sub: `浮盈${formatMoney(s.current_unrealized_profit)} / 分红${formatMoney(s.total_dividend_income)}`, color: (s.current_unrealized_profit + s.total_dividend_income) >= 0 ? '#F56C6C' : '#67C23A' },
-                { label: 'YTD 收益', value: formatMoney(s.ytd_gain), sub: `${s.ytd_gain_pct?.toFixed(2)}%`, color: s.ytd_gain >= 0 ? '#F56C6C' : '#67C23A' },
-            ];
+        const {
+            perfCards,
+            displayedPerfContribution,
+            perfContributionHeadline,
+            perfContributionMix,
+            contributionBarStyle,
+            renderPerfChart,
+            fetchPerformance,
+            addPerfFlow,
+            deletePerfFlow,
+        } = createPerformanceModule({
+            perfSummary,
+            perfTimeline,
+            perfContribution,
+            perfFlows,
+            perfLoading,
+            perfContributionFilter,
+            perfContributionSort,
+            perfFlowForm,
+            showSyncNotice,
+            nextTick,
+            computed,
         });
-
-        const displayedPerfContribution = computed(() => {
-            const totalGain = Number(perfSummary.value?.total_gain || 0);
-            let rows = [...(perfContribution.value || [])];
-            if (perfContributionFilter.value === 'positive') rows = rows.filter(item => Number(item.total_contribution || 0) >= 0);
-            if (perfContributionFilter.value === 'negative') rows = rows.filter(item => Number(item.total_contribution || 0) < 0);
-            if (perfContributionSort.value === 'market_value') {
-                rows.sort((a, b) => Number(b.market_value || 0) - Number(a.market_value || 0));
-            } else if (perfContributionSort.value === 'share') {
-                rows.sort((a, b) => {
-                    const shareB = totalGain ? Number(b.total_contribution || 0) / totalGain : 0;
-                    const shareA = totalGain ? Number(a.total_contribution || 0) / totalGain : 0;
-                    return shareB - shareA;
-                });
-            } else {
-                rows.sort((a, b) => Number(b.total_contribution || 0) - Number(a.total_contribution || 0));
-            }
-            return rows;
-        });
-
-        const perfContributionHeadline = computed(() => {
-            const rows = [...(perfContribution.value || [])].sort((a, b) => Number(b.total_contribution || 0) - Number(a.total_contribution || 0));
-            return {
-                best: rows[0] || null,
-                worst: rows.length ? rows[rows.length - 1] : null
-            };
-        });
-
-        const perfContributionMix = computed(() => {
-            const rows = perfContribution.value || [];
-            const sorted = [...rows].sort((a, b) => Number(b.total_contribution || 0) - Number(a.total_contribution || 0));
-            return {
-                positiveCount: rows.filter(item => Number(item.total_contribution || 0) >= 0).length,
-                negativeCount: rows.filter(item => Number(item.total_contribution || 0) < 0).length,
-                top3Contribution: sorted.slice(0, 3).reduce((sum, item) => sum + Number(item.total_contribution || 0), 0)
-            };
-        });
-
-        const contributionBarStyle = (value) => {
-            const maxAbs = Math.max(...(perfContribution.value || []).map(item => Math.abs(Number(item.total_contribution || 0))), 0);
-            const ratio = maxAbs > 0 ? Math.max(Math.abs(Number(value || 0)) / maxAbs, 0.04) : 0;
-            return {
-                width: `${Math.min(ratio * 100, 100)}%`,
-                background: Number(value || 0) >= 0 ? 'linear-gradient(90deg, #f89898 0%, #F56C6C 100%)' : 'linear-gradient(90deg, #95d475 0%, #67C23A 100%)'
-            };
-        };
-
-        async function fetchPerformance() {
-            perfLoading.value = true;
-            try {
-                const [sumR, tlR, ctR, flR] = await Promise.all([
-                    api.performanceSummary(),
-                    api.performanceTimeline(),
-                    api.performanceContribution(),
-                    api.listPortfolioCashFlows(),
-                ]);
-                perfSummary.value = sumR.data;
-                perfTimeline.value = tlR.data;
-                perfContribution.value = ctR.data;
-                perfFlows.value = flR.data;
-                nextTick(renderPerfChart);
-            } catch (e) {
-                console.error('fetchPerformance', e);
-                showSyncNotice('获取收益分析失败：' + (e?.response?.data?.detail || e?.message || '未知错误'), 'error');
-            } finally {
-                perfLoading.value = false;
-            }
-        }
-
-        async function addPerfFlow() {
-            try {
-                await api.addPortfolioCashFlow(perfFlowForm.value);
-                showSyncNotice('新增成功');
-                fetchPerformance();
-            } catch (e) { showSyncNotice('新增失败: ' + (e.response?.data?.detail || e.message), 'error'); }
-        }
-
-        async function deletePerfFlow(id) {
-            try {
-                await api.deletePortfolioCashFlow(id);
-                showSyncNotice('已删除');
-                fetchPerformance();
-            } catch (e) { showSyncNotice('删除失败', 'error'); }
-        }
-
-        function renderPerfChart() {
-            renderPerfTimelineChartView(perfTimeline.value);
-        }
 
         watch(activeTab, (val) => {
             if (val === 'allocation') nextTick(renderAllocationCharts);

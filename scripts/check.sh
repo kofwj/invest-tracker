@@ -13,44 +13,55 @@ echo "==> Checking health endpoint wiring"
 grep -q 'api/health' backend/main.py
 grep -q 'api/health' docker-compose.yml
 
-echo "==> Checking split frontend assets"
+echo "==> Checking Vite frontend structure"
 test -f frontend/index.html
-test -f frontend/assets/styles.css
-test -f frontend/assets/app.js
-test -f frontend/assets/utils.js
-test -f frontend/assets/charts.js
-test -f frontend/assets/api.js
-test -f frontend/assets/modules/transactions.js
-test -f frontend/assets/modules/deposits.js
-test -f frontend/assets/modules/cash.js
-grep -q 'assets/styles.css' frontend/index.html
-grep -q 'assets/utils.js' frontend/index.html
-grep -q 'assets/api.js' frontend/index.html
-grep -q 'assets/charts.js' frontend/index.html
-grep -q 'assets/modules/transactions.js' frontend/index.html
-grep -q 'assets/modules/deposits.js' frontend/index.html
-grep -q 'assets/modules/cash.js' frontend/index.html
-grep -q 'assets/app.js' frontend/index.html
-grep -q 'COPY assets' frontend/Dockerfile
+test -f frontend/package.json
+test -f frontend/package-lock.json
+test -f frontend/Dockerfile
+test -f frontend/nginx.conf
+test -f frontend/src/main.js
+test -f frontend/src/styles/styles.css
+test -f frontend/src/utils/index.js
+test -f frontend/src/api/index.js
+test -f frontend/src/charts/index.js
+test -f frontend/src/modules/transactions.js
+test -f frontend/src/modules/deposits.js
+test -f frontend/src/modules/cash.js
+test -f frontend/src/modules/snapshots.js
+test -f frontend/src/modules/performance.js
+grep -q 'type="module" src="/src/main.js"' frontend/index.html
+grep -q 'vite build' frontend/package.json
+grep -q 'npm run build' frontend/Dockerfile
+grep -q 'COPY --from=build /app/dist' frontend/Dockerfile
 "$python_bin" - <<'PY'
 from pathlib import Path
 html = Path('frontend/index.html').read_text(encoding='utf-8')
-for asset in ['styles.css', 'utils.js', 'api.js', 'charts.js', 'modules/transactions.js', 'modules/deposits.js', 'modules/cash.js', 'app.js']:
-    assert f'/assets/{asset}' in html, f'missing frontend asset reference: {asset}'
-script_order = [html.index('/assets/utils.js'), html.index('/assets/api.js'), html.index('/assets/charts.js'), html.index('/assets/modules/transactions.js'), html.index('/assets/modules/deposits.js'), html.index('/assets/modules/cash.js'), html.index('/assets/app.js')]
-assert script_order == sorted(script_order), 'frontend scripts must load as utils -> api -> charts -> modules -> app'
+assert '/src/main.js' in html, 'missing Vite frontend entry'
+assert '/assets/app.js' not in html, 'legacy app.js script should not be referenced'
 assert '<el-date-picker\n                            <el-date-picker' not in html, 'duplicate el-date-picker tag found'
+main = Path('frontend/src/main.js').read_text(encoding='utf-8')
+for module in ['./utils/index.js', './api/index.js', './charts/index.js', './modules/transactions.js', './modules/deposits.js', './modules/cash.js', './modules/snapshots.js', './modules/performance.js']:
+    assert module in main, f'missing frontend module import: {module}'
 PY
+
+echo "==> Checking frontend build"
+if command -v npm >/dev/null 2>&1; then
+  npm --prefix frontend run build
+else
+  echo "npm not found; skipping frontend build check"
+fi
 
 echo "==> Checking frontend JavaScript syntax"
 if command -v node >/dev/null 2>&1; then
-  node --check frontend/assets/utils.js
-  node --check frontend/assets/api.js
-  node --check frontend/assets/charts.js
-  node --check frontend/assets/modules/transactions.js
-  node --check frontend/assets/modules/deposits.js
-  node --check frontend/assets/modules/cash.js
-  node --check frontend/assets/app.js
+  node --check frontend/src/main.js
+  node --check frontend/src/utils/index.js
+  node --check frontend/src/api/index.js
+  node --check frontend/src/charts/index.js
+  node --check frontend/src/modules/transactions.js
+  node --check frontend/src/modules/deposits.js
+  node --check frontend/src/modules/cash.js
+  node --check frontend/src/modules/snapshots.js
+  node --check frontend/src/modules/performance.js
 else
   echo "node not found; skipping frontend JavaScript syntax check"
 fi
@@ -61,6 +72,9 @@ required_backend_files=(
   backend/database.py
   backend/csv_utils.py
   backend/holdings.py
+  backend/holding_calculator.py
+  backend/price_sync.py
+  backend/return_sync.py
   backend/cash.py
   backend/dashboard.py
   backend/snapshots.py
@@ -68,6 +82,9 @@ required_backend_files=(
   backend/routers_deposits.py
   backend/routers_transactions.py
   backend/routers_cash.py
+  backend/routers_fee_settings.py
+  backend/routers_securities_cash.py
+  backend/routers_cash_flows.py
   backend/routers_snapshots.py
   backend/routers_holdings.py
   backend/routers_dashboard.py

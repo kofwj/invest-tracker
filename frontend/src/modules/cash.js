@@ -81,3 +81,5 @@ const createCashModule = ({ dashboard, cashForm, cashFlows, cashFlowForm, cashFl
 
     return { updateCash, queryCashFlows, resetCashFlowQuery, cashFlowSummary, cashFlowTagType, addCashFlow, openCashFlowEditDialog, saveCashFlowEdit, deleteCashFlow };
 };
+
+window.createCashModule = createCashModule;

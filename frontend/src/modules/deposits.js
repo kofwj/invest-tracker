@@ -39,3 +39,5 @@ const createDepositsModule = ({ depositDialog, fetchData }) => {
 
     return { openDepositDialog, saveDeposit, deleteDeposit };
 };
+
+window.createDepositsModule = createDepositsModule;

@@ -122,3 +122,5 @@ const createTransactionsModule = ({
 
     return { submitTrans, resetForm, showTransactions, updatePendingTransactions, queryTransactions, applyTransFilter, resetTransQuery, goPendingTransactions, openTransEditDialog, saveTransactionEdit, deleteTransaction };
 };
+
+window.createTransactionsModule = createTransactionsModule;

@@ -50,3 +50,5 @@ const inferCategoryByCode = (code, name) => {
     if (/^\d{6}$/.test(c)) return 'A股权益';
     return '';
 };
+
+Object.assign(window, { normalizeText, daysUntil, formatMoney, formatPercent, pct, inferCategoryByCode });
