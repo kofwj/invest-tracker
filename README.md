@@ -275,29 +275,57 @@ All checks passed
 
 ---
 
-## 9. Git 提交流程
+## 9. 页面截图
 
-查看变更：
+截图统一保存在：
 
-```bash
-git status --short
-git diff --stat
+```text
+docs/screenshots/
 ```
 
-提交：
+> 说明：以下截图通过 `http://localhost:8080/?tab=...&mask=1` 生成，页面已开启金额打码，便于在 README 中展示整体 UI 和功能入口。
 
-```bash
-git add -A
-git commit -m "Migrate frontend to Vite structure"
-```
+### 9.1 资产快照
 
-推送到 GitHub：
+总资产趋势、资产结构、快照历史。
 
-```bash
-git push origin main
-```
+![资产快照](docs/screenshots/asset-snapshots.png)
 
-如果 GitHub 页面没看到更新，通常是因为只 commit 了本地，没有执行 `git push`。
+### 9.2 资产配置
+
+权益/固收/存款配置、集中度和组合健康检查。
+
+![资产配置](docs/screenshots/allocation.png)
+
+### 9.3 持仓明细
+
+当前持仓、市值、成本、盈亏和持仓占比。
+
+![持仓明细](docs/screenshots/holdings.png)
+
+### 9.4 银行存款
+
+存款总览、到期分布、预计利息和存款明细。
+
+![银行存款](docs/screenshots/deposits.png)
+
+### 9.5 交易录入/管理
+
+交易录入、查询、编辑、删除和交易现金联动。
+
+![交易录入/管理](docs/screenshots/transactions.png)
+
+### 9.6 现金设置
+
+证券现金、资金流水、现金校正和多账户费率设置。
+
+![现金设置](docs/screenshots/cash-settings.png)
+
+### 9.7 收益分析
+
+组合表现、收益时间线、贡献分析和现金流分析。
+
+![收益分析](docs/screenshots/performance.png)
 
 ---
 

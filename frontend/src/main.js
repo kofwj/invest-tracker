@@ -19,7 +19,14 @@ window.ElementPlus = ElementPlus;
 
 const app = createApp({
     setup() {
-        const activeTab = ref('snapshots');
+        const screenshotParams = new URLSearchParams(window.location.search);
+        const screenshotTabs = ['snapshots', 'allocation', 'performance', 'holdings', 'deposits', 'transactions', 'cash'];
+        const requestedTab = screenshotParams.get('tab');
+        const screenshotMode = screenshotParams.get('mask') === '1' || screenshotParams.get('screenshot') === '1';
+        if (screenshotMode) {
+            document.documentElement.classList.add('screenshot-mask');
+        }
+        const activeTab = ref(screenshotTabs.includes(requestedTab) ? requestedTab : 'snapshots');
         const dashboard = ref({});
         const holdings = ref([]);
         const deposits = ref([]);

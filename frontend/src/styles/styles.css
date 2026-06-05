@@ -125,3 +125,33 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helv
 .allocation-table .cell { white-space: nowrap; }
 @media (max-width: 1000px) { .allocation-hero { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 560px) { .allocation-hero { grid-template-columns: 1fr; } }
+
+/* README 截图打码模式：访问 ?mask=1 时启用，避免截图泄露真实资产金额/明细 */
+.screenshot-mask .stat-value,
+.screenshot-mask .stat-extra,
+.screenshot-mask .sync-notice,
+.screenshot-mask .snapshot-metric-value,
+.screenshot-mask .snapshot-metric-sub,
+.screenshot-mask .allocation-value,
+.screenshot-mask .allocation-sub,
+.screenshot-mask .deposit-stat-value,
+.screenshot-mask .deposit-stat-sub,
+.screenshot-mask .perf-metric-value,
+.screenshot-mask .perf-metric-sub,
+.screenshot-mask .perf-summary-main,
+.screenshot-mask .perf-summary-sub,
+.screenshot-mask .el-table__body-wrapper,
+.screenshot-mask .el-progress,
+.screenshot-mask .el-input__wrapper,
+.screenshot-mask .el-input-number,
+.screenshot-mask .chart,
+.screenshot-mask [id$="Chart"],
+.screenshot-mask [id*="chart"],
+.screenshot-mask canvas {
+    filter: blur(8px);
+}
+
+.screenshot-mask .el-table__empty-block {
+    filter: none;
+}
+
