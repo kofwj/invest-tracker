@@ -27,6 +27,26 @@ def load_backend_module():
     return module
 
 
+def clear_backend_module_cache():
+    """Ensure split backend modules reload after each test sets DB_PATH."""
+    module_names = [
+        'backend_main_test',
+        'database',
+        'csv_utils',
+        'holdings',
+        'cash',
+        'dashboard',
+        'snapshots',
+        'performance',
+        'routers_deposits',
+        'routers_transactions',
+        'routers_cash',
+        'routers_snapshots',
+    ]
+    for name in module_names:
+        sys.modules.pop(name, None)
+
+
 def create_tables(db_path: Path):
     conn = sqlite3.connect(db_path)
     conn.execute(
@@ -99,8 +119,7 @@ def app_module(tmp_path, monkeypatch):
     monkeypatch.setenv('DB_PATH', str(db_path))
     monkeypatch.setenv('APP_TIMEZONE', 'Asia/Shanghai')
 
-    if 'backend_main_test' in sys.modules:
-        del sys.modules['backend_main_test']
+    clear_backend_module_cache()
 
     module = load_backend_module()
     create_tables(db_path)

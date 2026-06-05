@@ -7,6 +7,7 @@ cd "$ROOT_DIR"
 backend_container="${BACKEND_CONTAINER:-backend}"
 backend_url="${BACKEND_URL:-http://localhost:8000}"
 frontend_url="${FRONTEND_URL:-http://localhost:8080}"
+python_bin="${PYTHON_BIN:-python3}"
 
 echo "==> Checking health endpoint wiring"
 grep -q 'api/health' backend/main.py
@@ -32,7 +33,7 @@ for file in "${required_backend_files[@]}"; do
 done
 
 echo "==> Checking backend importability"
-PYTHONPATH=backend python - <<'PY'
+PYTHONPATH=backend "$python_bin" - <<'PY'
 import importlib.util
 import sys
 from pathlib import Path
