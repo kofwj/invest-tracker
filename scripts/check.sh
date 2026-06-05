@@ -27,6 +27,10 @@ required_backend_files=(
   backend/routers_transactions.py
   backend/routers_cash.py
   backend/routers_snapshots.py
+  backend/routers_holdings.py
+  backend/routers_dashboard.py
+  backend/routers_performance.py
+  backend/schema.py
 )
 for file in "${required_backend_files[@]}"; do
   test -f "$file"

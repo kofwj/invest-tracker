@@ -42,6 +42,10 @@ def clear_backend_module_cache():
         'routers_transactions',
         'routers_cash',
         'routers_snapshots',
+        'routers_holdings',
+        'routers_dashboard',
+        'routers_performance',
+        'schema',
     ]
     for name in module_names:
         sys.modules.pop(name, None)

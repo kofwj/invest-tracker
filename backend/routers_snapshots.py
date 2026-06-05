@@ -1,4 +1,5 @@
 import sqlite3
+import sys
 from datetime import date as dt_date, datetime
 from typing import Optional
 
@@ -29,6 +30,12 @@ class SnapshotSchema(BaseModel):
 
 
 def local_today_iso():
+    # Keep compatibility with tests/importers that monkeypatch main.local_today_iso.
+    for module_name in ("backend_main_test", "main", "backend.main"):
+        module = sys.modules.get(module_name)
+        fn = getattr(module, "local_today_iso", None) if module else None
+        if callable(fn):
+            return fn()
     return datetime.now(LOCAL_TZ).date().isoformat()
 
 
