@@ -31,11 +31,3 @@ services:
       backend:
         condition: service_healthy
     restart: unless-stopped
-
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
-    depends_on:
-      frontend:
-        condition: service_started
-    restart: unless-stopped
