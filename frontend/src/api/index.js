@@ -59,6 +59,7 @@ const api = {
     listBackups: () => axios.get(API + '/maintenance/backups'),
     createBackup: () => axios.post(API + '/maintenance/backups'),
     restoreBackup: (filename) => axios.post(API + '/maintenance/restore', { filename }),
+    restoreUploadedBackup: (formData) => axios.post(API + '/maintenance/restore-upload', formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 180000 }),
     deleteBackup: (filename) => axios.delete(API + '/maintenance/backups/' + encodeURIComponent(filename)),
 
     performanceSummary: () => axios.get(API + '/performance/summary'),

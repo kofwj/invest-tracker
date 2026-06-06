@@ -761,6 +761,25 @@ const app = createApp({
             }
         };
 
+        const restoreUploadedBackup = async (file) => {
+            const raw = file?.raw || file;
+            if (!raw) return;
+            try {
+                await ElMessageBox.confirm(`确定上传并恢复备份 ${raw.name}？系统会先自动备份当前数据库。`, '上传备份并恢复', { type: 'warning' });
+                maintenanceLoading.value = true;
+                const fd = new FormData();
+                fd.append('file', raw);
+                const res = await api.restoreUploadedBackup(fd);
+                ElMessage.success(`恢复完成，恢复前备份：${res.data?.pre_restore_backup || ''}`);
+                await Promise.all([fetchData(), fetchSnapshots(), queryTransactions(), fetchMaintenance()]);
+            } catch (e) {
+                if (e === 'cancel') return;
+                ElMessage.error('上传恢复失败：' + (e?.response?.data?.detail || e?.message || '未知错误'));
+            } finally {
+                maintenanceLoading.value = false;
+            }
+        };
+
         // 预计年化收益编辑
         const openExpectedReturnDialog = (row) => {
             expectedReturnDialog.value = {
@@ -1090,7 +1109,7 @@ const app = createApp({
             openExpectedReturnDialog, saveExpectedReturn, openHoldingCorrectionDialog, saveHoldingCorrection, openHoldingCorrectionHistory, deleteHoldingCorrection, formatMoney, formatPercent, pct,
             perfSummary, perfTimeline, perfContribution, perfFlows, perfLoading, perfFlowForm, perfCards,
             displayedPerfContribution, perfContributionFilter, perfContributionSort, perfContributionHeadline, perfContributionMix,
-            fetchPerformance, addPerfFlow, deletePerfFlow, contributionBarStyle, fetchMaintenance, createDbBackup, downloadBackup, restoreBackup, deleteBackup
+            fetchPerformance, addPerfFlow, deletePerfFlow, contributionBarStyle, fetchMaintenance, createDbBackup, downloadBackup, restoreBackup, deleteBackup, restoreUploadedBackup
         };
     }
 });
