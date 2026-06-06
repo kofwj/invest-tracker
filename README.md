@@ -82,6 +82,10 @@ invest-tracker/
 
 ---
 
+## Cloudflare Tunnel 部署
+
+本地内网服务器 + Cloudflare Tunnel + Cloudflare Access 部署配置在 `deploy/cloudflare-tunnel` 分支维护，详见 [`docs/deploy-cloudflare-tunnel.md`](docs/deploy-cloudflare-tunnel.md)。
+
 ## 3. 启动方式
 
 ### 推荐：Docker Compose
