@@ -1132,6 +1132,14 @@
                             <el-space wrap>
                                 <el-button @click="fetchMaintenance">刷新列表</el-button>
                                 <el-button type="primary" :loading="maintenanceLoading" @click="createDbBackup">创建备份</el-button>
+                                <el-upload
+                                    :auto-upload="false"
+                                    :show-file-list="false"
+                                    accept=".db,.bak"
+                                    :on-change="restoreUploadedBackup"
+                                >
+                                    <el-button type="danger" plain :loading="maintenanceLoading">上传备份并恢复</el-button>
+                                </el-upload>
                             </el-space>
                         </div>
                     </template>

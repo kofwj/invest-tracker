@@ -4,7 +4,7 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -110,3 +110,36 @@ def restore_backup(payload: RestoreRequest):
     tmp.replace(db)
     check_sqlite(db)
     return {"status": "success", "restored": backup.name, "pre_restore_backup": pre_restore.name}
+
+
+@router.post("/maintenance/restore-upload")
+async def restore_uploaded_backup(file: UploadFile = File(...)):
+    original_name = Path(str(file.filename or "")).name
+    if not original_name or not original_name.endswith((".db.bak", ".bak", ".db")):
+        raise HTTPException(status_code=400, detail="请上传 .db.bak、.bak 或 .db 备份文件")
+
+    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now(LOCAL_TZ).strftime("%Y%m%d_%H%M%S")
+    upload_path = BACKUP_DIR / f"uploaded_{ts}_{original_name}"
+
+    try:
+        with upload_path.open("wb") as out:
+            shutil.copyfileobj(file.file, out)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"保存上传备份失败：{e}")
+    finally:
+        await file.close()
+
+    check_sqlite(upload_path)
+    pre_restore = Path(create_safety_backup("before_restore_upload"))
+    db = Path(DB_PATH)
+    db.parent.mkdir(parents=True, exist_ok=True)
+    tmp = db.with_suffix(db.suffix + ".restore_tmp")
+    shutil.copy2(str(upload_path), str(tmp))
+    tmp.replace(db)
+    check_sqlite(db)
+    return {
+        "status": "success",
+        "uploaded_backup": upload_path.name,
+        "pre_restore_backup": pre_restore.name,
+    }
