@@ -1,6 +1,33 @@
 const API = '/api';
 
+// 注册请求与响应拦截器处理身份校验
+axios.interceptors.request.use(
+    (config) => {
+        const token = localStorage.getItem('invest_tracker_token');
+        if (token) {
+            config.headers['Authorization'] = `Bearer ${token}`;
+        }
+        return config;
+    },
+    (error) => Promise.reject(error)
+);
+
+axios.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        if (error.response && error.response.status === 401) {
+            localStorage.removeItem('invest_tracker_token');
+            if (typeof window.onAuthRequired === 'function') {
+                window.onAuthRequired();
+            }
+        }
+        return Promise.reject(error);
+    }
+);
+
 const api = {
+    getAuthStatus: () => axios.get(API + '/auth/status'),
+    login: (password) => axios.post(API + '/login', { password }),
     getDashboard: () => axios.get(API + '/dashboard'),
     getHoldings: () => axios.get(API + '/holdings'),
     getDeposits: () => axios.get(API + '/deposits'),
@@ -59,6 +86,7 @@ const api = {
     listBackups: () => axios.get(API + '/maintenance/backups'),
     createBackup: () => axios.post(API + '/maintenance/backups'),
     restoreBackup: (filename) => axios.post(API + '/maintenance/restore', { filename }),
+    restoreUploadedBackup: (formData) => axios.post(API + '/maintenance/restore-upload', formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 180000 }),
     deleteBackup: (filename) => axios.delete(API + '/maintenance/backups/' + encodeURIComponent(filename)),
 
     performanceSummary: () => axios.get(API + '/performance/summary'),

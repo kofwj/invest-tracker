@@ -30,10 +30,28 @@ const app = createApp({
         const screenshotParams = new URLSearchParams(window.location.search);
         const screenshotTabs = ['snapshots', 'allocation', 'performance', 'holdings', 'deposits', 'transactions', 'cash'];
         const requestedTab = screenshotParams.get('tab');
-        const screenshotMode = screenshotParams.get('mask') === '1' || screenshotParams.get('screenshot') === '1';
-        if (screenshotMode) {
+        
+        // 隐私打码状态：默认开启打码保护，除非 URL 传了 mask=0 或 screenshot=0
+        const isMasked = ref(screenshotParams.get('mask') !== '0' && screenshotParams.get('screenshot') !== '0');
+        if (isMasked.value) {
             document.documentElement.classList.add('screenshot-mask');
+        } else {
+            document.documentElement.classList.remove('screenshot-mask');
         }
+
+        const toggleMask = () => {
+            isMasked.value = !isMasked.value;
+            if (isMasked.value) {
+                document.documentElement.classList.add('screenshot-mask');
+            } else {
+                document.documentElement.classList.remove('screenshot-mask');
+            }
+        };
+        const showLoginOverlay = ref(false);
+        const loginLoading = ref(false);
+        const loginPassword = ref('');
+        const authEnabled = ref(false);
+
         const activeTab = ref(screenshotTabs.includes(requestedTab) ? requestedTab : 'snapshots');
         const dashboard = ref({});
         const holdings = ref([]);
@@ -761,6 +779,25 @@ const app = createApp({
             }
         };
 
+        const restoreUploadedBackup = async (file) => {
+            const raw = file?.raw || file;
+            if (!raw) return;
+            try {
+                await ElMessageBox.confirm(`确定上传并恢复备份 ${raw.name}？系统会先自动备份当前数据库。`, '上传备份并恢复', { type: 'warning' });
+                maintenanceLoading.value = true;
+                const fd = new FormData();
+                fd.append('file', raw);
+                const res = await api.restoreUploadedBackup(fd);
+                ElMessage.success(`恢复完成，恢复前备份：${res.data?.pre_restore_backup || ''}`);
+                await Promise.all([fetchData(), fetchSnapshots(), queryTransactions(), fetchMaintenance()]);
+            } catch (e) {
+                if (e === 'cancel') return;
+                ElMessage.error('上传恢复失败：' + (e?.response?.data?.detail || e?.message || '未知错误'));
+            } finally {
+                maintenanceLoading.value = false;
+            }
+        };
+
         // 预计年化收益编辑
         const openExpectedReturnDialog = (row) => {
             expectedReturnDialog.value = {
@@ -1066,7 +1103,56 @@ const app = createApp({
             if (val === 'maintenance') fetchMaintenance();
         });
 
-        onMounted(() => {
+        const handleLogin = async () => {
+            if (!loginPassword.value) {
+                ElMessage.warning('请输入密码');
+                return;
+            }
+            loginLoading.value = true;
+            try {
+                const res = await api.login(loginPassword.value);
+                const token = res.data.token;
+                localStorage.setItem('invest_tracker_token', token);
+                showLoginOverlay.value = false;
+                loginPassword.value = '';
+                ElMessage.success('解锁成功');
+                fetchData();
+                queryTransactions();
+                queryCashFlows();
+                fetchSnapshots();
+                fetchMaintenance();
+            } catch (e) {
+                const detail = e?.response?.data?.detail || '密码错误';
+                ElMessage.error(detail);
+            } finally {
+                loginLoading.value = false;
+            }
+        };
+
+        const handleLogout = () => {
+            localStorage.removeItem('invest_tracker_token');
+            showLoginOverlay.value = true;
+            ElMessage.success('已安全退出');
+        };
+
+        window.onAuthRequired = () => {
+            showLoginOverlay.value = true;
+        };
+
+        onMounted(async () => {
+            try {
+                const statusRes = await api.getAuthStatus();
+                authEnabled.value = statusRes.data.auth_enabled;
+                if (authEnabled.value) {
+                    const token = localStorage.getItem('invest_tracker_token');
+                    if (!token) {
+                        showLoginOverlay.value = true;
+                        return;
+                    }
+                }
+            } catch (e) {
+                console.error('获取登录状态失败', e);
+            }
             fetchData();
             queryTransactions();
             queryCashFlows();
@@ -1075,6 +1161,8 @@ const app = createApp({
         });
 
         return {
+            isMasked, toggleMask,
+            showLoginOverlay, loginLoading, loginPassword, authEnabled, handleLogin, handleLogout,
             activeTab, dashboard, holdings, deposits, depositRows, depositSummary, depositBankBreakdown, depositMaturityBuckets, syncing, trailingSyncing, syncNotice,
             snapshots, snapshotRange, snapshotSummary, snapshotMetrics, snapshotChangeRows, snapshotInsights, snapshotLoading, maintenanceStatus, backups, maintenanceLoading, todayIso, todaySnapshotDone, latestPriceStatusText, latestBackupText,
             transForm, feeSettings, feeAccounts, activeFeeAccount, newFeeAccountName, feeCategories, feeSettingRows, feeAutoHint, depositDialog, cashForm, cashFlows, cashFlowForm, cashFlowQuery, cashFlowSummary, cashFlowEditDialog, transDialog, allocationAnalysis, macroAllocationAnalysis,
@@ -1090,7 +1178,7 @@ const app = createApp({
             openExpectedReturnDialog, saveExpectedReturn, openHoldingCorrectionDialog, saveHoldingCorrection, openHoldingCorrectionHistory, deleteHoldingCorrection, formatMoney, formatPercent, pct,
             perfSummary, perfTimeline, perfContribution, perfFlows, perfLoading, perfFlowForm, perfCards,
             displayedPerfContribution, perfContributionFilter, perfContributionSort, perfContributionHeadline, perfContributionMix,
-            fetchPerformance, addPerfFlow, deletePerfFlow, contributionBarStyle, fetchMaintenance, createDbBackup, downloadBackup, restoreBackup, deleteBackup
+            fetchPerformance, addPerfFlow, deletePerfFlow, contributionBarStyle, fetchMaintenance, createDbBackup, downloadBackup, restoreBackup, deleteBackup, restoreUploadedBackup
         };
     }
 });

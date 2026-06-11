@@ -169,3 +169,47 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helv
 .home-status-main.is-warn { color: #E6A23C; }
 .home-status-sub { font-size: 12px; color: #C0C4CC; margin-top: 4px; }
 @media (max-width: 900px) { .home-status-strip { grid-template-columns: 1fr; } }
+
+/* 登录锁屏遮罩 (Glassmorphic Lock Screen) */
+.login-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: linear-gradient(135deg, rgba(245, 247, 250, 0.9) 0%, rgba(228, 231, 237, 0.9) 100%);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    z-index: 10000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.login-box {
+    width: 360px;
+    padding: 40px;
+    background: rgba(255, 255, 255, 0.85);
+    border-radius: 16px;
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    text-align: center;
+}
+
+.login-logo {
+    font-size: 48px;
+    margin-bottom: 16px;
+}
+
+.login-box h3 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+    color: #303133;
+}
+
+.login-subtitle {
+    margin: 8px 0 0;
+    font-size: 13px;
+    color: #909399;
+}
