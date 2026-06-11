@@ -4,7 +4,7 @@ import sys
 from contextlib import asynccontextmanager
 from datetime import datetime
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -12,6 +12,7 @@ if CURRENT_DIR not in sys.path:
     sys.path.append(CURRENT_DIR)
 
 try:
+    from .auth import require_auth, router as auth_router
     from .cash import set_setting
     from .database import (
         APP_CONFIG,
@@ -31,6 +32,7 @@ try:
     from .routers_transactions import router as transactions_router
     from .schema import ensure_app_schema, ensure_core_tables, initialize_database, run_startup_migrations
 except ImportError:  # Allows tests to load this file directly via importlib.
+    from auth import require_auth, router as auth_router
     from cash import set_setting
     from database import (
         APP_CONFIG,
@@ -69,14 +71,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(deposits_router)
-app.include_router(transactions_router)
-app.include_router(cash_router)
-app.include_router(snapshots_router)
-app.include_router(holdings_router)
-app.include_router(dashboard_router)
-app.include_router(performance_router)
-app.include_router(maintenance_router)
+app.include_router(auth_router)
+app.include_router(deposits_router, dependencies=[Depends(require_auth)])
+app.include_router(transactions_router, dependencies=[Depends(require_auth)])
+app.include_router(cash_router, dependencies=[Depends(require_auth)])
+app.include_router(snapshots_router, dependencies=[Depends(require_auth)])
+app.include_router(holdings_router, dependencies=[Depends(require_auth)])
+app.include_router(dashboard_router, dependencies=[Depends(require_auth)])
+app.include_router(performance_router, dependencies=[Depends(require_auth)])
+app.include_router(maintenance_router, dependencies=[Depends(require_auth)])
 
 
 def local_today_iso():

@@ -10,9 +10,15 @@
         <div class="header">
             <h2>投资资产管理系统</h2>
             <div class="header-actions">
+                <el-button :type="isMasked ? 'danger' : 'info'" plain @click="toggleMask">
+                    {{ isMasked ? '👁️ 显示数据' : '🙈 隐藏数据' }}
+                </el-button>
                 <el-button type="success" @click="fetchData">刷新数据</el-button>
                 <el-button type="primary" @click="syncPrices" :loading="syncing">同步最新价</el-button>
                 <el-button type="warning" plain @click="syncTrailingReturns" :loading="trailingSyncing">同步近一年收益率</el-button>
+                <el-button v-if="authEnabled" type="info" link @click="handleLogout" style="margin-left: 8px;">
+                    🚪 退出登录
+                </el-button>
                 <span v-if="syncNotice.text" class="inline-sync-status" :class="syncNotice.type">{{ syncNotice.text }}</span>
             </div>
         </div>
@@ -1427,6 +1433,35 @@
                 <el-button type="primary" @click="saveExpectedReturn">确定</el-button>
             </template>
         </el-dialog>
+
+        <!-- 登录锁屏遮罩 (Glassmorphic Lock Screen) -->
+        <div v-if="showLoginOverlay" class="login-overlay">
+            <div class="login-box">
+                <div class="login-logo">🔒</div>
+                <h3>投资资产管理系统</h3>
+                <p class="login-subtitle">安全身份校验已启用</p>
+                <el-form @submit.prevent="handleLogin" style="margin-top: 24px;">
+                    <el-form-item style="margin-bottom: 20px;">
+                        <el-input 
+                            v-model="loginPassword" 
+                            type="password" 
+                            placeholder="请输入系统访问密码" 
+                            show-password
+                            autofocus
+                        >
+                            <template #prefix>
+                                <span style="font-size: 14px;">🔑</span>
+                            </template>
+                        </el-input>
+                    </el-form-item>
+                    <el-form-item style="margin-bottom: 0;">
+                        <el-button type="primary" native-type="submit" :loading="loginLoading" style="width: 100%;">
+                            解锁访问
+                        </el-button>
+                    </el-form-item>
+                </el-form>
+            </div>
+        </div>
     </div>
 
     <script type="module" src="/src/main.js"></script>

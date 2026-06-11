@@ -1,6 +1,33 @@
 const API = '/api';
 
+// 注册请求与响应拦截器处理身份校验
+axios.interceptors.request.use(
+    (config) => {
+        const token = localStorage.getItem('invest_tracker_token');
+        if (token) {
+            config.headers['Authorization'] = `Bearer ${token}`;
+        }
+        return config;
+    },
+    (error) => Promise.reject(error)
+);
+
+axios.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        if (error.response && error.response.status === 401) {
+            localStorage.removeItem('invest_tracker_token');
+            if (typeof window.onAuthRequired === 'function') {
+                window.onAuthRequired();
+            }
+        }
+        return Promise.reject(error);
+    }
+);
+
 const api = {
+    getAuthStatus: () => axios.get(API + '/auth/status'),
+    login: (password) => axios.post(API + '/login', { password }),
     getDashboard: () => axios.get(API + '/dashboard'),
     getHoldings: () => axios.get(API + '/holdings'),
     getDeposits: () => axios.get(API + '/deposits'),

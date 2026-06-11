@@ -11,6 +11,9 @@ htmlcov/
 *.sqlite3
 *.db-journal
 *.db-wal
+venv/
+.venv/
+
 
 # Project runtime data
 backend/__pycache__/

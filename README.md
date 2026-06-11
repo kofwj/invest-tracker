@@ -127,6 +127,30 @@ make test     # 运行后端测试
 make check    # 运行完整检查
 ```
 
+### 本地直接运行 (非 Docker)
+
+如果你没有 Docker 环境，或者希望直接进行本地调试：
+
+1. **后端启动**：
+   ```bash
+   # 创建并激活虚拟环境，安装依赖
+   python3 -m venv venv
+   source venv/bin/activate
+   pip install -r backend/requirements.txt
+   
+   # 启动 API 服务
+   python backend/main.py
+   ```
+   后端服务将运行在 `http://localhost:8000`。
+   
+2. **前端启动**：
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+   前端服务将运行在 `http://localhost:8080`，已配置本地 API 代理自动转发至后端的 8000 端口。
+
 ---
 
 ## 4. 前端开发说明
@@ -245,6 +269,22 @@ python3 scripts/restore_db.py backups/你的备份文件.db
 ```bash
 python3 scripts/safety_snapshot.py
 ```
+
+### 访问安全控制 (密码门锁)
+
+如果在公网服务器部署系统，强烈建议开启密码门锁功能保护资产隐私。
+
+1. **启用验证**：
+   在服务器环境配置中设置环境变量 `INVEST_TRACKER_PASSWORD`。例如：
+   ```bash
+   export INVEST_TRACKER_PASSWORD="你的安全访问密码"
+   ```
+2. **安全保护**：
+   - 启用后，所有数据查询与操作 API 均会强制校验身份。
+   - 首次打开网页或退出登录后，系统会默认呈现高质感模糊锁屏，提示输入系统密码。输入正确即发放一个 30 天有效的会话 Token。
+   - 临时隐藏数据：主页顶部增加了 “👁️ 显示数据” 和 “🙈 隐藏数据” 按钮，可以随时一键模糊界面。
+3. **未设置密码**：
+   - 如果不设置 `INVEST_TRACKER_PASSWORD` 环境变量，系统则为无锁模式，默认直接公开，便于本地直接使用。
 
 ---
 
