@@ -1,3 +1,5 @@
+import axios from 'axios';
+
 const API = '/api';
 
 // 注册请求与响应拦截器处理身份校验
