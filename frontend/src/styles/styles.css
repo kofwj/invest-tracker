@@ -213,3 +213,8 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helv
     font-size: 13px;
     color: #909399;
 }
+
+/* 确保登录框内的输入框不被模糊 */
+.login-overlay .el-input__wrapper {
+    filter: none !important;
+}
