@@ -220,36 +220,22 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helv
     filter: none !important;
 }
 
-.login-overlay .el-input {
-    opacity: 1 !important;
-    visibility: visible !important;
-    display: inline-flex !important;
+.login-native-input {
     width: 100% !important;
-    background: transparent !important;
-    box-sizing: border-box !important;
-}
-
-.login-overlay .el-input__wrapper {
-    width: 100% !important;
+    height: 40px !important;
+    padding: 8px 12px 8px 34px !important; /* Extra left padding to clear the 🔑 emoji */
     background: #ffffff !important;
-    border: 1px solid #a8abb2 !important; /* Explicit solid border */
-    box-shadow: none !important;
+    border: 1px solid #dcdfe6 !important;
     border-radius: 8px !important;
-    opacity: 1 !important;
-    visibility: visible !important;
-    filter: none !important;
-    box-sizing: border-box !important;
-    padding: 2px 12px !important;
-}
-
-.login-overlay .el-input__inner {
-    width: 100% !important;
     color: #303133 !important;
     font-size: 14px !important;
-    height: 40px !important;
-    background: transparent !important;
-    border: none !important;
+    box-sizing: border-box !important;
     outline: none !important;
+    transition: border-color 0.2s !important;
     opacity: 1 !important;
     visibility: visible !important;
+}
+
+.login-native-input:focus {
+    border-color: #409eff !important;
 }

@@ -1441,19 +1441,17 @@
                 <h3>投资资产管理系统</h3>
                 <p class="login-subtitle">安全身份校验已启用</p>
                 <el-form @submit.prevent="handleLogin" style="margin-top: 24px;">
-                    <el-form-item style="margin-bottom: 20px;">
-                        <el-input 
+                    <div style="margin-bottom: 20px; position: relative;">
+                        <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 14px; z-index: 10;">🔑</span>
+                        <input 
                             v-model="loginPassword" 
                             type="password" 
+                            class="login-native-input"
                             placeholder="请输入系统访问密码" 
-                            show-password
                             autofocus
+                            required
                         >
-                            <template #prefix>
-                                <span style="font-size: 14px;">🔑</span>
-                            </template>
-                        </el-input>
-                    </el-form-item>
+                    </div>
                     <el-form-item style="margin-bottom: 0;">
                         <el-button type="primary" native-type="submit" :loading="loginLoading" style="width: 100%;">
                             解锁访问
