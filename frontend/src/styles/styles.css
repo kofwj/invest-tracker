@@ -239,3 +239,33 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helv
 .login-native-input:focus {
     border-color: #409eff !important;
 }
+
+.login-native-button {
+    width: 100% !important;
+    height: 40px !important;
+    background-color: #409eff !important;
+    color: #ffffff !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    cursor: pointer !important;
+    transition: background-color 0.2s !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    display: block !important;
+    outline: none !important;
+}
+
+.login-native-button:hover {
+    background-color: #66b1ff !important;
+}
+
+.login-native-button:active {
+    background-color: #3a8ee6 !important;
+}
+
+.login-native-button:disabled {
+    background-color: #a0cfff !important;
+    cursor: not-allowed !important;
+}

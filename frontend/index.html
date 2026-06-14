@@ -1440,7 +1440,7 @@
                 <div class="login-logo">🔒</div>
                 <h3>投资资产管理系统</h3>
                 <p class="login-subtitle">安全身份校验已启用</p>
-                <el-form @submit.prevent="handleLogin" style="margin-top: 24px;">
+                <form @submit.prevent="handleLogin" style="margin-top: 24px;">
                     <div style="margin-bottom: 20px; position: relative;">
                         <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 14px; z-index: 10;">🔑</span>
                         <input 
@@ -1450,15 +1450,12 @@
                             placeholder="请输入系统访问密码" 
                             autofocus
                             required
-                            @keyup.enter="handleLogin"
                         >
                     </div>
-                    <el-form-item style="margin-bottom: 0;">
-                        <el-button type="primary" native-type="submit" :loading="loginLoading" style="width: 100%;">
-                            解锁访问
-                        </el-button>
-                    </el-form-item>
-                </el-form>
+                    <button type="submit" class="login-native-button" :disabled="loginLoading">
+                        {{ loginLoading ? '正在验证...' : '登 录' }}
+                    </button>
+                </form>
             </div>
         </div>
     </div>
