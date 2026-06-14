@@ -1103,27 +1103,45 @@ const app = createApp({
             if (val === 'maintenance') fetchMaintenance();
         });
 
+        const showMessage = (type, text) => {
+            console.log(`[Message ${type}]: ${text}`);
+            try {
+                if (type === 'success') {
+                    ElMessage.success(text);
+                } else if (type === 'warning') {
+                    ElMessage.warning(text);
+                } else {
+                    ElMessage.error(text);
+                }
+            } catch (err) {
+                console.error('ElMessage failed, using fallback alert', err);
+                alert(text);
+            }
+        };
+
         const handleLogin = async () => {
             if (!loginPassword.value) {
-                ElMessage.warning('请输入密码');
+                showMessage('warning', '请输入密码');
                 return;
             }
             loginLoading.value = true;
             try {
+                console.log('开始尝试登录...');
                 const res = await api.login(loginPassword.value);
                 const token = res.data.token;
                 localStorage.setItem('invest_tracker_token', token);
                 showLoginOverlay.value = false;
                 loginPassword.value = '';
-                ElMessage.success('解锁成功');
+                showMessage('success', '解锁成功');
                 fetchData();
                 queryTransactions();
                 queryCashFlows();
                 fetchSnapshots();
                 fetchMaintenance();
             } catch (e) {
-                const detail = e?.response?.data?.detail || '密码错误';
-                ElMessage.error(detail);
+                console.error('登录出现异常:', e);
+                const detail = e?.response?.data?.detail || e?.message || '密码错误或网络异常';
+                showMessage('error', detail);
             } finally {
                 loginLoading.value = false;
             }

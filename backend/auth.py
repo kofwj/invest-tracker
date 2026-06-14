@@ -12,7 +12,11 @@ class LoginRequest(BaseModel):
     password: str
 
 def get_system_password() -> str:
-    return os.environ.get(PASSWORD_ENV_VAR, "").strip()
+    pw = os.environ.get(PASSWORD_ENV_VAR, "").strip()
+    if len(pw) >= 2:
+        if (pw[0] == '"' and pw[-1] == '"') or (pw[0] == "'" and pw[-1] == "'"):
+            pw = pw[1:-1]
+    return pw
 
 def is_auth_enabled() -> bool:
     return bool(get_system_password())
