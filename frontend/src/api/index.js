@@ -101,3 +101,6 @@ const api = {
 };
 
 Object.assign(window, { API, api });
+
+export { API, api };
+export default api;

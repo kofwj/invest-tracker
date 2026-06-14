@@ -5,7 +5,7 @@ import axios from 'axios';
 import * as echarts from 'echarts';
 import './styles/styles.css';
 import './utils/index.js';
-import './api/index.js';
+import api from './api/index.js';
 import './charts/index.js';
 import './modules/transactions.js';
 import './modules/deposits.js';
