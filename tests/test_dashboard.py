@@ -41,7 +41,7 @@ def test_dashboard_total_assets_matches_market_cash_bank_and_pending(client, app
     app_module.set_setting(conn, "securities_cash_base", 5000)
     conn.execute(
         "INSERT INTO holdings (code, name, category, quantity, avg_cost, diluted_cost, total_dividend, last_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        ("600010", "包钢股份", "A股权益", 100, 8.0, 8.0, 0, 12.0),
+        ("600010", "包钢股份", "A股权益", 100, 8.0, 7.0, 50.0, 12.0),
     )
     conn.execute(
         "INSERT INTO deposits (bank_name, amount, interest_rate, due_date, remark) VALUES (?, ?, ?, ?, ?)",
@@ -63,3 +63,6 @@ def test_dashboard_total_assets_matches_market_cash_bank_and_pending(client, app
     assert data["pending_count"] == 1
     assert data["securities_cash"] == 4500.0
     assert data["total_assets"] == 8200.0
+    # 持仓浮盈 = (12-8)*100 + 50 = 450；全周期 = (12-7)*100 = 500
+    assert round(data["total_profit"], 2) == 450.0
+    assert round(data["lifetime_profit"], 2) == 500.0

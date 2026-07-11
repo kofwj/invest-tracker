@@ -62,18 +62,20 @@ body { font-family: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsof
 .perf-bar-fill { height:100%; border-radius:999px; }
 @media (max-width: 900px) { .perf-contrib-summary { grid-template-columns: 1fr; } .perf-contrib-controls { justify-content:flex-start; } }
 
-.top-stats { display: grid; grid-template-columns: 1.45fr repeat(4, 1fr); gap: 16px; }
+.top-stats { display: grid; grid-template-columns: 1.35fr repeat(5, 1fr); gap: 12px; }
 .stat-card { border: 0; border-radius: 14px; overflow: hidden; }
 .stat-card .el-card__body { padding: 18px 20px; }
 .stat-card-inner { min-height: 78px; display: flex; flex-direction: column; justify-content: space-between; }
 .stat-main { background: linear-gradient(135deg, #ecf5ff 0%, #ffffff 58%, #f0f9ff 100%); border-left: 4px solid #409EFF; }
 .stat-profit { border-left: 4px solid #F56C6C; }
+.stat-lifetime { border-left: 4px solid #E6A23C; }
 .stat-label { color: #909399; font-size: 13px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .stat-label::after { content: ''; flex: 1; height: 1px; background: #ebeef5; opacity: .75; }
-.stat-value { margin-top: 10px; font-size: 22px; line-height: 1.15; font-weight: 750; color: #303133; letter-spacing: -0.3px; white-space: nowrap; }
+.stat-value { margin-top: 10px; font-size: 20px; line-height: 1.15; font-weight: 750; color: #303133; letter-spacing: -0.3px; white-space: nowrap; }
 .stat-main .stat-value { font-size: 30px; color: #409EFF; }
 .stat-sub { margin-top: 8px; font-size: 12px; color: #909399; white-space: nowrap; }
-@media (max-width: 1100px) { .top-stats { grid-template-columns: repeat(2, 1fr); } .stat-main { grid-column: span 2; } }
+@media (max-width: 1280px) { .top-stats { grid-template-columns: repeat(3, 1fr); } .stat-main { grid-column: span 3; } }
+@media (max-width: 900px) { .top-stats { grid-template-columns: repeat(2, 1fr); } .stat-main { grid-column: span 2; } }
 @media (max-width: 640px) { .top-stats { grid-template-columns: 1fr; } .stat-main { grid-column: span 1; } }
 .mt-20 { margin-top: 20px; }
 .chart-container { height: 400px; width: 100%; margin-top: 20px; }

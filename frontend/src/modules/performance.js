@@ -22,7 +22,7 @@ const createPerformanceModule = ({
         {
             step: '2',
             title: '再看谁在贡献收益',
-            text: '中间贡献表按「当前仓浮盈 + 分红」排序，适合看谁在拉、谁在拖；不含已卖出的已实现盈亏。',
+            text: '中间贡献表默认按「当前仓浮盈 + 分红」；另有「全周期盈亏」列，接近券商累计，可切换排序。',
         },
         {
             step: '3',
@@ -48,10 +48,10 @@ const createPerformanceModule = ({
         },
         {
             name: '接近券商累计',
-            where: '持仓明细「全周期盈亏」',
+            where: '首页卡片 / 持仓明细 / 本页贡献表「全周期」',
             meaning: '(现价 − 摊薄成本)×数量',
             goodFor: '和券商 App 累计盈亏对账',
-            notFor: '不是本页贡献表默认口径',
+            notFor: '不要和「当前仓贡献」混加',
         },
     ]));
 
@@ -133,6 +133,13 @@ const createPerformanceModule = ({
                 color: floatSum >= 0 ? '#F56C6C' : '#67C23A',
             },
             {
+                label: '全周期盈亏合计',
+                plain: '接近券商累计盈亏',
+                value: formatMoney(s.lifetime_profit),
+                sub: 'Σ(现价 − 摊薄成本)×数量 · 分红已在摊薄中',
+                color: Number(s.lifetime_profit || 0) >= 0 ? '#F56C6C' : '#67C23A',
+            },
+            {
                 label: 'YTD 收益',
                 plain: '今年初至今赚了多少',
                 value: formatMoney(s.ytd_gain),
@@ -149,6 +156,8 @@ const createPerformanceModule = ({
         if (perfContributionFilter.value === 'negative') rows = rows.filter(item => Number(item.total_contribution || 0) < 0);
         if (perfContributionSort.value === 'market_value') {
             rows.sort((a, b) => Number(b.market_value || 0) - Number(a.market_value || 0));
+        } else if (perfContributionSort.value === 'lifetime') {
+            rows.sort((a, b) => Number(b.lifetime_profit || 0) - Number(a.lifetime_profit || 0));
         } else if (perfContributionSort.value === 'share') {
             rows.sort((a, b) => {
                 const shareB = totalGain ? Number(b.total_contribution || 0) / totalGain : 0;

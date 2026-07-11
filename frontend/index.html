@@ -90,7 +90,16 @@
                     <div class="stat-value" :style="{ color: dashboard.total_profit >= 0 ? '#F56C6C' : '#67C23A' }">
                         {{ formatMoney(dashboard.total_profit) }}
                     </div>
-                    <div class="stat-sub">按普通成本；不含已实现与申购在途</div>
+                    <div class="stat-sub">普通成本当前仓；不含已卖出已实现</div>
+                </div>
+            </el-card>
+            <el-card shadow="hover" class="stat-card stat-lifetime">
+                <div class="stat-card-inner">
+                    <div class="stat-label">投资账户全周期盈亏</div>
+                    <div class="stat-value" :style="{ color: (dashboard.lifetime_profit ?? 0) >= 0 ? '#F56C6C' : '#67C23A' }">
+                        {{ formatMoney(dashboard.lifetime_profit) }}
+                    </div>
+                    <div class="stat-sub">摊薄成本口径；接近券商累计盈亏</div>
                 </div>
             </el-card>
         </div>
@@ -357,6 +366,14 @@
                                         </template>
                                         <template #default="scope"><span :style="{color: scope.row.profit >= 0 ? '#F56C6C' : '#67C23A'}">{{ formatMoney(scope.row.profit, 2, true) }}</span></template>
                                     </el-table-column>
+                                    <el-table-column label="全周期盈亏" min-width="120" align="right" header-align="right">
+                                        <template #header>
+                                            <el-tooltip content="按摊薄成本汇总的全周期盈亏，接近券商累计盈亏。" placement="top">
+                                                <span>全周期盈亏</span>
+                                            </el-tooltip>
+                                        </template>
+                                        <template #default="scope"><span :style="{color: (scope.row.lifetime_profit || 0) >= 0 ? '#F56C6C' : '#67C23A'}">{{ formatMoney(scope.row.lifetime_profit || 0, 2, true) }}</span></template>
+                                    </el-table-column>
                                     <el-table-column label="预计年化" width="100" align="center" header-align="center">
                                         <template #default="scope"><span style="color:#409EFF;font-weight:bold;">{{ scope.row.expected_return?.toFixed(2) }}%</span></template>
                                     </el-table-column>
@@ -378,6 +395,9 @@
                             <el-table-column label="持仓浮盈" min-width="120" align="right" header-align="right">
                                 <template #default="scope"><span :style="{color: scope.row.profit >= 0 ? '#F56C6C' : '#67C23A'}">{{ formatMoney(scope.row.profit, 2, true) }}</span></template>
                             </el-table-column>
+                            <el-table-column label="全周期盈亏" min-width="120" align="right" header-align="right">
+                                <template #default="scope"><span :style="{color: (scope.row.lifetime_profit || 0) >= 0 ? '#F56C6C' : '#67C23A'}">{{ formatMoney(scope.row.lifetime_profit || 0, 2, true) }}</span></template>
+                            </el-table-column>
                             <el-table-column label="浮盈率" width="95" align="center" header-align="center">
                                 <template #default="scope"><span :style="{color: scope.row.profit_rate >= 0 ? '#F56C6C' : '#67C23A'}">{{ scope.row.profit_rate >= 0 ? '+' : '' }}{{ scope.row.profit_rate?.toFixed(2) }}%</span></template>
                             </el-table-column>
@@ -397,7 +417,7 @@
                     <div>
                         <h3 class="perf-page-title">收益分析</h3>
                         <div class="perf-page-subtitle">
-                            用「整户总账 + 当前仓贡献 + 年化」三层看收益。数字和券商/持仓页对不上时，先看口径，不要先怀疑算错。
+                            用「整户总账 + 当前仓贡献 + 全周期 + 年化」看收益。数字和券商/持仓页对不上时，先看口径，不要先怀疑算错。
                         </div>
                     </div>
                     <div class="perf-page-actions">
@@ -478,7 +498,7 @@
                     <div class="perf-contrib-toolbar">
                         <div>
                             <div class="perf-contrib-title">标的收益贡献</div>
-                            <div class="perf-contrib-sub">按「当前仓浮盈 + 累计分红」排序，看谁在拉收益、谁在拖后腿。这里不是华泰累计盈亏，也不含已卖出部分。</div>
+                            <div class="perf-contrib-sub">默认按「当前仓浮盈 + 累计分红」排序；另有「全周期盈亏」列接近券商累计。对账优先看全周期。</div>
                         </div>
                         <div class="perf-contrib-controls">
                             <el-tag size="small" type="info">共 {{ perfContribution.length }} 个标的</el-tag>
@@ -487,10 +507,11 @@
                                 <el-option label="只看正贡献" value="positive"></el-option>
                                 <el-option label="只看负贡献" value="negative"></el-option>
                             </el-select>
-                            <el-select v-model="perfContributionSort" size="small" style="width: 138px;">
-                                <el-option label="按总贡献排序" value="contribution"></el-option>
-                                <el-option label="按收益占比排序" value="share"></el-option>
-                                <el-option label="按市值排序" value="market_value"></el-option>
+                            <el-select v-model="perfContributionSort" size="small" style="width: 150px;">
+                                <el-option label="按当前仓贡献" value="contribution"></el-option>
+                                <el-option label="按全周期盈亏" value="lifetime"></el-option>
+                                <el-option label="按收益占比" value="share"></el-option>
+                                <el-option label="按市值" value="market_value"></el-option>
                             </el-select>
                         </div>
                     </div>
@@ -540,10 +561,18 @@
                         <el-table-column label="累计分红" min-width="110" align="right" header-align="right">
                             <template #default="s"><span>{{ formatMoney(s.row.dividend_income, 2, true) }}</span></template>
                         </el-table-column>
-                        <el-table-column label="总贡献" min-width="140" align="right" header-align="right">
+                        <el-table-column label="全周期盈亏" min-width="120" align="right" header-align="right">
                             <template #header>
-                                <el-tooltip content="总贡献 = 当前仓浮盈 + 累计分红。不含历史卖出已实现盈亏。" placement="top">
-                                    <span>总贡献</span>
+                                <el-tooltip content="(最新价 − 摊薄成本) × 数量；接近券商累计盈亏，分红已体现在摊薄成本中。" placement="top">
+                                    <span>全周期盈亏</span>
+                                </el-tooltip>
+                            </template>
+                            <template #default="s"><span :style="{color: (s.row.lifetime_profit || 0) >= 0 ? '#F56C6C' : '#67C23A'}">{{ formatMoney(s.row.lifetime_profit || 0, 2, true) }}</span></template>
+                        </el-table-column>
+                        <el-table-column label="当前仓总贡献" min-width="140" align="right" header-align="right">
+                            <template #header>
+                                <el-tooltip content="当前仓总贡献 = 当前仓浮盈 + 累计分红。不含历史卖出已实现盈亏。" placement="top">
+                                    <span>当前仓总贡献</span>
                                 </el-tooltip>
                             </template>
                             <template #default="s">

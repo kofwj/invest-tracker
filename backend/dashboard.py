@@ -26,6 +26,11 @@ def build_dashboard(conn):
     total_profit = sum(
         (h["last_price"] - h["avg_cost"]) * h["quantity"] + h["total_dividend"] for h in holdings
     )
+    # 全周期盈亏：Σ(最新价 − 摊薄成本)×数量；接近券商累计盈亏，分红已在摊薄中体现
+    lifetime_profit = sum(
+        (h["last_price"] - (h["diluted_cost"] if h["diluted_cost"] is not None else h["avg_cost"])) * h["quantity"]
+        for h in holdings
+    )
 
     price_row = conn.execute(
         "SELECT MAX(updated_at) AS latest FROM holdings WHERE quantity > 0 AND updated_at IS NOT NULL"
@@ -40,6 +45,7 @@ def build_dashboard(conn):
         "pending_count": pending_count,
         "total_assets": total_market_value + bank_balance + securities_cash + pending_purchase,
         "total_profit": total_profit,
+        "lifetime_profit": lifetime_profit,
         "holdings_count": len(holdings),
         "latest_price_updated_at": price_row["latest"] if price_row else None,
         "latest_snapshot_date": snapshot_row["latest"] if snapshot_row else None,

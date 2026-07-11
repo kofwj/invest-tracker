@@ -96,6 +96,11 @@ def build_performance_summary(conn):
     holdings = conn.execute("SELECT * FROM holdings WHERE quantity > 0").fetchall()
     unrealized = sum((dict(h)["last_price"] - dict(h)["avg_cost"]) * dict(h)["quantity"] for h in holdings)
     total_dividend = sum(dict(h)["total_dividend"] for h in holdings)
+    lifetime_profit = 0.0
+    for h in holdings:
+        h = dict(h)
+        diluted = h["diluted_cost"] if h["diluted_cost"] is not None else h["avg_cost"]
+        lifetime_profit += (h["last_price"] - diluted) * h["quantity"]
 
     ytd_start = today.replace(month=1, day=1)
     ytd_snap = conn.execute(
@@ -121,6 +126,7 @@ def build_performance_summary(conn):
         "xirr_message": xirr_msg,
         "current_unrealized_profit": round(unrealized, 2),
         "total_dividend_income": round(total_dividend, 2),
+        "lifetime_profit": round(lifetime_profit, 2),
         "pending_purchase": round(pending, 2),
         "ytd_gain": round(ytd_gain, 2),
         "ytd_gain_pct": round(ytd_gain_pct, 4),
@@ -184,6 +190,8 @@ def build_performance_contribution(conn):
         unrealized = (h["last_price"] - h["avg_cost"]) * h["quantity"]
         dividend = h["total_dividend"]
         total_contribution = unrealized + dividend
+        diluted = h["diluted_cost"] if h["diluted_cost"] is not None else h["avg_cost"]
+        lifetime_profit = (h["last_price"] - diluted) * h["quantity"]
         rows.append(
             {
                 "code": h["code"],
@@ -192,10 +200,12 @@ def build_performance_contribution(conn):
                 "quantity": h["quantity"],
                 "market_value": round(market_value, 2),
                 "avg_cost": round(h["avg_cost"], 4),
+                "diluted_cost": round(float(diluted or 0), 4),
                 "last_price": round(h["last_price"], 4),
                 "unrealized_profit": round(unrealized, 2),
                 "dividend_income": round(dividend, 2),
                 "total_contribution": round(total_contribution, 2),
+                "lifetime_profit": round(lifetime_profit, 2),
             }
         )
 

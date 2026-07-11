@@ -935,7 +935,7 @@ const app = createApp({
                 form: {
                     code: row.code,
                     name: row.name,
-                    expected_return: row.expected_return || 0
+                    expected_return: row.expected_return ?? 0
                 }
             };
         };
@@ -1029,9 +1029,9 @@ const app = createApp({
         const calculateAllocationAnalysis = () => {
             const categories = {};
             const macroGroups = {
-                '权益': { amount: 0, cost: 0, profit: 0, weighted_expected_return_sum: 0, total_weight: 0, details: new Set() },
-                '固收': { amount: 0, cost: 0, profit: 0, weighted_expected_return_sum: 0, total_weight: 0, details: new Set() },
-                '存款': { amount: 0, cost: 0, profit: 0, weighted_expected_return_sum: 0, total_weight: 0, details: new Set() }
+                '权益': { amount: 0, cost: 0, profit: 0, lifetime_profit: 0, weighted_expected_return_sum: 0, total_weight: 0, details: new Set() },
+                '固收': { amount: 0, cost: 0, profit: 0, lifetime_profit: 0, weighted_expected_return_sum: 0, total_weight: 0, details: new Set() },
+                '存款': { amount: 0, cost: 0, profit: 0, lifetime_profit: 0, weighted_expected_return_sum: 0, total_weight: 0, details: new Set() }
             };
             let totalValue = 0;
             
@@ -1058,6 +1058,8 @@ const app = createApp({
                 const value = h.quantity * h.last_price;
                 const cost = h.quantity * h.avg_cost;
                 const profit = value - cost + (h.total_dividend || 0);
+                const diluted = (h.diluted_cost != null && h.diluted_cost !== '') ? Number(h.diluted_cost) : Number(h.avg_cost || 0);
+                const lifetime = (Number(h.last_price || 0) - diluted) * Number(h.quantity || 0);
                 
                 totalValue += value;
                 
@@ -1066,6 +1068,7 @@ const app = createApp({
                         market_value: 0,
                         cost: 0,
                         profit: 0,
+                        lifetime_profit: 0,
                         count: 0,
                         weighted_expected_return_sum: 0,
                         total_weight: 0
@@ -1075,6 +1078,7 @@ const app = createApp({
                 categories[cat].market_value += value;
                 categories[cat].cost += cost;
                 categories[cat].profit += profit;
+                categories[cat].lifetime_profit += lifetime;
                 categories[cat].count += 1;
                 
                 const expectedReturn = (h.expected_return != null && h.expected_return !== '') ? Number(h.expected_return) : (defaultExpectedReturns[cat] || defaultExpectedReturns['未分类']);
@@ -1085,6 +1089,7 @@ const app = createApp({
                 macro.amount += value;
                 macro.cost += cost;
                 macro.profit += profit;
+                macro.lifetime_profit += lifetime;
                 macro.weighted_expected_return_sum += expectedReturn * value;
                 macro.total_weight += value;
                 macro.details.add(cat);
@@ -1093,11 +1098,12 @@ const app = createApp({
             const addSyntheticCategory = (cat, value, expectedReturn, detailCount = 1) => {
                 if (value <= 0) return;
                 if (!categories[cat]) {
-                    categories[cat] = { market_value: 0, cost: 0, profit: 0, count: 0, weighted_expected_return_sum: 0, total_weight: 0 };
+                    categories[cat] = { market_value: 0, cost: 0, profit: 0, lifetime_profit: 0, count: 0, weighted_expected_return_sum: 0, total_weight: 0 };
                 }
                 categories[cat].market_value += value;
                 categories[cat].cost += value;
                 categories[cat].profit += 0;
+                categories[cat].lifetime_profit = (categories[cat].lifetime_profit || 0) + 0;
                 categories[cat].count += detailCount;
                 categories[cat].weighted_expected_return_sum += expectedReturn * value;
                 categories[cat].total_weight += value;
@@ -1148,6 +1154,7 @@ const app = createApp({
                     market_value: data.market_value,
                     percentage: (data.market_value / totalValue) * 100,
                     profit: data.profit,
+                    lifetime_profit: data.lifetime_profit || 0,
                     profit_rate: data.cost > 0 ? (data.profit / data.cost) * 100 : 0,
                     count: data.count,
                     expected_annual_return: expectedReturn
@@ -1161,6 +1168,7 @@ const app = createApp({
                     amount: data.amount,
                     percentage: totalValue > 0 ? (data.amount / totalValue) * 100 : 0,
                     profit: data.profit,
+                    lifetime_profit: data.lifetime_profit || 0,
                     profit_rate: data.cost > 0 ? (data.profit / data.cost) * 100 : 0,
                     expected_return: data.total_weight > 0 ? data.weighted_expected_return_sum / data.total_weight : 0,
                     detail: Array.from(data.details).join('、') || '—'
