@@ -5,6 +5,23 @@
 
 ---
 
+## [2026-07-11] — Phase3 前端分包与结构优化
+
+### 构建 / 性能
+- Vite `manualChunks`：拆出 `vue` / `element-plus` / `echarts` / `axios` 缓存友好 vendor chunk
+- ECharts 改为 `echarts/core` + Line/Pie 按需注册；图表渲染 `import()` 懒加载（进入快照/配置/收益分析 tab 再拉）
+- 业务 app chunk 约 **57KB**（gzip ~18KB）；ECharts 约 **528KB**（gzip ~177KB）
+
+### 结构
+- `modules/*` 改为正式 ESM（`import api` / `element-plus`），去掉对 `window.createXxx` 的依赖
+- 抽出 `composables/authMask.js`、`composables/domainHelpers.js`（费率/分红/维护/导入导出/配置分析）
+- `main.js` 约 1364 → **780** 行；模板字段名与业务行为保持不变
+
+### 校验
+- 前端 build 通过；`pytest` **38 passed**；`check.sh` 同步 composables 检查
+
+---
+
 ## [2026-07-11] — Phase1/2 安全与增量重算
 
 ### 安全 / 性能
