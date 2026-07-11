@@ -5,6 +5,20 @@
 
 ---
 
+## [2026-07-11] — Phase3d Vue SFC + Element Plus 按需
+
+### 前端
+- 模板从 `index.html` 迁入 `App.vue`；`index.html` 仅保留挂载点与登录关键 CSS
+- Vue 改为 **runtime-only**（不再使用 `vue.esm-bundler`）
+- `@vitejs/plugin-vue` + `unplugin-vue-components` / `unplugin-auto-import` + ElementPlusResolver 按需组件
+- 去掉全量 `element-plus/dist/index.css`；消息/确认框/Loading 仍显式导入样式
+- 构建体积（约）：element-plus JS **1.0MB → 565KB**，CSS **356KB → 221KB**
+
+### 校验
+- `npm run build` 通过；`pytest` 后端不变
+
+---
+
 ## [2026-07-11] — Phase3 前端分包与结构优化
 
 ### 构建 / 性能

@@ -1,4 +1,4 @@
-import { ref, watch } from 'vue/dist/vue.esm-bundler.js';
+import { ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import api from '../api/index.js';
 

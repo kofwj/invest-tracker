@@ -1,7 +1,10 @@
-import { createApp, ref, onMounted, nextTick, watch, computed } from 'vue/dist/vue.esm-bundler.js';
-import ElementPlus, { ElLoading, ElMessage, ElMessageBox } from 'element-plus';
+import { createApp, ref, onMounted, nextTick, watch, computed } from 'vue';
+import { ElLoading, ElMessage, ElMessageBox } from 'element-plus';
 import zhCn from 'element-plus/es/locale/lang/zh-cn';
-import 'element-plus/dist/index.css';
+import 'element-plus/es/components/message/style/css';
+import 'element-plus/es/components/message-box/style/css';
+import 'element-plus/es/components/loading/style/css';
+import App from './App.vue';
 import {
     normalizeText,
     daysUntil,
@@ -39,6 +42,7 @@ const todayLocalIso = () => {
 };
 
 const app = createApp({
+    extends: App,
     setup() {
         const screenshotParams = new URLSearchParams(window.location.search);
         const screenshotTabs = ['snapshots', 'allocation', 'performance', 'holdings', 'deposits', 'transactions', 'cash'];
@@ -756,6 +760,7 @@ const app = createApp({
         });
 
         return {
+            zhCn,
             isMasked, toggleMask,
             showLoginOverlay, loginLoading, loginPassword, loginError, authEnabled, handleLogin, handleLogout,
             activeTab, dashboard, holdings, deposits, depositRows, depositSummary, depositBankBreakdown, depositMaturityBuckets, syncing, trailingSyncing, syncNotice,
@@ -776,5 +781,4 @@ const app = createApp({
         };
     }
 });
-app.use(ElementPlus, { locale: zhCn });
 app.mount('#app');

@@ -53,7 +53,8 @@ invest-tracker/
     requirements.txt
 
   frontend/
-    index.html                 # Vue 模板入口
+    index.html                 # HTML 挂载壳（#app）
+│   │   App.vue                   # 主界面 SFC 模板
     package.json               # Vite/npm 脚本
     Dockerfile                 # 多阶段构建：Vite build + Nginx
     nginx.conf                 # 前端静态托管与 /api 代理
@@ -189,8 +190,9 @@ npm run dev
 
 - 生产环境由 Dockerfile 执行 `npm run build` 生成 `dist/`，再复制到 Nginx；
 - `frontend/dist/`、`frontend/node_modules/` 已在 `.gitignore` 中排除；
-- 当前仍保留 `index.html` 内的大模板，业务逻辑已拆到 `frontend/src/modules/`；
-- 因模板仍在 HTML 中，`main.js` 使用 `vue/dist/vue.esm-bundler.js`，避免 Vue runtime-only 导致页面空白。
+- 主界面模板在 `frontend/src/App.vue`（SFC）；`index.html` 仅挂载点 + 登录关键 CSS。
+- 业务逻辑在 `frontend/src/main.js` + `modules/` + `composables/`；Vue 使用 **runtime-only**。
+- Element Plus 通过 `unplugin-vue-components` 按需引入，不再全量 CSS。
 
 ---
 
@@ -415,7 +417,7 @@ docker compose up -d --build frontend
 本项目 Vite 迁移后，`main.js` 必须使用带模板编译器的 Vue 构建：
 
 ```js
-import { createApp } from 'vue/dist/vue.esm-bundler.js';
+import { createApp } from 'vue';
 ```
 
 ### backend unhealthy

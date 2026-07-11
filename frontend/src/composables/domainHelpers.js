@@ -1,4 +1,4 @@
-import { computed, ref, watch } from 'vue/dist/vue.esm-bundler.js';
+import { computed, ref, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import api from '../api/index.js';
 import { formatMoney, inferCategoryByCode } from '../utils/index.js';

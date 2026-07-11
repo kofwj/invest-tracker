@@ -20,6 +20,7 @@ test -f frontend/package-lock.json
 test -f frontend/Dockerfile
 test -f frontend/nginx.conf
 test -f frontend/src/main.js
+test -f frontend/src/App.vue
 test -f frontend/src/styles/styles.css
 test -f frontend/src/utils/index.js
 test -f frontend/src/api/index.js
@@ -29,7 +30,11 @@ test -f frontend/src/modules/deposits.js
 test -f frontend/src/modules/cash.js
 test -f frontend/src/modules/snapshots.js
 test -f frontend/src/modules/performance.js
+test -f frontend/src/composables/authMask.js
+test -f frontend/src/composables/domainHelpers.js
 grep -q 'type="module" src="/src/main.js"' frontend/index.html
+grep -q '@vitejs/plugin-vue' frontend/package.json
+grep -q 'unplugin-vue-components' frontend/package.json
 grep -q 'vite build' frontend/package.json
 grep -q 'npm run build' frontend/Dockerfile
 grep -q 'COPY --from=build /app/dist' frontend/Dockerfile
@@ -38,17 +43,20 @@ from pathlib import Path
 html = Path('frontend/index.html').read_text(encoding='utf-8')
 assert '/src/main.js' in html, 'missing Vite frontend entry'
 assert '/assets/app.js' not in html, 'legacy app.js script should not be referenced'
-assert '<el-date-picker\n                            <el-date-picker' not in html, 'duplicate el-date-picker tag found'
+assert 'id="app"' in html, 'missing #app mount point'
+assert '<el-tabs' not in html, 'legacy inlined tabs should live in App.vue, not index.html'
 main = Path('frontend/src/main.js').read_text(encoding='utf-8')
+assert "from 'vue'" in main or 'from "vue"' in main, 'should use runtime Vue (not vue.esm-bundler)'
+assert 'vue.esm-bundler' not in main, 'full compiler build should not be used after SFC migration'
+assert "import App from './App.vue'" in main, 'missing App.vue import'
+assert 'extends: App' in main, 'root component should extend App.vue template'
+assert "element-plus/dist/index.css" not in main, 'full Element Plus CSS should not be imported after on-demand'
 for module in ['./utils/index.js', './api/index.js', './modules/transactions.js', './modules/deposits.js', './modules/cash.js', './modules/snapshots.js', './modules/performance.js', './composables/authMask.js', './composables/domainHelpers.js']:
     assert module in main, f'missing frontend module import: {module}'
-assert "./charts/index.js" in main, 'missing charts dynamic/static import reference'
-for extra in [
-    'frontend/src/composables/authMask.js',
-    'frontend/src/composables/domainHelpers.js',
-    'frontend/src/charts/index.js',
-]:
-    assert Path(extra).is_file(), f'missing {extra}'
+assert './charts/index.js' in main, 'missing charts dynamic/static import reference'
+app_vue = Path('frontend/src/App.vue').read_text(encoding='utf-8')
+for needle in ['el-tabs', 'activeTab', 'showLoginOverlay', 'holdingLifetimeProfit']:
+    assert needle in app_vue, f'missing template fragment in App.vue: {needle}'
 PY
 
 echo "==> Checking frontend build"
