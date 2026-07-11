@@ -36,6 +36,7 @@ def clear_backend_module_cache():
         'holdings',
         'cash',
         'dashboard',
+        'portfolio_totals',
         'snapshots',
         'performance',
         'routers_deposits',

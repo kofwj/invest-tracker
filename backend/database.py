@@ -49,8 +49,20 @@ def local_today_iso() -> str:
     return datetime.now(LOCAL_TZ).date().isoformat()
 
 
+def configure_sqlite_connection(conn: sqlite3.Connection) -> sqlite3.Connection:
+    """Apply pragmatic defaults for a multi-request personal SQLite app."""
+    # WAL improves concurrent read during writes (sync prices / UI).
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
+    conn.execute("PRAGMA foreign_keys=ON")
+    # NORMAL is a good durability/speed tradeoff for local personal data.
+    conn.execute("PRAGMA synchronous=NORMAL")
+    return conn
+
+
 def open_db(*, row_factory=None):
     conn = sqlite3.connect(DB_PATH)
+    configure_sqlite_connection(conn)
     if row_factory is not None:
         conn.row_factory = row_factory
     return conn
@@ -58,15 +70,23 @@ def open_db(*, row_factory=None):
 
 @contextmanager
 def db_session(*, row_factory=None):
+    """Connection context that always closes and rolls back on error."""
     conn = open_db(row_factory=row_factory)
     try:
         yield conn
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
     finally:
         conn.close()
 
 
 def get_db_connection(db_path: str, *, row_factory=None):
     conn = sqlite3.connect(db_path)
+    configure_sqlite_connection(conn)
     if row_factory is not None:
         conn.row_factory = row_factory
     return conn

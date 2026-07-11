@@ -63,7 +63,11 @@ const holdingFloatProfit = (row) => {
 const holdingLifetimeProfit = (row) => {
     const qty = Number(row?.quantity || 0);
     const last = Number(row?.last_price || 0);
-    const diluted = Number(row?.diluted_cost || 0);
+    // 摊薄成本缺省时回退普通成本，与后端口径一致
+    const dilutedRaw = row?.diluted_cost;
+    const diluted = (dilutedRaw === null || dilutedRaw === undefined || dilutedRaw === '')
+        ? Number(row?.avg_cost || 0)
+        : Number(dilutedRaw);
     // 全周期 ≈ 市值 - 净投入；摊薄成本 = 净投入/数量，故 (现价-摊薄)*数量
     // 分红已体现在 net_invested/摊薄成本中，不再重复加 total_dividend
     return (last - diluted) * qty;

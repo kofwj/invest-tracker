@@ -1,11 +1,11 @@
 from datetime import datetime
 
 try:
-    from .cash import cash_flow_adjustment, ensure_cash_base, get_setting_float, transaction_cash_flow
     from .database import LOCAL_TZ
+    from .portfolio_totals import compute_portfolio_totals, holding_lifetime_profit
 except ImportError:
-    from cash import cash_flow_adjustment, ensure_cash_base, get_setting_float, transaction_cash_flow
     from database import LOCAL_TZ
+    from portfolio_totals import compute_portfolio_totals, holding_lifetime_profit
 
 
 def _local_today():
@@ -48,24 +48,21 @@ def calculate_xirr(cashflows, guess=0.05, tol=1e-7, max_iter=1000):
 
 
 def get_total_assets_perf(conn):
-    holdings = conn.execute("SELECT * FROM holdings WHERE quantity > 0").fetchall()
-    deposits = conn.execute("SELECT SUM(amount) as total FROM deposits").fetchone()
-    pending_row = conn.execute(
-        "SELECT SUM(amount + COALESCE(fee, 0)) as total FROM transactions WHERE direction IN ('申购待确认', '待确认申购')"
-    ).fetchone()
-    ensure_cash_base(conn)
-    base = get_setting_float(conn, "securities_cash_base", 0.0)
-    tx_flow = transaction_cash_flow(conn)
-    manual_flow = cash_flow_adjustment(conn)
-    cash = base + manual_flow + tx_flow
-    bank = (deposits["total"] or 0) if deposits else 0
-    market = sum(dict(h)["quantity"] * dict(h)["last_price"] for h in holdings)
-    pending = float(pending_row["total"] or 0) if pending_row else 0
-    return market + cash + bank + pending, market, cash, bank, pending
+    totals = compute_portfolio_totals(conn)
+    return (
+        totals["total_assets"],
+        totals["total_market_value"],
+        totals["securities_cash"],
+        totals["bank_balance"],
+        totals["pending_purchase"],
+    )
 
 
 def build_performance_summary(conn):
-    total_assets, market_value, cash, bank, pending = get_total_assets_perf(conn)
+    totals = compute_portfolio_totals(conn)
+    total_assets = totals["total_assets"]
+    pending = totals["pending_purchase"]
+    holdings = totals["holdings"]
 
     flows = conn.execute("SELECT * FROM portfolio_cash_flows ORDER BY date, id").fetchall()
     flows = [dict(f) for f in flows]
@@ -93,14 +90,16 @@ def build_performance_summary(conn):
 
     xirr_val, xirr_status, xirr_msg = calculate_xirr(xirr_flows)
 
-    holdings = conn.execute("SELECT * FROM holdings WHERE quantity > 0").fetchall()
-    unrealized = sum((dict(h)["last_price"] - dict(h)["avg_cost"]) * dict(h)["quantity"] for h in holdings)
-    total_dividend = sum(dict(h)["total_dividend"] for h in holdings)
-    lifetime_profit = 0.0
+    # 未实现浮盈（不含分红）；分红单独列；全周期用摊薄成本
+    unrealized = 0.0
+    total_dividend = 0.0
     for h in holdings:
-        h = dict(h)
-        diluted = h["diluted_cost"] if h["diluted_cost"] is not None else h["avg_cost"]
-        lifetime_profit += (h["last_price"] - diluted) * h["quantity"]
+        qty = float(h["quantity"] or 0)
+        last = float(h["last_price"] or 0)
+        avg = float(h["avg_cost"] or 0)
+        unrealized += (last - avg) * qty
+        total_dividend += float(h["total_dividend"] or 0)
+    lifetime_profit = totals["lifetime_profit"]
 
     ytd_start = today.replace(month=1, day=1)
     ytd_snap = conn.execute(
@@ -185,23 +184,25 @@ def build_performance_contribution(conn):
 
     rows = []
     for h in holdings:
-        h = dict(h)
-        market_value = h["quantity"] * h["last_price"]
-        unrealized = (h["last_price"] - h["avg_cost"]) * h["quantity"]
-        dividend = h["total_dividend"]
+        qty = float(h["quantity"] or 0)
+        last = float(h["last_price"] or 0)
+        avg = float(h["avg_cost"] or 0)
+        market_value = qty * last
+        unrealized = (last - avg) * qty
+        dividend = float(h["total_dividend"] or 0)
         total_contribution = unrealized + dividend
-        diluted = h["diluted_cost"] if h["diluted_cost"] is not None else h["avg_cost"]
-        lifetime_profit = (h["last_price"] - diluted) * h["quantity"]
+        diluted = h["diluted_cost"] if h["diluted_cost"] is not None else avg
+        lifetime_profit = holding_lifetime_profit(h)
         rows.append(
             {
                 "code": h["code"],
                 "name": h["name"],
-                "category": h.get("category", ""),
-                "quantity": h["quantity"],
+                "category": h["category"] if "category" in h.keys() else "",
+                "quantity": qty,
                 "market_value": round(market_value, 2),
-                "avg_cost": round(h["avg_cost"], 4),
+                "avg_cost": round(avg, 4),
                 "diluted_cost": round(float(diluted or 0), 4),
-                "last_price": round(h["last_price"], 4),
+                "last_price": round(last, 4),
                 "unrealized_profit": round(unrealized, 2),
                 "dividend_income": round(dividend, 2),
                 "total_contribution": round(total_contribution, 2),

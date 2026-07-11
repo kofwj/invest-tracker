@@ -5,6 +5,22 @@
 
 ---
 
+## [2026-07-11] — 代码层优化
+
+### 优化
+
+- 新增 `backend/portfolio_totals.py`：首页与收益分析共用市值/现金/待确认/浮盈/全周期汇总，避免双份公式漂移
+- SQLite 连接统一 `WAL` + `busy_timeout` + `foreign_keys` + `synchronous=NORMAL`；`db_session` 异常时 rollback
+- dashboard / performance / deposits / fee-settings 路由统一 `db_session`，减少连接泄漏
+- 登录密码改为长度安全的 `hmac.compare_digest`
+- 前端 `holdingLifetimeProfit`：摊薄成本缺省时回退普通成本，与后端一致
+
+### 测试
+
+- 新增 `tests/test_portfolio_totals.py`；全量 **33 passed**
+
+---
+
 ## [2026-07-11]
 
 ### 新增
