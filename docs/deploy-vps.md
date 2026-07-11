@@ -92,11 +92,45 @@ Authorization callback URL: https://invest.example.com/oauth2/callback
 
 ### 4.2 生成 Cookie Secret
 
-在本机或 VPS 执行：
+`oauth2-proxy` 要求 `cookie_secret` **解码后** 正好是 16 / 24 / 32 字节。
+
+推荐生成方式（32 字节原始密钥，再 base64url；结果通常 43 字符且无 `=` 填充）：
 
 ```bash
 python3 -c 'import os,base64; print(base64.urlsafe_b64encode(os.urandom(32)).decode())'
 ```
+
+校验当前 `.env` 里 secret 是否合法（应打印 `decoded_bytes= 32 ok`）：
+
+```bash
+python3 - <<'PY'
+import base64
+from pathlib import Path
+for line in Path('.env').read_text().splitlines():
+    if line.startswith('OAUTH2_PROXY_COOKIE_SECRET='):
+        s = line.split('=', 1)[1].strip().strip('"').strip("'")
+        raw = base64.urlsafe_b64decode(s + '=' * (-len(s) % 4))
+        print('decoded_bytes=', len(raw), 'ok' if len(raw) in (16, 24, 32) else 'BAD')
+        break
+else:
+    print('missing OAUTH2_PROXY_COOKIE_SECRET in .env')
+PY
+```
+
+常见错误：
+
+- 把 hex / 普通随机串直接当 secret（未按 base64 语义）→ 长度不对；
+- secret 两侧加了引号、行尾有空格 → 日志常报 `but is 33/34 bytes`；
+- 日志 `cookie_secret must be 16, 24, or 32 bytes ... but is 34 bytes`：请重新生成并整行替换。
+
+改 secret 后执行：
+
+```bash
+docker compose -f docker-compose.prod.yml up -d oauth2-proxy
+docker compose -f docker-compose.prod.yml ps oauth2-proxy
+```
+
+已登录用户需重新走 GitHub 授权。
 
 ### 4.3 配置 `.env`
 
@@ -108,7 +142,7 @@ GITHUB_OAUTH_ALLOWED_USER=你的GitHub用户名
 OAUTH2_PROXY_COOKIE_SECRET=上一步生成的随机字符串
 ```
 
-注意：真实 `.env` 不要提交到 Git。
+注意：真实 `.env` 不要提交到 Git。值两侧不要加引号，行尾不要留空格。
 
 ### 4.4 启动带鉴权的生产服务
 

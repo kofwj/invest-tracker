@@ -62,11 +62,16 @@ echo "== 3. Compose 服务 =="
 if command -v docker >/dev/null 2>&1; then
   if docker compose -f "$COMPOSE_FILE" ps >/tmp/invest-tracker-ps.$$ 2>/dev/null; then
     cat /tmp/invest-tracker-ps.$$
-    for svc in backend frontend; do
+    for svc in backend frontend oauth2-proxy caddy; do
       if docker compose -f "$COMPOSE_FILE" ps --status running --services 2>/dev/null | grep -qx "$svc"; then
         ok "${svc} 运行中"
       else
-        bad "${svc} 未运行"
+        # oauth2-proxy 崩溃时域名登录会挂，本机 8080 仍可能 healthy
+        if [ "$svc" = "oauth2-proxy" ] || [ "$svc" = "caddy" ]; then
+          bad "${svc} 未运行（看 logs: docker compose -f $COMPOSE_FILE logs --tail=50 $svc）"
+        else
+          bad "${svc} 未运行"
+        fi
       fi
     done
   else
@@ -75,6 +80,32 @@ if command -v docker >/dev/null 2>&1; then
   rm -f /tmp/invest-tracker-ps.$$
 else
   warn "本机无 docker，跳过容器检查"
+fi
+
+echo
+echo "== 3b. OAuth cookie secret 长度 =="
+if [ -n "${OAUTH2_PROXY_COOKIE_SECRET:-}" ]; then
+  SECRET_LEN_MSG="$(python3 - <<'PY'
+import base64, os
+s = os.environ.get("OAUTH2_PROXY_COOKIE_SECRET", "").strip().strip('"').strip("'")
+try:
+    raw = base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))
+    n = len(raw)
+except Exception as e:
+    print(f"decode_error: {e}")
+    raise SystemExit(0)
+print(n)
+PY
+)" || SECRET_LEN_MSG="error"
+  case "$SECRET_LEN_MSG" in
+    16|24|32) ok "OAUTH2_PROXY_COOKIE_SECRET 解码后 ${SECRET_LEN_MSG} 字节" ;;
+    *)
+      bad "OAUTH2_PROXY_COOKIE_SECRET 非法（解码后应为 16/24/32 字节，当前: ${SECRET_LEN_MSG}）"
+      warn "修复: python3 -c 'import os,base64; print(base64.urlsafe_b64encode(os.urandom(32)).decode())' 写入 .env 后 up -d oauth2-proxy"
+      ;;
+  esac
+else
+  warn "未从 .env 读到 OAUTH2_PROXY_COOKIE_SECRET（若 compose 用 env_file 仍可能生效）"
 fi
 
 echo
