@@ -1,3 +1,24 @@
+import * as echarts from 'echarts/core';
+import { LineChart, PieChart } from 'echarts/charts';
+import {
+    TitleComponent,
+    TooltipComponent,
+    LegendComponent,
+    GridComponent,
+} from 'echarts/components';
+import { CanvasRenderer } from 'echarts/renderers';
+import { formatMoney } from '../utils/index.js';
+
+echarts.use([
+    LineChart,
+    PieChart,
+    TitleComponent,
+    TooltipComponent,
+    LegendComponent,
+    GridComponent,
+    CanvasRenderer,
+]);
+
 let allocationChart = null;
 let categoryChart = null;
 let snapshotTrendChart = null;
@@ -91,4 +112,14 @@ const renderPerfTimelineChartView = (perfTimeline = []) => {
     });
 };
 
-Object.assign(window, { renderSnapshotChartsView, renderAllocationChartsView, renderPerfTimelineChartView });
+export {
+    renderSnapshotChartsView,
+    renderAllocationChartsView,
+    renderPerfTimelineChartView,
+};
+
+export default {
+    renderSnapshotChartsView,
+    renderAllocationChartsView,
+    renderPerfTimelineChartView,
+};

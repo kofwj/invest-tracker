@@ -40,8 +40,15 @@ assert '/src/main.js' in html, 'missing Vite frontend entry'
 assert '/assets/app.js' not in html, 'legacy app.js script should not be referenced'
 assert '<el-date-picker\n                            <el-date-picker' not in html, 'duplicate el-date-picker tag found'
 main = Path('frontend/src/main.js').read_text(encoding='utf-8')
-for module in ['./utils/index.js', './api/index.js', './charts/index.js', './modules/transactions.js', './modules/deposits.js', './modules/cash.js', './modules/snapshots.js', './modules/performance.js']:
+for module in ['./utils/index.js', './api/index.js', './modules/transactions.js', './modules/deposits.js', './modules/cash.js', './modules/snapshots.js', './modules/performance.js', './composables/authMask.js', './composables/domainHelpers.js']:
     assert module in main, f'missing frontend module import: {module}'
+assert "./charts/index.js" in main, 'missing charts dynamic/static import reference'
+for extra in [
+    'frontend/src/composables/authMask.js',
+    'frontend/src/composables/domainHelpers.js',
+    'frontend/src/charts/index.js',
+]:
+    assert Path(extra).is_file(), f'missing {extra}'
 PY
 
 echo "==> Checking frontend build"
@@ -62,6 +69,8 @@ if command -v node >/dev/null 2>&1; then
   node --check frontend/src/modules/cash.js
   node --check frontend/src/modules/snapshots.js
   node --check frontend/src/modules/performance.js
+  node --check frontend/src/composables/authMask.js
+  node --check frontend/src/composables/domainHelpers.js
 else
   echo "node not found; skipping frontend JavaScript syntax check"
 fi

@@ -1,3 +1,7 @@
+import api from '../api/index.js';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import { formatMoney } from '../utils/index.js';
+
 const createSnapshotsModule = ({
     activeTab,
     snapshots,
@@ -14,12 +18,12 @@ const createSnapshotsModule = ({
         try {
             const res = await api.createSnapshot();
             const action = res.data?.action === 'updated' ? '已更新今日快照' : '今日快照已记录';
-            ElementPlus.ElMessage.success(action);
+            ElMessage.success(action);
             await fetchData();
             await fetchSnapshots();
         } catch (e) {
             const detail = e?.response?.data?.detail || e?.message || '记录失败';
-            ElementPlus.ElMessage.error(detail);
+            ElMessage.error(detail);
         } finally {
             snapshotLoading.value = false;
         }
@@ -63,7 +67,10 @@ const createSnapshotsModule = ({
         })) : [];
     };
 
-    const renderSnapshotCharts = () => renderSnapshotChartsView(snapshots.value);
+    const renderSnapshotCharts = async () => {
+        const { renderSnapshotChartsView: render } = await import('../charts/index.js');
+        render(snapshots.value);
+    };
 
     const exportSnapshots = async () => {
         try {
@@ -81,20 +88,20 @@ const createSnapshotsModule = ({
             document.body.removeChild(link);
             window.URL.revokeObjectURL(blobUrl);
         } catch (e) {
-            ElementPlus.ElMessage.error('导出快照失败：' + (e?.response?.data?.detail || e?.message || '未知错误'));
+            ElMessage.error('导出快照失败：' + (e?.response?.data?.detail || e?.message || '未知错误'));
         }
     };
 
     const compactSnapshots = async () => {
         try {
-            await ElementPlus.ElMessageBox.confirm('压缩会自动备份数据库：最近365天保留每日快照，更早保留每周/每月代表快照。确定继续？', '压缩历史快照', { type: 'warning' });
+            await ElMessageBox.confirm('压缩会自动备份数据库：最近365天保留每日快照，更早保留每周/每月代表快照。确定继续？', '压缩历史快照', { type: 'warning' });
             const res = await api.compactSnapshots();
             const data = res.data || {};
-            ElementPlus.ElMessage.success(`快照压缩完成：删除 ${data.deleted || 0} 条，剩余 ${data.after || 0} 条`);
+            ElMessage.success(`快照压缩完成：删除 ${data.deleted || 0} 条，剩余 ${data.after || 0} 条`);
             await fetchSnapshots();
         } catch (e) {
             if (e === 'cancel') return;
-            ElementPlus.ElMessage.error('压缩快照失败：' + (e?.response?.data?.detail || e?.message || '未知错误'));
+            ElMessage.error('压缩快照失败：' + (e?.response?.data?.detail || e?.message || '未知错误'));
         }
     };
 
@@ -116,4 +123,5 @@ const createSnapshotsModule = ({
     return { createSnapshot, buildSnapshotAnalysis, renderSnapshotCharts, fetchSnapshots, exportSnapshots, compactSnapshots };
 };
 
-window.createSnapshotsModule = createSnapshotsModule;
+export { createSnapshotsModule };
+export default createSnapshotsModule;

@@ -1,3 +1,6 @@
+import api from '../api/index.js';
+import { ElMessage, ElMessageBox } from 'element-plus';
+
 const createTransactionsModule = ({
     activeTab,
     allTransactions,
@@ -33,17 +36,17 @@ const createTransactionsModule = ({
         try {
             const payload = { ...transForm.value };
             await api.addTransaction(payload);
-            ElementPlus.ElMessage.success('录入成功');
+            ElMessage.success('录入成功');
             await fetchData();
             resetForm();
-        } catch (e) { ElementPlus.ElMessage.error('录入失败'); }
+        } catch (e) { ElMessage.error('录入失败'); }
     };
 
     const showTransactions = async (row) => {
         try {
             const res = await api.listTransactionsByCode(row.code);
             transDialog.value = { visible: true, title: `${row.name} (${row.code}) 交易记录`, transactions: res.data };
-        } catch (e) { ElementPlus.ElMessage.error('获取交易记录失败'); }
+        } catch (e) { ElMessage.error('获取交易记录失败'); }
     };
 
     const updatePendingTransactions = () => {
@@ -81,7 +84,7 @@ const createTransactionsModule = ({
             filteredTransactions.value = items;
             transPage.value.total = Array.isArray(data) ? items.length : Number(data.total || 0);
             updatePendingTransactions();
-        } catch (e) { ElementPlus.ElMessage.error('获取交易记录失败'); }
+        } catch (e) { ElMessage.error('获取交易记录失败'); }
     };
 
     const resetTransQuery = async () => {
@@ -131,18 +134,18 @@ const createTransactionsModule = ({
     const saveTransactionEdit = async () => {
         try {
             await api.updateTransaction(transEditDialog.value.editId, transEditDialog.value.form);
-            ElementPlus.ElMessage.success('更新成功');
+            ElMessage.success('更新成功');
             transEditDialog.value.visible = false;
             await queryTransactions();
             await fetchData();
-        } catch (e) { ElementPlus.ElMessage.error('更新失败'); }
+        } catch (e) { ElMessage.error('更新失败'); }
     };
 
     const deleteTransaction = async (row) => {
         try {
-            await ElementPlus.ElMessageBox.confirm(`确定删除 ${row.date} ${row.name} ${row.direction} ${row.quantity}股的记录？`, '确认删除', { type: 'warning' });
+            await ElMessageBox.confirm(`确定删除 ${row.date} ${row.name} ${row.direction} ${row.quantity}股的记录？`, '确认删除', { type: 'warning' });
             await api.deleteTransaction(row.id);
-            ElementPlus.ElMessage.success('已删除');
+            ElMessage.success('已删除');
             await queryTransactions();
             await fetchData();
         } catch (e) { /* 用户取消 */ }
@@ -151,4 +154,5 @@ const createTransactionsModule = ({
     return { submitTrans, resetForm, showTransactions, updatePendingTransactions, queryTransactions, applyTransFilter, resetTransQuery, handleTransPageChange, handleTransPageSizeChange, goPendingTransactions, openTransEditDialog, saveTransactionEdit, deleteTransaction };
 };
 
-window.createTransactionsModule = createTransactionsModule;
+export { createTransactionsModule };
+export default createTransactionsModule;

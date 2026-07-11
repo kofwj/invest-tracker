@@ -1,3 +1,7 @@
+import api from '../api/index.js';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import { formatMoney } from '../utils/index.js';
+
 const createDepositsModule = ({ depositDialog, fetchData }) => {
     const openDepositDialog = (row) => {
         if (row) {
@@ -18,21 +22,21 @@ const createDepositsModule = ({ depositDialog, fetchData }) => {
         try {
             if (depositDialog.value.isEdit) {
                 await api.updateDeposit(depositDialog.value.editId, f);
-                ElementPlus.ElMessage.success('更新成功');
+                ElMessage.success('更新成功');
             } else {
                 await api.addDeposit(f);
-                ElementPlus.ElMessage.success('新增成功');
+                ElMessage.success('新增成功');
             }
             depositDialog.value.visible = false;
             await fetchData();
-        } catch (e) { ElementPlus.ElMessage.error('操作失败'); }
+        } catch (e) { ElMessage.error('操作失败'); }
     };
 
     const deleteDeposit = async (row) => {
         try {
-            await ElementPlus.ElMessageBox.confirm('确定删除 ' + row.bank_name + ' 的 ' + formatMoney(row.amount) + '？', '确认删除', { type: 'warning' });
+            await ElMessageBox.confirm('确定删除 ' + row.bank_name + ' 的 ' + formatMoney(row.amount) + '？', '确认删除', { type: 'warning' });
             await api.deleteDeposit(row.id);
-            ElementPlus.ElMessage.success('已删除');
+            ElMessage.success('已删除');
             await fetchData();
         } catch (e) { /* 用户取消 */ }
     };
@@ -40,4 +44,5 @@ const createDepositsModule = ({ depositDialog, fetchData }) => {
     return { openDepositDialog, saveDeposit, deleteDeposit };
 };
 
-window.createDepositsModule = createDepositsModule;
+export { createDepositsModule };
+export default createDepositsModule;

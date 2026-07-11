@@ -1,3 +1,7 @@
+import api from '../api/index.js';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import { formatMoney } from '../utils/index.js';
+
 const createCashModule = ({ dashboard, cashForm, cashFlows, cashFlowForm, cashFlowQuery, cashFlowEditDialog, activeFeeAccount, fetchData, computed }) => {
     const queryCashFlows = async () => {
         try {
@@ -11,7 +15,7 @@ const createCashModule = ({ dashboard, cashForm, cashFlows, cashFlowForm, cashFl
             if (q.flow_type) params.push(`flow_type=${encodeURIComponent(q.flow_type)}`);
             const res = await api.listCashFlows(params);
             cashFlows.value = res.data || [];
-        } catch (e) { ElementPlus.ElMessage.error('获取资金流水失败'); }
+        } catch (e) { ElMessage.error('获取资金流水失败'); }
     };
 
     const updateCash = async () => {
@@ -19,10 +23,10 @@ const createCashModule = ({ dashboard, cashForm, cashFlows, cashFlowForm, cashFl
             const before = Number(dashboard.value.securities_cash || 0);
             const after = Number(cashForm.value.amount || 0);
             await api.updateSecuritiesCash(after);
-            ElementPlus.ElMessage.success(`证券现金已校准，差额 ${formatMoney(after - before, 2, true)} 已写入资金流水`);
+            ElMessage.success(`证券现金已校准，差额 ${formatMoney(after - before, 2, true)} 已写入资金流水`);
             await fetchData();
             await queryCashFlows();
-        } catch (e) { ElementPlus.ElMessage.error('更新失败'); }
+        } catch (e) { ElMessage.error('更新失败'); }
     };
 
     const resetCashFlowQuery = async () => {
@@ -45,14 +49,14 @@ const createCashModule = ({ dashboard, cashForm, cashFlows, cashFlowForm, cashFl
 
     const addCashFlow = async () => {
         try {
-            if (!cashFlowForm.value.date) return ElementPlus.ElMessage.warning('请选择日期');
-            if (!cashFlowForm.value.amount) return ElementPlus.ElMessage.warning('请输入金额');
+            if (!cashFlowForm.value.date) return ElMessage.warning('请选择日期');
+            if (!cashFlowForm.value.amount) return ElMessage.warning('请输入金额');
             await api.addCashFlow(cashFlowForm.value);
-            ElementPlus.ElMessage.success('资金流水已新增');
+            ElMessage.success('资金流水已新增');
             cashFlowForm.value = { date: new Date().toISOString().split('T')[0], account: cashFlowForm.value.account || activeFeeAccount.value || '华泰证券', flow_type: '银证转入', amount: 0, remark: '' };
             await fetchData();
             await queryCashFlows();
-        } catch (e) { ElementPlus.ElMessage.error('新增资金流水失败'); }
+        } catch (e) { ElMessage.error('新增资金流水失败'); }
     };
 
     const openCashFlowEditDialog = (row) => {
@@ -62,18 +66,18 @@ const createCashModule = ({ dashboard, cashForm, cashFlows, cashFlowForm, cashFl
     const saveCashFlowEdit = async () => {
         try {
             await api.updateCashFlow(cashFlowEditDialog.value.editId, cashFlowEditDialog.value.form);
-            ElementPlus.ElMessage.success('资金流水已更新');
+            ElMessage.success('资金流水已更新');
             cashFlowEditDialog.value.visible = false;
             await fetchData();
             await queryCashFlows();
-        } catch (e) { ElementPlus.ElMessage.error('更新资金流水失败'); }
+        } catch (e) { ElMessage.error('更新资金流水失败'); }
     };
 
     const deleteCashFlow = async (row) => {
         try {
-            await ElementPlus.ElMessageBox.confirm(`确定删除 ${row.date} ${row.flow_type} ${formatMoney(row.amount, 2, true)}？`, '确认删除', { type: 'warning' });
+            await ElMessageBox.confirm(`确定删除 ${row.date} ${row.flow_type} ${formatMoney(row.amount, 2, true)}？`, '确认删除', { type: 'warning' });
             await api.deleteCashFlow(row.id);
-            ElementPlus.ElMessage.success('资金流水已删除');
+            ElMessage.success('资金流水已删除');
             await fetchData();
             await queryCashFlows();
         } catch (e) {}
@@ -82,4 +86,5 @@ const createCashModule = ({ dashboard, cashForm, cashFlows, cashFlowForm, cashFl
     return { updateCash, queryCashFlows, resetCashFlowQuery, cashFlowSummary, cashFlowTagType, addCashFlow, openCashFlowEditDialog, saveCashFlowEdit, deleteCashFlow };
 };
 
-window.createCashModule = createCashModule;
+export { createCashModule };
+export default createCashModule;

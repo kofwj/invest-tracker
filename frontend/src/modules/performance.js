@@ -1,3 +1,6 @@
+import api from '../api/index.js';
+import { formatMoney } from '../utils/index.js';
+
 const createPerformanceModule = ({
     perfSummary,
     perfTimeline,
@@ -194,7 +197,10 @@ const createPerformanceModule = ({
         };
     };
 
-    const renderPerfChart = () => renderPerfTimelineChartView(perfTimeline.value);
+    const renderPerfChart = async () => {
+        const { renderPerfTimelineChartView } = await import('../charts/index.js');
+        renderPerfTimelineChartView(perfTimeline.value);
+    };
 
     async function fetchPerformance() {
         perfLoading.value = true;
@@ -251,4 +257,5 @@ const createPerformanceModule = ({
     };
 };
 
-window.createPerformanceModule = createPerformanceModule;
+export { createPerformanceModule };
+export default createPerformanceModule;
