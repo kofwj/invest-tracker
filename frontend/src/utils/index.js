@@ -87,3 +87,16 @@ const holdingLifetimeProfitRate = (row) => {
 };
 
 Object.assign(window, { normalizeText, daysUntil, formatMoney, formatPercent, pct, inferCategoryByCode, holdingFloatProfit, holdingLifetimeProfit, holdingFloatProfitRate, holdingLifetimeProfitRate });
+
+export {
+    normalizeText,
+    daysUntil,
+    formatMoney,
+    formatPercent,
+    pct,
+    inferCategoryByCode,
+    holdingFloatProfit,
+    holdingLifetimeProfit,
+    holdingFloatProfitRate,
+    holdingLifetimeProfitRate,
+};

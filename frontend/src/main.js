@@ -5,7 +5,17 @@ import 'element-plus/dist/index.css';
 import axios from 'axios';
 import * as echarts from 'echarts';
 import './styles/styles.css';
-import './utils/index.js';
+import {
+    normalizeText,
+    daysUntil,
+    formatMoney,
+    formatPercent,
+    pct,
+    holdingFloatProfit,
+    holdingLifetimeProfit,
+    holdingFloatProfitRate,
+    holdingLifetimeProfitRate,
+} from './utils/index.js';
 import api from './api/index.js';
 import './charts/index.js';
 import './modules/transactions.js';
@@ -1331,7 +1341,7 @@ const app = createApp({
             openDepositDialog, saveDeposit, deleteDeposit, updateCash, queryCashFlows, resetCashFlowQuery, addCashFlow, openCashFlowEditDialog, saveCashFlowEdit, deleteCashFlow, cashFlowTagType,
             createSnapshot, fetchSnapshots, exportSnapshots, compactSnapshots, showTransactions,
             queryTransactions, applyTransFilter, resetTransQuery, handleTransPageChange, handleTransPageSizeChange, goPendingTransactions, openTransEditDialog, saveTransactionEdit, deleteTransaction,
-            openExpectedReturnDialog, saveExpectedReturn, openHoldingCorrectionDialog, saveHoldingCorrection, openHoldingCorrectionHistory, deleteHoldingCorrection, formatMoney, formatPercent, pct,
+            openExpectedReturnDialog, saveExpectedReturn, openHoldingCorrectionDialog, saveHoldingCorrection, openHoldingCorrectionHistory, deleteHoldingCorrection, formatMoney, formatPercent, pct, holdingFloatProfit, holdingLifetimeProfit, holdingFloatProfitRate, holdingLifetimeProfitRate,
             perfSummary, perfTimeline, perfContribution, perfFlows, perfLoading, perfFlowForm, perfCards,
             displayedPerfContribution, perfContributionFilter, perfContributionSort, perfContributionHeadline, perfContributionMix,
             fetchPerformance, addPerfFlow, deletePerfFlow, contributionBarStyle, fetchMaintenance, createDbBackup, downloadBackup, restoreBackup, deleteBackup, restoreUploadedBackup
