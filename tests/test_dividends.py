@@ -135,24 +135,101 @@ def test_dividend_confirm_writes_transaction_and_dedupes(client, app_module, mon
     assert conf2.json()["skipped_count"] == len(new_items)
 
 
-def test_dividend_scan_skips_etf(client, app_module, monkeypatch):
+def _fund_market_rows(code="513530", per_share=0.01):
+    today = date.today()
+    # Sina-normalized shape used by fetch_sina_fund_dividends
+    return [
+        {
+            "SECURITY_CODE": code,
+            "SECURITY_NAME_ABBR": "",
+            "IMPL_PLAN_PROFILE": f"每份派{per_share:g}元",
+            "PRETAX_BONUS_RMB": per_share * 10,
+            "EQUITY_RECORD_DATE": (today - timedelta(days=12)).isoformat(),
+            "EX_DIVIDEND_DATE": (today - timedelta(days=5)).isoformat(),
+            "ASSIGN_PROGRESS": "实施分配",
+            "NOTICE_DATE": (today - timedelta(days=12)).isoformat(),
+            "_source": "sina_fund_fh",
+            "_cash_per_share": per_share,
+        },
+        {
+            "SECURITY_CODE": code,
+            "SECURITY_NAME_ABBR": "",
+            "IMPL_PLAN_PROFILE": f"每份派{per_share:g}元",
+            "PRETAX_BONUS_RMB": per_share * 10,
+            "EQUITY_RECORD_DATE": (today - timedelta(days=40)).isoformat(),
+            "EX_DIVIDEND_DATE": (today - timedelta(days=35)).isoformat(),
+            "ASSIGN_PROGRESS": "实施分配",
+            "NOTICE_DATE": (today - timedelta(days=40)).isoformat(),
+            "_source": "sina_fund_fh",
+            "_cash_per_share": per_share,
+        },
+    ]
+
+
+def test_dividend_scan_listed_fund_uses_sina_source(client, app_module, monkeypatch):
     import dividend_sync
 
     with app_module.get_db_connection(app_module.DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
-        _seed_holding(conn, code="159352", name="A500ETF", qty=10000, category="A股ETF")
+        _seed_holding(conn, code="513530", name="港股通红利ETF", qty=10000, category="港股ETF")
+        _seed_holding(conn, code="508056", name="中金普洛斯REIT", qty=2000, category="REITs")
+        # open-end short bond should remain unsupported
+        _seed_holding(conn, code="002864", name="某短债", qty=1000, category="债基")
         conn.commit()
 
-    called = {"n": 0}
+    equity_called = {"n": 0}
+    fund_called = {"codes": []}
 
-    def fake_fetch(code, page_size=30):
-        called["n"] += 1
+    def fake_equity(code, page_size=30):
+        equity_called["n"] += 1
         return _market_rows()
 
-    monkeypatch.setattr(dividend_sync, "fetch_eastmoney_share_bonus", fake_fetch)
+    def fake_fund(code, page_size=40):
+        fund_called["codes"].append(code)
+        if code == "513530":
+            return _fund_market_rows("513530", 0.01)
+        if code == "508056":
+            return _fund_market_rows("508056", 0.04)
+        return []
+
+    monkeypatch.setattr(dividend_sync, "fetch_eastmoney_share_bonus", fake_equity)
+    monkeypatch.setattr(dividend_sync, "fetch_sina_fund_dividends", fake_fund)
+
+    res = client.post("/dividends/scan", json={"lookback_days": 120})
+    assert res.status_code == 200
+    data = res.json()
+    assert data["summary"]["scanned_fund_holdings"] == 2
+    assert data["summary"]["unsupported_holdings"] == 1
+    assert equity_called["n"] == 0
+    assert set(fund_called["codes"]) == {"513530", "508056"}
+
+    drafts = data["drafts"]
+    assert len(drafts) == 4  # 2 codes * 2 events
+    by_code = {}
+    for d in drafts:
+        by_code.setdefault(d["code"], []).append(d)
+    # 10000 * 0.01 = 100
+    hk = [d for d in by_code["513530"] if d["status"] == "new"]
+    assert hk
+    assert abs(hk[0]["amount"] - 100) < 0.01
+    assert hk[0]["source"] == "sina_fund_fh"
+    # 2000 * 0.04 = 80
+    reit = [d for d in by_code["508056"] if d["status"] == "new"]
+    assert reit
+    assert abs(reit[0]["amount"] - 80) < 0.01
+
+
+def test_dividend_scan_skips_open_end_bond(client, app_module, monkeypatch):
+    import dividend_sync
+
+    with app_module.get_db_connection(app_module.DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        _seed_holding(conn, code="002864", name="某短债", qty=1000, category="债基")
+        conn.commit()
+
+    monkeypatch.setattr(dividend_sync, "fetch_sina_fund_dividends", lambda code, page_size=40: (_ for _ in ()).throw(AssertionError("should not fetch")))
     res = client.post("/dividends/scan", json={"lookback_days": 120})
     assert res.status_code == 200
     data = res.json()
     assert data["summary"]["scanned_holdings"] == 0
     assert data["summary"]["unsupported_holdings"] == 1
-    assert called["n"] == 0

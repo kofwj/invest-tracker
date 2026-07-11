@@ -1591,7 +1591,7 @@
         <!-- 半自动分红草稿 -->
         <el-dialog v-model="dividendDialog.visible" title="半自动分红草稿" width="1080px" top="5vh">
             <el-alert
-                title="仅支持 A 股个股现金分红。系统会按股权登记日持仓估算金额，并自动识别交易流水里已有的分红/分红再投资，避免重复入账。ETF/债基/REIT 请继续手工录入。"
+                title="支持 A 股个股 + 场内 ETF/港股ETF/REIT 现金分红草稿。按权益登记日持仓估算金额，并自动识别已有分红/分红再投资流水避免重复。开放式债基等仍需手工录入；金额为税前估算，确认前请对照券商到账。" 
                 type="info"
                 show-icon
                 :closable="false"

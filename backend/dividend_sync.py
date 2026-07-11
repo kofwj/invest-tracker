@@ -1,12 +1,17 @@
-"""Semi-automatic cash dividend drafts for A-share equity holdings.
+"""Semi-automatic cash dividend drafts.
 
 Flow:
-1. Scan current holdings (A股权益) against Eastmoney share-bonus data
+1. Scan current holdings against market dividend calendars
 2. Estimate cash dividend amount from equity-record-date quantity
 3. Mark drafts that already match existing 分红/分红再投资 ledger rows
 4. User confirms selected drafts -> insert 分红 transactions
 
-ETF / fund / REIT automatic dividends are out of scope for v1.
+Sources:
+- A-share equities: Eastmoney RPT_SHAREBONUS_DET (per 10 shares)
+- A-share ETF / 港股ETF / REITs / listed funds: Sina FundPageInfoService.tabfh
+  (per share cash dividend; works for 513530 港股通红利ETF, 508056 中金普洛斯REIT, etc.)
+
+Open-end pure funds without stable calendar data remain out of scope.
 """
 from __future__ import annotations
 
@@ -63,6 +68,41 @@ def is_a_share_equity(code: str, category: Optional[str] = None, name: str = "")
     # Heuristic for uncategorized rows.
     inferred = infer_category(c, name)
     return inferred == "A股权益"
+
+
+LISTED_FUND_PREFIXES = ("15", "16", "18", "50", "51", "52", "56", "58", "159")
+# 508 is covered by 50* as REIT; kept explicit for readability in messages.
+
+
+def is_listed_fund_product(code: str, category: Optional[str] = None, name: str = "") -> bool:
+    """ETF / REIT / listed fund products that can use fund dividend calendar (Sina)."""
+    cat = str(category or "").strip()
+    if cat in {"A股ETF", "港股ETF", "REITs", "黄金"}:
+        return True
+    if cat in {"A股权益", "债基", "其他"}:
+        # Explicit non-listed-fund categories: only allow by strong code shape below.
+        pass
+    c = pure_security_code(code)
+    if not (len(c) == 6 and c.isdigit()):
+        return False
+    if is_a_share_equity(code, category, name):
+        return False
+    # Exchange-traded fund / REIT / gold ETF code prefixes.
+    if c.startswith(LISTED_FUND_PREFIXES):
+        return True
+    inferred = infer_category(c, name)
+    return inferred in {"A股ETF", "港股ETF", "REITs", "黄金"}
+
+
+def dividend_asset_kind(code: str, category: Optional[str] = None, name: str = "") -> Optional[str]:
+    if is_a_share_equity(code, category, name):
+        return "a_share_equity"
+    if is_listed_fund_product(code, category, name):
+        return "listed_fund"
+    return None
+
+
+SINA_FUND_DIVIDEND_URL = "https://stock.finance.sina.com.cn/fundInfo/api/openapi.php/FundPageInfoService.tabfh"
 
 
 def parse_date_value(raw: Any) -> Optional[date]:
@@ -224,8 +264,91 @@ def fetch_eastmoney_share_bonus(code: str, page_size: int = 30) -> List[Dict[str
     return list(data)
 
 
+def fetch_sina_fund_dividends(code: str, page_size: int = 40) -> List[Dict[str, Any]]:
+    """Fetch fund/ETF/REIT cash dividends from Sina openapi.
+
+    Returns market rows normalized to the same shape as Eastmoney share-bonus rows so
+    build_draft_from_market_row can reuse equity-record / ex-date / amount estimation.
+
+    Sina fields:
+      - djr: equity record date (权益登记日)
+      - fhr: pay / ex-ish date (分红日)
+      - mffh: cash dividend per share (每份分红)
+    """
+    security_code = pure_security_code(code)
+    if not (len(security_code) == 6 and security_code.isdigit()):
+        return []
+    res = requests.get(
+        SINA_FUND_DIVIDEND_URL,
+        params={"symbol": security_code},
+        timeout=12,
+        headers={
+            "User-Agent": "Mozilla/5.0",
+            "Referer": "https://finance.sina.com.cn/",
+        },
+    )
+    res.raise_for_status()
+    payload = res.json() or {}
+    result = payload.get("result") or {}
+    status = result.get("status") or {}
+    if str(status.get("code")) not in {"0", "0.0"} and status.get("code") not in (0, None):
+        # Some responses omit status; continue if data exists.
+        data_probe = (result.get("data") or {})
+        if not data_probe:
+            return []
+    data = result.get("data") or {}
+    rows = data.get("fhdata") or []
+    out: List[Dict[str, Any]] = []
+    for row in rows[: max(1, int(page_size or 40))]:
+        record_date = parse_date_value(row.get("djr"))
+        pay_date = parse_date_value(row.get("fhr"))
+        try:
+            per_share = float(row.get("mffh") or 0)
+        except (TypeError, ValueError):
+            per_share = 0.0
+        if per_share <= 0:
+            continue
+        if not record_date and not pay_date:
+            continue
+        # Normalize to Eastmoney-like fields. PRETAX_BONUS_RMB is "per 10 shares".
+        pretax_per_10 = round(per_share * 10.0, 6)
+        event_for_plan = pay_date or record_date
+        plan = f"每份派{per_share:g}元"
+        out.append(
+            {
+                "SECURITY_CODE": security_code,
+                "SECURITY_NAME_ABBR": "",
+                "IMPL_PLAN_PROFILE": plan,
+                "PRETAX_BONUS_RMB": pretax_per_10,
+                "EQUITY_RECORD_DATE": record_date.isoformat() if record_date else None,
+                # For funds, pay date is the practical settlement date; use as ex/event date.
+                "EX_DIVIDEND_DATE": pay_date.isoformat() if pay_date else (record_date.isoformat() if record_date else None),
+                "ASSIGN_PROGRESS": "实施分配",
+                "NOTICE_DATE": (record_date or pay_date).isoformat() if (record_date or pay_date) else None,
+                "PAY_CASH_DATE": pay_date.isoformat() if pay_date else None,
+                "_source": "sina_fund_fh",
+                "_cash_per_share": per_share,
+            }
+        )
+    return out
+
+
+def fetch_market_dividend_rows(code: str, kind: str, page_size: int = 30) -> List[Dict[str, Any]]:
+    if kind == "a_share_equity":
+        return fetch_eastmoney_share_bonus(code, page_size=page_size)
+    if kind == "listed_fund":
+        return fetch_sina_fund_dividends(code, page_size=page_size)
+    return []
+
+
 def _cash_per_share(row: Dict[str, Any]) -> Optional[float]:
-    """Eastmoney PRETAX_BONUS_RMB is cash dividend per 10 shares."""
+    """Prefer explicit per-share override; else Eastmoney PRETAX_BONUS_RMB is per 10 shares."""
+    if row.get("_cash_per_share") not in (None, ""):
+        try:
+            v = float(row.get("_cash_per_share"))
+            return v if v > 0 else None
+        except (TypeError, ValueError):
+            pass
     raw = row.get("PRETAX_BONUS_RMB")
     if raw in (None, "", "-"):
         # try parse from plan text: 10派1.30元
@@ -311,7 +434,9 @@ def build_draft_from_market_row(
     category = holding.get("category") or infer_category(code, name)
     account = "华泰证券"
     draft_key = f"{pure_security_code(code)}|{event_date.isoformat()}|{round(per_share, 6)}"
-    remark = f"自动草稿|{plan}|每股{per_share:.4f}|登记日数量{round(quantity, 4)}"
+    unit_label = "每份" if str(market_row.get("_source") or "") == "sina_fund_fh" else "每股"
+    remark = f"自动草稿|{plan}|{unit_label}{per_share:.4f}|登记日数量{round(quantity, 4)}"
+    row_source = str(market_row.get("_source") or "eastmoney_sharebonus")
 
     return {
         "draft_key": draft_key,
@@ -336,7 +461,7 @@ def build_draft_from_market_row(
         "reason": reason,
         "matched_transaction_id": matched.get("id") if matched else None,
         "matched_transaction": matched,
-        "source": "eastmoney_sharebonus",
+        "source": row_source,
         "selectable": status == "new" and estimated_amount > 0,
     }
 
@@ -347,9 +472,14 @@ def scan_dividend_drafts(
     lookback_days: int = DEFAULT_LOOKBACK_DAYS,
     codes: Optional[Iterable[str]] = None,
     fetch_fn=None,
+    fetch_equity_fn=None,
+    fetch_fund_fn=None,
 ) -> Dict[str, Any]:
-    if fetch_fn is None:
-        fetch_fn = fetch_eastmoney_share_bonus
+    # Backward compatible: fetch_fn overrides equity source (tests monkeypatch this).
+    if fetch_equity_fn is None:
+        fetch_equity_fn = fetch_fn or fetch_eastmoney_share_bonus
+    if fetch_fund_fn is None:
+        fetch_fund_fn = fetch_sina_fund_dividends
     today = datetime.now(LOCAL_TZ).date()
     lookback_start = today - timedelta(days=max(30, int(lookback_days or DEFAULT_LOOKBACK_DAYS)))
     code_filter = {normalize_code(c) for c in (codes or []) if normalize_code(c)}
@@ -365,25 +495,34 @@ def scan_dividend_drafts(
     skipped_unsupported: List[Dict[str, Any]] = []
     failed: List[Dict[str, Any]] = []
     scanned = 0
+    scanned_equity = 0
+    scanned_fund = 0
 
     for h in holding_rows:
         code = normalize_code(h.get("code"))
         name = h.get("name") or code
         category = h.get("category")
-        if not is_a_share_equity(code, category, name):
+        kind = dividend_asset_kind(code, category, name)
+        if kind is None:
             skipped_unsupported.append(
                 {
                     "code": code,
                     "name": name,
                     "category": category,
-                    "reason": "暂仅支持 A 股个股现金分红自动草稿（ETF/债基/REIT/黄金需手工录入）",
+                    "reason": "暂不支持该品类自动分红草稿（可手工录入分红流水）",
                 }
             )
             continue
 
         scanned += 1
+        if kind == "a_share_equity":
+            scanned_equity += 1
+            fetcher = fetch_equity_fn
+        else:
+            scanned_fund += 1
+            fetcher = fetch_fund_fn
         try:
-            market_rows = fetch_fn(code)
+            market_rows = fetcher(code)
         except Exception as exc:
             logger.exception("dividend scan failed for %s", code)
             failed.append({"code": code, "name": name, "reason": str(exc)})
@@ -397,6 +536,7 @@ def scan_dividend_drafts(
                 lookback_start=lookback_start,
             )
             if draft:
+                draft["asset_kind"] = kind
                 drafts.append(draft)
 
     # de-dupe identical draft keys
@@ -411,6 +551,8 @@ def scan_dividend_drafts(
 
     summary = {
         "scanned_holdings": scanned,
+        "scanned_equity_holdings": scanned_equity,
+        "scanned_fund_holdings": scanned_fund,
         "unsupported_holdings": len(skipped_unsupported),
         "draft_total": len(drafts),
         "new_count": sum(1 for d in drafts if d["status"] == "new"),
@@ -420,6 +562,10 @@ def scan_dividend_drafts(
         "lookback_days": int(lookback_days or DEFAULT_LOOKBACK_DAYS),
         "lookback_start": lookback_start.isoformat(),
         "as_of": today.isoformat(),
+        "sources": {
+            "a_share_equity": "eastmoney_sharebonus",
+            "listed_fund": "sina_fund_fh",
+        },
     }
     return {
         "status": "success",
