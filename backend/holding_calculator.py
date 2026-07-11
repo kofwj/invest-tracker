@@ -3,6 +3,16 @@ import sqlite3
 from datetime import datetime
 
 
+ALLOWED_DIRECTIONS = {
+    "买入",
+    "卖出",
+    "分红",
+    "分红再投资",
+    "申购待确认",
+    "待确认申购",
+}
+
+
 def infer_category(code: str, name: str = ""):
     c = str(code or "").strip().lower()
     n = str(name or "")
@@ -87,6 +97,95 @@ def latest_holding_corrections(conn):
         return {}
 
 
+def current_holding_quantity(conn, code: str, exclude_transaction_id=None) -> float:
+    """Compute current holding quantity for a code from transactions + latest correction."""
+    code = str(code or "").strip()
+    if not code:
+        return 0.0
+    corrections = latest_holding_corrections(conn)
+    correction = corrections.get(code)
+    qty = 0.0
+    if correction:
+        qty = float(correction.get("actual_quantity") or 0)
+        anchor = str(correction.get("date") or "")
+    else:
+        anchor = None
+
+    query = """
+        SELECT date, direction, quantity, id FROM transactions
+        WHERE code = ? AND TRIM(code) != ''
+        ORDER BY date, id
+    """
+    rows = conn.execute(query, (code,)).fetchall()
+    for t in rows:
+        if exclude_transaction_id is not None and int(t["id"] if isinstance(t, sqlite3.Row) else t[3]) == int(exclude_transaction_id):
+            continue
+        direction = t["direction"] if isinstance(t, sqlite3.Row) else t[1]
+        date = str((t["date"] if isinstance(t, sqlite3.Row) else t[0]) or "")
+        t_qty = float((t["quantity"] if isinstance(t, sqlite3.Row) else t[2]) or 0)
+        if direction in ("申购待确认", "待确认申购"):
+            continue
+        if anchor is not None and date <= anchor:
+            continue
+        if direction in ("买入", "分红再投资"):
+            qty += t_qty
+        elif direction == "卖出":
+            qty = max(0.0, qty - t_qty)
+    return float(qty)
+
+
+def validate_transaction_payload(
+    conn,
+    *,
+    direction,
+    code,
+    quantity,
+    price,
+    amount,
+    fee,
+    exclude_transaction_id=None,
+    strict_oversell=True,
+):
+    """Validate transaction fields. Raises ValueError on invalid input."""
+    direction = str(direction or "").strip()
+    code = str(code or "").strip()
+    qty = float(quantity or 0)
+    px = float(price or 0)
+    amt = float(amount or 0)
+    f = float(fee or 0)
+
+    if direction not in ALLOWED_DIRECTIONS:
+        raise ValueError("方向必须是：买入/卖出/分红/分红再投资/申购待确认")
+    if not code:
+        raise ValueError("代码不能为空")
+    if qty < 0:
+        raise ValueError("数量不能为负")
+    if px < 0:
+        raise ValueError("价格不能为负")
+    if amt < 0:
+        raise ValueError("金额不能为负；买卖方向通过direction表示")
+    if f < 0:
+        raise ValueError("手续费不能为负")
+
+    if direction == "买入" and qty <= 0:
+        raise ValueError("买入数量必须大于0")
+    if direction in ("申购待确认", "待确认申购") and amt <= 0:
+        raise ValueError("申购待确认金额必须大于0")
+    if direction == "卖出":
+        if qty <= 0:
+            raise ValueError("卖出数量必须大于0")
+        if strict_oversell and conn is not None:
+            available = current_holding_quantity(conn, code, exclude_transaction_id=exclude_transaction_id)
+            # allow tiny float noise
+            if qty > available + 1e-6:
+                raise ValueError(f"卖出数量 {qty} 超过当前持仓 {round(available, 6)}")
+    if direction == "分红" and amt <= 0:
+        raise ValueError("分红金额必须大于0")
+    if direction == "分红再投资" and (qty <= 0 or amt <= 0):
+        raise ValueError("分红再投资需要数量和金额都大于0")
+    return True
+
+
 def recalc_holdings(conn):
     """Recalculate holdings from transactions, then apply latest forced correction anchors."""
     conn.row_factory = sqlite3.Row
@@ -166,10 +265,18 @@ def recalc_holdings(conn):
             s["net_invested"] += reinvest_cost - dividend_amount
             s["dividend"] += dividend_amount
         elif t["direction"] == "卖出":
-            if s["quantity"] > 0 and qty > 0:
-                s["cost"] -= (s["cost"] / s["quantity"]) * qty
-            s["net_invested"] -= cash_amount
-            s["quantity"] = max(0.0, s["quantity"] - qty)
+            # Cap sell quantity to available holding to avoid phantom cash / negative inventory.
+            sell_qty = min(qty, s["quantity"]) if s["quantity"] > 0 else 0.0
+            if sell_qty > 0 and qty > 0:
+                # Scale cash impact proportionally when historical oversell exists.
+                scale = sell_qty / qty if qty > sell_qty else 1.0
+                applied_cash = cash_amount * scale
+                s["cost"] -= (s["cost"] / s["quantity"]) * sell_qty
+                s["net_invested"] -= applied_cash
+                s["quantity"] = max(0.0, s["quantity"] - sell_qty)
+            else:
+                # No inventory: ignore sell impact on holdings (cash still follows ledger transactions).
+                pass
             if s["quantity"] == 0:
                 s["cost"] = 0.0
                 s["net_invested"] = 0.0

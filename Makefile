@@ -19,6 +19,9 @@ ps:
 test:
 	docker compose exec -T backend pytest -q /app/tests
 
+test-local:
+	PYTHONPATH=backend python3 -m pytest -q tests
+
 check:
 	bash scripts/check.sh
 

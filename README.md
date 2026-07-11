@@ -252,6 +252,7 @@ data/invest.db
 
 注意：
 
+- 可用环境变量 `DB_PATH`、`BACKUP_DIR`、`APP_TIMEZONE`、`CORS_ALLOW_ORIGINS`、`MAX_BACKUP_UPLOAD_BYTES` 覆盖默认配置；
 - `data/`、`backups/`、数据库文件不会提交到 Git；
 - 高风险修改前建议先备份数据库；
 - Git 只管理代码和测试，不管理真实资产数据。
@@ -321,7 +322,7 @@ docker compose exec -T backend pytest -q /app/tests
 当前基准：
 
 ```text
-17 passed
+23 passed
 All checks passed
 ```
 

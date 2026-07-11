@@ -53,6 +53,7 @@ def clear_backend_module_cache():
         'routers_dashboard',
         'routers_performance',
         'schema',
+        'routers_maintenance',
     ]
     for name in module_names:
         sys.modules.pop(name, None)
@@ -125,9 +126,12 @@ def create_tables(db_path: Path):
 def app_module(tmp_path, monkeypatch):
     data_dir = tmp_path / 'data'
     data_dir.mkdir()
+    backup_dir = tmp_path / 'backups'
+    backup_dir.mkdir()
     db_path = data_dir / 'test.db'
 
     monkeypatch.setenv('DB_PATH', str(db_path))
+    monkeypatch.setenv('BACKUP_DIR', str(backup_dir))
     monkeypatch.setenv('APP_TIMEZONE', 'Asia/Shanghai')
 
     clear_backend_module_cache()

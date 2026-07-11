@@ -947,7 +947,7 @@ const app = createApp({
                 categories[cat].profit += profit;
                 categories[cat].count += 1;
                 
-                const expectedReturn = h.expected_return || defaultExpectedReturns[cat] || defaultExpectedReturns['未分类'];
+                const expectedReturn = (h.expected_return != null && h.expected_return !== '') ? Number(h.expected_return) : (defaultExpectedReturns[cat] || defaultExpectedReturns['未分类']);
                 categories[cat].weighted_expected_return_sum += expectedReturn * value;
                 categories[cat].total_weight += value;
 

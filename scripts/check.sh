@@ -112,6 +112,9 @@ required_routes = {
     "/transactions",
     "/deposits",
     "/dashboard",
+    "/holdings",
+    "/holding-corrections",
+    "/sync-prices",
 }
 routes = {getattr(route, "path", "") for route in module.app.routes}
 missing = sorted(required_routes - routes)
