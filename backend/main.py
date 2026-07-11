@@ -2,7 +2,6 @@ import logging
 import os
 import sys
 from contextlib import asynccontextmanager
-from datetime import datetime
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,6 +19,7 @@ try:
         check_database_health as _check_database_health,
         fetch_all_as_dicts,
         get_db_connection,
+        local_today_iso,
     )
     from .routers_cash import router as cash_router
     from .routers_dashboard import router as dashboard_router
@@ -39,6 +39,7 @@ except ImportError:  # Allows tests to load this file directly via importlib.
         check_database_health as _check_database_health,
         fetch_all_as_dicts,
         get_db_connection,
+        local_today_iso,
     )
     from routers_cash import router as cash_router
     from routers_dashboard import router as dashboard_router
@@ -62,9 +63,15 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Investment Tracker API", lifespan=lifespan)
 
+_cors_origins = os.environ.get("CORS_ALLOW_ORIGINS", "*")
+if _cors_origins.strip() == "*":
+    _allow_origins = ["*"]
+else:
+    _allow_origins = [o.strip() for o in _cors_origins.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allow_origins,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -77,10 +84,6 @@ app.include_router(holdings_router)
 app.include_router(dashboard_router)
 app.include_router(performance_router)
 app.include_router(maintenance_router)
-
-
-def local_today_iso():
-    return datetime.now(LOCAL_TZ).date().isoformat()
 
 
 def check_database_health():

@@ -3,9 +3,6 @@ import logging
 import urllib.request
 from datetime import date as dt_date
 
-import akshare as ak
-import pandas as pd
-
 logger = logging.getLogger(__name__)
 
 
@@ -22,6 +19,8 @@ def ensure_holding_return_columns(conn):
 
 def nearest_numeric_value(df, date_col_candidates, value_col_candidates, target_date, direction="before"):
     """Pick nearest numeric historical value on/before or on/after target_date."""
+    import pandas as pd  # lazy
+
     if df is None or df.empty:
         return None, None
     date_col = next((c for c in date_col_candidates if c in df.columns), None)
@@ -84,6 +83,8 @@ def fetch_tencent_kline_closes(code: str, start: dt_date, end: dt_date):
 
 def calculate_trailing_return_1y(code: str, current_price: float = None):
     """Return (pct, source). pct uses price/NAV one-year change; A-share/ETF uses qfq close when available."""
+    import akshare as ak  # lazy: not required for app boot / unit tests
+
     c = str(code or "").strip().lower()
     end = dt_date.today()
     start = end.replace(year=end.year - 1)
@@ -112,7 +113,13 @@ def calculate_trailing_return_1y(code: str, current_price: float = None):
                     start_val = end_val = start_date = end_date = None
                     source_name = "腾讯前复权K线"
             except Exception:
-                df = ak.stock_zh_a_hist(symbol=symbol, period="daily", start_date=start.strftime("%Y%m%d"), end_date=end.strftime("%Y%m%d"), adjust="qfq")
+                df = ak.stock_zh_a_hist(
+                    symbol=symbol,
+                    period="daily",
+                    start_date=start.strftime("%Y%m%d"),
+                    end_date=end.strftime("%Y%m%d"),
+                    adjust="qfq",
+                )
                 start_val, start_date = nearest_numeric_value(df, ["日期"], ["收盘"], start, "after")
                 end_val, end_date = nearest_numeric_value(df, ["日期"], ["收盘"], end, "before")
                 source_name = "AKShare前复权收盘"

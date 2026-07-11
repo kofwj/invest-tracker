@@ -85,7 +85,7 @@
         >
             <template #title>
                 <span>
-                    当前有 {{ pendingTransactions.length || '' }} 笔申购在途，金额 {{ formatMoney(dashboard.pending_purchase) }}。确认份额/净值后，请到交易管理把对应记录从“申购待确认”改为“买入”。
+                    当前有 {{ dashboard.pending_count || pendingTransactions.length || 0 }} 笔申购在途，金额 {{ formatMoney(dashboard.pending_purchase) }}。确认份额/净值后，请到交易管理把对应记录从“申购待确认”改为“买入”。
                 </span>
                 <el-button type="warning" link style="margin-left: 12px;" @click="goPendingTransactions">查看在途交易</el-button>
             </template>

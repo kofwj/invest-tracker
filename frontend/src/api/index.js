@@ -9,8 +9,8 @@ const api = {
     updateFeeSettings: (payload) => axios.put(API + '/fee-settings', payload),
     resetFeeSettings: () => axios.post(API + '/fee-settings/reset'),
 
-    syncPrices: () => axios.get(API + '/sync-prices', { timeout: 120000 }),
-    syncTrailingReturns: () => axios.get(API + '/sync-trailing-returns', { timeout: 180000 }),
+    syncPrices: () => axios.post(API + '/sync-prices', null, { timeout: 120000 }),
+    syncTrailingReturns: () => axios.post(API + '/sync-trailing-returns', null, { timeout: 180000 }),
 
     addTransaction: (payload) => axios.post(API + '/transactions', payload),
     listTransactions: (params = {}) => {

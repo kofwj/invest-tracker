@@ -103,7 +103,8 @@ const createTransactionsModule = ({
 
     const goPendingTransactions = async () => {
         activeTab.value = 'transactions';
-        transQuery.value.direction = '申购待确认';
+        // backend treats 申购待确认 / 待确认申购 / pending as the same pending set
+        transQuery.value.direction = 'pending';
         await queryTransactions();
     };
 
