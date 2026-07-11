@@ -1,10 +1,11 @@
-import { createApp, ref, onMounted, nextTick, watch, computed } from 'vue';
+import { createApp, ref, onMounted, nextTick, watch, computed, provide } from 'vue';
 import { ElLoading, ElMessage, ElMessageBox } from 'element-plus';
 import zhCn from 'element-plus/es/locale/lang/zh-cn';
 import 'element-plus/es/components/message/style/css';
 import 'element-plus/es/components/message-box/style/css';
 import 'element-plus/es/components/loading/style/css';
 import App from './App.vue';
+import { APP_CTX_KEY } from './composables/useAppCtx.js';
 import {
     normalizeText,
     daysUntil,
@@ -45,7 +46,7 @@ const app = createApp({
     extends: App,
     setup() {
         const screenshotParams = new URLSearchParams(window.location.search);
-        const screenshotTabs = ['snapshots', 'allocation', 'performance', 'holdings', 'deposits', 'transactions', 'cash'];
+        const screenshotTabs = ['snapshots', 'allocation', 'performance', 'holdings', 'deposits', 'transactions', 'cash', 'maintenance'];
         const requestedTab = screenshotParams.get('tab');
 
         // Deferred bootstrap after login unlock (wired below after helpers exist)
@@ -759,7 +760,7 @@ const app = createApp({
             await bootstrapAfterAuth();
         });
 
-        return {
+        const appCtx = {
             zhCn,
             isMasked, toggleMask,
             showLoginOverlay, loginLoading, loginPassword, loginError, authEnabled, handleLogin, handleLogout,
@@ -779,6 +780,8 @@ const app = createApp({
             displayedPerfContribution, perfContributionFilter, perfContributionSort, perfContributionHeadline, perfContributionMix,
             fetchPerformance, addPerfFlow, deletePerfFlow, contributionBarStyle, fetchMaintenance, createDbBackup, downloadBackup, restoreBackup, deleteBackup, restoreUploadedBackup
         };
+        provide(APP_CTX_KEY, appCtx);
+        return appCtx;
     }
 });
 app.mount('#app');

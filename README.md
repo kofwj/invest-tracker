@@ -54,7 +54,9 @@ invest-tracker/
 
   frontend/
     index.html                 # HTML 挂载壳（#app）
-│   │   App.vue                   # 主界面 SFC 模板
+│   │   App.vue                   # 主界面壳（tabs/懒加载）
+│   │   components/               # Header/首页/弹窗/登录
+│   │   views/                    # 各 tab SFC（懒加载）
     package.json               # Vite/npm 脚本
     Dockerfile                 # 多阶段构建：Vite build + Nginx
     nginx.conf                 # 前端静态托管与 /api 代理

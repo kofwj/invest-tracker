@@ -32,6 +32,19 @@ test -f frontend/src/modules/snapshots.js
 test -f frontend/src/modules/performance.js
 test -f frontend/src/composables/authMask.js
 test -f frontend/src/composables/domainHelpers.js
+test -f frontend/src/composables/useAppCtx.js
+test -f frontend/src/components/AppHeader.vue
+test -f frontend/src/components/HomeDashboard.vue
+test -f frontend/src/components/AppDialogs.vue
+test -f frontend/src/components/LoginOverlay.vue
+test -f frontend/src/views/SnapshotsTab.vue
+test -f frontend/src/views/AllocationTab.vue
+test -f frontend/src/views/PerformanceTab.vue
+test -f frontend/src/views/HoldingsTab.vue
+test -f frontend/src/views/DepositsTab.vue
+test -f frontend/src/views/TransactionsTab.vue
+test -f frontend/src/views/CashTab.vue
+test -f frontend/src/views/MaintenanceTab.vue
 grep -q 'type="module" src="/src/main.js"' frontend/index.html
 grep -q '@vitejs/plugin-vue' frontend/package.json
 grep -q 'unplugin-vue-components' frontend/package.json
@@ -55,8 +68,12 @@ for module in ['./utils/index.js', './api/index.js', './modules/transactions.js'
     assert module in main, f'missing frontend module import: {module}'
 assert './charts/index.js' in main, 'missing charts dynamic/static import reference'
 app_vue = Path('frontend/src/App.vue').read_text(encoding='utf-8')
-for needle in ['el-tabs', 'activeTab', 'showLoginOverlay', 'holdingLifetimeProfit']:
-    assert needle in app_vue, f'missing template fragment in App.vue: {needle}'
+for needle in ['el-tabs', 'activeTab', 'SnapshotsTab', 'defineAsyncComponent']:
+    assert needle in app_vue, f'missing shell fragment in App.vue: {needle}'
+assert 'provide' in main or 'APP_CTX_KEY' in main, 'root should provide app context'
+holdings = Path('frontend/src/views/HoldingsTab.vue').read_text(encoding='utf-8')
+assert 'holdingLifetimeProfit' in holdings, 'holdings tab missing lifetime helper'
+assert 'useAppCtx' in holdings, 'views should inject app ctx'
 PY
 
 echo "==> Checking frontend build"

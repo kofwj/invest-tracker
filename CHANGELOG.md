@@ -5,6 +5,19 @@
 
 ---
 
+## [2026-07-11] — Phase3e 按 tab 拆分 SFC + 懒加载
+
+### 前端结构
+- `App.vue` 降为壳：header / 首页卡片 / tabs / dialogs / 登录
+- 新增 `views/*Tab.vue`（快照/配置/收益/持仓/存款/交易/现金/维护）与 `components/{AppHeader,HomeDashboard,AppDialogs,LoginOverlay}.vue`
+- `provide/inject`（`useAppCtx`）共享根 setup 状态，避免海量 props
+- `el-tab-pane lazy` + `defineAsyncComponent`：进入 tab 再加载对应 chunk
+
+### 体积
+- 主 app chunk 约 **143KB → 83KB**；各 tab 独立 3–14KB 异步包
+
+---
+
 ## [2026-07-11] — Phase3d Vue SFC + Element Plus 按需
 
 ### 前端
