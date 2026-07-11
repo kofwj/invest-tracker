@@ -5,6 +5,20 @@
 
 ---
 
+## [2026-07-11] — Phase1/2 安全与增量重算
+
+### 安全 / 性能
+- 登录防爆破：按 IP 滑动窗口失败计数，超限 429；成功清零（`LOGIN_MAX_FAILURES` / `LOGIN_WINDOW_SECONDS` / `LOGIN_LOCK_SECONDS`）
+- 分红扫描：`requests.Session` 复用 + 进程内 6h TTL 缓存（东财/新浪）
+
+### 账本
+- `recalc_holdings(conn, codes=None)` 支持按 code 增量重算；单笔增删改 / 确认分红 / 持仓校正走增量，CSV 导入仍全量
+
+### 测试
+- `test_login_rate_limit` / `test_dividend_cache` / `test_partial_recalc`；全量 **38 passed**
+
+---
+
 ## [2026-07-11] — 代码层优化
 
 ### 优化

@@ -18,6 +18,7 @@ from __future__ import annotations
 import logging
 import re
 import sqlite3
+import time
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -37,6 +38,31 @@ DEFAULT_LOOKBACK_DAYS = 400
 DATE_MATCH_WINDOW_DAYS = 3
 AMOUNT_MATCH_TOLERANCE = 0.08  # 8% amount tolerance for fuzzy dedupe
 EASTMONEY_SHAREBONUS_URL = "https://datacenter-web.eastmoney.com/api/data/v1/get"
+HTTP_CACHE_TTL_SECONDS = 6 * 3600  # dividend calendars change slowly
+_HTTP_SESSION = requests.Session()
+_HTTP_SESSION.headers.update({"User-Agent": "Mozilla/5.0"})
+# key -> (expires_at, payload)
+_HTTP_CACHE: Dict[Tuple[str, str, int], Tuple[float, Any]] = {}
+
+
+def clear_dividend_http_cache() -> None:
+    """Test/ops helper."""
+    _HTTP_CACHE.clear()
+
+
+def _cache_get(key: Tuple[str, str, int]):
+    hit = _HTTP_CACHE.get(key)
+    if not hit:
+        return None
+    expires_at, payload = hit
+    if expires_at < time.time():
+        _HTTP_CACHE.pop(key, None)
+        return None
+    return payload
+
+
+def _cache_set(key: Tuple[str, str, int], payload: Any, ttl: int = HTTP_CACHE_TTL_SECONDS) -> None:
+    _HTTP_CACHE[key] = (time.time() + max(60, int(ttl or HTTP_CACHE_TTL_SECONDS)), payload)
 
 
 def normalize_code(code: Any) -> str:
@@ -237,6 +263,10 @@ def fetch_eastmoney_share_bonus(code: str, page_size: int = 30) -> List[Dict[str
     security_code = pure_security_code(code)
     if not (len(security_code) == 6 and security_code.isdigit()):
         return []
+    cache_key = ("eastmoney_sharebonus", security_code, int(page_size or 30))
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return list(cached)
     params = {
         "sortColumns": "NOTICE_DATE,EX_DIVIDEND_DATE",
         "sortTypes": "-1,-1",
@@ -248,19 +278,17 @@ def fetch_eastmoney_share_bonus(code: str, page_size: int = 30) -> List[Dict[str
         "client": "WEB",
         "filter": f'(SECURITY_CODE="{security_code}")',
     }
-    res = requests.get(
+    res = _HTTP_SESSION.get(
         EASTMONEY_SHAREBONUS_URL,
         params=params,
         timeout=12,
-        headers={
-            "User-Agent": "Mozilla/5.0",
-            "Referer": "https://data.eastmoney.com/",
-        },
+        headers={"Referer": "https://data.eastmoney.com/"},
     )
     res.raise_for_status()
     payload = res.json() or {}
     result = payload.get("result") or {}
-    data = result.get("data") or []
+    data = list(result.get("data") or [])
+    _cache_set(cache_key, data)
     return list(data)
 
 
@@ -278,14 +306,15 @@ def fetch_sina_fund_dividends(code: str, page_size: int = 40) -> List[Dict[str, 
     security_code = pure_security_code(code)
     if not (len(security_code) == 6 and security_code.isdigit()):
         return []
-    res = requests.get(
+    cache_key = ("sina_fund_fh", security_code, int(page_size or 40))
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return list(cached)
+    res = _HTTP_SESSION.get(
         SINA_FUND_DIVIDEND_URL,
         params={"symbol": security_code},
         timeout=12,
-        headers={
-            "User-Agent": "Mozilla/5.0",
-            "Referer": "https://finance.sina.com.cn/",
-        },
+        headers={"Referer": "https://finance.sina.com.cn/"},
     )
     res.raise_for_status()
     payload = res.json() or {}
@@ -312,7 +341,6 @@ def fetch_sina_fund_dividends(code: str, page_size: int = 40) -> List[Dict[str, 
             continue
         # Normalize to Eastmoney-like fields. PRETAX_BONUS_RMB is "per 10 shares".
         pretax_per_10 = round(per_share * 10.0, 6)
-        event_for_plan = pay_date or record_date
         plan = f"每份派{per_share:g}元"
         out.append(
             {
@@ -330,6 +358,7 @@ def fetch_sina_fund_dividends(code: str, page_size: int = 40) -> List[Dict[str, 
                 "_cash_per_share": per_share,
             }
         )
+    _cache_set(cache_key, out)
     return out
 
 

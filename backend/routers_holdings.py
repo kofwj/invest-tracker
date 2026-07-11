@@ -145,7 +145,7 @@ def add_holding_correction(payload: HoldingCorrectionBase):
             ),
         )
         new_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-        recalc_holdings(conn)
+        recalc_holdings(conn, codes=[code])
         conn.commit()
     return {"status": "success", "id": new_id, "backup": backup_path}
 
@@ -153,11 +153,15 @@ def add_holding_correction(payload: HoldingCorrectionBase):
 @router.delete("/holding-corrections/{correction_id}")
 def delete_holding_correction(correction_id: int):
     backup_path = create_safety_backup("before_delete_holding_correction")
-    with db_session() as conn:
-        conn.execute("DELETE FROM holding_corrections WHERE id = ?", (correction_id,))
-        if conn.total_changes == 0:
+    with db_session(row_factory=sqlite3.Row) as conn:
+        existing = conn.execute(
+            "SELECT code FROM holding_corrections WHERE id = ?", (correction_id,)
+        ).fetchone()
+        if not existing:
             raise HTTPException(status_code=404, detail="Correction not found")
-        recalc_holdings(conn)
+        code = str(existing["code"] or "").strip()
+        conn.execute("DELETE FROM holding_corrections WHERE id = ?", (correction_id,))
+        recalc_holdings(conn, codes=[code] if code else None)
         conn.commit()
     return {"status": "success", "backup": backup_path}
 

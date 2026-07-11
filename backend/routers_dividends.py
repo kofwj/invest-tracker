@@ -93,7 +93,9 @@ def confirm_dividends(payload: DividendConfirmRequest):
         with db_session(row_factory=sqlite3.Row) as conn:
             result = confirm_dividend_drafts(conn, items, recheck_existing=True)
             if result["created_count"] > 0:
-                recalc_holdings(conn)
+                codes = {str(c.get("code") or "").strip() for c in result.get("created") or []}
+                codes.discard("")
+                recalc_holdings(conn, codes=codes or None)
             conn.commit()
     except Exception as e:
         logger.exception("dividend confirm failed")

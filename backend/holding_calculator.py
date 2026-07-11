@@ -186,16 +186,58 @@ def validate_transaction_payload(
     return True
 
 
-def recalc_holdings(conn):
-    """Recalculate holdings from transactions, then apply latest forced correction anchors."""
+def _normalize_code_set(codes):
+    """Return None for full recalc, or a non-empty set of codes for partial recalc."""
+    if codes is None:
+        return None
+    if isinstance(codes, (str, bytes)):
+        codes = [codes]
+    out = {str(c or "").strip() for c in codes if str(c or "").strip()}
+    return out or None
+
+
+def recalc_holdings(conn, codes=None):
+    """Recalculate holdings from transactions, then apply latest forced correction anchors.
+
+    codes:
+      - None / empty: full rebuild (default, safest)
+      - iterable of codes: only rebuild those symbols; other holdings rows stay untouched
+    """
     conn.row_factory = sqlite3.Row
-    old_holdings = {r["code"]: dict(r) for r in conn.execute("SELECT * FROM holdings").fetchall()}
-    corrections = latest_holding_corrections(conn)
-    txs = conn.execute("""
-        SELECT * FROM transactions
-        WHERE code IS NOT NULL AND TRIM(code) != ''
-        ORDER BY date, id
-    """).fetchall()
+    code_filter = _normalize_code_set(codes)
+    if code_filter is None:
+        old_holdings = {r["code"]: dict(r) for r in conn.execute("SELECT * FROM holdings").fetchall()}
+        txs = conn.execute("""
+            SELECT * FROM transactions
+            WHERE code IS NOT NULL AND TRIM(code) != ''
+            ORDER BY date, id
+        """).fetchall()
+        corrections_all = latest_holding_corrections(conn)
+    else:
+        placeholders = ",".join("?" for _ in code_filter)
+        code_list = list(code_filter)
+        old_holdings = {
+            r["code"]: dict(r)
+            for r in conn.execute(
+                f"SELECT * FROM holdings WHERE code IN ({placeholders})",
+                code_list,
+            ).fetchall()
+        }
+        # Ensure every requested code exists in old_holdings map even if never held.
+        for c in code_filter:
+            old_holdings.setdefault(c, {"code": c})
+        txs = conn.execute(
+            f"""
+            SELECT * FROM transactions
+            WHERE code IS NOT NULL AND TRIM(code) != '' AND code IN ({placeholders})
+            ORDER BY date, id
+            """,
+            code_list,
+        ).fetchall()
+        corrections_all = latest_holding_corrections(conn)
+        corrections_all = {k: v for k, v in corrections_all.items() if k in code_filter}
+
+    corrections = corrections_all
     state = {}
 
     def init_state(code, name='', category='', old=None):
@@ -285,9 +327,16 @@ def recalc_holdings(conn):
             s["net_invested"] -= cash_amount
 
     active_codes = set(state.keys())
-    for code in old_holdings.keys():
-        if code not in active_codes:
-            conn.execute("DELETE FROM holdings WHERE code = ?", (code,))
+    if code_filter is None:
+        # Full rebuild: remove holdings that no longer have state.
+        for code in old_holdings.keys():
+            if code not in active_codes:
+                conn.execute("DELETE FROM holdings WHERE code = ?", (code,))
+    else:
+        # Partial: only delete requested codes that have no remaining state.
+        for code in code_filter:
+            if code not in active_codes:
+                conn.execute("DELETE FROM holdings WHERE code = ?", (code,))
 
     now = datetime.now(LOCAL_TZ).replace(tzinfo=None)
     for code, s in state.items():

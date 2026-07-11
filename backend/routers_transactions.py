@@ -189,6 +189,7 @@ async def import_transactions(file: UploadFile = File(...)):
                 except Exception as e:
                     errors.append({"row": idx, "error": str(e)})
             if success:
+                # Full rebuild on CSV import (many codes / safer)
                 recalc_holdings(conn)
             conn.commit()
         except Exception:
@@ -281,7 +282,7 @@ def add_transaction(trans: TransactionBase):
                 trans.remark,
             ),
         )
-        recalc_holdings(conn)
+        recalc_holdings(conn, codes=[trans.code])
         conn.commit()
     return {"status": "success"}
 
@@ -333,7 +334,9 @@ def update_transaction(transaction_id: int, trans: TransactionUpdate):
             raise HTTPException(status_code=400, detail=str(e))
         vals.append(transaction_id)
         conn.execute(f"UPDATE transactions SET {', '.join(updates)} WHERE id = ?", vals)
-        recalc_holdings(conn)
+        affected = {str(existing["code"] or "").strip(), str(merged["code"] or "").strip()}
+        affected.discard("")
+        recalc_holdings(conn, codes=affected or None)
         conn.commit()
     return {"status": "success", "backup": backup_path}
 
@@ -341,10 +344,12 @@ def update_transaction(transaction_id: int, trans: TransactionUpdate):
 @router.delete("/transactions/{transaction_id}")
 def delete_transaction(transaction_id: int):
     backup_path = create_safety_backup("before_delete_transaction")
-    with db_session() as conn:
-        conn.execute("DELETE FROM transactions WHERE id = ?", (transaction_id,))
-        if conn.total_changes == 0:
+    with db_session(row_factory=sqlite3.Row) as conn:
+        existing = conn.execute("SELECT code FROM transactions WHERE id = ?", (transaction_id,)).fetchone()
+        if not existing:
             raise HTTPException(status_code=404, detail="Transaction not found")
-        recalc_holdings(conn)
+        code = str(existing["code"] or "").strip()
+        conn.execute("DELETE FROM transactions WHERE id = ?", (transaction_id,))
+        recalc_holdings(conn, codes=[code] if code else None)
         conn.commit()
     return {"status": "success", "backup": backup_path}
