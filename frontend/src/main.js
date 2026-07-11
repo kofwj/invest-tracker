@@ -1286,6 +1286,15 @@ const app = createApp({
             showLoginOverlay.value = true;
         };
 
+        // Login gate must never look "garbled": drop privacy blur while overlay is visible.
+        watch(showLoginOverlay, (visible) => {
+            if (visible) {
+                document.documentElement.classList.remove('screenshot-mask');
+            } else if (isMasked.value) {
+                document.documentElement.classList.add('screenshot-mask');
+            }
+        }, { immediate: true });
+
         onMounted(async () => {
             try {
                 const statusRes = await api.getAuthStatus();
