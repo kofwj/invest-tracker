@@ -316,3 +316,16 @@ chmod +x scripts/verify_vps_deploy.sh scripts/cron_sync_prices.sh
 ```cron
 15 2 * * * cd /home/kofwj/invest-tracker && python3 scripts/backup_db.py --label daily >/dev/null
 ```
+
+## 10. Docker 构建缓存清理
+
+多次 `docker compose … --build` 会在小盘上堆积 **Build Cache**（数 GB）。
+
+- **部署脚本自动清**：`./scripts/deploy_vps.sh` 在 build + health 成功后会执行 `docker builder prune -f`（不影响运行中容器与 `data/`）。
+- **可选月度定时**（双保险，即使手工 build 也会回收）：
+
+```cron
+30 3 1 * * docker builder prune -f >> /var/log/docker-builder-prune.log 2>&1
+```
+
+查看占用：`docker system df` / `docker builder du`。不要对在用镜像使用 `docker system prune -a`。

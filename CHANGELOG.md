@@ -49,6 +49,9 @@
 
 ### 运维备忘（家用 + 隧道）
 
+- `scripts/deploy_vps.sh` 部署成功后自动 `docker builder prune -f`，避免 Build Cache 占满小盘
+
+
 ```text
 浏览器 --HTTPS--> Cloudflare
               --隧道--> 本机 cloudflared
