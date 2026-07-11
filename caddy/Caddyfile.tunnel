@@ -1,0 +1,45 @@
+# Cloudflare Tunnel / 家用内网源站用：由 CF 终结 HTTPS，Caddy 只听 HTTP。
+# 用法：.env 里设 CADDYFILE=./caddy/Caddyfile.tunnel 后 recreate caddy
+#
+# 隧道 Public Hostname 必须指到本机 Caddy:80，禁止指 frontend:8080。
+
+{
+	auto_https off
+}
+
+:80 {
+	encode gzip
+
+	# OAuth2 Proxy 登录/回调必须公开
+	handle /oauth2/* {
+		reverse_proxy oauth2-proxy:4180 {
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-Uri {uri}
+			# 浏览器侧始终是 HTTPS（Cloudflare），强制下游识别为 https
+			header_up X-Forwarded-Proto https
+			header_up X-Forwarded-Host {host}
+		}
+	}
+
+	handle {
+		# 未登录 → oauth2-proxy
+		forward_auth oauth2-proxy:4180 {
+			uri /oauth2/auth
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-Proto https
+			header_up X-Forwarded-Host {host}
+			copy_headers X-Auth-Request-User X-Auth-Request-Email X-Auth-Request-Groups
+
+			@error status 401
+			handle_response @error {
+				# rd 必须用 https，不能用内部 {scheme}=http
+				redir * /oauth2/sign_in?rd=https://{host}{uri}
+			}
+		}
+
+		reverse_proxy frontend:80 {
+			header_up X-Forwarded-Proto https
+			header_up X-Forwarded-Host {host}
+		}
+	}
+}

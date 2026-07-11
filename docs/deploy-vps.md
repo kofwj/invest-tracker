@@ -166,6 +166,73 @@ https://invest.example.com
 - backend 只 `expose` 给 Docker 网络，不映射公网端口；
 - 如果不想让 VPS 本机以外访问 `8080`，保持 `FRONTEND_BIND=127.0.0.1`。
 
+
+### 4.6 家用 VPS + Cloudflare Tunnel（推荐读）
+
+若域名经 **Cloudflare Tunnel（cloudflared）** 回源到家里/内网机器，**不要**让 Caddy 再申请公网 Let’s Encrypt：公网校验会打到 Cloudflare，拿到的是前端 HTML，证书会失败。
+
+正确链路：
+
+```text
+浏览器 --HTTPS--> Cloudflare 边缘
+                 --隧道--> 家里 cloudflared
+                 --HTTP--> 本机 Caddy:80
+                 --forward_auth--> oauth2-proxy
+                 --proxy--> frontend → backend
+```
+
+**禁止**把隧道 Service 指到 `http://127.0.0.1:8080`（frontend）——会完全绕过 GitHub 登录，表现就是：页面 200 能开、不跳 GitHub、ACME challenge 变成首页 HTML。
+
+#### 配置步骤
+
+1. `.env`：
+
+```env
+APP_DOMAIN=asset.anemy.org
+CADDYFILE=./caddy/Caddyfile.tunnel
+FRONTEND_BIND=127.0.0.1
+FRONTEND_PORT=8080
+GITHUB_OAUTH_CLIENT_ID=...
+GITHUB_OAUTH_CLIENT_SECRET=...
+GITHUB_OAUTH_ALLOWED_USER=...
+OAUTH2_PROXY_COOKIE_SECRET=...
+```
+
+`APP_DOMAIN` **不要**写 `https://`。
+
+2. 重建：
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --force-recreate caddy oauth2-proxy frontend
+```
+
+3. Cloudflare Zero Trust → Tunnel → Public Hostname：
+
+| 字段 | 值 |
+|------|-----|
+| Hostname | 你的域名（如 `asset.anemy.org`） |
+| Path | （空） |
+| Type | HTTP |
+| URL | `127.0.0.1:80` 或 `localhost:80` |
+
+若 cloudflared 与 compose 在同一 Docker 网络，也可 `http://caddy:80`。
+
+4. GitHub OAuth App 回调：`https://你的域名/oauth2/callback`
+
+5. 验证（应 302，而不是直接 200 整页 HTML）：
+
+```bash
+curl -sI 'https://你的域名/' | head -20
+curl -sI 'http://127.0.0.1:80/oauth2/sign_in' | head -15
+```
+
+6. 无痕窗口打开域名 → GitHub →（若启用）应用密码。
+
+#### 资金流水失败
+
+与 GitHub 是两层。未过应用密码门时 `/api/cash-flows` 为 401，前端提示「获取资金流水失败」。GitHub 通过后输入 `INVEST_TRACKER_PASSWORD` 再强刷。
+
+
 ## 5. 更新部署
 
 ```bash
