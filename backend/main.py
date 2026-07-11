@@ -24,6 +24,7 @@ try:
     )
     from .routers_cash import router as cash_router
     from .routers_dashboard import router as dashboard_router
+    from .routers_dividends import router as dividends_router
     from .routers_deposits import router as deposits_router
     from .routers_holdings import router as holdings_router
     from .routers_performance import router as performance_router
@@ -45,6 +46,7 @@ except ImportError:  # Allows tests to load this file directly via importlib.
     )
     from routers_cash import router as cash_router
     from routers_dashboard import router as dashboard_router
+    from routers_dividends import router as dividends_router
     from routers_deposits import router as deposits_router
     from routers_holdings import router as holdings_router
     from routers_performance import router as performance_router
@@ -84,6 +86,7 @@ app.include_router(transactions_router, dependencies=[Depends(require_auth)])
 app.include_router(cash_router, dependencies=[Depends(require_auth)])
 app.include_router(snapshots_router, dependencies=[Depends(require_auth)])
 app.include_router(holdings_router, dependencies=[Depends(require_auth)])
+app.include_router(dividends_router, dependencies=[Depends(require_auth)])
 app.include_router(dashboard_router, dependencies=[Depends(require_auth)])
 app.include_router(performance_router, dependencies=[Depends(require_auth)])
 app.include_router(maintenance_router, dependencies=[Depends(require_auth)])

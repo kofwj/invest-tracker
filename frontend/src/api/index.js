@@ -40,6 +40,8 @@ const api = {
 
     syncPrices: () => axios.post(API + '/sync-prices', null, { timeout: 120000 }),
     syncTrailingReturns: () => axios.post(API + '/sync-trailing-returns', null, { timeout: 180000 }),
+    scanDividends: (payload = {}) => axios.post(API + '/dividends/scan', payload, { timeout: 180000 }),
+    confirmDividends: (payload) => axios.post(API + '/dividends/confirm', payload, { timeout: 120000 }),
 
     addTransaction: (payload) => axios.post(API + '/transactions', payload),
     listTransactions: (params = {}) => {

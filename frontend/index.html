@@ -16,8 +16,9 @@
                 <el-button type="success" @click="fetchData">刷新数据</el-button>
                 <el-button type="primary" @click="syncPrices" :loading="syncing">同步最新价</el-button>
                 <el-button type="warning" plain @click="syncTrailingReturns" :loading="trailingSyncing">同步近一年收益率</el-button>
+                <el-button type="success" plain @click="openDividendDraftDialog" :loading="dividendLoading">分红草稿</el-button>
                 <el-button v-if="authEnabled" type="info" link @click="handleLogout" style="margin-left: 8px;">
-                    🚪 退出登录
+                    退出登录
                 </el-button>
                 <span v-if="syncNotice.text" class="inline-sync-status" :class="syncNotice.type">{{ syncNotice.text }}</span>
             </div>
@@ -1434,26 +1435,114 @@
             </template>
         </el-dialog>
 
-        <!-- 登录锁屏遮罩 (Glassmorphic Lock Screen) -->
-        <div v-if="showLoginOverlay" class="login-overlay">
+
+        <!-- 半自动分红草稿 -->
+        <el-dialog v-model="dividendDialog.visible" title="半自动分红草稿" width="1080px" top="5vh">
+            <el-alert
+                title="仅支持 A 股个股现金分红。系统会按股权登记日持仓估算金额，并自动识别交易流水里已有的分红/分红再投资，避免重复入账。ETF/债基/REIT 请继续手工录入。"
+                type="info"
+                show-icon
+                :closable="false"
+                style="margin-bottom: 12px;"
+            ></el-alert>
+            <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px;align-items:center;">
+                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+                    <span style="color:#606266;">回看天数</span>
+                    <el-input-number v-model="dividendDialog.lookbackDays" :min="30" :max="2000" :step="30"></el-input-number>
+                    <el-button type="primary" :loading="dividendLoading" @click="scanDividendDrafts">扫描分红</el-button>
+                    <el-button @click="selectSelectableDividendDrafts">全选可确认</el-button>
+                    <el-button @click="clearDividendDraftSelection">清空选择</el-button>
+                </div>
+                <div style="color:#909399;font-size:13px;" v-if="dividendDialog.summary">
+                    新草稿 {{ dividendDialog.summary.new_count || 0 }} /
+                    已有流水 {{ dividendDialog.summary.already_recorded_count || 0 }} /
+                    零持仓 {{ dividendDialog.summary.zero_qty_count || 0 }} /
+                    不支持 {{ dividendDialog.summary.unsupported_holdings || 0 }}
+                </div>
+            </div>
+            <el-table
+                ref="dividendTableRef"
+                :data="dividendDialog.drafts"
+                stripe
+                max-height="480"
+                style="width:100%;"
+                @selection-change="onDividendSelectionChange"
+                empty-text="暂无草稿，请先扫描"
+            >
+                <el-table-column type="selection" width="48" :selectable="isDividendDraftSelectable"></el-table-column>
+                <el-table-column label="状态" width="110" align="center">
+                    <template #default="scope">
+                        <el-tag :type="dividendStatusType(scope.row.status)" size="small">{{ dividendStatusLabel(scope.row.status) }}</el-tag>
+                    </template>
+                </el-table-column>
+                <el-table-column prop="event_date" label="除权/事件日" width="115" align="center"></el-table-column>
+                <el-table-column label="标的" min-width="150">
+                    <template #default="scope">
+                        <div>{{ scope.row.name }}</div>
+                        <div style="color:#909399;font-size:12px;">{{ scope.row.code }} · {{ scope.row.category || '未分类' }}</div>
+                    </template>
+                </el-table-column>
+                <el-table-column prop="plan_profile" label="方案" min-width="150" show-overflow-tooltip></el-table-column>
+                <el-table-column label="登记日数量" width="110" align="right">
+                    <template #default="scope">{{ Number(scope.row.quantity_on_record_date || 0).toLocaleString() }}</template>
+                </el-table-column>
+                <el-table-column label="每股分红" width="95" align="right">
+                    <template #default="scope">{{ formatMoney(scope.row.cash_per_share, 4) }}</template>
+                </el-table-column>
+                <el-table-column label="估算金额" width="120" align="right">
+                    <template #default="scope">
+                        <el-input-number
+                            v-if="scope.row.selectable"
+                            v-model="scope.row.amount"
+                            :precision="2"
+                            :controls="false"
+                            class="wide-number-input"
+                            style="width:110px;"
+                        ></el-input-number>
+                        <span v-else>{{ formatMoney(scope.row.amount) }}</span>
+                    </template>
+                </el-table-column>
+                <el-table-column label="匹配/说明" min-width="180" show-overflow-tooltip>
+                    <template #default="scope">
+                        <span style="color:#909399;font-size:12px;">{{ scope.row.reason || scope.row.assign_progress || '' }}</span>
+                    </template>
+                </el-table-column>
+            </el-table>
+            <template #footer>
+                <div style="display:flex;justify-content:space-between;align-items:center;width:100%;gap:12px;flex-wrap:wrap;">
+                    <span style="color:#909399;font-size:13px;">已选 {{ dividendDialog.selected.length }} 条，确认后写入「分红」交易并重算持仓/现金</span>
+                    <div>
+                        <el-button @click="dividendDialog.visible = false">关闭</el-button>
+                        <el-button type="primary" :loading="dividendConfirming" @click="confirmSelectedDividends">确认入账</el-button>
+                    </div>
+                </div>
+            </template>
+        </el-dialog>
+
+        <!-- 登录锁屏遮罩 -->
+        <div v-if="showLoginOverlay" class="login-overlay" role="dialog" aria-modal="true" aria-label="系统登录">
             <div class="login-box">
-                <div class="login-logo">🔒</div>
+                <div class="login-logo" aria-hidden="true">投</div>
                 <h3>投资资产管理系统</h3>
-                <p class="login-subtitle">安全身份校验已启用</p>
-                <form @submit.prevent="handleLogin" style="margin-top: 24px;">
-                    <div style="margin-bottom: 20px; position: relative;">
-                        <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 14px; z-index: 10;">🔑</span>
-                        <input 
-                            v-model="loginPassword" 
-                            type="password" 
+                <p class="login-subtitle">请输入访问密码以继续</p>
+                <form @submit.prevent="handleLogin" style="margin-top: 24px;" autocomplete="on">
+                    <div class="login-field">
+                        <label class="login-field-label" for="login-password-input">访问密码</label>
+                        <input
+                            id="login-password-input"
+                            v-model="loginPassword"
+                            type="password"
                             class="login-native-input"
-                            placeholder="请输入系统访问密码" 
+                            placeholder="请输入系统访问密码"
+                            autocomplete="current-password"
                             autofocus
                             required
+                            lang="zh-CN"
                         >
                     </div>
+                    <p class="login-error" v-if="loginError">{{ loginError }}</p>
                     <button type="submit" class="login-native-button" :disabled="loginLoading">
-                        {{ loginLoading ? '正在验证...' : '登 录' }}
+                        {{ loginLoading ? '正在验证...' : '登录' }}
                     </button>
                 </form>
             </div>

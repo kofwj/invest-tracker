@@ -1,5 +1,6 @@
 import { createApp, ref, onMounted, nextTick, watch, computed } from 'vue/dist/vue.esm-bundler.js';
 import ElementPlus, { ElLoading, ElMessage, ElMessageBox } from 'element-plus';
+import zhCn from 'element-plus/es/locale/lang/zh-cn';
 import 'element-plus/dist/index.css';
 import axios from 'axios';
 import * as echarts from 'echarts';
@@ -50,6 +51,7 @@ const app = createApp({
         const showLoginOverlay = ref(false);
         const loginLoading = ref(false);
         const loginPassword = ref('');
+        const loginError = ref('');
         const authEnabled = ref(false);
 
         const activeTab = ref(screenshotTabs.includes(requestedTab) ? requestedTab : 'snapshots');
@@ -83,6 +85,18 @@ const app = createApp({
         const maintenanceStatus = ref({});
         const backups = ref([]);
         const maintenanceLoading = ref(false);
+        const dividendLoading = ref(false);
+        const dividendConfirming = ref(false);
+        const dividendTableRef = ref(null);
+        const dividendDialog = ref({
+            visible: false,
+            lookbackDays: 400,
+            drafts: [],
+            selected: [],
+            summary: null,
+            unsupported: [],
+            failed: [],
+        });
 
         const transForm = ref({
             date: todayLocalIso(),
@@ -330,6 +344,112 @@ const app = createApp({
                 showSyncNotice('最新价同步失败：' + detail, 'error');
             } finally {
                 syncing.value = false;
+            }
+        };
+
+
+        const openDividendDraftDialog = () => {
+            dividendDialog.value.visible = true;
+            if (!dividendDialog.value.drafts.length) {
+                scanDividendDrafts();
+            }
+        };
+
+        const dividendStatusLabel = (status) => ({
+            new: '待确认',
+            already_recorded: '已有流水',
+            zero_qty: '零持仓',
+            zero_amount: '零金额',
+        }[status] || status || '未知');
+
+        const dividendStatusType = (status) => ({
+            new: 'success',
+            already_recorded: 'info',
+            zero_qty: 'warning',
+            zero_amount: 'warning',
+        }[status] || 'info');
+
+        const isDividendDraftSelectable = (row) => !!row?.selectable && Number(row?.amount || 0) > 0;
+
+        const onDividendSelectionChange = (rows) => {
+            dividendDialog.value.selected = rows || [];
+        };
+
+        const selectSelectableDividendDrafts = () => {
+            const table = dividendTableRef.value;
+            if (!table) return;
+            table.clearSelection();
+            (dividendDialog.value.drafts || []).forEach((row) => {
+                if (isDividendDraftSelectable(row)) table.toggleRowSelection(row, true);
+            });
+        };
+
+        const clearDividendDraftSelection = () => {
+            const table = dividendTableRef.value;
+            if (table) table.clearSelection();
+            dividendDialog.value.selected = [];
+        };
+
+        const scanDividendDrafts = async () => {
+            dividendLoading.value = true;
+            try {
+                const res = await api.scanDividends({ lookback_days: dividendDialog.value.lookbackDays || 400 });
+                const data = res.data || {};
+                dividendDialog.value.drafts = data.drafts || [];
+                dividendDialog.value.summary = data.summary || null;
+                dividendDialog.value.unsupported = data.unsupported || [];
+                dividendDialog.value.failed = data.failed || [];
+                dividendDialog.value.selected = [];
+                const s = data.summary || {};
+                ElMessage.success(`扫描完成：新草稿 ${s.new_count || 0}，已有流水 ${s.already_recorded_count || 0}，零持仓 ${s.zero_qty_count || 0}`);
+            } catch (e) {
+                ElMessage.error('扫描分红失败：' + (e?.response?.data?.detail || e?.message || '未知错误'));
+            } finally {
+                dividendLoading.value = false;
+            }
+        };
+
+        const confirmSelectedDividends = async () => {
+            const selected = (dividendDialog.value.selected || []).filter(isDividendDraftSelectable);
+            if (!selected.length) {
+                return ElMessage.warning('请先勾选可确认的分红草稿');
+            }
+            try {
+                await ElMessageBox.confirm(
+                    `确认将 ${selected.length} 条分红草稿写入交易流水？系统会再次去重，已存在相近分红不会重复入账。`,
+                    '确认分红入账',
+                    { type: 'warning' }
+                );
+            } catch (e) {
+                return;
+            }
+            dividendConfirming.value = true;
+            try {
+                const payload = {
+                    backup: true,
+                    drafts: selected.map((d) => ({
+                        code: d.code,
+                        name: d.name,
+                        category: d.category,
+                        account: d.account || activeFeeAccount.value || '华泰证券',
+                        event_date: d.event_date,
+                        amount: Number(d.amount || 0),
+                        fee: Number(d.fee || 0),
+                        remark: d.remark,
+                        plan_profile: d.plan_profile,
+                        direction: '分红',
+                        draft_key: d.draft_key,
+                    })),
+                };
+                const res = await api.confirmDividends(payload);
+                const data = res.data || {};
+                ElMessage.success(`入账完成：新建 ${data.created_count || 0}，跳过 ${data.skipped_count || 0}，失败 ${data.error_count || 0}`);
+                await Promise.all([fetchData(), queryTransactions(), scanDividendDrafts()]);
+            } catch (e) {
+                if (e === 'cancel') return;
+                ElMessage.error('确认分红失败：' + (e?.response?.data?.detail || e?.message || '未知错误'));
+            } finally {
+                dividendConfirming.value = false;
             }
         };
 
@@ -1120,18 +1240,20 @@ const app = createApp({
         };
 
         const handleLogin = async () => {
+            loginError.value = '';
             if (!loginPassword.value) {
+                loginError.value = '请输入密码';
                 showMessage('warning', '请输入密码');
                 return;
             }
             loginLoading.value = true;
             try {
-                console.log('开始尝试登录...');
                 const res = await api.login(loginPassword.value);
                 const token = res.data.token;
                 localStorage.setItem('invest_tracker_token', token);
                 showLoginOverlay.value = false;
                 loginPassword.value = '';
+                loginError.value = '';
                 showMessage('success', '解锁成功');
                 fetchData();
                 queryTransactions();
@@ -1140,8 +1262,15 @@ const app = createApp({
                 fetchMaintenance();
             } catch (e) {
                 console.error('登录出现异常:', e);
-                const detail = e?.response?.data?.detail || e?.message || '密码错误或网络异常';
-                showMessage('error', detail);
+                let detail = e?.response?.data?.detail || e?.message || '密码错误或网络异常';
+                // FastAPI may return detail as object/array; normalize to readable Chinese text.
+                if (Array.isArray(detail)) {
+                    detail = detail.map(x => x?.msg || x?.message || String(x)).join('；');
+                } else if (detail && typeof detail === 'object') {
+                    detail = detail.msg || detail.message || JSON.stringify(detail);
+                }
+                loginError.value = String(detail);
+                showMessage('error', String(detail));
             } finally {
                 loginLoading.value = false;
             }
@@ -1180,14 +1309,14 @@ const app = createApp({
 
         return {
             isMasked, toggleMask,
-            showLoginOverlay, loginLoading, loginPassword, authEnabled, handleLogin, handleLogout,
+            showLoginOverlay, loginLoading, loginPassword, loginError, authEnabled, handleLogin, handleLogout,
             activeTab, dashboard, holdings, deposits, depositRows, depositSummary, depositBankBreakdown, depositMaturityBuckets, syncing, trailingSyncing, syncNotice,
-            snapshots, snapshotRange, snapshotSummary, snapshotMetrics, snapshotChangeRows, snapshotInsights, snapshotLoading, maintenanceStatus, backups, maintenanceLoading, todayIso, todaySnapshotDone, latestPriceStatusText, latestBackupText,
+            snapshots, snapshotRange, snapshotSummary, snapshotMetrics, snapshotChangeRows, snapshotInsights, snapshotLoading, maintenanceStatus, backups, maintenanceLoading, dividendLoading, dividendConfirming, dividendDialog, dividendTableRef, todayIso, todaySnapshotDone, latestPriceStatusText, latestBackupText,
             transForm, feeSettings, feeAccounts, activeFeeAccount, newFeeAccountName, feeCategories, feeSettingRows, feeAutoHint, depositDialog, cashForm, cashFlows, cashFlowForm, cashFlowQuery, cashFlowSummary, cashFlowEditDialog, transDialog, allocationAnalysis, macroAllocationAnalysis,
             allocationSummary, allocationHealth, portfolioExpectedReturn, expectedReturnDialog, holdingCorrectionDialog, holdingCorrectionHistoryDialog,
             // 交易管理相关
             allTransactions, filteredTransactions, pendingTransactions, pendingPurchaseTotal, transQuery, transPage, transEditDialog,
-            syncPrices, syncTrailingReturns, submitTrans, resetForm, fetchData, markFeeManual, saveFeeSettings, resetFeeSettings, addFeeAccount, removeFeeAccount, onActiveFeeAccountChange,
+            syncPrices, syncTrailingReturns, openDividendDraftDialog, scanDividendDrafts, confirmSelectedDividends, selectSelectableDividendDrafts, clearDividendDraftSelection, onDividendSelectionChange, isDividendDraftSelectable, dividendStatusLabel, dividendStatusType, submitTrans, resetForm, fetchData, markFeeManual, saveFeeSettings, resetFeeSettings, addFeeAccount, removeFeeAccount, onActiveFeeAccountChange,
             downloadTransactionsTemplate, exportTransactions, importTransactions, downloadDepositsTemplate, exportDeposits, importDeposits,
             queryAssetByCode, queryAssetByName, selectTransAsset, autoMatchTransAsset,
             openDepositDialog, saveDeposit, deleteDeposit, updateCash, queryCashFlows, resetCashFlowQuery, addCashFlow, openCashFlowEditDialog, saveCashFlowEdit, deleteCashFlow, cashFlowTagType,
@@ -1200,5 +1329,5 @@ const app = createApp({
         };
     }
 });
-app.use(ElementPlus);
+app.use(ElementPlus, { locale: zhCn });
 app.mount('#app');

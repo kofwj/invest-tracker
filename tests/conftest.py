@@ -50,6 +50,8 @@ def clear_backend_module_cache():
         'holding_calculator',
         'routers_snapshots',
         'routers_holdings',
+        'routers_dividends',
+        'dividend_sync',
         'routers_dashboard',
         'routers_performance',
         'schema',
