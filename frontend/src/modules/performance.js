@@ -11,16 +11,134 @@ const createPerformanceModule = ({
     nextTick,
     computed,
 }) => {
+    const hasPerfFlows = computed(() => Number(perfSummary.value?.flow_count || 0) > 0);
+
+    const perfGuideSteps = computed(() => ([
+        {
+            step: '1',
+            title: '先看整户赚没赚',
+            text: '重点看「你还净投了多少」和「整户一共赚了多少」。这是全组合账，不是单只股票。',
+        },
+        {
+            step: '2',
+            title: '再看谁在贡献收益',
+            text: '中间贡献表按「当前仓浮盈 + 分红」排序，适合看谁在拉、谁在拖；不含已卖出的已实现盈亏。',
+        },
+        {
+            step: '3',
+            title: '需要年化时再录流水',
+            text: 'XIRR / 准确净投入，依赖底部「组合资金流水」（外部投入/取出）。买卖交易、银证转账不要记这里。',
+        },
+    ]));
+
+    const perfLensRows = computed(() => ([
+        {
+            name: '整户总账',
+            where: '本页顶部「累计总收益」',
+            meaning: '当前总资产 − 累计净投入',
+            goodFor: '回答：整锅钱相对额外投入，到底赚了多少',
+            notFor: '不对应华泰某只票的累计盈亏',
+        },
+        {
+            name: '当前仓贡献',
+            where: '本页「浮盈+分红」与贡献表',
+            meaning: '(现价 − 普通成本)×数量 + 分红',
+            goodFor: '回答：现在还拿着的仓，谁在帮你赚钱',
+            notFor: '不含历史卖出已实现；通常小于券商累计盈亏',
+        },
+        {
+            name: '接近券商累计',
+            where: '持仓明细「全周期盈亏」',
+            meaning: '(现价 − 摊薄成本)×数量',
+            goodFor: '和券商 App 累计盈亏对账',
+            notFor: '不是本页贡献表默认口径',
+        },
+    ]));
+
+    const perfReadTips = computed(() => {
+        const s = perfSummary.value || {};
+        const tips = [];
+        if (!hasPerfFlows.value) {
+            tips.push({
+                type: 'warning',
+                title: '外部资金流水尚未录入',
+                text: '净投入、累计总收益、XIRR 都依赖底部「组合资金流水」。没录之前，请把它们当参考，优先看贡献表相对排序。',
+            });
+        } else {
+            tips.push({
+                type: 'success',
+                title: '外部流水已启用',
+                text: `已记录 ${s.flow_count || 0} 笔组合外部资金进出。净投入与 XIRR 才有完整意义。`,
+            });
+        }
+        tips.push({
+            type: 'info',
+            title: '三套盈亏本来就不会相等',
+            text: '整户总账 ≠ 当前仓浮盈+分红 ≠ 持仓页全周期盈亏。对不上是口径不同，不是算错。',
+        });
+        tips.push({
+            type: 'info',
+            title: '日常怎么选页',
+            text: '看单票涨跌/是否减仓 → 持仓明细；看配置比例 → 资产配置；看整户赚亏与年化 → 本页。',
+        });
+        return tips;
+    });
+
     const perfCards = computed(() => {
         const s = perfSummary.value;
         if (!s) return [];
+        const flowReady = Number(s.flow_count || 0) > 0;
+        const gainColor = s.total_gain >= 0 ? '#F56C6C' : '#67C23A';
+        const floatSum = Number(s.current_unrealized_profit || 0) + Number(s.total_dividend_income || 0);
         return [
-            { label: '当前总资产', value: formatMoney(s.total_assets), sub: '市值+现金+存款+在途', color: '#303133' },
-            { label: '累计净投入', value: formatMoney(s.net_contribution), sub: `投入${formatMoney(s.total_in)} / 取出${formatMoney(s.total_out)}` },
-            { label: '累计总收益', value: formatMoney(s.total_gain), sub: `${s.total_gain_pct?.toFixed(2)}%`, color: s.total_gain >= 0 ? '#F56C6C' : '#67C23A' },
-            { label: 'XIRR 年化', value: s.xirr != null ? s.xirr.toFixed(2) + '%' : '--', sub: s.xirr_status === 'ok' ? '资金加权' : s.xirr_message || '暂无', color: (s.xirr || 0) >= 0 ? '#F56C6C' : '#67C23A' },
-            { label: '浮盈 + 分红', value: formatMoney(s.current_unrealized_profit + s.total_dividend_income), sub: `浮盈${formatMoney(s.current_unrealized_profit)} / 分红${formatMoney(s.total_dividend_income)}`, color: (s.current_unrealized_profit + s.total_dividend_income) >= 0 ? '#F56C6C' : '#67C23A' },
-            { label: 'YTD 收益', value: formatMoney(s.ytd_gain), sub: `${s.ytd_gain_pct?.toFixed(2)}%`, color: s.ytd_gain >= 0 ? '#F56C6C' : '#67C23A' },
+            {
+                label: '当前总资产',
+                plain: '你现在一共有多少钱',
+                value: formatMoney(s.total_assets),
+                sub: '市值 + 证券现金 + 存款 + 申购在途',
+                color: '#303133',
+            },
+            {
+                label: '累计净投入',
+                plain: '你还净投了多少',
+                value: flowReady ? formatMoney(s.net_contribution) : '待录入',
+                sub: flowReady
+                    ? `投入 ${formatMoney(s.total_in)} − 取出 ${formatMoney(s.total_out)}`
+                    : '请在下方录「投入/取出」，不是买卖流水',
+                color: flowReady ? '#303133' : '#E6A23C',
+            },
+            {
+                label: '累计总收益',
+                plain: '整户一共赚了多少',
+                value: flowReady ? formatMoney(s.total_gain) : '待录入',
+                sub: flowReady
+                    ? `相对净投入 ${Number(s.total_gain_pct || 0).toFixed(2)}% · 总资产−净投入`
+                    : '公式：总资产 − 净投入（需先有外部流水）',
+                color: flowReady ? gainColor : '#E6A23C',
+            },
+            {
+                label: 'XIRR 年化',
+                plain: '考虑进出时间后的年化',
+                value: s.xirr != null ? `${Number(s.xirr).toFixed(2)}%` : (flowReady ? '--' : '待录入'),
+                sub: s.xirr_status === 'ok'
+                    ? '资金加权年化，适合长期跟踪'
+                    : (s.xirr_message || '至少需要有效的投入/取出与当前资产'),
+                color: s.xirr != null ? ((s.xirr || 0) >= 0 ? '#F56C6C' : '#67C23A') : '#909399',
+            },
+            {
+                label: '当前仓浮盈+分红',
+                plain: '现在还拿着的仓赚多少',
+                value: formatMoney(floatSum),
+                sub: `浮盈 ${formatMoney(s.current_unrealized_profit)} / 分红 ${formatMoney(s.total_dividend_income)} · 不含已卖出`,
+                color: floatSum >= 0 ? '#F56C6C' : '#67C23A',
+            },
+            {
+                label: 'YTD 收益',
+                plain: '今年初至今赚了多少',
+                value: formatMoney(s.ytd_gain),
+                sub: `相对年初快照 ${Number(s.ytd_gain_pct || 0).toFixed(2)}% · 已扣今年净投入变化`,
+                color: s.ytd_gain >= 0 ? '#F56C6C' : '#67C23A',
+            },
         ];
     });
 
@@ -108,6 +226,10 @@ const createPerformanceModule = ({
     }
 
     return {
+        hasPerfFlows,
+        perfGuideSteps,
+        perfLensRows,
+        perfReadTips,
         perfCards,
         displayedPerfContribution,
         perfContributionHeadline,
