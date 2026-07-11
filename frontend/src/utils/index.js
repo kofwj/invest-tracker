@@ -51,4 +51,39 @@ const inferCategoryByCode = (code, name) => {
     return '';
 };
 
-Object.assign(window, { normalizeText, daysUntil, formatMoney, formatPercent, pct, inferCategoryByCode });
+
+const holdingFloatProfit = (row) => {
+    const qty = Number(row?.quantity || 0);
+    const last = Number(row?.last_price || 0);
+    const avg = Number(row?.avg_cost || 0);
+    const div = Number(row?.total_dividend || 0);
+    return (last - avg) * qty + div;
+};
+
+const holdingLifetimeProfit = (row) => {
+    const qty = Number(row?.quantity || 0);
+    const last = Number(row?.last_price || 0);
+    const diluted = Number(row?.diluted_cost || 0);
+    // 全周期 ≈ 市值 - 净投入；摊薄成本 = 净投入/数量，故 (现价-摊薄)*数量
+    // 分红已体现在 net_invested/摊薄成本中，不再重复加 total_dividend
+    return (last - diluted) * qty;
+};
+
+const holdingFloatProfitRate = (row) => {
+    const qty = Number(row?.quantity || 0);
+    const avg = Number(row?.avg_cost || 0);
+    const cost = avg * qty;
+    if (!(cost > 0)) return null;
+    return holdingFloatProfit(row) / cost * 100;
+};
+
+const holdingLifetimeProfitRate = (row) => {
+    const qty = Number(row?.quantity || 0);
+    const diluted = Number(row?.diluted_cost || 0);
+    const net = diluted * qty;
+    // 净投入为 0 或负（回本后仍持仓）时不展示比率
+    if (!(net > 0)) return null;
+    return holdingLifetimeProfit(row) / net * 100;
+};
+
+Object.assign(window, { normalizeText, daysUntil, formatMoney, formatPercent, pct, inferCategoryByCode, holdingFloatProfit, holdingLifetimeProfit, holdingFloatProfitRate, holdingLifetimeProfitRate });
