@@ -2,8 +2,23 @@ import json as pyjson
 import logging
 import urllib.request
 from datetime import date as dt_date
+from datetime import datetime
+
+try:
+    from .database import LOCAL_TZ
+except ImportError:
+    try:
+        from database import LOCAL_TZ
+    except ImportError:
+        LOCAL_TZ = None
 
 logger = logging.getLogger(__name__)
+
+
+def _local_today() -> dt_date:
+    if LOCAL_TZ is not None:
+        return datetime.now(LOCAL_TZ).date()
+    return dt_date.today()
 
 
 def ensure_holding_return_columns(conn):
@@ -86,7 +101,7 @@ def calculate_trailing_return_1y(code: str, current_price: float = None):
     import akshare as ak  # lazy: not required for app boot / unit tests
 
     c = str(code or "").strip().lower()
-    end = dt_date.today()
+    end = _local_today()
     start = end.replace(year=end.year - 1)
     try:
         if c.startswith("f"):

@@ -1,13 +1,14 @@
 import sqlite3
 
 
-def test_discipline_report_and_policy(client, app_module):
-    # cash + one big holding
+def _seed_gree_heavy_portfolio(client, app_module, cash_base=200000, deposit=50000, qty=2000, price=40):
     conn = sqlite3.connect(app_module.DB_PATH)
-    conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('cash_base', '100000')")
+    app_module.set_setting(conn, "securities_cash_base", cash_base)
+    # keep displayed securities_cash in sync for any legacy readers
+    app_module.set_setting(conn, "securities_cash", cash_base)
     conn.execute(
         "INSERT INTO deposits (bank_name, amount, interest_rate, due_date, remark) VALUES (?,?,?,?,?)",
-        ("测试银行", 50000, 2.0, "2027-01-01", "t"),
+        ("测试银行", deposit, 2.0, "2027-01-01", "t"),
     )
     conn.commit()
     conn.close()
@@ -21,9 +22,9 @@ def test_discipline_report_and_policy(client, app_module):
             "category": "A股权益",
             "account": "华泰证券",
             "direction": "买入",
-            "quantity": 2000,
-            "price": 40,
-            "amount": 80000,
+            "quantity": qty,
+            "price": price,
+            "amount": qty * price,
             "fee": 0,
             "remark": "",
         },
@@ -31,9 +32,13 @@ def test_discipline_report_and_policy(client, app_module):
     assert r.status_code == 200, r.text
 
     conn = sqlite3.connect(app_module.DB_PATH)
-    conn.execute("UPDATE holdings SET last_price = 40 WHERE code = '000651'")
+    conn.execute("UPDATE holdings SET last_price = ? WHERE code = '000651'", (price,))
     conn.commit()
     conn.close()
+
+
+def test_discipline_report_and_policy(client, app_module):
+    _seed_gree_heavy_portfolio(client, app_module)
 
     report = client.get("/discipline/report")
     assert report.status_code == 200
@@ -41,6 +46,7 @@ def test_discipline_report_and_policy(client, app_module):
     assert "breaches" in data and isinstance(data["breaches"], list)
     assert "actions" in data and isinstance(data["actions"], list)
     assert "snapshot" in data
+    assert data["snapshot"]["securities_cash"] > 0
     assert "summary" in data
     assert "policy" in data
 
@@ -59,13 +65,43 @@ def test_discipline_report_and_policy(client, app_module):
     assert saved.status_code == 200
     assert saved.json()["policy"]["equity_max_pct"] == 50
 
-    # drafts create (may be 0 if no actions under current numbers)
+    # invalid policy: min > max
+    bad = client.put("/discipline/policy", json={"equity_min_pct": 60, "equity_max_pct": 40})
+    assert bad.status_code == 400
+
+    # invalid targets sum
+    bad2 = client.put(
+        "/discipline/policy",
+        json={"targets": {"equity_pct": 90, "fixed_income_pct": 90, "deposit_pct": 90}},
+    )
+    assert bad2.status_code == 400
+
     created = client.post("/discipline/drafts", json={})
     assert created.status_code == 200
-    assert "count" in created.json()
+    body = created.json()
+    assert "count" in body
+    assert body["count"] >= 1
 
     drafts = client.get("/discipline/drafts?status=draft")
     assert drafts.status_code == 200
+    assert len(drafts.json()) >= 1
+
+
+def test_discipline_draft_dedupe_same_code_side(client, app_module):
+    _seed_gree_heavy_portfolio(client, app_module)
+    first = client.post("/discipline/drafts", json={})
+    assert first.status_code == 200
+    n1 = first.json()["count"]
+    assert n1 >= 1
+    ids1 = {d["id"] for d in client.get("/discipline/drafts?status=draft").json()}
+
+    second = client.post("/discipline/drafts", json={})
+    assert second.status_code == 200
+    assert second.json().get("updated_count", 0) + second.json().get("created_count", 0) >= 1
+    ids2 = {d["id"] for d in client.get("/discipline/drafts?status=draft").json()}
+    # open drafts should not grow unboundedly for same actions
+    assert len(ids2) == len(ids1)
+    assert ids2 == ids1
 
 
 def test_discipline_confirm_buy_creates_pending_tx(client, app_module):
@@ -99,3 +135,28 @@ def test_discipline_confirm_buy_creates_pending_tx(client, app_module):
     # second confirm should fail
     again = client.post(f"/discipline/drafts/{did}/confirm")
     assert again.status_code in (400, 404)
+
+
+def test_discipline_confirm_sell_without_qty_fails(client, app_module):
+    client.post(
+        "/discipline/drafts",
+        json={
+            "actions": [
+                {
+                    "side": "sell",
+                    "code": "000651",
+                    "name": "格力电器",
+                    "category": "A股权益",
+                    "account": "华泰证券",
+                    "amount": 10000,
+                    "quantity": 0,
+                    "price": 0,
+                    "reason": "无价卖出",
+                }
+            ]
+        },
+    )
+    drafts = client.get("/discipline/drafts?status=draft").json()
+    did = drafts[0]["id"]
+    conf = client.post(f"/discipline/drafts/{did}/confirm")
+    assert conf.status_code == 400

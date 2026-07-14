@@ -9,6 +9,14 @@ import json
 from datetime import date, datetime
 from typing import Iterable, Optional, Set, Union
 
+try:
+    from .database import LOCAL_TZ
+except ImportError:
+    try:
+        from database import LOCAL_TZ
+    except ImportError:
+        LOCAL_TZ = None
+
 # Built-in A-share closed days (weekends excluded; weekends handled separately).
 # Covers 2025–2027 major public holidays commonly observed by SSE/SZSE.
 # Source: public holiday notices; adjust yearly via settings if exchange tweaks.
@@ -97,6 +105,12 @@ def closed_day_set(conn=None, extra: Optional[Iterable[str]] = None) -> Set[str]
     return days
 
 
+def _local_today() -> date:
+    if LOCAL_TZ is not None:
+        return datetime.now(LOCAL_TZ).date()
+    return date.today()
+
+
 def is_a_share_trading_day(
     value: Union[str, date, datetime, None] = None,
     *,
@@ -106,7 +120,7 @@ def is_a_share_trading_day(
     """True if the given calendar day is expected to be an A-share trading day."""
     d = _to_date(value)
     if d is None:
-        d = date.today()
+        d = _local_today()
     # Sat=5 Sun=6
     if d.weekday() >= 5:
         return False
@@ -120,7 +134,7 @@ def trading_day_status(
     *,
     conn=None,
 ) -> dict:
-    d = _to_date(value) or date.today()
+    d = _to_date(value) or _local_today()
     iso = d.isoformat()
     trading = is_a_share_trading_day(d, conn=conn)
     reason = "trading"

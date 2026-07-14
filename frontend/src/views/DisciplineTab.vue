@@ -156,6 +156,24 @@
         <el-form-item label="优先加仓名称">
           <el-input v-model="disciplinePolicy.preferred_buy_name" />
         </el-form-item>
+        <el-form-item label="格力上限%">
+          <el-input-number v-model="greeLimitPct" :min="1" :max="100" :step="1" />
+        </el-form-item>
+        <el-form-item label="防守额外品类">
+          <el-select
+            v-model="disciplinePolicy.defensive_extra_categories"
+            multiple
+            filterable
+            allow-create
+            default-first-option
+            placeholder="如 黄金 / REITs（可选）"
+            style="width: 100%"
+          >
+            <el-option label="黄金" value="黄金" />
+            <el-option label="REITs" value="REITs" />
+            <el-option label="港股ETF" value="港股ETF" />
+          </el-select>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="disciplinePolicyDialog = false">取消</el-button>
@@ -166,6 +184,7 @@
 </template>
 
 <script setup>
+import { computed } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 
 const {
@@ -194,6 +213,31 @@ const {
 if (disciplinePolicy.value && !disciplinePolicy.value.targets) {
   disciplinePolicy.value.targets = { equity_pct: 45, fixed_income_pct: 30, deposit_pct: 25 };
 }
+if (disciplinePolicy.value && !Array.isArray(disciplinePolicy.value.defensive_extra_categories)) {
+  disciplinePolicy.value.defensive_extra_categories = [];
+}
+if (disciplinePolicy.value && !Array.isArray(disciplinePolicy.value.named_limits)) {
+  disciplinePolicy.value.named_limits = [{ code: '000651', name: '格力电器', max_pct: 15 }];
+}
+
+const greeLimitPct = computed({
+  get() {
+    const limits = disciplinePolicy.value?.named_limits || [];
+    const g = limits.find((x) => String(x.code) === '000651');
+    return g?.max_pct ?? 15;
+  },
+  set(v) {
+    const n = Number(v);
+    if (!disciplinePolicy.value) return;
+    const limits = Array.isArray(disciplinePolicy.value.named_limits)
+      ? [...disciplinePolicy.value.named_limits]
+      : [];
+    const idx = limits.findIndex((x) => String(x.code) === '000651');
+    if (idx >= 0) limits[idx] = { ...limits[idx], max_pct: n };
+    else limits.push({ code: '000651', name: '格力电器', max_pct: n });
+    disciplinePolicy.value.named_limits = limits;
+  },
+});
 
 const fmtPct = (v) => {
   if (v === null || v === undefined || v === '') return '—';

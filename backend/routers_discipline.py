@@ -45,6 +45,8 @@ class PolicyBody(BaseModel):
     preferred_buy_category: Optional[str] = None
     preferred_buy_account: Optional[str] = None
     no_new_codes: Optional[list] = None
+    fixed_income_categories: Optional[list] = None
+    defensive_extra_categories: Optional[list] = None
 
 
 class CreateDraftsBody(BaseModel):

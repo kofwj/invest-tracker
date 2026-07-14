@@ -6,7 +6,7 @@ from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel
 
 try:
-    from .database import db_session, open_db
+    from .database import db_session, local_today_iso, open_db
     from .csv_utils import (
         TRANSACTION_CSV_COLUMNS,
         TRANSACTION_HEADER_ALIASES,
@@ -20,7 +20,7 @@ try:
     )
     from .holdings import ALLOWED_DIRECTIONS, infer_category, recalc_holdings, validate_transaction_payload
 except ImportError:
-    from database import db_session, open_db
+    from database import db_session, local_today_iso, open_db
     from csv_utils import (
         TRANSACTION_CSV_COLUMNS,
         TRANSACTION_HEADER_ALIASES,
@@ -82,9 +82,9 @@ def ensure_transaction_columns(conn):
 @router.get("/transactions/template")
 def download_transactions_template():
     rows = [
-        [dt_date.today().isoformat(), "华泰证券", "601288", "农业银行", "A股权益", "买入", "1000", "6.00", "6000.00", "5.00", "示例：请删除后填写真实交易"],
-        [dt_date.today().isoformat(), "华泰证券", "f004388", "鹏华丰享", "债基", "申购待确认", "0", "0", "50000.00", "0.00", "场外基金份额未确认时使用"],
-        [dt_date.today().isoformat(), "华泰证券", "f004388", "鹏华丰享", "债基", "分红再投资", "95.2381", "1.0500", "100.00", "0.00", "示例：100元分红按1.05净值再投"],
+        [local_today_iso(), "华泰证券", "601288", "农业银行", "A股权益", "买入", "1000", "6.00", "6000.00", "5.00", "示例：请删除后填写真实交易"],
+        [local_today_iso(), "华泰证券", "f004388", "鹏华丰享", "债基", "申购待确认", "0", "0", "50000.00", "0.00", "场外基金份额未确认时使用"],
+        [local_today_iso(), "华泰证券", "f004388", "鹏华丰享", "债基", "分红再投资", "95.2381", "1.0500", "100.00", "0.00", "示例：100元分红按1.05净值再投"],
     ]
     return csv_response("transactions_template.csv", TRANSACTION_CSV_COLUMNS, rows)
 
@@ -136,7 +136,7 @@ def export_transactions(
             ORDER BY date DESC, id DESC
         """, params).fetchall()
     data = [[r[k] for k in TRANSACTION_CSV_COLUMNS] for r in rows]
-    return csv_response(f"transactions_{dt_date.today().isoformat()}.csv", TRANSACTION_CSV_COLUMNS, data)
+    return csv_response(f"transactions_{local_today_iso()}.csv", TRANSACTION_CSV_COLUMNS, data)
 
 
 @router.post("/transactions/import")

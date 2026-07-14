@@ -6,7 +6,7 @@ from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
 try:
-    from .database import db_session
+    from .database import db_session, local_today_iso
     from .csv_utils import (
         DEPOSIT_CSV_COLUMNS,
         DEPOSIT_HEADER_ALIASES,
@@ -19,7 +19,7 @@ try:
         read_upload_csv,
     )
 except ImportError:
-    from database import db_session
+    from database import db_session, local_today_iso
     from csv_utils import (
         DEPOSIT_CSV_COLUMNS,
         DEPOSIT_HEADER_ALIASES,
@@ -76,7 +76,7 @@ def export_deposits():
             """
         ).fetchall()
     data = [[r[k] for k in DEPOSIT_CSV_COLUMNS] for r in rows]
-    return csv_response(f"deposits_{dt_date.today().isoformat()}.csv", DEPOSIT_CSV_COLUMNS, data)
+    return csv_response(f"deposits_{local_today_iso()}.csv", DEPOSIT_CSV_COLUMNS, data)
 
 
 @router.post("/deposits/import")

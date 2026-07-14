@@ -9,15 +9,27 @@ import json
 import math
 import sqlite3
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 try:
+    from .csv_utils import create_safety_backup
     from .database import LOCAL_TZ, local_today_iso
-    from .holdings import infer_category, recalc_holdings, validate_transaction_payload
+    from .holdings import (
+        current_holding_quantity,
+        infer_category,
+        recalc_holdings,
+        validate_transaction_payload,
+    )
     from .portfolio_totals import compute_portfolio_totals
 except ImportError:
+    from csv_utils import create_safety_backup
     from database import LOCAL_TZ, local_today_iso
-    from holdings import infer_category, recalc_holdings, validate_transaction_payload
+    from holdings import (
+        current_holding_quantity,
+        infer_category,
+        recalc_holdings,
+        validate_transaction_payload,
+    )
     from portfolio_totals import compute_portfolio_totals
 
 POLICY_KEY = "discipline_policy"
@@ -43,6 +55,10 @@ DEFAULT_POLICY: Dict[str, Any] = {
     "preferred_buy_category": "A股ETF",
     "preferred_buy_account": "华泰证券",
     "no_new_codes": ["000651", "601288", "600028"],  # 格力/农行/石化 默认不建议新开仓
+    # 计入「固收」大类的品类（其余非存款进权益）。可在参数里改。
+    "fixed_income_categories": ["债基", "证券现金", "基金申购在途"],
+    # 额外算进「防守」的权益品类（不改大类饼图，只抬高防守占比）
+    "defensive_extra_categories": [],
 }
 
 
@@ -66,6 +82,10 @@ def ensure_discipline_tables(conn) -> None:
             confirmed_at DATETIME,
             transaction_id INTEGER
         )"""
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_discipline_drafts_status_code_side "
+        "ON discipline_drafts(status, code, side)"
     )
 
 
@@ -108,6 +128,16 @@ def _deep_merge(base: Dict[str, Any], overlay: Dict[str, Any]) -> Dict[str, Any]
     return out
 
 
+def _finite(value: Any, name: str) -> float:
+    try:
+        n = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} 必须是数字") from exc
+    if not math.isfinite(n):
+        raise ValueError(f"{name} 无效")
+    return n
+
+
 def get_policy(conn) -> Dict[str, Any]:
     raw = _get_setting(conn, POLICY_KEY, "")
     if not raw:
@@ -125,29 +155,92 @@ def set_policy(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError("policy 必须是对象")
     merged = _deep_merge(get_policy(conn), payload)
-    # basic clamps
-    for key in ("equity_min_pct", "equity_max_pct", "defensive_min_pct", "single_holding_max_pct", "rebalance_band_pct"):
+
+    for key in (
+        "equity_min_pct",
+        "equity_max_pct",
+        "defensive_min_pct",
+        "single_holding_max_pct",
+        "rebalance_band_pct",
+    ):
         if key in merged:
-            merged[key] = float(merged[key])
-    targets = merged.get("targets") or {}
+            merged[key] = _finite(merged[key], key)
+            if merged[key] < 0 or merged[key] > 100:
+                raise ValueError(f"{key} 需在 0–100 之间")
+
+    if float(merged["equity_min_pct"]) > float(merged["equity_max_pct"]):
+        raise ValueError("权益下限不能高于上限")
+
+    targets = dict(merged.get("targets") or {})
     for key in ("equity_pct", "fixed_income_pct", "deposit_pct"):
         if key in targets:
-            targets[key] = float(targets[key])
+            targets[key] = _finite(targets[key], f"targets.{key}")
+            if targets[key] < 0 or targets[key] > 100:
+                raise ValueError(f"目标 {key} 需在 0–100 之间")
+    t_sum = (
+        float(targets.get("equity_pct") or 0)
+        + float(targets.get("fixed_income_pct") or 0)
+        + float(targets.get("deposit_pct") or 0)
+    )
+    if abs(t_sum - 100.0) > 0.51:
+        raise ValueError(f"目标权益+固收+存款应约等于 100%（当前 {t_sum:.1f}%）")
     merged["targets"] = targets
+
+    if "preferred_buy_code" in merged:
+        merged["preferred_buy_code"] = str(merged.get("preferred_buy_code") or "").strip()
+    if not merged.get("preferred_buy_code"):
+        raise ValueError("优先加仓代码不能为空")
+
+    for list_key in ("named_limits", "no_new_codes", "fixed_income_categories", "defensive_extra_categories"):
+        if list_key in merged and merged[list_key] is None:
+            merged[list_key] = []
+
     _set_setting(conn, POLICY_KEY, json.dumps(merged, ensure_ascii=False))
     return merged
 
 
-def _macro_group(category: str) -> str:
+def _macro_group(category: str, policy: Optional[Dict[str, Any]] = None) -> str:
     cat = str(category or "")
-    if cat in ("债基", "证券现金", "基金申购在途"):
+    policy = policy or DEFAULT_POLICY
+    fixed = set(policy.get("fixed_income_categories") or ["债基", "证券现金", "基金申购在途"])
+    if cat in fixed:
         return "固收"
     if cat in ("银行存款",):
         return "存款"
     return "权益"
 
 
-def _holding_rows(conn) -> List[Dict[str, Any]]:
+def _is_defensive_holding(h: Dict[str, Any], policy: Dict[str, Any]) -> bool:
+    if h.get("macro") in ("固收", "存款"):
+        return True
+    extra = set(policy.get("defensive_extra_categories") or [])
+    return str(h.get("category") or "") in extra
+
+
+def _latest_account_for_code(conn, code: str, default: str = "华泰证券") -> str:
+    code = str(code or "").strip()
+    if not code:
+        return default
+    try:
+        row = conn.execute(
+            """
+            SELECT account FROM transactions
+            WHERE code = ? AND account IS NOT NULL AND TRIM(account) != ''
+            ORDER BY date DESC, id DESC LIMIT 1
+            """,
+            (code,),
+        ).fetchone()
+    except Exception:
+        return default
+    if not row:
+        return default
+    acct = row["account"] if isinstance(row, sqlite3.Row) else row[0]
+    return str(acct or default).strip() or default
+
+
+def _holding_rows(conn, policy: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    policy = policy or DEFAULT_POLICY
+    pref_acct = str(policy.get("preferred_buy_account") or "华泰证券")
     rows = conn.execute(
         """
         SELECT code, name, category, quantity, last_price, avg_cost, diluted_cost, total_dividend
@@ -161,8 +254,8 @@ def _holding_rows(conn) -> List[Dict[str, Any]]:
         price = float(h.get("last_price") or 0)
         mv = qty * price
         h["market_value"] = mv
-        h["macro"] = _macro_group(h.get("category") or "")
-        h["account"] = "华泰证券"
+        h["macro"] = _macro_group(h.get("category") or "", policy)
+        h["account"] = _latest_account_for_code(conn, h.get("code") or "", pref_acct)
         out.append(h)
     return out
 
@@ -177,13 +270,17 @@ def build_discipline_report(conn) -> Dict[str, Any]:
     bank = float(totals.get("bank_balance") or 0)
     cash = float(totals.get("securities_cash") or 0)
     pending = float(totals.get("pending_purchase") or 0)
-    holdings = _holding_rows(conn)
+    holdings = _holding_rows(conn, policy)
 
     equity_mv = sum(h["market_value"] for h in holdings if h["macro"] == "权益")
-    # 固收持仓（债基等）+ 证券现金 + 申购在途
     fixed_holdings = sum(h["market_value"] for h in holdings if h["macro"] == "固收")
     fixed_mv = fixed_holdings + cash + pending
     deposit_mv = bank
+    defensive_extra_mv = sum(
+        h["market_value"]
+        for h in holdings
+        if h["macro"] == "权益" and _is_defensive_holding(h, policy)
+    )
 
     def pct(part: float) -> float:
         return (part / total_assets * 100.0) if total_assets > 0 else 0.0
@@ -191,12 +288,11 @@ def build_discipline_report(conn) -> Dict[str, Any]:
     equity_pct = pct(equity_mv)
     fixed_pct = pct(fixed_mv)
     deposit_pct = pct(deposit_mv)
-    defensive_pct = pct(fixed_mv + deposit_mv)
+    defensive_pct = pct(fixed_mv + deposit_mv + defensive_extra_mv)
 
     breaches: List[Dict[str, Any]] = []
     actions: List[Dict[str, Any]] = []
 
-    # --- discipline breaches ---
     eq_min = float(policy.get("equity_min_pct") or 35)
     eq_max = float(policy.get("equity_max_pct") or 55)
     def_min = float(policy.get("defensive_min_pct") or 40)
@@ -249,7 +345,6 @@ def build_discipline_report(conn) -> Dict[str, Any]:
             }
         )
 
-    # single holding concentration
     for h in sorted(holdings, key=lambda x: x["market_value"], reverse=True):
         share = pct(h["market_value"])
         if share > single_max + 1e-9:
@@ -263,7 +358,6 @@ def build_discipline_report(conn) -> Dict[str, Any]:
                 }
             )
 
-    # named limits (e.g. 格力 15%)
     for lim in policy.get("named_limits") or []:
         code = str(lim.get("code") or "").strip()
         max_p = float(lim.get("max_pct") or 0)
@@ -283,7 +377,6 @@ def build_discipline_report(conn) -> Dict[str, Any]:
                     "code_ref": code,
                 }
             )
-            # sell-down action
             target_mv = total_assets * max_p / 100.0
             sell_mv = max(h["market_value"] - target_mv, 0)
             price = float(h.get("last_price") or 0)
@@ -300,12 +393,13 @@ def build_discipline_report(conn) -> Dict[str, Any]:
                         "amount": round(sell_mv, 2),
                         "quantity": round(qty, 4) if qty else 0,
                         "price": price,
-                        "reason": f"降至个人上限 {max_p:.0f}%（当前 {share:.1f}%）",
+                        "reason": f"降至个人上限 {max_p:.0f}%（当前 {share:.1f}%）"
+                        + ("；无现价，确认前请补数量" if price <= 0 else ""),
                         "source": "named_limit",
+                        "needs_manual_qty": price <= 0,
                     }
                 )
 
-    # generic single max sells (skip if already named action)
     named_codes = {str(x.get("code") or "") for x in (policy.get("named_limits") or [])}
     for h in sorted(holdings, key=lambda x: x["market_value"], reverse=True):
         code = str(h.get("code") or "")
@@ -330,12 +424,13 @@ def build_discipline_report(conn) -> Dict[str, Any]:
                     "amount": round(sell_mv, 2),
                     "quantity": round(qty, 4) if qty else 0,
                     "price": price,
-                    "reason": f"单票占比 {share:.1f}% > {single_max:.0f}%",
+                    "reason": f"单票占比 {share:.1f}% > {single_max:.0f}%"
+                    + ("；无现价，确认前请补数量" if price <= 0 else ""),
                     "source": "single_max",
+                    "needs_manual_qty": price <= 0,
                 }
             )
 
-    # --- rebalance vs targets ---
     targets = policy.get("targets") or {}
     band = float(policy.get("rebalance_band_pct") or 3)
     t_eq = float(targets.get("equity_pct") or 45)
@@ -354,14 +449,11 @@ def build_discipline_report(conn) -> Dict[str, Any]:
     pref_acct = str(policy.get("preferred_buy_account") or "华泰证券")
     no_new = {str(c).strip() for c in (policy.get("no_new_codes") or [])}
 
-    # Need more equity
     if gaps["equity"] > band and total_assets > 0:
         need_mv = total_assets * gaps["equity"] / 100.0
-        # fund from cash first, then conceptually deposits (amount only as suggestion)
         from_cash = min(max(cash, 0), need_mv)
         from_deposit = max(need_mv - from_cash, 0)
         buy_amt = from_cash + min(from_deposit, max(bank, 0))
-        # prefer existing holding price if any
         pref_h = next((x for x in holdings if str(x.get("code")) == pref_code), None)
         price = float(pref_h["last_price"]) if pref_h and pref_h.get("last_price") else 0
         qty = (buy_amt / price) if price > 0 else 0
@@ -387,11 +479,10 @@ def build_discipline_report(conn) -> Dict[str, Any]:
                         + "；".join(fund_note)
                     ),
                     "source": "rebalance_equity_up",
-                    "use_pending_direction": True,  # 金额买入用申购待确认更稳
+                    "use_pending_direction": True,
                 }
             )
 
-    # Equity too high vs target → reduce largest equity not already in sell list
     if gaps["equity"] < -band and total_assets > 0:
         reduce_mv = total_assets * abs(gaps["equity"]) / 100.0
         already = {a["code"] for a in actions if a.get("side") == "sell"}
@@ -402,7 +493,7 @@ def build_discipline_report(conn) -> Dict[str, Any]:
             if remaining < 100:
                 break
             price = float(h.get("last_price") or 0)
-            sell_mv = min(remaining, h["market_value"] * 0.5)  # 单票一次最多减一半，避免过激
+            sell_mv = min(remaining, h["market_value"] * 0.5)
             if sell_mv < 100:
                 continue
             qty = (sell_mv / price) if price > 0 else 0
@@ -417,13 +508,14 @@ def build_discipline_report(conn) -> Dict[str, Any]:
                     "amount": round(sell_mv, 2),
                     "quantity": round(qty, 4) if qty else 0,
                     "price": price,
-                    "reason": f"权益 {equity_pct:.1f}% 高于目标 {t_eq:.0f}%，建议减一部分",
+                    "reason": f"权益 {equity_pct:.1f}% 高于目标 {t_eq:.0f}%，建议减一部分"
+                    + ("；无现价，确认前请补数量" if price <= 0 else ""),
                     "source": "rebalance_equity_down",
+                    "needs_manual_qty": price <= 0,
                 }
             )
             remaining -= sell_mv
 
-    # deposit overweight → suggest move to preferred equity buy (if not already)
     if gaps["deposit"] < -band and gaps["equity"] > 0 and total_assets > 0:
         move = min(bank, total_assets * abs(gaps["deposit"]) / 100.0)
         if move >= 1000 and not any(a.get("source") == "rebalance_equity_up" for a in actions):
@@ -444,17 +536,14 @@ def build_discipline_report(conn) -> Dict[str, Any]:
                 }
             )
 
-    # block buy actions on no_new_codes except preferred if listed
     filtered_actions = []
     for a in actions:
         if a.get("side") == "buy" and a.get("code") in no_new and a.get("code") != pref_code:
             continue
         filtered_actions.append(a)
 
-    # sort priority then amount
     filtered_actions.sort(key=lambda x: (int(x.get("priority") or 99), -float(x.get("amount") or 0)))
 
-    # summary sentence
     warn_n = sum(1 for b in breaches if b.get("level") == "warning")
     if warn_n:
         summary = f"有 {warn_n} 条纪律提醒需要关注；再平衡建议 {len(filtered_actions)} 条（仅建议，不自动下单）。"
@@ -512,13 +601,29 @@ def list_drafts(conn, status: Optional[str] = "draft") -> List[Dict[str, Any]]:
     return [_row_to_dict(r) for r in rows]
 
 
+def _find_open_draft(conn, code: str, side: str) -> Optional[Dict[str, Any]]:
+    row = conn.execute(
+        """
+        SELECT * FROM discipline_drafts
+        WHERE status = 'draft' AND code = ? AND side = ?
+        ORDER BY id DESC LIMIT 1
+        """,
+        (code, side),
+    ).fetchone()
+    return _row_to_dict(row) if row else None
+
+
 def create_drafts_from_actions(
     conn,
     actions: Optional[List[Dict[str, Any]]] = None,
     *,
     use_report_actions: bool = True,
+    replace_existing: bool = True,
 ) -> Dict[str, Any]:
-    """Persist suggested actions as drafts. Does not write real transactions."""
+    """Persist suggested actions as drafts. Does not write real transactions.
+
+    Same code+side open draft is updated (or skipped) to avoid double-confirm risk.
+    """
     ensure_discipline_tables(conn)
     if actions is None and use_report_actions:
         report = build_discipline_report(conn)
@@ -527,6 +632,9 @@ def create_drafts_from_actions(
     now = datetime.now(LOCAL_TZ).replace(tzinfo=None)
     today = local_today_iso()
     created = []
+    updated = []
+    skipped = []
+
     for a in actions:
         side = str(a.get("side") or "").lower()
         if side not in ("buy", "sell"):
@@ -535,30 +643,56 @@ def create_drafts_from_actions(
         amount = float(a.get("amount") or 0)
         if not code or amount <= 0:
             continue
+
+        existing = _find_open_draft(conn, code, side)
+        qty = float(a.get("quantity") or 0)
+        price = float(a.get("price") or 0)
+        name = a.get("name") or code
+        category = a.get("category") or ""
+        account = a.get("account") or "华泰证券"
+        reason = a.get("reason") or ""
+
+        if existing and not replace_existing:
+            skipped.append({"id": existing.get("id"), "code": code, "side": side, "reason": "已有未确认草稿"})
+            continue
+
+        if existing and replace_existing:
+            conn.execute(
+                """
+                UPDATE discipline_drafts
+                SET date=?, name=?, category=?, account=?, quantity=?, price=?, amount=?, fee=0,
+                    reason=?, created_at=?
+                WHERE id=?
+                """,
+                (today, name, category, account, qty, price, amount, reason, now, existing["id"]),
+            )
+            row = conn.execute(
+                "SELECT * FROM discipline_drafts WHERE id = ?", (existing["id"],)
+            ).fetchone()
+            updated.append(_row_to_dict(row))
+            continue
+
         cur = conn.execute(
             """
             INSERT INTO discipline_drafts
                 (date, code, name, category, account, side, quantity, price, amount, fee, reason, status, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'draft', ?)
             """,
-            (
-                today,
-                code,
-                a.get("name") or code,
-                a.get("category") or "",
-                a.get("account") or "华泰证券",
-                side,
-                float(a.get("quantity") or 0),
-                float(a.get("price") or 0),
-                amount,
-                a.get("reason") or "",
-                now,
-            ),
+            (today, code, name, category, account, side, qty, price, amount, reason, now),
         )
         did = int(cur.lastrowid)
         row = conn.execute("SELECT * FROM discipline_drafts WHERE id = ?", (did,)).fetchone()
         created.append(_row_to_dict(row))
-    return {"created": created, "count": len(created)}
+
+    return {
+        "created": created,
+        "updated": updated,
+        "skipped": skipped,
+        "count": len(created) + len(updated),
+        "created_count": len(created),
+        "updated_count": len(updated),
+        "skipped_count": len(skipped),
+    }
 
 
 def delete_draft(conn, draft_id: int) -> bool:
@@ -570,7 +704,7 @@ def delete_draft(conn, draft_id: int) -> bool:
     return cur.rowcount > 0
 
 
-def confirm_draft(conn, draft_id: int) -> Dict[str, Any]:
+def confirm_draft(conn, draft_id: int, *, make_backup: bool = True) -> Dict[str, Any]:
     """Turn one draft into a real transaction (user-confirmed only)."""
     ensure_discipline_tables(conn)
     row = conn.execute("SELECT * FROM discipline_drafts WHERE id = ?", (draft_id,)).fetchone()
@@ -608,11 +742,16 @@ def confirm_draft(conn, draft_id: int) -> Dict[str, Any]:
         if qty <= 0 and price > 0 and amount > 0:
             qty = amount / price
         if qty <= 0:
-            raise ValueError("卖出需要数量（请先有现价估算出数量）")
+            raise ValueError("卖出需要数量：当前无可用现价估算，请先同步最新价或手改草稿数量后再确认")
         if price <= 0:
-            # keep amount as qty * last known if any
             price = amount / qty if qty else 0
-        amount = qty * price
+        # re-check live holding and cap to available
+        available = current_holding_quantity(conn, code)
+        if qty > available + 1e-6:
+            if available <= 1e-6:
+                raise ValueError(f"卖出失败：{code} 当前无持仓")
+            qty = available
+        amount = qty * price if price > 0 else amount
     else:
         raise ValueError("side 必须是 buy 或 sell")
 
@@ -639,6 +778,13 @@ def confirm_draft(conn, draft_id: int) -> Dict[str, Any]:
         fee=float(d.get("fee") or 0),
         strict_oversell=True,
     )
+
+    backup_path = None
+    if make_backup:
+        try:
+            backup_path = create_safety_backup("before_confirm_discipline_draft")
+        except Exception:
+            backup_path = None
 
     cur = conn.execute(
         """
@@ -676,15 +822,27 @@ def confirm_draft(conn, draft_id: int) -> Dict[str, Any]:
         "transaction_id": tx_id,
         "direction": direction,
         "payload": payload,
+        "backup": backup_path,
     }
 
 
 def confirm_drafts(conn, draft_ids: List[int]) -> Dict[str, Any]:
     results = []
     errors = []
+    backup_path = None
+    try:
+        backup_path = create_safety_backup("before_confirm_discipline_drafts")
+    except Exception:
+        backup_path = None
     for did in draft_ids:
         try:
-            results.append(confirm_draft(conn, int(did)))
+            # single shared backup already taken
+            results.append(confirm_draft(conn, int(did), make_backup=False))
         except Exception as exc:
             errors.append({"draft_id": did, "error": str(exc)})
-    return {"confirmed": results, "errors": errors, "count": len(results)}
+    return {
+        "confirmed": results,
+        "errors": errors,
+        "count": len(results),
+        "backup": backup_path,
+    }
