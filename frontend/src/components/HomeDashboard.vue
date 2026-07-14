@@ -52,7 +52,7 @@
         <div class="home-status-strip">
             <el-card shadow="never" class="home-status-card">
                 <div class="home-status-label">最新价同步</div>
-                <div class="home-status-main">{{ latestPriceStatusText }}</div>
+                <div class="home-status-main" :class="dashboard.price_stale ? 'is-warn' : ''">{{ latestPriceStatusText }}</div>
                 <div class="home-status-sub">取持仓最新更新时间</div>
             </el-card>
             <el-card shadow="never" class="home-status-card">

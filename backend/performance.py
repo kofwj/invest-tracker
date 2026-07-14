@@ -310,7 +310,26 @@ def build_performance_story(conn):
     if not winner_items and not loser_items:
         bullets.append("当前没有可拆的持仓贡献（可能空仓或尚未同步价格）。")
 
+    # 大类贡献（权益/固收等，按 category 粗分）
+    cat_map = {}
+    for r in contrib:
+        cat = (r.get("category") or "其他").strip() or "其他"
+        if any(k in cat for k in ("债", "固收", "货币", "现金", "REIT", "REITs")):
+            bucket = "固收相关"
+        elif any(k in cat for k in ("存款",)):
+            bucket = "存款"
+        else:
+            bucket = "权益相关"
+        cat_map[bucket] = cat_map.get(bucket, 0.0) + float(r.get("total_contribution") or 0)
+    category_contrib = [
+        {"name": k, "amount": round(v, 2), "text": f"{k} {_money_cn(v)}"}
+        for k, v in sorted(cat_map.items(), key=lambda x: x[1], reverse=True)
+    ]
+    if category_contrib:
+        bullets.append("大类贡献（当前仓）：" + "；".join(c["text"] for c in category_contrib) + "。")
+
     month_change = None
+    lookback_change = None
     if len(timeline) >= 2:
         last = timeline[-1]
         prev = timeline[-2]
@@ -324,6 +343,23 @@ def build_performance_story(conn):
             "text": f"最近两个快照日（{pd} → {dd}）总资产变化 {_money_cn(da)}。",
         }
         bullets.append(month_change["text"])
+
+        # 近约 30 个快照点（或全部若不足）
+        window = timeline[-31:] if len(timeline) > 31 else timeline
+        if len(window) >= 2:
+            w0, w1 = window[0], window[-1]
+            wa = float(w1.get("total_assets") or 0) - float(w0.get("total_assets") or 0)
+            lookback_change = {
+                "from_date": str(w0.get("date") or ""),
+                "to_date": str(w1.get("date") or ""),
+                "points": len(window),
+                "assets_change": round(wa, 2),
+                "text": (
+                    f"近 {len(window)} 个快照日（{w0.get('date')} → {w1.get('date')}）"
+                    f"总资产变化 {_money_cn(wa)}。"
+                ),
+            }
+            bullets.append(lookback_change["text"])
 
     caveats = [
         "整户总账、当前仓浮盈+分红、全周期盈亏三套口径本来就不会完全相等。",
@@ -346,7 +382,9 @@ def build_performance_story(conn):
         "bullets": bullets,
         "winners": winner_items,
         "losers": loser_items,
+        "category_contrib": category_contrib,
         "month_change": month_change,
+        "lookback_change": lookback_change,
         "caveats": caveats,
         "metrics": {
             "total_assets": summary.get("total_assets"),

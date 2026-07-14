@@ -4,7 +4,7 @@
       <div>
         <h3 class="broker-title">券商对账单</h3>
         <div class="broker-sub">
-          上传券商持仓 CSV（华泰导出或简化表），对照本系统持仓差异；勾选后写入「持仓校正」，不改历史成交。
+          上传券商持仓 CSV/Excel，对照本系统差异；勾选后写入「持仓校正」（自动备份，并自动重扫）。
         </div>
       </div>
     </div>
@@ -15,7 +15,7 @@
       show-icon
       :closable="false"
       class="broker-alert"
-      description="1）券商 App 导出持仓表为 CSV；2）上传预览差异；3）核对后勾选 → 应用校正。应用前会自动备份数据库。"
+      description="1）券商 App 导出持仓表 CSV/Excel；2）可选填券商证券现金；3）上传预览；4）勾选 → 应用校正。应用后会自动重扫。"
     />
 
     <el-card shadow="never" class="broker-card">
@@ -30,14 +30,23 @@
             size="small"
             style="width: 150px"
           />
+          <span class="broker-label">券商证券现金</span>
+          <el-input-number
+            v-model="brokerCashInput"
+            :min="0"
+            :controls="false"
+            placeholder="可选"
+            size="small"
+            style="width: 130px"
+          />
           <el-upload
             :auto-upload="false"
             :show-file-list="false"
-            accept=".csv,text/csv"
+            accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             :on-change="onBrokerFileChange"
             :disabled="brokerLoading"
           >
-            <el-button type="primary" :loading="brokerLoading">上传 CSV 预览</el-button>
+            <el-button type="primary" :loading="brokerLoading">上传预览</el-button>
           </el-upload>
         </div>
         <div class="broker-toolbar-right" v-if="brokerResult">
@@ -58,11 +67,21 @@
 
       <div v-if="brokerResult?.parse" class="broker-parse-meta">
         识别字段：{{ (brokerResult.parse.mapped_fields || []).join('、') || '—' }}
+        · 格式 {{ brokerResult.parse.format || 'csv' }}
         · 券商行数 {{ brokerResult.broker_count }} · 系统持仓 {{ brokerResult.app_count }}
         <span v-if="brokerResult.filename"> · 文件 {{ brokerResult.filename }}</span>
       </div>
 
-      <el-empty v-if="!brokerResult" description="还没上传文件。支持：证券代码、证券名称、数量、成本价（中英文表头均可）" />
+      <el-alert
+        v-if="brokerResult?.cash"
+        :title="brokerResult.cash.text"
+        :type="brokerResult.cash.status === 'match' ? 'success' : 'warning'"
+        show-icon
+        :closable="false"
+        style="margin-bottom: 12px"
+      />
+
+      <el-empty v-if="!brokerResult" description="还没上传文件。支持 CSV / Excel；列：证券代码、证券名称、数量、成本价" />
 
       <template v-else>
         <el-alert
@@ -116,7 +135,6 @@
         <div v-if="brokerResult.suggestions?.length" class="broker-suggest-block">
           <div class="broker-suggest-title">校正建议（以券商为准；仅系统有的会建议数量改为 0）</div>
           <el-table
-            ref="suggestTableRef"
             :data="brokerResult.suggestions"
             stripe
             size="small"
@@ -152,6 +170,7 @@ const {
   brokerLoading,
   brokerSelected,
   brokerAsOfDate,
+  brokerCashInput,
   statusLabel,
   statusType,
   onBrokerFileChange,

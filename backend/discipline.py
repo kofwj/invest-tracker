@@ -576,19 +576,33 @@ def build_discipline_report(conn) -> Dict[str, Any]:
     a500_mv = float(a500_h["market_value"]) if a500_h else 0.0
     a500_gap = max(a500_target - a500_mv, 0.0) if a500_target > 0 else 0.0
     if a500_target > 0:
+        progress_pct = min(max(a500_mv / a500_target * 100.0, 0.0), 999.0) if a500_target else 0.0
+        # 建议下次：剩余分 2～4 笔，优先用证券现金
+        cash_avail = float(totals.get("securities_cash") or 0)
         if a500_gap >= 100:
+            if a500_gap >= 80000:
+                next_batch = min(max(a500_gap / 4.0, 20000.0), 50000.0)
+            elif a500_gap >= 40000:
+                next_batch = min(max(a500_gap / 3.0, 15000.0), 40000.0)
+            else:
+                next_batch = min(a500_gap, max(cash_avail, 10000.0) if cash_avail > 0 else a500_gap)
+            next_batch = round(min(next_batch, a500_gap), 2)
             plan_items.append(
                 {
                     "code": "a500_batch",
                     "level": "info",
                     "title": f"{a500_name} 分批计划",
                     "text": (
-                        f"目标约 {a500_target:.0f} 元，当前市值约 {a500_mv:.0f}，"
-                        f"还差约 {a500_gap:.0f}。可优先用证券现金/存款分批申购，不必一次买完。"
+                        f"目标约 {a500_target:.0f} 元，当前市值约 {a500_mv:.0f}（完成 {progress_pct:.0f}%），"
+                        f"还差约 {a500_gap:.0f}。建议下次大约 {next_batch:.0f} 元"
+                        + (f"（证券现金约 {cash_avail:.0f}）" if cash_avail > 0 else "")
+                        + "，分批即可不必一次买完。"
                     ),
                     "remaining_amount": round(a500_gap, 2),
                     "current_amount": round(a500_mv, 2),
                     "target_amount": round(a500_target, 2),
+                    "progress_pct": round(progress_pct, 2),
+                    "suggested_next_amount": next_batch,
                     "symbol": a500_code,
                 }
             )
@@ -598,10 +612,12 @@ def build_discipline_report(conn) -> Dict[str, Any]:
                     "code": "a500_batch_done",
                     "level": "ok",
                     "title": f"{a500_name} 分批计划",
-                    "text": f"目标约 {a500_target:.0f} 元，当前市值约 {a500_mv:.0f}，计划基本到位。",
+                    "text": f"目标约 {a500_target:.0f} 元，当前市值约 {a500_mv:.0f}（完成 {progress_pct:.0f}%），计划基本到位。",
                     "remaining_amount": 0,
                     "current_amount": round(a500_mv, 2),
                     "target_amount": round(a500_target, 2),
+                    "progress_pct": round(progress_pct, 2),
+                    "suggested_next_amount": 0,
                     "symbol": a500_code,
                 }
             )

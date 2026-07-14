@@ -253,6 +253,32 @@ const createPerformanceModule = ({
         } catch (e) { showSyncNotice('删除失败', 'error'); }
     }
 
+    async function loadPerfFlowSuggestions() {
+        try {
+            const res = await api.portfolioCashFlowSuggest();
+            return res.data || { drafts: [], count: 0 };
+        } catch (e) {
+            showSyncNotice('加载流水建议失败: ' + (e?.response?.data?.detail || e.message), 'error');
+            return { drafts: [], count: 0 };
+        }
+    }
+
+    async function applyPerfFlowSuggestion(row) {
+        try {
+            await api.addPortfolioCashFlow({
+                date: row.date,
+                flow_type: row.flow_type,
+                amount: row.amount,
+                source: row.source || '',
+                remark: row.remark || '',
+            });
+            showSyncNotice('已记入组合流水');
+            fetchPerformance();
+        } catch (e) {
+            showSyncNotice('写入失败: ' + (e?.response?.data?.detail || e.message), 'error');
+        }
+    }
+
     return {
         hasPerfFlows,
         perfStoryToneType,
@@ -268,6 +294,8 @@ const createPerformanceModule = ({
         fetchPerformance,
         addPerfFlow,
         deletePerfFlow,
+        loadPerfFlowSuggestions,
+        applyPerfFlowSuggestion,
     };
 };
 

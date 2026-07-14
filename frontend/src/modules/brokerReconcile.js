@@ -6,6 +6,7 @@ const createBrokerReconcileModule = ({
     brokerLoading,
     brokerSelected,
     brokerAsOfDate,
+    brokerCashInput,
     fetchData,
     showSyncNotice,
 }) => {
@@ -32,6 +33,9 @@ const createBrokerReconcileModule = ({
             const fd = new FormData();
             fd.append('file', raw);
             if (brokerAsOfDate.value) fd.append('as_of_date', brokerAsOfDate.value);
+            if (brokerCashInput.value !== '' && brokerCashInput.value != null) {
+                fd.append('broker_cash', String(brokerCashInput.value));
+            }
             const res = await api.brokerReconcilePreview(fd);
             brokerResult.value = res.data || {};
             brokerSelected.value = [];
@@ -67,7 +71,7 @@ const createBrokerReconcileModule = ({
         }
         try {
             await ElMessageBox.confirm(
-                `将按券商数据写入 ${items.length} 条持仓校正（会先自动备份）。校正后持仓会重算。确定？`,
+                `将按券商数据写入 ${items.length} 条持仓校正（会先自动备份）。校正后自动重扫差异。确定？`,
                 '应用券商校正',
                 { type: 'warning', confirmButtonText: '写入校正', cancelButtonText: '取消' }
             );
@@ -76,6 +80,7 @@ const createBrokerReconcileModule = ({
         }
         brokerLoading.value = true;
         try {
+            const cashVal = brokerCashInput.value;
             const payload = {
                 items: items.map((s) => ({
                     date: s.date,
@@ -87,14 +92,28 @@ const createBrokerReconcileModule = ({
                     actual_total_dividend: s.actual_total_dividend || 0,
                     remark: s.remark || '券商对账单导入校正',
                 })),
+                broker_rows: brokerResult.value?.broker_rows || null,
+                as_of_date: brokerAsOfDate.value || brokerResult.value?.as_of_date || null,
+                broker_cash: cashVal !== '' && cashVal != null ? Number(cashVal) : (brokerResult.value?.broker_cash_input ?? null),
             };
             const res = await api.brokerReconcileApply(payload);
             const n = res.data?.applied_count ?? items.length;
-            showSyncNotice?.(`已写入 ${n} 条持仓校正` + (res.data?.backup ? `（备份：${res.data.backup}）` : ''), 'success');
+            showSyncNotice?.(`已写入 ${n} 条持仓校正` + (res.data?.backup ? `（已备份）` : ''), 'success');
             ElMessage.success(`已写入 ${n} 条校正`);
             await fetchData?.();
             brokerSelected.value = [];
-            // re-preview not automatic without file; keep last result but user can re-upload
+            if (res.data?.recheck) {
+                brokerResult.value = {
+                    ...brokerResult.value,
+                    ...res.data.recheck,
+                    parse: brokerResult.value?.parse,
+                    filename: brokerResult.value?.filename,
+                    broker_cash_input: payload.broker_cash,
+                };
+                const left = Number(res.data.recheck.diff_count || 0);
+                if (left === 0) ElMessage.success(res.data.recheck.summary_text || '重扫：已全部一致');
+                else ElMessage.warning(res.data.recheck.summary_text || `重扫后仍有 ${left} 处差异`);
+            }
         } catch (e) {
             if (e !== 'cancel') {
                 ElMessage.error(e?.response?.data?.detail || e?.message || '写入失败');

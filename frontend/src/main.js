@@ -49,8 +49,17 @@ const app = createApp({
     extends: App,
     setup() {
         const screenshotParams = new URLSearchParams(window.location.search);
-        const screenshotTabs = ['snapshots', 'allocation', 'performance', 'market', 'discipline', 'holdings', 'deposits', 'transactions', 'cash', 'maintenance'];
+        const screenshotTabs = ['snapshots', 'allocation', 'performance', 'market', 'discipline', 'holdings', 'deposits', 'transactions', 'broker', 'cash', 'maintenance'];
         const requestedTab = screenshotParams.get('tab');
+        const tabGroups = [
+            { id: 'daily', label: '日常', tabs: ['holdings', 'transactions', 'broker', 'deposits', 'cash'] },
+            { id: 'analysis', label: '分析', tabs: ['performance', 'allocation', 'snapshots', 'market', 'discipline'] },
+            { id: 'ops', label: '维护', tabs: ['maintenance'] },
+        ];
+        const tabGroupOf = (tab) => {
+            const hit = tabGroups.find(g => g.tabs.includes(tab));
+            return hit ? hit.id : 'analysis';
+        };
 
         // Deferred bootstrap after login unlock (wired below after helpers exist)
         let bootstrapAfterAuth = async () => {};
@@ -70,6 +79,15 @@ const app = createApp({
         });
 
         const activeTab = ref(screenshotTabs.includes(requestedTab) ? requestedTab : 'snapshots');
+        const tabGroup = ref(tabGroupOf(activeTab.value));
+        watch(tabGroup, (gid) => {
+            const g = tabGroups.find(x => x.id === gid);
+            if (g && !g.tabs.includes(activeTab.value)) activeTab.value = g.tabs[0];
+        });
+        watch(activeTab, (tab) => {
+            const gid = tabGroupOf(tab);
+            if (tabGroup.value !== gid) tabGroup.value = gid;
+        });
         const dashboard = ref({});
         const holdings = ref([]);
         const deposits = ref([]);
@@ -691,7 +709,16 @@ const app = createApp({
 
         const todayIso = computed(() => todayLocalIso());
         const todaySnapshotDone = computed(() => dashboard.value.latest_snapshot_date === todayIso.value);
-        const latestPriceStatusText = computed(() => dashboard.value.latest_price_updated_at ? String(dashboard.value.latest_price_updated_at).replace('T', ' ').slice(0, 19) : '暂无同步记录');
+        const latestPriceStatusText = computed(() => {
+            const raw = dashboard.value.latest_price_updated_at;
+            if (!raw) return '暂无同步记录';
+            const t = String(raw).replace('T', ' ').slice(0, 19);
+            if (dashboard.value.price_stale) {
+                const h = dashboard.value.price_age_hours;
+                return h != null ? `${t}（已偏旧约 ${h} 小时）` : `${t}（已偏旧）`;
+            }
+            return t;
+        });
         const latestBackupText = computed(() => maintenanceStatus.value.latest_backup_at ? String(maintenanceStatus.value.latest_backup_at).replace('T', ' ').slice(0, 19) : '暂无备份');
 
         const perfSummary = ref(null);
@@ -725,6 +752,8 @@ const app = createApp({
             fetchPerformance,
             addPerfFlow,
             deletePerfFlow,
+            loadPerfFlowSuggestions,
+            applyPerfFlowSuggestion,
         } = createPerformanceModule({
             perfSummary,
             perfTimeline,
@@ -744,6 +773,7 @@ const app = createApp({
         const brokerLoading = ref(false);
         const brokerSelected = ref([]);
         const brokerAsOfDate = ref(todayLocalIso());
+        const brokerCashInput = ref('');
         const {
             statusLabel: brokerStatusLabel,
             statusType: brokerStatusType,
@@ -757,6 +787,7 @@ const app = createApp({
             brokerLoading,
             brokerSelected,
             brokerAsOfDate,
+            brokerCashInput,
             fetchData,
             showSyncNotice,
         });
@@ -925,16 +956,33 @@ const app = createApp({
             await bootstrapAfterAuth();
         });
 
+
+        const eveningBriefDialog = ref({ visible: false, text: '', loading: false });
+        const openEveningBrief = async (notify = false) => {
+            eveningBriefDialog.value.loading = true;
+            try {
+                const res = await api.eveningBrief(!!notify);
+                eveningBriefDialog.value.text = res.data?.text || '';
+                eveningBriefDialog.value.visible = true;
+                if (notify && res.data?.notify?.sent) ElMessage.success('已推送飞书');
+                else if (notify && res.data?.notify?.reason === 'no_webhook') ElMessage.warning('未配置 FEISHU_ALERT_WEBHOOK，仅本地预览');
+            } catch (e) {
+                ElMessage.error(e?.response?.data?.detail || e?.message || '简报失败');
+            } finally {
+                eveningBriefDialog.value.loading = false;
+            }
+        };
+
         const appCtx = {
             zhCn,
             isMasked, toggleMask,
             showLoginOverlay, loginLoading, loginPassword, loginError, authEnabled, handleLogin, handleLogout,
-            activeTab, dashboard, holdings, deposits, depositRows, depositSummary, depositBankBreakdown, depositMaturityBuckets, syncing, trailingSyncing, syncNotice,
+            activeTab, tabGroup, tabGroups, dashboard, holdings, deposits, depositRows, depositSummary, depositBankBreakdown, depositMaturityBuckets, syncing, trailingSyncing, syncNotice,
             snapshots, snapshotRange, snapshotSummary, snapshotMetrics, snapshotChangeRows, snapshotInsights, snapshotLoading, maintenanceStatus, backups, maintenanceLoading, dividendLoading, dividendConfirming, dividendDialog, dividendTableRef, todayIso, todaySnapshotDone, latestPriceStatusText, latestBackupText,
             transForm, feeSettings, feeAccounts, activeFeeAccount, newFeeAccountName, feeCategories, feeSettingRows, feeAutoHint, depositDialog, cashForm, cashFlows, cashFlowForm, cashFlowQuery, cashFlowSummary, cashFlowEditDialog, transDialog, allocationAnalysis, macroAllocationAnalysis,
             allocationSummary, allocationHealth, portfolioExpectedReturn, expectedReturnDialog, holdingCorrectionDialog, holdingCorrectionHistoryDialog,
             allTransactions, filteredTransactions, pendingTransactions, pendingPurchaseTotal, transQuery, transPage, transEditDialog,
-            syncPrices, syncTrailingReturns, openDividendDraftDialog, scanDividendDrafts, confirmSelectedDividends, selectSelectableDividendDrafts, clearDividendDraftSelection, onDividendSelectionChange, isDividendDraftSelectable, dividendStatusLabel, dividendStatusType, submitTrans, resetForm, fetchData, markFeeManual, saveFeeSettings, resetFeeSettings, addFeeAccount, removeFeeAccount, onActiveFeeAccountChange,
+            syncPrices, syncTrailingReturns, openDividendDraftDialog, openEveningBrief, eveningBriefDialog, scanDividendDrafts, confirmSelectedDividends, selectSelectableDividendDrafts, clearDividendDraftSelection, onDividendSelectionChange, isDividendDraftSelectable, dividendStatusLabel, dividendStatusType, submitTrans, resetForm, fetchData, markFeeManual, saveFeeSettings, resetFeeSettings, addFeeAccount, removeFeeAccount, onActiveFeeAccountChange,
             downloadTransactionsTemplate, exportTransactions, importTransactions, downloadDepositsTemplate, exportDeposits, importDeposits,
             queryAssetByCode, queryAssetByName, selectTransAsset, autoMatchTransAsset,
             openDepositDialog, saveDeposit, deleteDeposit, updateCash, queryCashFlows, resetCashFlowQuery, addCashFlow, openCashFlowEditDialog, saveCashFlowEdit, deleteCashFlow, cashFlowTagType,
@@ -943,8 +991,8 @@ const app = createApp({
             openExpectedReturnDialog, saveExpectedReturn, openHoldingCorrectionDialog, saveHoldingCorrection, openHoldingCorrectionHistory, deleteHoldingCorrection, formatMoney, formatPercent, pct, holdingFloatProfit, holdingLifetimeProfit, holdingFloatProfitRate, holdingLifetimeProfitRate,
             perfSummary, perfTimeline, perfContribution, perfFlows, perfStory, perfLoading, perfFlowForm, hasPerfFlows, perfStoryToneType, perfGuideSteps, perfLensRows, perfReadTips, perfCards,
             displayedPerfContribution, perfContributionFilter, perfContributionSort, perfContributionHeadline, perfContributionMix,
-            fetchPerformance, addPerfFlow, deletePerfFlow, contributionBarStyle, fetchMaintenance, createDbBackup, downloadBackup, restoreBackup, deleteBackup, restoreUploadedBackup,
-            brokerResult, brokerLoading, brokerSelected, brokerAsOfDate,
+            fetchPerformance, addPerfFlow, deletePerfFlow, loadPerfFlowSuggestions, applyPerfFlowSuggestion, contributionBarStyle, fetchMaintenance, createDbBackup, downloadBackup, restoreBackup, deleteBackup, restoreUploadedBackup,
+            brokerResult, brokerLoading, brokerSelected, brokerAsOfDate, brokerCashInput,
             statusLabel: brokerStatusLabel, statusType: brokerStatusType,
             onBrokerFileChange, onBrokerSelectionChange, selectAllSuggestions, clearBrokerSelection, applySelectedCorrections,
             marketSummary, alertRules, alertEvents, marketLoading, alertChecking, alertEventsLoading, alertForm, alertEditDialog, triggeredAlerts,

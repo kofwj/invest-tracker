@@ -204,12 +204,31 @@
                 </el-card>
 
                 <el-card shadow="never">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px;flex-wrap:wrap;">
                         <div>
                             <div style="font-weight:700;font-size:16px;color:#303133;">组合资金流水（外部投入/取出）</div>
                             <div class="perf-contrib-sub">只记「额外塞进组合」或「从组合提走」的钱。买卖股票、银证互转、银行内部转账都不要记这里。</div>
                         </div>
-                        <el-tag size="small">共 {{ perfFlows.length }} 笔</el-tag>
+                        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                            <el-button size="small" @click="onLoadFlowSuggest" :loading="perfSuggestLoading">从银证流水生成建议</el-button>
+                            <el-tag size="small">共 {{ perfFlows.length }} 笔</el-tag>
+                        </div>
+                    </div>
+                    <div v-if="perfFlowSuggestions.length" class="perf-suggest-box" style="margin-bottom:12px;">
+                        <div class="perf-contrib-sub" style="margin-bottom:8px;">建议草稿（点「记入」才写入；内部调仓别录）</div>
+                        <el-table :data="perfFlowSuggestions" size="small" stripe>
+                            <el-table-column prop="date" label="日期" width="110" />
+                            <el-table-column prop="flow_type" label="类型" width="70" />
+                            <el-table-column label="金额" width="120" align="right">
+                                <template #default="s">{{ formatMoney(s.row.amount) }}</template>
+                            </el-table-column>
+                            <el-table-column prop="remark" label="说明" min-width="180" show-overflow-tooltip />
+                            <el-table-column label="操作" width="90">
+                                <template #default="s">
+                                    <el-button type="primary" link size="small" @click="applyPerfFlowSuggestion(s.row)">记入</el-button>
+                                </template>
+                            </el-table-column>
+                        </el-table>
                     </div>
                     <el-alert
                         title="示例：工资入金 10 万买股票 → 记一笔「投入 10 万」；年底提出 2 万花掉 → 记「取出 2 万」。在券商里卖 A 买 B，不算取出。"
@@ -280,6 +299,18 @@
 </template>
 
 <script setup>
+import { ref } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
-const { formatMoney, pct, perfSummary, perfTimeline, perfContribution, perfFlows, perfStory, perfLoading, perfFlowForm, hasPerfFlows, perfStoryToneType, perfGuideSteps, perfLensRows, perfReadTips, perfCards, displayedPerfContribution, perfContributionFilter, perfContributionSort, perfContributionHeadline, perfContributionMix, fetchPerformance, addPerfFlow, deletePerfFlow, contributionBarStyle } = useAppCtx();
+const { formatMoney, pct, perfSummary, perfTimeline, perfContribution, perfFlows, perfStory, perfLoading, perfFlowForm, hasPerfFlows, perfStoryToneType, perfGuideSteps, perfLensRows, perfReadTips, perfCards, displayedPerfContribution, perfContributionFilter, perfContributionSort, perfContributionHeadline, perfContributionMix, fetchPerformance, addPerfFlow, deletePerfFlow, loadPerfFlowSuggestions, applyPerfFlowSuggestion, contributionBarStyle } = useAppCtx();
+const perfFlowSuggestions = ref([]);
+const perfSuggestLoading = ref(false);
+const onLoadFlowSuggest = async () => {
+    perfSuggestLoading.value = true;
+    try {
+        const data = await loadPerfFlowSuggestions();
+        perfFlowSuggestions.value = data?.drafts || [];
+    } finally {
+        perfSuggestLoading.value = false;
+    }
+};
 </script>

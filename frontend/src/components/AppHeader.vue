@@ -7,11 +7,20 @@
                 </el-button>
                 <el-button type="success" @click="fetchData">刷新数据</el-button>
                 <el-button type="primary" @click="syncPrices" :loading="syncing">同步最新价</el-button>
-                <el-button type="warning" plain @click="syncTrailingReturns" :loading="trailingSyncing">同步近一年收益率</el-button>
-                <el-button type="success" plain @click="openDividendDraftDialog" :loading="dividendLoading">分红草稿</el-button>
-                <el-button v-if="authEnabled" type="info" link @click="handleLogout" style="margin-left: 8px;">
-                    退出登录
-                </el-button>
+                <el-dropdown trigger="click" @command="onHeaderMore">
+                    <el-button plain>
+                        更多
+                        <span style="margin-left:4px;opacity:.7">▾</span>
+                    </el-button>
+                    <template #dropdown>
+                        <el-dropdown-menu>
+                            <el-dropdown-item command="trailing" :disabled="trailingSyncing">同步近一年收益率</el-dropdown-item>
+                            <el-dropdown-item command="dividend" :disabled="dividendLoading">分红草稿</el-dropdown-item>
+                            <el-dropdown-item command="brief">生成晚间简报</el-dropdown-item>
+                            <el-dropdown-item v-if="authEnabled" divided command="logout">退出登录</el-dropdown-item>
+                        </el-dropdown-menu>
+                    </template>
+                </el-dropdown>
                 <span v-if="syncNotice.text" class="inline-sync-status" :class="syncNotice.type">{{ syncNotice.text }}</span>
             </div>
         </div>
@@ -19,5 +28,15 @@
 
 <script setup>
 import { useAppCtx } from '../composables/useAppCtx.js';
-const { isMasked, toggleMask, authEnabled, handleLogout, syncing, trailingSyncing, syncNotice, dividendLoading, syncPrices, syncTrailingReturns, openDividendDraftDialog, fetchData } = useAppCtx();
+const {
+    isMasked, toggleMask, authEnabled, handleLogout, syncing, trailingSyncing, syncNotice,
+    dividendLoading, syncPrices, syncTrailingReturns, openDividendDraftDialog, fetchData, openEveningBrief,
+} = useAppCtx();
+
+const onHeaderMore = (cmd) => {
+    if (cmd === 'trailing') syncTrailingReturns();
+    else if (cmd === 'dividend') openDividendDraftDialog();
+    else if (cmd === 'brief') openEveningBrief?.();
+    else if (cmd === 'logout') handleLogout();
+};
 </script>

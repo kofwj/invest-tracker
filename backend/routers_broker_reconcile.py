@@ -1,32 +1,26 @@
-"""券商对账单：上传 CSV → 差异清单 → 可选批量写入持仓校正。"""
+"""券商对账单：上传 CSV/Excel → 差异清单 → 可选批量写入持仓校正（含应用后重扫）。"""
 
 from __future__ import annotations
 
 import sqlite3
 from datetime import date as dt_date
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 try:
-    from .broker_reconcile import (
-        compare_holdings,
-        decode_upload_bytes,
-        parse_broker_csv_text,
-    )
+    from .broker_reconcile import compare_holdings, parse_broker_upload
     from .csv_utils import create_safety_backup
     from .database import db_session, local_today_iso
     from .holding_calculator import infer_category, recalc_holdings
+    from .portfolio_totals import compute_portfolio_totals
 except ImportError:
-    from broker_reconcile import (
-        compare_holdings,
-        decode_upload_bytes,
-        parse_broker_csv_text,
-    )
+    from broker_reconcile import compare_holdings, parse_broker_upload
     from csv_utils import create_safety_backup
     from database import db_session, local_today_iso
     from holding_calculator import infer_category, recalc_holdings
+    from portfolio_totals import compute_portfolio_totals
 
 router = APIRouter()
 
@@ -44,26 +38,53 @@ class BrokerSuggestion(BaseModel):
 
 class BrokerApplyBody(BaseModel):
     items: List[BrokerSuggestion] = Field(default_factory=list)
+    # optional: re-diff using last uploaded broker rows
+    broker_rows: Optional[List[Dict[str, Any]]] = None
+    broker_cash: Optional[float] = None
+    as_of_date: Optional[str] = None
+
+
+def _build_preview(
+    broker_rows: List[Dict[str, Any]],
+    as_of: str,
+    broker_cash: Optional[float] = None,
+) -> Dict[str, Any]:
+    with db_session(row_factory=sqlite3.Row) as conn:
+        app_rows = [dict(r) for r in conn.execute("SELECT * FROM holdings WHERE quantity > 0").fetchall()]
+        totals = compute_portfolio_totals(conn)
+        app_cash = float(totals.get("securities_cash") or 0)
+    return compare_holdings(
+        broker_rows,
+        app_rows,
+        as_of_date=as_of,
+        broker_cash=broker_cash,
+        app_cash=app_cash if broker_cash is not None else None,
+    )
 
 
 @router.post("/broker-reconcile/preview")
 async def broker_reconcile_preview(
     file: UploadFile = File(...),
     as_of_date: Optional[str] = Form(None),
+    broker_cash: Optional[str] = Form(None),
 ):
     raw = await file.read()
     if not raw:
         raise HTTPException(status_code=400, detail="上传文件为空")
-    text = decode_upload_bytes(raw)
-    broker_rows, parse_meta = parse_broker_csv_text(text)
+    broker_rows, parse_meta = parse_broker_upload(raw, filename=file.filename or "")
     if parse_meta.get("error") and not broker_rows:
         raise HTTPException(status_code=400, detail=parse_meta.get("error"))
     as_of = (as_of_date or "").strip() or local_today_iso()
-    with db_session(row_factory=sqlite3.Row) as conn:
-        app_rows = [dict(r) for r in conn.execute("SELECT * FROM holdings WHERE quantity > 0").fetchall()]
-    result = compare_holdings(broker_rows, app_rows, as_of_date=as_of)
+    cash_val = None
+    if broker_cash is not None and str(broker_cash).strip() != "":
+        try:
+            cash_val = float(str(broker_cash).replace(",", "").strip())
+        except ValueError:
+            raise HTTPException(status_code=400, detail="券商证券现金请填数字")
+    result = _build_preview(broker_rows, as_of, broker_cash=cash_val)
     result["parse"] = parse_meta
     result["filename"] = file.filename
+    result["broker_cash_input"] = cash_val
     return result
 
 
@@ -109,9 +130,16 @@ def broker_reconcile_apply(body: BrokerApplyBody):
         if codes:
             recalc_holdings(conn, codes=list(dict.fromkeys(codes)))
         conn.commit()
+
+    recheck = None
+    if body.broker_rows:
+        as_of = (body.as_of_date or "").strip() or local_today_iso()
+        recheck = _build_preview(body.broker_rows, as_of, broker_cash=body.broker_cash)
+
     return {
         "status": "success",
         "applied_count": len(applied),
         "codes": applied,
         "backup": backup_path,
+        "recheck": recheck,
     }

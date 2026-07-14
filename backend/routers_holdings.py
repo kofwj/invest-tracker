@@ -277,24 +277,6 @@ def sync_trailing_returns_post(backup: bool = False):
     return _sync_trailing_returns_impl(backup=backup)
 
 
-@router.get("/sync-trailing-returns", deprecated=True)
-def sync_trailing_returns_get(backup: bool = False):
-    # Prefer POST — GET has side effects and may be prefetched by browsers/proxies.
-    result = _sync_trailing_returns_impl(backup=backup)
-    if isinstance(result, dict):
-        result = {**result, "deprecated": True, "prefer": "POST /sync-trailing-returns"}
-    return result
-
-
 @router.post("/sync-prices")
 def sync_prices_post(backup: bool = False):
     return _sync_prices_impl(backup=backup)
-
-
-@router.get("/sync-prices", deprecated=True)
-def sync_prices_get(backup: bool = False):
-    # Prefer POST — GET has side effects and may be prefetched by browsers/proxies.
-    result = _sync_prices_impl(backup=backup)
-    if isinstance(result, dict):
-        result = {**result, "deprecated": True, "prefer": "POST /sync-prices"}
-    return result

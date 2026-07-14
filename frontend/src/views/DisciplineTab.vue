@@ -90,6 +90,16 @@
             <el-tag size="small" :type="tagType(p.level)">{{ levelLabel(p.level) }}</el-tag>
           </div>
           <div class="breach-text">{{ p.text }}</div>
+          <div v-if="p.target_amount" class="plan-progress" style="margin-top:8px;">
+            <el-progress
+              :percentage="Math.min(Number(p.progress_pct || 0), 100)"
+              :stroke-width="10"
+              :status="Number(p.remaining_amount || 0) <= 0 ? 'success' : undefined"
+            />
+            <div class="hint" style="margin-top:4px;" v-if="p.suggested_next_amount">
+              建议下次约 {{ formatMoney(p.suggested_next_amount) }}
+            </div>
+          </div>
         </div>
       </div>
     </el-card>

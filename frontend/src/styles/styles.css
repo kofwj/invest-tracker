@@ -408,3 +408,20 @@ html.screenshot-mask .login-overlay *,
 
   .home-status-main { font-size: 14px; }
 }
+
+/* Tab 分组 */
+.tab-group-bar { display:flex; gap:8px; flex-wrap:wrap; margin: 14px 0 0; }
+.tab-group-btn {
+  border: 1px solid #dcdfe6; background: #fff; color: #606266;
+  border-radius: 999px; padding: 6px 14px; font-size: 13px; cursor: pointer;
+  font-family: inherit;
+}
+.tab-group-btn.active { background: #ecf5ff; border-color: #b3d8ff; color: #409EFF; font-weight: 600; }
+.tab-group-btn:hover { border-color: #c0c4cc; }
+
+.plan-progress { max-width: 420px; }
+@media (max-width: 768px) {
+  .tab-group-bar { margin-top: 10px; }
+  .tab-group-btn { padding: 6px 12px; }
+}
+

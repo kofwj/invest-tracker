@@ -139,3 +139,29 @@ def performance_story():
         data = build_performance_story(conn)
         conn.commit()
     return data
+
+
+@router.get("/portfolio-cash-flows/suggest")
+def portfolio_cash_flow_suggest():
+    try:
+        from .portfolio_helpers import suggest_portfolio_cash_flows
+    except ImportError:
+        from portfolio_helpers import suggest_portfolio_cash_flows
+    with db_session(row_factory=sqlite3.Row) as conn:
+        ensure_portfolio_cash_flows_table(conn)
+        data = suggest_portfolio_cash_flows(conn)
+        conn.commit()
+    return data
+
+
+@router.get("/evening-brief")
+def evening_brief(notify: bool = False):
+    try:
+        from .portfolio_helpers import send_evening_brief
+    except ImportError:
+        from portfolio_helpers import send_evening_brief
+    with db_session(row_factory=sqlite3.Row) as conn:
+        ensure_portfolio_cash_flows_table(conn)
+        data = send_evening_brief(conn, notify=notify)
+        conn.commit()
+    return data
