@@ -4,15 +4,17 @@ try:
     from .cash import ensure_cash_base, set_setting
     from .database import open_db
     from .holdings import ensure_holding_return_columns
+    from .market import ensure_alert_tables
     from .snapshots import ensure_snapshot_columns, ensure_portfolio_cash_flows_table
 except ImportError:
     from cash import ensure_cash_base, set_setting
     from database import open_db
     from holdings import ensure_holding_return_columns
+    from market import ensure_alert_tables
     from snapshots import ensure_snapshot_columns, ensure_portfolio_cash_flows_table
 
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 SCHEMA_VERSION_KEY = "schema_version"
 
 
@@ -123,6 +125,7 @@ def ensure_app_tables(conn):
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )""")
     ensure_portfolio_cash_flows_table(conn)
+    ensure_alert_tables(conn)
 
 
 def migrate_to_v1_core_compat(conn):
@@ -154,11 +157,17 @@ def migrate_to_v4_cash_settings(conn):
     ensure_cash_base(conn)
 
 
+def migrate_to_v5_market_alerts(conn):
+    """Market summary + price alert tables (read-only observer)."""
+    ensure_alert_tables(conn)
+
+
 MIGRATIONS = [
     (1, migrate_to_v1_core_compat),
     (2, migrate_to_v2_holdings_and_snapshots),
     (3, migrate_to_v3_performance_cash_flows),
     (4, migrate_to_v4_cash_settings),
+    (5, migrate_to_v5_market_alerts),
 ]
 
 

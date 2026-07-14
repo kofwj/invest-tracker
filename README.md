@@ -48,6 +48,7 @@ invest-tracker/
     fee_settings.py            # 多账户费率设置
     snapshots.py               # 资产快照逻辑
     performance.py             # 组合表现分析
+    market.py                  # 市场摘要 + 价格预警（只读观察）
     routers_*.py               # 按业务拆分的 API 路由
     Dockerfile
     requirements.txt
@@ -56,7 +57,7 @@ invest-tracker/
     index.html                 # HTML 挂载壳（#app）
 │   │   App.vue                   # 主界面壳（tabs/懒加载）
 │   │   components/               # Header/首页/弹窗/登录
-│   │   views/                    # 各 tab SFC（懒加载）
+│   │   views/                    # 各 tab SFC（懒加载，含 MarketTab）
     package.json               # Vite/npm 脚本
     Dockerfile                 # 多阶段构建：Vite build + Nginx
     nginx.conf                 # 前端静态托管与 /api 代理
@@ -72,6 +73,7 @@ invest-tracker/
         cash.js
         snapshots.js
         performance.js
+        market.js
 
   tests/                       # 后端回归测试
   scripts/
@@ -369,31 +371,35 @@ docs/screenshots/
 
 ![资产配置](docs/screenshots/allocation.png)
 
-### 9.3 持仓明细
+### 9.3 市场摘要
+
+关键指数、持仓今日贡献粗估、价格阈值预警（手动检查，不改账本）。
+
+### 9.4 持仓明细
 
 当前持仓、市值、成本、盈亏和持仓占比。
 
 ![持仓明细](docs/screenshots/holdings.png)
 
-### 9.4 银行存款
+### 9.5 银行存款
 
 存款总览、到期分布、预计利息和存款明细。
 
 ![银行存款](docs/screenshots/deposits.png)
 
-### 9.5 交易录入/管理
+### 9.6 交易录入/管理
 
 交易录入、查询、编辑、删除和交易现金联动。
 
 ![交易录入/管理](docs/screenshots/transactions.png)
 
-### 9.6 现金设置
+### 9.7 现金设置
 
 证券现金、资金流水、现金校正和多账户费率设置。
 
 ![现金设置](docs/screenshots/cash-settings.png)
 
-### 9.7 收益分析
+### 9.8 收益分析
 
 组合表现、收益时间线、贡献分析和现金流分析。
 

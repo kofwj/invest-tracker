@@ -9,24 +9,30 @@ def eastmoney_sec_id(code: str) -> str:
     return f"0.{c}"
 
 
-def fetch_eastmoney_prices(codes):
-    numeric_codes = [
-        str(c).strip().lower().replace("f", "")
-        for c in codes
-        if str(c).strip().lower().replace("f", "").isdigit()
-        and len(str(c).strip().lower().replace("f", "")) == 6
-    ]
+def fetch_eastmoney_quotes(codes, secid_map=None):
+    """Fetch quotes from Eastmoney push2delay.
+
+    Returns {code: {price, change_pct, name}} for successful rows.
+    secid_map: optional {code: "1.000300"} overrides eastmoney_sec_id for indices.
+    """
+    secid_map = secid_map or {}
+    numeric_codes = []
+    for c in codes:
+        raw = str(c).strip().lower().replace("f", "")
+        if raw.isdigit() and len(raw) == 6:
+            numeric_codes.append(raw)
     if not numeric_codes:
         return {}
-    prices = {}
+
+    quotes = {}
     for i in range(0, len(numeric_codes), 40):
-        batch = numeric_codes[i:i + 40]
-        secids = ",".join(eastmoney_sec_id(c) for c in batch)
+        batch = numeric_codes[i : i + 40]
+        secids = ",".join(secid_map.get(c) or eastmoney_sec_id(c) for c in batch)
         url = "https://push2delay.eastmoney.com/api/qt/ulist.np/get"
         params = {
             "fltt": "2",
             "invt": "2",
-            "fields": "f12,f14,f2",
+            "fields": "f12,f14,f2,f3",
             "secids": secids,
         }
         res = requests.get(
@@ -40,9 +46,28 @@ def fetch_eastmoney_prices(codes):
         for item in data.get("diff") or []:
             code = str(item.get("f12") or "").strip()
             price = item.get("f2")
-            if code and price not in (None, "-"):
-                prices[code] = float(price)
-    return prices
+            if not code or price in (None, "-"):
+                continue
+            change_pct = item.get("f3")
+            if change_pct in (None, "-"):
+                change_pct = None
+            else:
+                try:
+                    change_pct = float(change_pct)
+                except (TypeError, ValueError):
+                    change_pct = None
+            quotes[code] = {
+                "price": float(price),
+                "change_pct": change_pct,
+                "name": str(item.get("f14") or "").strip(),
+            }
+    return quotes
+
+
+def fetch_eastmoney_prices(codes):
+    """Backward-compatible: {code: price} only."""
+    quotes = fetch_eastmoney_quotes(codes)
+    return {code: q["price"] for code, q in quotes.items() if q.get("price") is not None}
 
 
 def fetch_open_fund_nav(code: str):

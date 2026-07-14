@@ -40,11 +40,15 @@ test -f frontend/src/components/LoginOverlay.vue
 test -f frontend/src/views/SnapshotsTab.vue
 test -f frontend/src/views/AllocationTab.vue
 test -f frontend/src/views/PerformanceTab.vue
+test -f frontend/src/views/MarketTab.vue
 test -f frontend/src/views/HoldingsTab.vue
 test -f frontend/src/views/DepositsTab.vue
 test -f frontend/src/views/TransactionsTab.vue
 test -f frontend/src/views/CashTab.vue
 test -f frontend/src/views/MaintenanceTab.vue
+test -f frontend/src/modules/market.js
+test -f backend/market.py
+test -f backend/routers_market.py
 grep -q 'type="module" src="/src/main.js"' frontend/index.html
 grep -q '@vitejs/plugin-vue' frontend/package.json
 grep -q 'unplugin-vue-components' frontend/package.json
@@ -64,16 +68,24 @@ assert 'vue.esm-bundler' not in main, 'full compiler build should not be used af
 assert "import App from './App.vue'" in main, 'missing App.vue import'
 assert 'extends: App' in main, 'root component should extend App.vue template'
 assert "element-plus/dist/index.css" not in main, 'full Element Plus CSS should not be imported after on-demand'
-for module in ['./utils/index.js', './api/index.js', './modules/transactions.js', './modules/deposits.js', './modules/cash.js', './modules/snapshots.js', './modules/performance.js', './composables/authMask.js', './composables/domainHelpers.js']:
+for module in ['./utils/index.js', './api/index.js', './modules/transactions.js', './modules/deposits.js', './modules/cash.js', './modules/snapshots.js', './modules/performance.js', './modules/market.js', './composables/authMask.js', './composables/domainHelpers.js']:
     assert module in main, f'missing frontend module import: {module}'
 assert './charts/index.js' in main, 'missing charts dynamic/static import reference'
+assert "'market'" in main or '"market"' in main, 'screenshotTabs should include market'
 app_vue = Path('frontend/src/App.vue').read_text(encoding='utf-8')
-for needle in ['el-tabs', 'activeTab', 'SnapshotsTab', 'defineAsyncComponent']:
+for needle in ['el-tabs', 'activeTab', 'SnapshotsTab', 'MarketTab', 'defineAsyncComponent']:
     assert needle in app_vue, f'missing shell fragment in App.vue: {needle}'
 assert 'provide' in main or 'APP_CTX_KEY' in main, 'root should provide app context'
 holdings = Path('frontend/src/views/HoldingsTab.vue').read_text(encoding='utf-8')
 assert 'holdingLifetimeProfit' in holdings, 'holdings tab missing lifetime helper'
 assert 'useAppCtx' in holdings, 'views should inject app ctx'
+market_tab = Path('frontend/src/views/MarketTab.vue').read_text(encoding='utf-8')
+assert 'useAppCtx' in market_tab, 'market tab should inject app ctx'
+assert 'checkAlerts' in market_tab, 'market tab missing checkAlerts'
+backend_main = Path('backend/main.py').read_text(encoding='utf-8')
+assert 'market_router' in backend_main, 'backend should register market router'
+schema = Path('backend/schema.py').read_text(encoding='utf-8')
+assert 'migrate_to_v5_market_alerts' in schema, 'schema missing v5 market alerts migration'
 PY
 
 echo "==> Checking frontend build"

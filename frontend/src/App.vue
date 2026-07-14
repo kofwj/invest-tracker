@@ -14,6 +14,9 @@
         <el-tab-pane label="收益分析" name="performance" lazy>
           <PerformanceTab />
         </el-tab-pane>
+        <el-tab-pane label="市场摘要" name="market" lazy>
+          <MarketTab />
+        </el-tab-pane>
         <el-tab-pane label="持仓明细" name="holdings" lazy>
           <HoldingsTab />
         </el-tab-pane>
@@ -54,6 +57,7 @@ export default {
     SnapshotsTab: defineAsyncComponent(() => import('./views/SnapshotsTab.vue')),
     AllocationTab: defineAsyncComponent(() => import('./views/AllocationTab.vue')),
     PerformanceTab: defineAsyncComponent(() => import('./views/PerformanceTab.vue')),
+    MarketTab: defineAsyncComponent(() => import('./views/MarketTab.vue')),
     HoldingsTab: defineAsyncComponent(() => import('./views/HoldingsTab.vue')),
     DepositsTab: defineAsyncComponent(() => import('./views/DepositsTab.vue')),
     TransactionsTab: defineAsyncComponent(() => import('./views/TransactionsTab.vue')),

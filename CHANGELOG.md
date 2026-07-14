@@ -5,6 +5,26 @@
 
 ---
 
+## [2026-07-14] — 市场摘要 + 简单价格预警（MVP）
+
+### 功能
+- 新 Tab「市场摘要」：关键指数（上证/深成/沪深300/创业板/A500）+ 持仓今日贡献粗估 + 与大盘对比一句话
+- 价格预警规则 CRUD（持仓/指数，上穿/下穿阈值）；「立即检查」手动触发；触发写入 `alert_events`
+- **不改真实账本**，不自动推送；行情复用东财延时接口
+
+### 后端
+- `schema` v5：`alert_rules` / `alert_events`
+- 新增 `backend/market.py`、`backend/routers_market.py`
+- `price_sync.fetch_eastmoney_quotes`（含涨跌%），`fetch_eastmoney_prices` 兼容旧调用
+
+### 前端
+- `views/MarketTab.vue` + `modules/market.js`；`App.vue` / `main.js` / `api/index.js` 接线
+
+### 校验
+- `pytest` 新增 `tests/test_market_alerts.py`；`scripts/check.sh` 增加结构检查
+
+---
+
 ## [2026-07-11] — Phase3e 按 tab 拆分 SFC + 懒加载
 
 ### 前端结构

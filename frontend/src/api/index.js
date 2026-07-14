@@ -100,6 +100,13 @@ const api = {
     addPortfolioCashFlow: (payload) => axios.post(API + '/portfolio-cash-flows', payload),
     deletePortfolioCashFlow: (id) => axios.delete(API + '/portfolio-cash-flows/' + id),
 
+    getMarketSummary: () => axios.get(API + '/market/summary', { timeout: 60000 }),
+    listAlertRules: () => axios.get(API + '/market/alert-rules'),
+    createAlertRule: (payload) => axios.post(API + '/market/alert-rules', payload),
+    updateAlertRule: (id, payload) => axios.put(API + '/market/alert-rules/' + id, payload),
+    deleteAlertRule: (id) => axios.delete(API + '/market/alert-rules/' + id),
+    checkAlerts: () => axios.post(API + '/market/alerts/check', null, { timeout: 60000 }),
+
     download: (url) => axios.get(API + url, { responseType: 'blob' }),
     uploadCsv: (url, formData) => axios.post(API + url, formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 180000 }),
 };

@@ -24,6 +24,7 @@ import { createDepositsModule } from './modules/deposits.js';
 import { createCashModule } from './modules/cash.js';
 import { createSnapshotsModule } from './modules/snapshots.js';
 import { createPerformanceModule } from './modules/performance.js';
+import { createMarketModule } from './modules/market.js';
 import { createAuthMask } from './composables/authMask.js';
 import {
     createFeeHelpers,
@@ -46,7 +47,7 @@ const app = createApp({
     extends: App,
     setup() {
         const screenshotParams = new URLSearchParams(window.location.search);
-        const screenshotTabs = ['snapshots', 'allocation', 'performance', 'holdings', 'deposits', 'transactions', 'cash', 'maintenance'];
+        const screenshotTabs = ['snapshots', 'allocation', 'performance', 'market', 'holdings', 'deposits', 'transactions', 'cash', 'maintenance'];
         const requestedTab = screenshotParams.get('tab');
 
         // Deferred bootstrap after login unlock (wired below after helpers exist)
@@ -723,10 +724,52 @@ const app = createApp({
             computed,
         });
 
+        const marketSummary = ref({});
+        const alertRules = ref([]);
+        const marketLoading = ref(false);
+        const alertChecking = ref(false);
+        const alertEditDialog = ref(false);
+        const triggeredAlerts = ref([]);
+        const alertForm = ref({
+            target_type: 'holding',
+            code: '',
+            name: '',
+            condition: 'above',
+            threshold: 0,
+            enabled: true,
+        });
+
+        const {
+            fetchMarketSummary,
+            fetchAlertRules,
+            refreshMarket,
+            resetAlertForm,
+            saveAlertRule,
+            openAlertCreate,
+            openAlertEdit,
+            toggleAlertEnabled,
+            deleteAlertRule,
+            checkAlerts,
+            indexRows,
+            holdingsDayRows,
+            marketSignals,
+            marketUpdatedAt,
+        } = createMarketModule({
+            marketSummary,
+            alertRules,
+            marketLoading,
+            alertChecking,
+            alertForm,
+            alertEditDialog,
+            triggeredAlerts,
+            computed,
+        });
+
         watch(activeTab, (val) => {
             if (val === 'transactions') queryTransactions();
             if (val === 'allocation') nextTick(renderAllocationCharts);
             if (val === 'performance') fetchPerformance();
+            if (val === 'market') refreshMarket();
             if (val === 'snapshots') {
                 fetchSnapshots().then(() => nextTick(renderSnapshotCharts));
             }
@@ -778,7 +821,10 @@ const app = createApp({
             openExpectedReturnDialog, saveExpectedReturn, openHoldingCorrectionDialog, saveHoldingCorrection, openHoldingCorrectionHistory, deleteHoldingCorrection, formatMoney, formatPercent, pct, holdingFloatProfit, holdingLifetimeProfit, holdingFloatProfitRate, holdingLifetimeProfitRate,
             perfSummary, perfTimeline, perfContribution, perfFlows, perfLoading, perfFlowForm, hasPerfFlows, perfGuideSteps, perfLensRows, perfReadTips, perfCards,
             displayedPerfContribution, perfContributionFilter, perfContributionSort, perfContributionHeadline, perfContributionMix,
-            fetchPerformance, addPerfFlow, deletePerfFlow, contributionBarStyle, fetchMaintenance, createDbBackup, downloadBackup, restoreBackup, deleteBackup, restoreUploadedBackup
+            fetchPerformance, addPerfFlow, deletePerfFlow, contributionBarStyle, fetchMaintenance, createDbBackup, downloadBackup, restoreBackup, deleteBackup, restoreUploadedBackup,
+            marketSummary, alertRules, marketLoading, alertChecking, alertForm, alertEditDialog, triggeredAlerts,
+            fetchMarketSummary, fetchAlertRules, refreshMarket, resetAlertForm, saveAlertRule, openAlertCreate, openAlertEdit,
+            toggleAlertEnabled, deleteAlertRule, checkAlerts, indexRows, holdingsDayRows, marketSignals, marketUpdatedAt,
         };
         provide(APP_CTX_KEY, appCtx);
         return appCtx;
