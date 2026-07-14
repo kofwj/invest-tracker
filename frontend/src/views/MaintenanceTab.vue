@@ -24,9 +24,12 @@
                         <el-descriptions-item label="数据库状态">{{ maintenanceStatus.db_exists ? '正常' : '未找到' }}</el-descriptions-item>
                         <el-descriptions-item label="数据库大小">{{ ((maintenanceStatus.db_size || 0) / 1024 / 1024).toFixed(2) }} MB</el-descriptions-item>
                         <el-descriptions-item label="最近备份">{{ maintenanceStatus.latest_backup || '暂无' }}</el-descriptions-item>
+                        <el-descriptions-item label="最近备份时间">{{ latestBackupText }}</el-descriptions-item>
+                        <el-descriptions-item label="备份数量">{{ maintenanceStatus.backup_count || backups.length || 0 }}</el-descriptions-item>
+                        <el-descriptions-item label="建议">操作前先「创建备份」并下载一份到本地</el-descriptions-item>
                     </el-descriptions>
                     <el-alert
-                        title="恢复数据库属于高风险操作：系统会先自动备份当前数据库，但仍建议先下载关键备份文件。"
+                        title="恢复数据库属于高风险操作：系统会先自动备份当前库，但仍建议先下载最新备份到电脑。恢复后会刷新首页/持仓/交易数据。"
                         type="warning"
                         show-icon
                         :closable="false"
@@ -51,5 +54,5 @@
 
 <script setup>
 import { useAppCtx } from '../composables/useAppCtx.js';
-const { maintenanceStatus, backups, maintenanceLoading, fetchMaintenance, createDbBackup, downloadBackup, restoreBackup, deleteBackup, restoreUploadedBackup } = useAppCtx();
+const { maintenanceStatus, backups, maintenanceLoading, latestBackupText, fetchMaintenance, createDbBackup, downloadBackup, restoreBackup, deleteBackup, restoreUploadedBackup } = useAppCtx();
 </script>

@@ -432,27 +432,73 @@ def _build_today_highlights(
     contrib_rows: List[Dict[str, Any]],
     portfolio_chg: Optional[float],
     hs300_chg: Optional[float],
+    watch_rows: Optional[List[Dict[str, Any]]] = None,
 ) -> List[str]:
+    """人话结论，不甩技术指标名。"""
     lines: List[str] = []
+    watch_rows = watch_rows or []
+
+    # 机会/风险：涨跌幅较大的持仓/自选（结论向）
+    movers = []
+    for r in contrib_rows:
+        chg = r.get("change_pct")
+        if chg is None:
+            continue
+        movers.append(
+            {
+                "name": r.get("name") or r.get("code"),
+                "code": r.get("code"),
+                "change_pct": float(chg),
+                "kind": "持仓",
+            }
+        )
+    for r in watch_rows:
+        chg = r.get("change_pct")
+        if chg is None:
+            continue
+        movers.append(
+            {
+                "name": r.get("name") or r.get("code"),
+                "code": r.get("code"),
+                "change_pct": float(chg),
+                "kind": "自选",
+            }
+        )
+    if movers:
+        strong = [m for m in movers if m["change_pct"] >= 3.0]
+        weak = [m for m in movers if m["change_pct"] <= -3.0]
+        strong.sort(key=lambda x: x["change_pct"], reverse=True)
+        weak.sort(key=lambda x: x["change_pct"])
+        if strong:
+            s = strong[0]
+            lines.append(
+                f"机会留意：{s['kind']}「{s['name']}」今天大约涨 {s['change_pct']:+.2f}%，可关注是否跟你计划有关（不是买卖指令）。"
+            )
+        if weak:
+            w = weak[0]
+            lines.append(
+                f"风险留意：{w['kind']}「{w['name']}」今天大约跌 {w['change_pct']:+.2f}%，别急着加仓；先看是不是你本来就想减的票。"
+            )
+
     idx_with = [i for i in indices if i.get("change_pct") is not None]
     if idx_with:
         best = max(idx_with, key=lambda x: float(x["change_pct"]))
         worst = min(idx_with, key=lambda x: float(x["change_pct"]))
         lines.append(
-            f"指数方面：{best.get('name')} {float(best['change_pct']):+.2f}%，"
+            f"大盘：{best.get('name')} {float(best['change_pct']):+.2f}%，"
             f"{worst.get('name')} {float(worst['change_pct']):+.2f}%。"
         )
     if portfolio_chg is not None and hs300_chg is not None:
         diff = portfolio_chg - hs300_chg
         if abs(diff) < 0.15:
-            lines.append(f"组合约 {portfolio_chg:+.2f}%，和沪深300差不多。")
+            lines.append(f"你的组合大约 {portfolio_chg:+.2f}%，和大盘差不多。")
         elif diff > 0:
             lines.append(
-                f"组合约 {portfolio_chg:+.2f}%，比沪深300（{hs300_chg:+.2f}%）强约 {diff:.2f} 个百分点。"
+                f"你的组合大约 {portfolio_chg:+.2f}%，比沪深300（{hs300_chg:+.2f}%）强一点。"
             )
         else:
             lines.append(
-                f"组合约 {portfolio_chg:+.2f}%，比沪深300（{hs300_chg:+.2f}%）弱约 {abs(diff):.2f} 个百分点。"
+                f"你的组合大约 {portfolio_chg:+.2f}%，比沪深300（{hs300_chg:+.2f}%）弱一点——防守仓常见，先别慌。"
             )
     with_contrib = [r for r in contrib_rows if r.get("day_contrib") is not None]
     if with_contrib:
@@ -460,15 +506,23 @@ def _build_today_highlights(
         bottom = min(with_contrib, key=lambda r: float(r["day_contrib"]))
         if float(top["day_contrib"]) > 0:
             lines.append(
-                f"今天贡献最多：{top.get('name')}（约 {float(top['day_contrib']):+.0f} 元）。"
+                f"今天赚钱主要靠：{top.get('name')}（大约 {float(top['day_contrib']):+.0f} 元）。"
             )
         if float(bottom["day_contrib"]) < 0:
             lines.append(
-                f"今天拖累最多：{bottom.get('name')}（约 {float(bottom['day_contrib']):+.0f} 元）。"
+                f"今天拖后腿：{bottom.get('name')}（大约 {float(bottom['day_contrib']):+.0f} 元）。"
             )
     if not lines:
         lines.append("行情或持仓数据不全，今天看点暂无法生成。")
-    return lines[:5]
+    # 去重保序
+    seen = set()
+    out = []
+    for line in lines:
+        if line in seen:
+            continue
+        seen.add(line)
+        out.append(line)
+    return out[:6]
 
 
 def build_market_summary(conn) -> Dict[str, Any]:
@@ -599,7 +653,7 @@ def build_market_summary(conn) -> Dict[str, Any]:
                 }
             )
 
-    highlights = _build_today_highlights(indices, contrib_rows, portfolio_chg, hs300_chg)
+    highlights = _build_today_highlights(indices, contrib_rows, portfolio_chg, hs300_chg, watch_rows)
 
     cache_ttl = os.environ.get("MARKET_QUOTE_CACHE_SECONDS", "120")
     return {

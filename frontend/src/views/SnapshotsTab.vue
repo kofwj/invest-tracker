@@ -23,6 +23,14 @@
                     </div>
 
                     <el-alert
+                        v-if="snapshotSummary?.day_over_day_anomaly?.text"
+                        :title="snapshotSummary.day_over_day_anomaly.text"
+                        type="warning"
+                        show-icon
+                        :closable="false"
+                        style="margin-bottom: 16px;"
+                    ></el-alert>
+                    <el-alert
                         title="重复点击今天的快照会更新当天记录，不再因为已存在而丢掉最新价格/现金数据。"
                         type="info"
                         show-icon
@@ -151,5 +159,5 @@
 
 <script setup>
 import { useAppCtx } from '../composables/useAppCtx.js';
-const { snapshots, snapshotRange, snapshotMetrics, snapshotChangeRows, snapshotInsights, snapshotLoading, createSnapshot, fetchSnapshots, exportSnapshots, compactSnapshots, formatMoney, pct } = useAppCtx();
+const { snapshots, snapshotRange, snapshotMetrics, snapshotChangeRows, snapshotInsights, snapshotSummary, snapshotLoading, createSnapshot, fetchSnapshots, exportSnapshots, compactSnapshots, formatMoney, pct } = useAppCtx();
 </script>

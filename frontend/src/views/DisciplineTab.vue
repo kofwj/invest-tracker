@@ -22,6 +22,13 @@
       style="margin-bottom: 14px;"
     />
 
+    <el-card v-if="helpNotes.length" shadow="never" style="margin-bottom: 16px;">
+      <template #header><span class="section-title">怎么用</span></template>
+      <ul class="help-list">
+        <li v-for="(line, i) in helpNotes" :key="i">{{ line }}</li>
+      </ul>
+    </el-card>
+
     <el-row :gutter="12" style="margin-bottom: 16px;">
       <el-col :xs="12" :sm="8" :md="6">
         <el-card shadow="hover" class="d-metric">
@@ -69,13 +76,29 @@
       </div>
     </el-card>
 
+    <el-card shadow="never" style="margin-bottom: 16px;" v-if="planItems.length">
+      <template #header>
+        <div>
+          <div class="section-title">个人计划</div>
+          <div class="hint">A500 分批 / 格力软上限等，只提醒不自动下单；可在参数里改目标金额。</div>
+        </div>
+      </template>
+      <div class="breach-list">
+        <div v-for="(p, i) in planItems" :key="i" class="breach-item" :class="'lv-' + (p.level || 'info')">
+          <div class="breach-head">
+            <span>{{ p.title }}</span>
+            <el-tag size="small" :type="tagType(p.level)">{{ levelLabel(p.level) }}</el-tag>
+          </div>
+          <div class="breach-text">{{ p.text }}</div>
+        </div>
+      </div>
+    </el-card>
+
     <el-card shadow="never" style="margin-bottom: 16px;">
       <template #header>
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
-          <div>
-            <div class="section-title">再平衡建议</div>
-            <div class="hint">只读建议；可生成草稿，确认后才入账。券商下单仍需你自己操作。</div>
-          </div>
+        <div>
+          <div class="section-title">再平衡建议</div>
+          <div class="hint">只读建议；可生成草稿，确认后才入账。券商下单仍需你自己操作。</div>
         </div>
       </template>
       <el-table :data="actions" stripe empty-text="暂无建议" v-loading="disciplineLoading">
@@ -99,12 +122,22 @@
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
           <div>
             <div class="section-title">纪律草稿</div>
-            <div class="hint">确认后写入真实交易；买入金额单默认记为「申购待确认」。</div>
+            <div class="hint">可编辑数量/金额后再确认；买入金额单默认记为「申购待确认」。</div>
           </div>
-          <el-button size="small" :loading="disciplineDraftLoading" @click="fetchDisciplineDrafts">刷新草稿</el-button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <el-button size="small" :loading="disciplineDraftLoading" @click="fetchDisciplineDrafts">刷新草稿</el-button>
+            <el-button size="small" type="warning" @click="confirmSelectedDrafts">批量确认</el-button>
+          </div>
         </div>
       </template>
-      <el-table :data="disciplineDrafts" stripe empty-text="暂无草稿" v-loading="disciplineDraftLoading">
+      <el-table
+        :data="disciplineDrafts"
+        stripe
+        empty-text="暂无草稿"
+        v-loading="disciplineDraftLoading"
+        @selection-change="onDraftSelectionChange"
+      >
+        <el-table-column type="selection" width="48" />
         <el-table-column label="方向" width="80">
           <template #default="s">{{ s.row.side === 'sell' ? '卖出' : '买入' }}</template>
         </el-table-column>
@@ -113,10 +146,14 @@
         <el-table-column label="金额" width="110" align="right" header-align="right">
           <template #default="s">{{ formatMoney(s.row.amount) }}</template>
         </el-table-column>
-        <el-table-column prop="reason" label="原因" min-width="180" show-overflow-tooltip />
-        <el-table-column prop="created_at" label="创建" width="160" />
-        <el-table-column label="操作" width="160" align="center">
+        <el-table-column label="数量" width="90" align="right" header-align="right">
+          <template #default="s">{{ s.row.quantity ? Number(s.row.quantity).toFixed(2) : '—' }}</template>
+        </el-table-column>
+        <el-table-column prop="reason" label="原因" min-width="160" show-overflow-tooltip />
+        <el-table-column prop="created_at" label="创建" width="150" />
+        <el-table-column label="操作" width="210" align="center">
           <template #default="s">
+            <el-button type="primary" link @click="openDraftEdit(s.row)">编辑</el-button>
             <el-button type="primary" link @click="confirmDraft(s.row)">确认入账</el-button>
             <el-button type="danger" link @click="deleteDraft(s.row)">删除</el-button>
           </template>
@@ -124,8 +161,15 @@
       </el-table>
     </el-card>
 
-    <el-dialog v-model="disciplinePolicyDialog" title="纪律 / 目标参数" width="520px" destroy-on-close>
-      <el-form label-width="120px" v-if="disciplinePolicy">
+    <el-dialog v-model="disciplinePolicyDialog" title="纪律 / 目标参数" width="560px" destroy-on-close>
+      <el-alert
+        title="改参数只影响提醒和建议，不会自动买卖。权益/固收/存款三项目标合计应约 100%。"
+        type="info"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 12px;"
+      />
+      <el-form label-width="130px" v-if="disciplinePolicy">
         <el-form-item label="权益下限%">
           <el-input-number v-model="disciplinePolicy.equity_min_pct" :min="0" :max="100" :step="1" />
         </el-form-item>
@@ -159,6 +203,17 @@
         <el-form-item label="格力上限%">
           <el-input-number v-model="greeLimitPct" :min="1" :max="100" :step="1" />
         </el-form-item>
+        <el-form-item label="A500计划金额">
+          <el-input-number
+            v-model="disciplinePolicy.plans.a500_batch_target_amount"
+            :min="0"
+            :step="10000"
+            :controls="true"
+          />
+        </el-form-item>
+        <el-form-item label="格力软上限%">
+          <el-input-number v-model="disciplinePolicy.plans.gree_soft_max_pct" :min="0" :max="100" :step="1" />
+        </el-form-item>
         <el-form-item label="防守额外品类">
           <el-select
             v-model="disciplinePolicy.defensive_extra_categories"
@@ -180,6 +235,36 @@
         <el-button type="primary" @click="savePolicy">保存</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="disciplineDraftEditDialog" title="编辑纪律草稿" width="440px" destroy-on-close>
+      <el-form label-width="90px" v-if="disciplineDraftEditForm">
+        <el-form-item label="标的">
+          <span>{{ disciplineDraftEditForm.name }}（{{ disciplineDraftEditForm.code }}）</span>
+        </el-form-item>
+        <el-form-item label="方向">
+          <span>{{ disciplineDraftEditForm.side === 'sell' ? '卖出' : '买入' }}</span>
+        </el-form-item>
+        <el-form-item label="数量">
+          <el-input-number v-model="disciplineDraftEditForm.quantity" :min="0" :step="1" :precision="4" style="width:100%" />
+        </el-form-item>
+        <el-form-item label="价格">
+          <el-input-number v-model="disciplineDraftEditForm.price" :min="0" :step="0.01" :precision="4" style="width:100%" />
+        </el-form-item>
+        <el-form-item label="金额">
+          <el-input-number v-model="disciplineDraftEditForm.amount" :min="0.01" :step="100" :precision="2" style="width:100%" />
+        </el-form-item>
+        <el-form-item label="账户">
+          <el-input v-model="disciplineDraftEditForm.account" />
+        </el-form-item>
+        <el-form-item label="原因">
+          <el-input v-model="disciplineDraftEditForm.reason" type="textarea" :rows="2" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="disciplineDraftEditDialog = false">取消</el-button>
+        <el-button type="primary" @click="saveDraftEdit">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -188,30 +273,39 @@ import { computed } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 
 const {
-  disciplineReport,
   disciplineDrafts,
   disciplinePolicy,
   disciplineLoading,
   disciplineDraftLoading,
   disciplinePolicyDialog,
+  disciplineDraftEditDialog,
+  disciplineDraftEditForm,
   refreshDiscipline,
   openPolicyDialog,
   savePolicy,
   createDraftsFromReport,
+  openDraftEdit,
+  saveDraftEdit,
   deleteDraft,
   confirmDraft,
+  confirmSelectedDrafts,
+  onDraftSelectionChange,
   fetchDisciplineDrafts,
   breaches,
   actions,
+  planItems,
+  helpNotes,
   snapshot,
   targets,
   summaryText,
   formatMoney,
 } = useAppCtx();
 
-// ensure targets object exists for form binding
 if (disciplinePolicy.value && !disciplinePolicy.value.targets) {
   disciplinePolicy.value.targets = { equity_pct: 45, fixed_income_pct: 30, deposit_pct: 25 };
+}
+if (disciplinePolicy.value && !disciplinePolicy.value.plans) {
+  disciplinePolicy.value.plans = { a500_batch_target_amount: 200000, gree_soft_max_pct: 15 };
 }
 if (disciplinePolicy.value && !Array.isArray(disciplinePolicy.value.defensive_extra_categories)) {
   disciplinePolicy.value.defensive_extra_categories = [];
@@ -236,6 +330,8 @@ const greeLimitPct = computed({
     if (idx >= 0) limits[idx] = { ...limits[idx], max_pct: n };
     else limits.push({ code: '000651', name: '格力电器', max_pct: n });
     disciplinePolicy.value.named_limits = limits;
+    if (!disciplinePolicy.value.plans) disciplinePolicy.value.plans = {};
+    disciplinePolicy.value.plans.gree_soft_max_pct = n;
   },
 });
 
@@ -272,6 +368,7 @@ const levelLabel = (lv) => {
 .discipline-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .section-title { font-size: 16px; font-weight: 700; color: #303133; }
 .hint { font-size: 12px; color: #909399; margin-top: 4px; }
+.help-list { margin: 0; padding-left: 18px; color: #606266; font-size: 13px; line-height: 1.7; }
 .d-metric { margin-bottom: 8px; }
 .d-label { font-size: 12px; color: #909399; }
 .d-value { font-size: 22px; font-weight: 700; margin: 6px 0 4px; }

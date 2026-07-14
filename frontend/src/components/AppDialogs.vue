@@ -258,8 +258,16 @@
         <!-- 半自动分红草稿 -->
         <el-dialog v-model="dividendDialog.visible" title="半自动分红草稿" width="1080px" top="5vh">
             <el-alert
-                title="支持 A 股个股 + 场内 ETF/港股ETF/REIT 现金分红草稿。按权益登记日持仓估算金额，并自动识别已有分红/分红再投资流水避免重复。开放式债基等仍需手工录入；金额为税前估算，确认前请对照券商到账。" 
+                title="支持 A 股个股 + 场内 ETF/港股ETF/REIT 现金分红草稿。按权益登记日持仓估算金额，并自动识别已有分红/分红再投资流水避免重复。开放式债基等仍需手工录入（交易管理里录「分红」）；金额为税前估算，确认前请对照券商到账。"
                 type="info"
+                show-icon
+                :closable="false"
+                style="margin-bottom: 12px;"
+            ></el-alert>
+            <el-alert
+                v-if="(dividendDialog.unsupported || []).length"
+                :title="`当前有 ${dividendDialog.unsupported.length} 只持仓不支持自动扫描（常见：开放式债基）。请到券商对账后，在「交易管理」手工补分红。`"
+                type="warning"
                 show-icon
                 :closable="false"
                 style="margin-bottom: 12px;"

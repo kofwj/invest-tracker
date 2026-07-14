@@ -111,6 +111,31 @@ def snapshots_summary_data(conn, start_date: Optional[str] = None, end_date: Opt
 
     first = dict(rows[0])
     last = dict(rows[-1])
+    anomaly = None
+    prev = dict(rows[-2])
+    try:
+        prev_assets = float(prev.get("total_assets") or 0)
+        last_assets = float(last.get("total_assets") or 0)
+        if prev_assets > 0:
+            day_chg_pct = (last_assets / prev_assets - 1.0) * 100.0
+            day_chg_amt = last_assets - prev_assets
+            # 异常：单日总资产变动 ≥2% 且金额 ≥1万
+            if abs(day_chg_pct) >= 2.0 and abs(day_chg_amt) >= 10000:
+                direction = "涨" if day_chg_amt > 0 else "跌"
+                anomaly = {
+                    "from_date": prev.get("date"),
+                    "to_date": last.get("date"),
+                    "change_amount": round(day_chg_amt, 2),
+                    "change_pct": round(day_chg_pct, 2),
+                    "text": (
+                        f"盘后留意：总资产从 {prev.get('date')} 到 {last.get('date')} "
+                        f"大约{direction}了 {abs(day_chg_amt):.0f} 元（{day_chg_pct:+.2f}%）。"
+                        f"可能是行情、入金/出金或记账变动，建议对照资金流水。"
+                    ),
+                }
+    except Exception:
+        anomaly = None
+
     return {
         "period": f"{first['date']} 至 {last['date']}",
         "days": (dt_date.fromisoformat(last['date']) - dt_date.fromisoformat(first['date'])).days,
@@ -145,4 +170,5 @@ def snapshots_summary_data(conn, start_date: Optional[str] = None, end_date: Opt
             "end": last.get('lifetime_profit', 0) or 0,
             "change": (last.get('lifetime_profit', 0) or 0) - (first.get('lifetime_profit', 0) or 0),
         },
+        "day_over_day_anomaly": anomaly,
     }

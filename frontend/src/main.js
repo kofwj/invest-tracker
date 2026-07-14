@@ -334,6 +334,12 @@ const app = createApp({
             const bufferMain = total > 0 ? `缓冲资产 ${defensiveRatio.toFixed(1)}%` : '暂无缓冲数据';
             const bufferSub = total > 0 ? `现金+存款+在途 ${formatMoney(liquid)}，总资产 ${formatMoney(total)}` : '请先记录快照';
 
+            const anomaly = snapshotSummary.value?.day_over_day_anomaly;
+            if (anomaly?.text) {
+                focusMain = `盘后异常 ${formatMoney(anomaly.change_amount, 2, true)}`;
+                focusSub = anomaly.text;
+            }
+
             return [
                 { main: latestMain, sub: latestSub },
                 { main: focusMain, sub: focusSub },
@@ -809,12 +815,16 @@ const app = createApp({
             preferred_buy_category: 'A股ETF',
             preferred_buy_account: '华泰证券',
             targets: { equity_pct: 45, fixed_income_pct: 30, deposit_pct: 25 },
+            plans: { a500_batch_target_amount: 200000, gree_soft_max_pct: 15, a500_batch_code: '159352', gree_code: '000651' },
             named_limits: [],
             no_new_codes: [],
         });
         const disciplineLoading = ref(false);
         const disciplineDraftLoading = ref(false);
         const disciplinePolicyDialog = ref(false);
+        const disciplineDraftEditDialog = ref(false);
+        const disciplineDraftEditForm = ref({});
+        const disciplineSelectedDraftIds = ref([]);
 
         const {
             fetchDisciplineReport,
@@ -823,10 +833,16 @@ const app = createApp({
             openPolicyDialog,
             savePolicy,
             createDraftsFromReport,
+            openDraftEdit,
+            saveDraftEdit,
             deleteDraft,
             confirmDraft,
+            onDraftSelectionChange,
+            confirmSelectedDrafts,
             breaches,
             actions,
+            planItems,
+            helpNotes,
             snapshot,
             targets,
             summaryText,
@@ -837,6 +853,11 @@ const app = createApp({
             disciplineLoading,
             disciplineDraftLoading,
             disciplinePolicyDialog,
+            disciplineDraftEditDialog,
+            disciplineDraftEditForm,
+            disciplineSelectedDraftIds,
+            fetchData,
+            queryTransactions,
             computed,
         });
 
@@ -904,8 +925,10 @@ const app = createApp({
             toggleAlertEnabled, deleteAlertRule, checkAlerts, addWatchlistRow, removeWatchlistRow, saveWatchlist,
             indexRows, watchlistRows, holdingsDayRows, marketSignals, marketHighlights, marketComparisons, marketUpdatedAt, quoteCacheSeconds, alertCooldownMinutes,
             disciplineReport, disciplineDrafts, disciplinePolicy, disciplineLoading, disciplineDraftLoading, disciplinePolicyDialog,
-            fetchDisciplineReport, fetchDisciplineDrafts, refreshDiscipline, openPolicyDialog, savePolicy, createDraftsFromReport, deleteDraft, confirmDraft,
-            breaches, actions, snapshot, targets, summaryText,
+            disciplineDraftEditDialog, disciplineDraftEditForm, disciplineSelectedDraftIds,
+            fetchDisciplineReport, fetchDisciplineDrafts, refreshDiscipline, openPolicyDialog, savePolicy, createDraftsFromReport,
+            openDraftEdit, saveDraftEdit, deleteDraft, confirmDraft, onDraftSelectionChange, confirmSelectedDrafts,
+            breaches, actions, planItems, helpNotes, snapshot, targets, summaryText,
         };
         provide(APP_CTX_KEY, appCtx);
         return appCtx;

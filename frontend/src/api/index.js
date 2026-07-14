@@ -136,6 +136,7 @@ const api = {
         return axios.get(API + '/discipline/drafts' + (qs.toString() ? '?' + qs.toString() : ''));
     },
     createDisciplineDrafts: (payload = {}) => axios.post(API + '/discipline/drafts', payload || {}),
+    updateDisciplineDraft: (id, payload) => axios.put(API + '/discipline/drafts/' + id, payload || {}),
     deleteDisciplineDraft: (id) => axios.delete(API + '/discipline/drafts/' + id),
     confirmDisciplineDraft: (id) => axios.post(API + '/discipline/drafts/' + id + '/confirm'),
     confirmDisciplineDrafts: (payload) => axios.post(API + '/discipline/drafts/confirm', payload || {}),

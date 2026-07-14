@@ -160,3 +160,63 @@ def test_discipline_confirm_sell_without_qty_fails(client, app_module):
     did = drafts[0]["id"]
     conf = client.post(f"/discipline/drafts/{did}/confirm")
     assert conf.status_code == 400
+
+
+def test_discipline_update_draft_and_batch_confirm(client, app_module):
+    client.post(
+        "/discipline/drafts",
+        json={
+            "actions": [
+                {
+                    "side": "buy",
+                    "code": "159352",
+                    "name": "中证A500ETF",
+                    "category": "A股ETF",
+                    "account": "华泰证券",
+                    "amount": 3000,
+                    "quantity": 0,
+                    "price": 0,
+                    "reason": "批1",
+                },
+                {
+                    "side": "buy",
+                    "code": "518880",
+                    "name": "黄金ETF",
+                    "category": "黄金",
+                    "account": "华泰证券",
+                    "amount": 2000,
+                    "quantity": 0,
+                    "price": 0,
+                    "reason": "批2",
+                },
+            ]
+        },
+    )
+    drafts = client.get("/discipline/drafts?status=draft").json()
+    assert len(drafts) >= 2
+    d0 = drafts[0]
+    upd = client.put(
+        f"/discipline/drafts/{d0['id']}",
+        json={"amount": 3500, "reason": "手改金额"},
+    )
+    assert upd.status_code == 200, upd.text
+    assert float(upd.json()["draft"]["amount"]) == 3500
+
+    ids = [d["id"] for d in drafts[:2]]
+    batch = client.post("/discipline/drafts/confirm", json={"draft_ids": ids})
+    assert batch.status_code == 200
+    body = batch.json()
+    assert body["count"] >= 1
+
+
+def test_discipline_report_includes_plans_and_help(client, app_module):
+    _seed_gree_heavy_portfolio(client, app_module, cash_base=300000, deposit=800000, qty=100, price=40)
+    r = client.get("/discipline/report")
+    assert r.status_code == 200
+    data = r.json()
+    assert "plans" in data and isinstance(data["plans"], list)
+    assert "help_notes" in data and len(data["help_notes"]) >= 1
+    assert any(
+        "A500" in (p.get("title") or "") or str(p.get("code") or "").startswith("a500")
+        for p in data["plans"]
+    )

@@ -59,6 +59,15 @@ DEFAULT_POLICY: Dict[str, Any] = {
     "fixed_income_categories": ["债基", "证券现金", "基金申购在途"],
     # 额外算进「防守」的权益品类（不改大类饼图，只抬高防守占比）
     "defensive_extra_categories": [],
+    # 个人计划（与再平衡建议并列，偏人话提醒）
+    "plans": {
+        "a500_batch_target_amount": 200000.0,  # 计划分批买入 A500 总额
+        "a500_batch_code": "159352",
+        "a500_batch_name": "中证A500ETF",
+        "gree_code": "000651",
+        "gree_name": "格力电器",
+        "gree_soft_max_pct": 15.0,  # 超此占比提示减仓
+    },
 }
 
 
@@ -194,6 +203,19 @@ def set_policy(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
     for list_key in ("named_limits", "no_new_codes", "fixed_income_categories", "defensive_extra_categories"):
         if list_key in merged and merged[list_key] is None:
             merged[list_key] = []
+
+    plans = dict(merged.get("plans") or {})
+    if "a500_batch_target_amount" in plans:
+        plans["a500_batch_target_amount"] = max(0.0, _finite(plans["a500_batch_target_amount"], "plans.a500_batch_target_amount"))
+    if "gree_soft_max_pct" in plans:
+        g = _finite(plans["gree_soft_max_pct"], "plans.gree_soft_max_pct")
+        if g < 0 or g > 100:
+            raise ValueError("格力软上限需在 0–100 之间")
+        plans["gree_soft_max_pct"] = g
+    for k in ("a500_batch_code", "a500_batch_name", "gree_code", "gree_name"):
+        if k in plans and plans[k] is not None:
+            plans[k] = str(plans[k]).strip()
+    merged["plans"] = plans
 
     _set_setting(conn, POLICY_KEY, json.dumps(merged, ensure_ascii=False))
     return merged
@@ -544,9 +566,91 @@ def build_discipline_report(conn) -> Dict[str, Any]:
 
     filtered_actions.sort(key=lambda x: (int(x.get("priority") or 99), -float(x.get("amount") or 0)))
 
+    # --- personal plans (A500 batch / Gree soft cap) ---
+    plans = policy.get("plans") or {}
+    plan_items: List[Dict[str, Any]] = []
+    a500_code = str(plans.get("a500_batch_code") or pref_code or "159352").strip()
+    a500_name = str(plans.get("a500_batch_name") or pref_name or a500_code)
+    a500_target = float(plans.get("a500_batch_target_amount") or 0)
+    a500_h = next((x for x in holdings if str(x.get("code")) == a500_code), None)
+    a500_mv = float(a500_h["market_value"]) if a500_h else 0.0
+    a500_gap = max(a500_target - a500_mv, 0.0) if a500_target > 0 else 0.0
+    if a500_target > 0:
+        if a500_gap >= 100:
+            plan_items.append(
+                {
+                    "code": "a500_batch",
+                    "level": "info",
+                    "title": f"{a500_name} 分批计划",
+                    "text": (
+                        f"目标约 {a500_target:.0f} 元，当前市值约 {a500_mv:.0f}，"
+                        f"还差约 {a500_gap:.0f}。可优先用证券现金/存款分批申购，不必一次买完。"
+                    ),
+                    "remaining_amount": round(a500_gap, 2),
+                    "current_amount": round(a500_mv, 2),
+                    "target_amount": round(a500_target, 2),
+                    "symbol": a500_code,
+                }
+            )
+        else:
+            plan_items.append(
+                {
+                    "code": "a500_batch_done",
+                    "level": "ok",
+                    "title": f"{a500_name} 分批计划",
+                    "text": f"目标约 {a500_target:.0f} 元，当前市值约 {a500_mv:.0f}，计划基本到位。",
+                    "remaining_amount": 0,
+                    "current_amount": round(a500_mv, 2),
+                    "target_amount": round(a500_target, 2),
+                    "symbol": a500_code,
+                }
+            )
+
+    gree_code = str(plans.get("gree_code") or "000651").strip()
+    gree_name = str(plans.get("gree_name") or "格力电器")
+    gree_soft = float(plans.get("gree_soft_max_pct") or 15)
+    gree_h = next((x for x in holdings if str(x.get("code")) == gree_code), None)
+    if gree_h and total_assets > 0 and gree_soft > 0:
+        gree_share = pct(gree_h["market_value"])
+        if gree_share > gree_soft + 1e-9:
+            target_mv = total_assets * gree_soft / 100.0
+            sell_mv = max(gree_h["market_value"] - target_mv, 0)
+            plan_items.append(
+                {
+                    "code": "gree_reduce",
+                    "level": "warning",
+                    "title": f"{gree_name} 减仓提醒",
+                    "text": (
+                        f"约占总额 {gree_share:.1f}%（软上限 {gree_soft:.0f}%），"
+                        f"建议减约 {sell_mv:.0f} 元到上限附近；是否动手看你自己节奏。"
+                    ),
+                    "remaining_amount": round(sell_mv, 2),
+                    "current_pct": round(gree_share, 2),
+                    "target_pct": gree_soft,
+                    "symbol": gree_code,
+                }
+            )
+        else:
+            plan_items.append(
+                {
+                    "code": "gree_ok",
+                    "level": "ok",
+                    "title": f"{gree_name} 占比",
+                    "text": f"约占 {gree_share:.1f}%，在软上限 {gree_soft:.0f}% 以内。",
+                    "current_pct": round(gree_share, 2),
+                    "target_pct": gree_soft,
+                    "symbol": gree_code,
+                }
+            )
+
     warn_n = sum(1 for b in breaches if b.get("level") == "warning")
-    if warn_n:
-        summary = f"有 {warn_n} 条纪律提醒需要关注；再平衡建议 {len(filtered_actions)} 条（仅建议，不自动下单）。"
+    plan_warn = sum(1 for p in plan_items if p.get("level") == "warning")
+    if warn_n or plan_warn:
+        summary = (
+            f"有 {warn_n} 条纪律提醒"
+            + (f"、{plan_warn} 条个人计划提醒" if plan_warn else "")
+            + f"；再平衡建议 {len(filtered_actions)} 条（仅建议，不自动下单）。"
+        )
     elif filtered_actions:
         summary = f"纪律总体还行；按目标比例有 {len(filtered_actions)} 条再平衡建议。"
     else:
@@ -556,6 +660,14 @@ def build_discipline_report(conn) -> Dict[str, Any]:
         "SELECT COUNT(*) AS c FROM discipline_drafts WHERE status = 'draft'"
     ).fetchone()
     open_draft_count = int(open_drafts["c"] if isinstance(open_drafts, sqlite3.Row) else open_drafts[0])
+
+    help_notes = [
+        "本页默认只读：点「建议→草稿」不会改账，只有「确认入账」才写真实交易。",
+        "买入金额类确认后一般记为「申购待确认」，份额确认后再改成买入。",
+        "券商下单仍需你自己操作；这里只帮你记建议和账本草稿。",
+        "改参数会影响纪律提醒和再平衡建议，保存后立即生效。",
+        f"默认优先加仓 {pref_name}（{pref_code}）；格力等可设个人上限。",
+    ]
 
     return {
         "policy": policy,
@@ -581,6 +693,8 @@ def build_discipline_report(conn) -> Dict[str, Any]:
         "gaps_pct": {k: round(v, 2) for k, v in gaps.items()},
         "breaches": breaches,
         "actions": filtered_actions,
+        "plans": plan_items,
+        "help_notes": help_notes,
         "summary": summary,
         "open_draft_count": open_draft_count,
         "generated_at": datetime.now(LOCAL_TZ).replace(tzinfo=None).isoformat(sep=" ", timespec="seconds"),
@@ -702,6 +816,60 @@ def delete_draft(conn, draft_id: int) -> bool:
         (draft_id,),
     )
     return cur.rowcount > 0
+
+
+def update_draft(conn, draft_id: int, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Edit an open draft (quantity/price/amount/reason/...). Confirmed drafts are frozen."""
+    ensure_discipline_tables(conn)
+    row = conn.execute("SELECT * FROM discipline_drafts WHERE id = ?", (draft_id,)).fetchone()
+    if not row:
+        raise KeyError("草稿不存在")
+    d = _row_to_dict(row)
+    if d.get("status") != "draft":
+        raise ValueError("已确认草稿不能修改")
+
+    fields = {}
+    if "quantity" in payload and payload["quantity"] is not None:
+        fields["quantity"] = max(0.0, float(payload["quantity"]))
+    if "price" in payload and payload["price"] is not None:
+        fields["price"] = max(0.0, float(payload["price"]))
+    if "amount" in payload and payload["amount"] is not None:
+        fields["amount"] = float(payload["amount"])
+        if fields["amount"] <= 0:
+            raise ValueError("金额必须大于 0")
+    if "fee" in payload and payload["fee"] is not None:
+        fields["fee"] = max(0.0, float(payload["fee"]))
+    if "reason" in payload and payload["reason"] is not None:
+        fields["reason"] = str(payload["reason"])
+    if "account" in payload and payload["account"] is not None:
+        fields["account"] = str(payload["account"] or "华泰证券").strip() or "华泰证券"
+    if "name" in payload and payload["name"] is not None:
+        fields["name"] = str(payload["name"] or d.get("code") or "")
+    if "category" in payload and payload["category"] is not None:
+        fields["category"] = str(payload["category"] or "")
+    if "date" in payload and payload["date"] is not None:
+        fields["date"] = str(payload["date"])[:10]
+    if "side" in payload and payload["side"] is not None:
+        side = str(payload["side"]).lower().strip()
+        if side not in ("buy", "sell"):
+            raise ValueError("side 必须是 buy 或 sell")
+        fields["side"] = side
+
+    # If qty+price set and amount omitted, keep amount in sync for sells/buys with shares
+    qty = float(fields.get("quantity", d.get("quantity") or 0) or 0)
+    price = float(fields.get("price", d.get("price") or 0) or 0)
+    if "amount" not in fields and qty > 0 and price > 0:
+        fields["amount"] = round(qty * price, 2)
+    if "amount" in fields and float(fields["amount"]) <= 0:
+        raise ValueError("金额必须大于 0")
+    if not fields:
+        raise ValueError("没有可更新的字段")
+
+    sets = ", ".join(f"{k} = ?" for k in fields)
+    vals = list(fields.values()) + [draft_id]
+    conn.execute(f"UPDATE discipline_drafts SET {sets} WHERE id = ? AND status = 'draft'", vals)
+    updated = conn.execute("SELECT * FROM discipline_drafts WHERE id = ?", (draft_id,)).fetchone()
+    return _row_to_dict(updated)
 
 
 def confirm_draft(conn, draft_id: int, *, make_backup: bool = True) -> Dict[str, Any]:

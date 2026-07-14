@@ -15,6 +15,7 @@ try:
         get_policy,
         list_drafts,
         set_policy,
+        update_draft,
     )
 except ImportError:
     from database import db_session
@@ -27,6 +28,7 @@ except ImportError:
         get_policy,
         list_drafts,
         set_policy,
+        update_draft,
     )
 
 router = APIRouter()
@@ -47,6 +49,7 @@ class PolicyBody(BaseModel):
     no_new_codes: Optional[list] = None
     fixed_income_categories: Optional[list] = None
     defensive_extra_categories: Optional[list] = None
+    plans: Optional[dict] = None
 
 
 class CreateDraftsBody(BaseModel):
@@ -56,6 +59,19 @@ class CreateDraftsBody(BaseModel):
 
 class ConfirmDraftsBody(BaseModel):
     draft_ids: List[int] = Field(default_factory=list)
+
+
+class UpdateDraftBody(BaseModel):
+    quantity: Optional[float] = None
+    price: Optional[float] = None
+    amount: Optional[float] = None
+    fee: Optional[float] = None
+    reason: Optional[str] = None
+    account: Optional[str] = None
+    name: Optional[str] = None
+    category: Optional[str] = None
+    date: Optional[str] = None
+    side: Optional[str] = None
 
 
 @router.get("/discipline/report")
@@ -94,6 +110,20 @@ def discipline_create_drafts(body: CreateDraftsBody = CreateDraftsBody()):
         result = create_drafts_from_actions(conn, actions=body.actions, use_report_actions=body.actions is None)
         conn.commit()
     return {"status": "success", **result}
+
+
+@router.put("/discipline/drafts/{draft_id}")
+def discipline_update_draft(draft_id: int, body: UpdateDraftBody):
+    payload = body.model_dump(exclude_unset=True)
+    try:
+        with db_session(row_factory=sqlite3.Row) as conn:
+            row = update_draft(conn, draft_id, payload)
+            conn.commit()
+        return {"status": "success", "draft": row}
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.delete("/discipline/drafts/{draft_id}")

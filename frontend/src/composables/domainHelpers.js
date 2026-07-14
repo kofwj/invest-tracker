@@ -281,7 +281,17 @@ export function createDividendHelpers({
             dividendDialog.value.failed = data.failed || [];
             dividendDialog.value.selected = [];
             const s = data.summary || {};
-            ElMessage.success(`扫描完成：新草稿 ${s.new_count || 0}，已有流水 ${s.already_recorded_count || 0}，零持仓 ${s.zero_qty_count || 0}`);
+            const tips = [];
+            if ((s.unsupported_holdings || 0) > 0) {
+                tips.push(`有 ${s.unsupported_holdings} 只不支持自动扫（多为开放式债基），请对照券商手工补分红`);
+            }
+            if ((data.failed || []).length) {
+                tips.push(`${data.failed.length} 只扫描失败，可稍后再扫或手工录`);
+            }
+            ElMessage.success(
+                `扫描完成：新草稿 ${s.new_count || 0}，已有流水 ${s.already_recorded_count || 0}，零持仓 ${s.zero_qty_count || 0}`
+                + (tips.length ? `。${tips.join('；')}` : ''),
+            );
         } catch (e) {
             ElMessage.error('扫描分红失败：' + (e?.response?.data?.detail || e?.message || '未知错误'));
         } finally {
@@ -386,7 +396,11 @@ export function createMaintenanceHelpers({
     const restoreBackup = async (row) => {
         if (!row?.filename) return;
         try {
-            await ElMessageBox.confirm(`确定恢复备份 ${row.filename}？系统会先自动备份当前数据库。`, '恢复数据库', { type: 'warning' });
+            await ElMessageBox.confirm(
+                `确定恢复备份 ${row.filename}？\n\n1）会先自动备份当前数据库\n2）恢复后当前账本数据会被替换\n3）建议先点「下载」留一份到本地\n\n请再次确认操作人就是你本人。`,
+                '恢复数据库（高风险）',
+                { type: 'warning', confirmButtonText: '仍要恢复', cancelButtonText: '取消' },
+            );
             maintenanceLoading.value = true;
             const res = await api.restoreBackup(row.filename);
             ElMessage.success(`恢复完成，恢复前备份：${res.data?.pre_restore_backup || ''}`);
