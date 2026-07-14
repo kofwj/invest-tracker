@@ -25,12 +25,27 @@ let snapshotTrendChart = null;
 let snapshotStructureChart = null;
 let perfTimelineChart = null;
 
+/** 确保 echarts 实例挂在当前 DOM 上（lazy tab / 异步组件会换掉节点） */
+const ensureChart = (instance, domId) => {
+    const el = document.getElementById(domId);
+    if (!el) return null;
+    if (instance) {
+        const oldEl = typeof instance.getDom === 'function' ? instance.getDom() : null;
+        if (oldEl === el && el.isConnected) return instance;
+        try { instance.dispose(); } catch (_) { /* ignore */ }
+    }
+    return echarts.init(el);
+};
+
 const renderSnapshotChartsView = (snapshots = []) => {
     const trendDom = document.getElementById('snapshotTrendChart');
     const structDom = document.getElementById('snapshotStructureChart');
-    if (!trendDom || !structDom) return;
-    if (!snapshotTrendChart) snapshotTrendChart = echarts.init(trendDom);
-    if (!snapshotStructureChart) snapshotStructureChart = echarts.init(structDom);
+    if (!trendDom || !structDom) return false;
+
+    snapshotTrendChart = ensureChart(snapshotTrendChart, 'snapshotTrendChart');
+    snapshotStructureChart = ensureChart(snapshotStructureChart, 'snapshotStructureChart');
+    if (!snapshotTrendChart || !snapshotStructureChart) return false;
+
     const rowsAsc = [...snapshots].sort((a, b) => String(a.date).localeCompare(String(b.date)));
     const dates = rowsAsc.map(r => r.date);
     snapshotTrendChart.setOption({
@@ -59,43 +74,50 @@ const renderSnapshotChartsView = (snapshots = []) => {
             ],
         }],
     });
+    return true;
 };
 
 const renderAllocationChartsView = (macroAllocationAnalysis = [], allocationAnalysis = []) => {
-    if (!allocationChart) {
-        const chartDom = document.getElementById('allocationChart');
-        if (chartDom) allocationChart = echarts.init(chartDom);
-    }
-    if (!categoryChart) {
-        const catDom = document.getElementById('categoryChart');
-        if (catDom) categoryChart = echarts.init(catDom);
-    }
+    const chartDom = document.getElementById('allocationChart');
+    const catDom = document.getElementById('categoryChart');
+    // lazy tab 首次切换时异步组件可能尚未挂载
+    if (!chartDom || !catDom) return false;
+
+    allocationChart = ensureChart(allocationChart, 'allocationChart');
+    categoryChart = ensureChart(categoryChart, 'categoryChart');
+    if (!allocationChart || !categoryChart) return false;
 
     const macroData = macroAllocationAnalysis.map(x => ({ name: x.group, value: Number(x.amount || 0) })).filter(x => x.value > 0);
     const categoryData = allocationAnalysis.map(x => ({ name: x.category, value: Number(x.market_value || 0) })).filter(x => x.value > 0);
 
-    if (allocationChart) {
-        allocationChart.setOption({
-            title: { text: '权益 / 固收 / 存款', left: 'center' },
-            tooltip: { trigger: 'item', formatter: params => `${params.name}: ${formatMoney(params.value)} (${params.percent}%)` },
-            legend: { bottom: 0 },
-            series: [{ type: 'pie', radius: ['38%', '66%'], center: ['50%', '46%'], data: macroData }],
-        });
-    }
-    if (categoryChart) {
-        categoryChart.setOption({
-            title: { text: '细分类别占比', left: 'center' },
-            tooltip: { trigger: 'item', formatter: params => `${params.name}: ${formatMoney(params.value)} (${params.percent}%)` },
-            legend: { bottom: 0 },
-            series: [{ type: 'pie', radius: ['34%', '64%'], center: ['50%', '46%'], data: categoryData }],
-        });
-    }
+    allocationChart.setOption({
+        title: { text: '权益 / 固收 / 存款', left: 'center' },
+        tooltip: { trigger: 'item', formatter: params => `${params.name}: ${formatMoney(params.value)} (${params.percent}%)` },
+        legend: { bottom: 0 },
+        series: [{ type: 'pie', radius: ['38%', '66%'], center: ['50%', '46%'], data: macroData }],
+    }, true);
+    categoryChart.setOption({
+        title: { text: '细分类别占比', left: 'center' },
+        tooltip: { trigger: 'item', formatter: params => `${params.name}: ${formatMoney(params.value)} (${params.percent}%)` },
+        legend: { bottom: 0 },
+        series: [{ type: 'pie', radius: ['34%', '64%'], center: ['50%', '46%'], data: categoryData }],
+    }, true);
+
+    // 容器从 display:none 切过来时宽高可能为 0，强制重算
+    try {
+        allocationChart.resize();
+        categoryChart.resize();
+    } catch (_) { /* ignore */ }
+    return true;
 };
 
 const renderPerfTimelineChartView = (perfTimeline = []) => {
     const el = document.getElementById('perfTimelineChart');
-    if (!el || !perfTimeline.length) return;
-    if (perfTimelineChart) perfTimelineChart.dispose();
+    if (!el || !perfTimeline.length) return false;
+    if (perfTimelineChart) {
+        try { perfTimelineChart.dispose(); } catch (_) { /* ignore */ }
+        perfTimelineChart = null;
+    }
     perfTimelineChart = echarts.init(el);
     const data = perfTimeline;
     perfTimelineChart.setOption({
@@ -110,16 +132,43 @@ const renderPerfTimelineChartView = (perfTimeline = []) => {
             { name: '总收益', type: 'line', data: data.map(d => d.total_gain), smooth: true, lineStyle: { width: 1.5 }, itemStyle: { color: '#E6A23C' } },
         ],
     });
+    try { perfTimelineChart.resize(); } catch (_) { /* ignore */ }
+    return true;
+};
+
+/**
+ * 等待图表容器出现（应对 el-tab-pane lazy + defineAsyncComponent 的挂载延迟）
+ * @returns {Promise<boolean>} 是否在超时前找到节点
+ */
+const waitForChartDom = (ids, { timeoutMs = 2500, intervalMs = 50 } = {}) => {
+    const list = Array.isArray(ids) ? ids : [ids];
+    const start = Date.now();
+    return new Promise((resolve) => {
+        const tick = () => {
+            if (list.every((id) => document.getElementById(id))) {
+                resolve(true);
+                return;
+            }
+            if (Date.now() - start >= timeoutMs) {
+                resolve(false);
+                return;
+            }
+            setTimeout(tick, intervalMs);
+        };
+        tick();
+    });
 };
 
 export {
     renderSnapshotChartsView,
     renderAllocationChartsView,
     renderPerfTimelineChartView,
+    waitForChartDom,
 };
 
 export default {
     renderSnapshotChartsView,
     renderAllocationChartsView,
     renderPerfTimelineChartView,
+    waitForChartDom,
 };

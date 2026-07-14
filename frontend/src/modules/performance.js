@@ -198,7 +198,11 @@ const createPerformanceModule = ({
     };
 
     const renderPerfChart = async () => {
-        const { renderPerfTimelineChartView } = await import('../charts/index.js');
+        const { renderPerfTimelineChartView, waitForChartDom } = await import('../charts/index.js');
+        if (!perfTimeline.value?.length) return;
+        const ready = await waitForChartDom(['perfTimelineChart']);
+        if (!ready) return;
+        await new Promise((r) => requestAnimationFrame(() => r()));
         renderPerfTimelineChartView(perfTimeline.value);
     };
 

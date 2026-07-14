@@ -131,6 +131,38 @@
 </template>
 
 <script setup>
+import { onMounted, watch, nextTick } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
-const { dashboard, allocationAnalysis, macroAllocationAnalysis, allocationSummary, allocationHealth, portfolioExpectedReturn, formatMoney } = useAppCtx();
+
+const {
+    dashboard,
+    allocationAnalysis,
+    macroAllocationAnalysis,
+    allocationSummary,
+    allocationHealth,
+    portfolioExpectedReturn,
+    formatMoney,
+} = useAppCtx();
+
+// 本 tab 为 lazy + 异步组件：父级 watch 的 nextTick 经常早于本组件挂载。
+// 挂载后再画一次，并在配置数据变化时刷新。
+const paintCharts = async () => {
+    const { renderAllocationChartsView, waitForChartDom } = await import('../charts/index.js');
+    const ready = await waitForChartDom(['allocationChart', 'categoryChart']);
+    if (!ready) return;
+    await nextTick();
+    renderAllocationChartsView(macroAllocationAnalysis.value, allocationAnalysis.value);
+};
+
+onMounted(() => {
+    paintCharts();
+});
+
+watch(
+    [macroAllocationAnalysis, allocationAnalysis],
+    () => {
+        paintCharts();
+    },
+    { deep: true },
+);
 </script>

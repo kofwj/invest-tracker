@@ -68,7 +68,11 @@ const createSnapshotsModule = ({
     };
 
     const renderSnapshotCharts = async () => {
-        const { renderSnapshotChartsView: render } = await import('../charts/index.js');
+        const { renderSnapshotChartsView: render, waitForChartDom } = await import('../charts/index.js');
+        // lazy tab + 异步组件：容器可能尚未挂载
+        const ready = await waitForChartDom(['snapshotTrendChart', 'snapshotStructureChart']);
+        if (!ready) return;
+        await new Promise((r) => requestAnimationFrame(() => r()));
         render(snapshots.value);
     };
 

@@ -341,7 +341,12 @@ const app = createApp({
         });
 
         const renderAllocationCharts = async () => {
-            const { renderAllocationChartsView } = await import('./charts/index.js');
+            const { renderAllocationChartsView, waitForChartDom } = await import('./charts/index.js');
+            // lazy tab + 异步 SFC：单次 nextTick 时 #allocationChart 往往还没挂上
+            const ready = await waitForChartDom(['allocationChart', 'categoryChart']);
+            if (!ready) return;
+            // 再等一帧，避免容器宽高仍为 0
+            await new Promise((r) => requestAnimationFrame(() => r()));
             renderAllocationChartsView(macroAllocationAnalysis.value, allocationAnalysis.value);
         };
 
