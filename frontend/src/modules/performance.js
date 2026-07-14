@@ -6,6 +6,7 @@ const createPerformanceModule = ({
     perfTimeline,
     perfContribution,
     perfFlows,
+    perfStory,
     perfLoading,
     perfContributionFilter,
     perfContributionSort,
@@ -15,6 +16,12 @@ const createPerformanceModule = ({
     computed,
 }) => {
     const hasPerfFlows = computed(() => Number(perfSummary.value?.flow_count || 0) > 0);
+    const perfStoryToneType = computed(() => {
+        const t = perfStory.value?.tone;
+        if (t === 'positive') return 'success';
+        if (t === 'negative') return 'error';
+        return 'info';
+    });
 
     const perfGuideSteps = computed(() => ([
         {
@@ -209,16 +216,18 @@ const createPerformanceModule = ({
     async function fetchPerformance() {
         perfLoading.value = true;
         try {
-            const [sumR, tlR, ctR, flR] = await Promise.all([
+            const [sumR, tlR, ctR, flR, stR] = await Promise.all([
                 api.performanceSummary(),
                 api.performanceTimeline(),
                 api.performanceContribution(),
                 api.listPortfolioCashFlows(),
+                api.performanceStory(),
             ]);
             perfSummary.value = sumR.data;
             perfTimeline.value = tlR.data;
             perfContribution.value = ctR.data;
             perfFlows.value = flR.data;
+            perfStory.value = stR.data;
             nextTick(renderPerfChart);
         } catch (e) {
             console.error('fetchPerformance', e);
@@ -246,6 +255,7 @@ const createPerformanceModule = ({
 
     return {
         hasPerfFlows,
+        perfStoryToneType,
         perfGuideSteps,
         perfLensRows,
         perfReadTips,

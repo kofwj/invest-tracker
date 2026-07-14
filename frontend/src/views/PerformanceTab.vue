@@ -37,6 +37,33 @@
                     ></el-alert>
                 </div>
 
+                <el-card v-if="perfStory?.headline" shadow="never" class="perf-story-card" style="margin-bottom: 18px;">
+                    <div class="perf-story-head">
+                        <div>
+                            <div class="perf-contrib-title">绩效故事（人话）</div>
+                            <div class="perf-contrib-sub">自动根据当前数字生成，不猜；刷新收益分析时更新。</div>
+                        </div>
+                        <el-tag :type="perfStoryToneType" size="small">{{ perfStory.as_of_date || '今日' }}</el-tag>
+                    </div>
+                    <div class="perf-story-headline" :class="'is-' + (perfStory.tone || 'neutral')">{{ perfStory.headline }}</div>
+                    <ul class="perf-story-bullets">
+                        <li v-for="(b, i) in (perfStory.bullets || [])" :key="i">{{ b }}</li>
+                    </ul>
+                    <div class="perf-story-cols" v-if="(perfStory.winners || []).length || (perfStory.losers || []).length">
+                        <div class="perf-story-col is-win" v-if="(perfStory.winners || []).length">
+                            <div class="perf-story-col-title">赚钱靠前</div>
+                            <div v-for="w in perfStory.winners" :key="'w'+w.code" class="perf-story-col-row">{{ w.text }}</div>
+                        </div>
+                        <div class="perf-story-col is-lose" v-if="(perfStory.losers || []).length">
+                            <div class="perf-story-col-title">拖累靠前</div>
+                            <div v-for="w in perfStory.losers" :key="'l'+w.code" class="perf-story-col-row">{{ w.text }}</div>
+                        </div>
+                    </div>
+                    <div class="perf-story-caveats" v-if="(perfStory.caveats || []).length">
+                        <span v-for="(c, i) in perfStory.caveats" :key="i">{{ c }}</span>
+                    </div>
+                </el-card>
+
                 <el-row :gutter="12" class="perf-cards-row" style="margin-bottom: 18px;">
                     <el-col :xs="12" :sm="8" :md="4" v-for="m in perfCards" :key="m.label">
                         <el-card shadow="hover" class="perf-metric-card">
@@ -254,5 +281,5 @@
 
 <script setup>
 import { useAppCtx } from '../composables/useAppCtx.js';
-const { formatMoney, pct, perfSummary, perfTimeline, perfContribution, perfFlows, perfLoading, perfFlowForm, hasPerfFlows, perfGuideSteps, perfLensRows, perfReadTips, perfCards, displayedPerfContribution, perfContributionFilter, perfContributionSort, perfContributionHeadline, perfContributionMix, fetchPerformance, addPerfFlow, deletePerfFlow, contributionBarStyle } = useAppCtx();
+const { formatMoney, pct, perfSummary, perfTimeline, perfContribution, perfFlows, perfStory, perfLoading, perfFlowForm, hasPerfFlows, perfStoryToneType, perfGuideSteps, perfLensRows, perfReadTips, perfCards, displayedPerfContribution, perfContributionFilter, perfContributionSort, perfContributionHeadline, perfContributionMix, fetchPerformance, addPerfFlow, deletePerfFlow, contributionBarStyle } = useAppCtx();
 </script>

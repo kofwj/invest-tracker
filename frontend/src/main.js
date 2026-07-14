@@ -24,6 +24,7 @@ import { createDepositsModule } from './modules/deposits.js';
 import { createCashModule } from './modules/cash.js';
 import { createSnapshotsModule } from './modules/snapshots.js';
 import { createPerformanceModule } from './modules/performance.js';
+import { createBrokerReconcileModule } from './modules/brokerReconcile.js';
 import { createMarketModule } from './modules/market.js';
 import { createDisciplineModule } from './modules/discipline.js';
 import { createAuthMask } from './composables/authMask.js';
@@ -697,6 +698,7 @@ const app = createApp({
         const perfTimeline = ref([]);
         const perfContribution = ref([]);
         const perfFlows = ref([]);
+        const perfStory = ref(null);
         const perfLoading = ref(false);
         const perfContributionFilter = ref('all');
         const perfContributionSort = ref('contribution');
@@ -710,6 +712,7 @@ const app = createApp({
 
         const {
             hasPerfFlows,
+            perfStoryToneType,
             perfGuideSteps,
             perfLensRows,
             perfReadTips,
@@ -727,6 +730,7 @@ const app = createApp({
             perfTimeline,
             perfContribution,
             perfFlows,
+            perfStory,
             perfLoading,
             perfContributionFilter,
             perfContributionSort,
@@ -734,6 +738,27 @@ const app = createApp({
             showSyncNotice,
             nextTick,
             computed,
+        });
+
+        const brokerResult = ref(null);
+        const brokerLoading = ref(false);
+        const brokerSelected = ref([]);
+        const brokerAsOfDate = ref(todayLocalIso());
+        const {
+            statusLabel: brokerStatusLabel,
+            statusType: brokerStatusType,
+            onBrokerFileChange,
+            onBrokerSelectionChange,
+            selectAllSuggestions,
+            clearBrokerSelection,
+            applySelectedCorrections,
+        } = createBrokerReconcileModule({
+            brokerResult,
+            brokerLoading,
+            brokerSelected,
+            brokerAsOfDate,
+            fetchData,
+            showSyncNotice,
         });
 
         const marketSummary = ref({});
@@ -916,9 +941,12 @@ const app = createApp({
             createSnapshot, fetchSnapshots, exportSnapshots, compactSnapshots, showTransactions,
             queryTransactions, applyTransFilter, resetTransQuery, handleTransPageChange, handleTransPageSizeChange, goPendingTransactions, openTransEditDialog, saveTransactionEdit, deleteTransaction,
             openExpectedReturnDialog, saveExpectedReturn, openHoldingCorrectionDialog, saveHoldingCorrection, openHoldingCorrectionHistory, deleteHoldingCorrection, formatMoney, formatPercent, pct, holdingFloatProfit, holdingLifetimeProfit, holdingFloatProfitRate, holdingLifetimeProfitRate,
-            perfSummary, perfTimeline, perfContribution, perfFlows, perfLoading, perfFlowForm, hasPerfFlows, perfGuideSteps, perfLensRows, perfReadTips, perfCards,
+            perfSummary, perfTimeline, perfContribution, perfFlows, perfStory, perfLoading, perfFlowForm, hasPerfFlows, perfStoryToneType, perfGuideSteps, perfLensRows, perfReadTips, perfCards,
             displayedPerfContribution, perfContributionFilter, perfContributionSort, perfContributionHeadline, perfContributionMix,
             fetchPerformance, addPerfFlow, deletePerfFlow, contributionBarStyle, fetchMaintenance, createDbBackup, downloadBackup, restoreBackup, deleteBackup, restoreUploadedBackup,
+            brokerResult, brokerLoading, brokerSelected, brokerAsOfDate,
+            statusLabel: brokerStatusLabel, statusType: brokerStatusType,
+            onBrokerFileChange, onBrokerSelectionChange, selectAllSuggestions, clearBrokerSelection, applySelectedCorrections,
             marketSummary, alertRules, alertEvents, marketLoading, alertChecking, alertEventsLoading, alertForm, alertEditDialog, triggeredAlerts,
             alertEventCodeFilter, alertEventStartDate, alertEventEndDate, watchlistDraft, watchlistSaving,
             fetchMarketSummary, fetchAlertRules, fetchAlertEvents, exportAlertEvents, clearAlertEvents, refreshMarket, resetAlertForm, saveAlertRule, openAlertCreate, openAlertEdit,

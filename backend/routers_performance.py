@@ -9,6 +9,7 @@ try:
     from .database import db_session
     from .performance import (
         build_performance_contribution,
+        build_performance_story,
         build_performance_summary,
         build_performance_timeline,
     )
@@ -17,6 +18,7 @@ except ImportError:
     from database import db_session
     from performance import (
         build_performance_contribution,
+        build_performance_story,
         build_performance_summary,
         build_performance_timeline,
     )
@@ -128,3 +130,12 @@ def performance_contribution():
     with db_session(row_factory=sqlite3.Row) as conn:
         rows = build_performance_contribution(conn)
     return rows
+
+
+@router.get("/performance/story")
+def performance_story():
+    with db_session(row_factory=sqlite3.Row) as conn:
+        ensure_portfolio_cash_flows_table(conn)
+        data = build_performance_story(conn)
+        conn.commit()
+    return data

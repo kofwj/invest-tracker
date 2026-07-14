@@ -29,6 +29,9 @@
         <el-tab-pane label="交易录入/管理" name="transactions" lazy>
           <TransactionsTab />
         </el-tab-pane>
+        <el-tab-pane label="券商对账" name="broker" lazy>
+          <BrokerReconcileTab />
+        </el-tab-pane>
         <el-tab-pane label="现金设置" name="cash" lazy>
           <CashTab />
         </el-tab-pane>
@@ -65,6 +68,7 @@ export default {
     HoldingsTab: defineAsyncComponent(() => import('./views/HoldingsTab.vue')),
     DepositsTab: defineAsyncComponent(() => import('./views/DepositsTab.vue')),
     TransactionsTab: defineAsyncComponent(() => import('./views/TransactionsTab.vue')),
+    BrokerReconcileTab: defineAsyncComponent(() => import('./views/BrokerReconcileTab.vue')),
     CashTab: defineAsyncComponent(() => import('./views/CashTab.vue')),
     MaintenanceTab: defineAsyncComponent(() => import('./views/MaintenanceTab.vue')),
   },

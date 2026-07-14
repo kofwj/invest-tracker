@@ -212,3 +212,148 @@ def build_performance_contribution(conn):
 
     rows.sort(key=lambda r: r["total_contribution"], reverse=True)
     return rows
+
+
+def _money_cn(value):
+    try:
+        n = float(value or 0)
+    except (TypeError, ValueError):
+        n = 0.0
+    sign = "+" if n > 0 else ""
+    return f"{sign}{n:,.0f} 元"
+
+
+def _pct_cn(value):
+    try:
+        n = float(value or 0)
+    except (TypeError, ValueError):
+        n = 0.0
+    sign = "+" if n > 0 else ""
+    return f"{sign}{n:.2f}%"
+
+
+def build_performance_story(conn):
+    """人话绩效故事：谁赚钱、谁拖累、整户结论。数字全部来自现有汇总/贡献，不猜。"""
+    summary = build_performance_summary(conn)
+    contrib = build_performance_contribution(conn)
+    timeline = build_performance_timeline(conn)
+
+    has_flows = int(summary.get("flow_count") or 0) > 0
+    total_gain = float(summary.get("total_gain") or 0)
+    lifetime = float(summary.get("lifetime_profit") or 0)
+    float_plus_div = float(summary.get("current_unrealized_profit") or 0) + float(
+        summary.get("total_dividend_income") or 0
+    )
+    ytd = float(summary.get("ytd_gain") or 0)
+    ytd_pct = float(summary.get("ytd_gain_pct") or 0)
+    xirr = summary.get("xirr")
+    assets = float(summary.get("total_assets") or 0)
+
+    if has_flows:
+        if total_gain > 0:
+            headline = f"整户相对净投入赚了 {_money_cn(total_gain).lstrip('+')}（{_pct_cn(summary.get('total_gain_pct'))}）"
+        elif total_gain < 0:
+            headline = f"整户相对净投入亏了 {_money_cn(abs(total_gain)).lstrip('+')}（{_pct_cn(summary.get('total_gain_pct'))}）"
+        else:
+            headline = "整户相对净投入基本持平"
+    else:
+        if lifetime > 0:
+            headline = f"当前仓全周期合计赚 {_money_cn(lifetime).lstrip('+')}（外部流水未录全，整户总账仅供参考）"
+        elif lifetime < 0:
+            headline = f"当前仓全周期合计亏 {_money_cn(abs(lifetime)).lstrip('+')}（外部流水未录全，整户总账仅供参考）"
+        else:
+            headline = "当前仓全周期盈亏接近 0；外部流水未录全时，整户总账先当参考"
+
+    bullets = []
+    bullets.append(f"现在总资产约 {_money_cn(assets).lstrip('+')}。")
+    if has_flows:
+        bullets.append(
+            f"累计净投入 {_money_cn(summary.get('net_contribution')).lstrip('+')}；"
+            f"累计总收益 {_money_cn(total_gain)}。"
+        )
+    else:
+        bullets.append("组合外部「投入/取出」流水还没录齐：净投入、累计总收益、年化请先当参考。")
+
+    bullets.append(
+        f"当前还拿着的仓：浮盈+分红 {_money_cn(float_plus_div)}；"
+        f"接近券商累计的全周期 {_money_cn(lifetime)}。"
+    )
+    bullets.append(f"今年至今（YTD）{_money_cn(ytd)}（{_pct_cn(ytd_pct)}）。")
+    if xirr is not None and summary.get("xirr_status") == "ok":
+        bullets.append(f"资金加权年化（XIRR）约 {_pct_cn(xirr)}。")
+    elif has_flows:
+        bullets.append(f"年化暂时算不出：{summary.get('xirr_message') or '现金流不足'}。")
+
+    by_contrib = sorted(contrib, key=lambda r: float(r.get("total_contribution") or 0), reverse=True)
+    winners = [r for r in by_contrib if float(r.get("total_contribution") or 0) > 0][:3]
+    losers = [r for r in sorted(by_contrib, key=lambda r: float(r.get("total_contribution") or 0)) if float(r.get("total_contribution") or 0) < 0][:3]
+
+    def _row_line(r, key="total_contribution"):
+        name = (r.get("name") or r.get("code") or "—").strip()
+        code = (r.get("code") or "").strip()
+        label = f"{name}（{code}）" if code and name != code else name
+        return {
+            "code": code,
+            "name": name,
+            "label": label,
+            "amount": round(float(r.get(key) or 0), 2),
+            "text": f"{label} {_money_cn(r.get(key))}",
+        }
+
+    winner_items = [_row_line(r) for r in winners]
+    loser_items = [_row_line(r) for r in losers]
+
+    if winner_items:
+        bullets.append("当前仓赚钱靠前：" + "；".join(i["text"] for i in winner_items) + "。")
+    if loser_items:
+        bullets.append("当前仓拖累靠前：" + "；".join(i["text"] for i in loser_items) + "。")
+    if not winner_items and not loser_items:
+        bullets.append("当前没有可拆的持仓贡献（可能空仓或尚未同步价格）。")
+
+    month_change = None
+    if len(timeline) >= 2:
+        last = timeline[-1]
+        prev = timeline[-2]
+        da = float(last.get("total_assets") or 0) - float(prev.get("total_assets") or 0)
+        dd = str(last.get("date") or "")
+        pd = str(prev.get("date") or "")
+        month_change = {
+            "from_date": pd,
+            "to_date": dd,
+            "assets_change": round(da, 2),
+            "text": f"最近两个快照日（{pd} → {dd}）总资产变化 {_money_cn(da)}。",
+        }
+        bullets.append(month_change["text"])
+
+    caveats = [
+        "整户总账、当前仓浮盈+分红、全周期盈亏三套口径本来就不会完全相等。",
+        "对账优先看「全周期」；日常加减仓看持仓明细；整户结果看本页总账。",
+    ]
+    if not has_flows:
+        caveats.insert(0, "录齐底部「组合资金流水」后，净投入/总收益/年化才完整。")
+
+    tone = "neutral"
+    primary = total_gain if has_flows else lifetime
+    if primary > 0:
+        tone = "positive"
+    elif primary < 0:
+        tone = "negative"
+
+    return {
+        "as_of_date": summary.get("as_of_date"),
+        "tone": tone,
+        "headline": headline,
+        "bullets": bullets,
+        "winners": winner_items,
+        "losers": loser_items,
+        "month_change": month_change,
+        "caveats": caveats,
+        "metrics": {
+            "total_assets": summary.get("total_assets"),
+            "total_gain": summary.get("total_gain") if has_flows else None,
+            "lifetime_profit": summary.get("lifetime_profit"),
+            "ytd_gain": summary.get("ytd_gain"),
+            "xirr": summary.get("xirr"),
+            "has_external_flows": has_flows,
+        },
+    }

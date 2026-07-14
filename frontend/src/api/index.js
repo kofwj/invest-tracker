@@ -96,9 +96,13 @@ const api = {
     performanceSummary: () => axios.get(API + '/performance/summary'),
     performanceTimeline: () => axios.get(API + '/performance/timeline'),
     performanceContribution: () => axios.get(API + '/performance/contribution'),
+    performanceStory: () => axios.get(API + '/performance/story'),
     listPortfolioCashFlows: () => axios.get(API + '/portfolio-cash-flows'),
     addPortfolioCashFlow: (payload) => axios.post(API + '/portfolio-cash-flows', payload),
     deletePortfolioCashFlow: (id) => axios.delete(API + '/portfolio-cash-flows/' + id),
+
+    brokerReconcilePreview: (formData) => axios.post(API + '/broker-reconcile/preview', formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120000 }),
+    brokerReconcileApply: (payload) => axios.post(API + '/broker-reconcile/apply', payload || {}, { timeout: 120000 }),
 
     getMarketSummary: () => axios.get(API + '/market/summary', { timeout: 60000 }),
     getTradingDay: (date) => axios.get(API + '/market/trading-day' + (date ? ('?date=' + encodeURIComponent(date)) : '')),

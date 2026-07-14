@@ -341,3 +341,70 @@ html.screenshot-mask .login-overlay *,
     color: #f56c6c;
     text-align: left;
 }
+
+/* 绩效故事 */
+.perf-story-card .el-card__body { padding: 16px 16px 14px; }
+.perf-story-head { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; margin-bottom:10px; flex-wrap:wrap; }
+.perf-story-headline { font-size:17px; font-weight:750; line-height:1.45; color:#303133; margin-bottom:10px; }
+.perf-story-headline.is-positive { color:#F56C6C; }
+.perf-story-headline.is-negative { color:#67C23A; }
+.perf-story-bullets { margin:0 0 12px; padding-left:18px; color:#606266; font-size:13px; line-height:1.65; }
+.perf-story-bullets li { margin-bottom:4px; }
+.perf-story-cols { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:10px; }
+.perf-story-col { border:1px solid #ebeef5; border-radius:10px; padding:10px 12px; background:#fafafa; min-width:0; }
+.perf-story-col.is-win { background:linear-gradient(135deg,#fff5f5 0%,#fff 100%); border-color:#fde2e2; }
+.perf-story-col.is-lose { background:linear-gradient(135deg,#f4fbf1 0%,#fff 100%); border-color:#d9f2cc; }
+.perf-story-col-title { font-size:12px; color:#909399; margin-bottom:6px; font-weight:600; }
+.perf-story-col-row { font-size:13px; color:#303133; line-height:1.5; margin-bottom:4px; word-break:break-all; }
+.perf-story-caveats { display:flex; flex-direction:column; gap:4px; font-size:12px; color:#909399; line-height:1.5; border-top:1px dashed #ebeef5; padding-top:10px; }
+@media (max-width: 720px) { .perf-story-cols { grid-template-columns: 1fr; } }
+
+/* 券商对账 */
+.broker-page { min-width: 0; }
+.broker-header { margin-bottom: 12px; }
+.broker-title { margin:0; font-size:18px; font-weight:700; }
+.broker-sub { margin-top:6px; font-size:13px; color:#909399; line-height:1.55; }
+.broker-alert { margin-bottom: 12px; border-radius: 10px; }
+.broker-card .el-card__body { padding: 14px; }
+.broker-toolbar { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
+.broker-toolbar-left, .broker-toolbar-right { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.broker-label { font-size:13px; color:#606266; }
+.broker-parse-meta { font-size:12px; color:#909399; margin-bottom:12px; line-height:1.5; }
+.broker-suggest-block { margin-top: 16px; }
+.broker-suggest-title { font-size:14px; font-weight:700; margin-bottom:8px; color:#303133; }
+
+/* 表格横向滚动（手机） */
+.table-scroll { width: 100%; }
+.table-scroll .el-table__body-wrapper,
+.el-table { overflow-x: auto; }
+
+/* —— 移动端整体 —— */
+@media (max-width: 768px) {
+  .app-container { padding: 10px 10px 72px; max-width: 100%; }
+  .header { flex-direction: column; align-items: flex-start; gap: 10px; margin-bottom: 12px; }
+  .header h2 { font-size: 18px; margin: 0; }
+  .header-actions { width: 100%; justify-content: flex-start; }
+  .header-actions .el-button { margin: 0; }
+  .inline-sync-status { max-width: 100%; font-size: 12px; }
+
+  .mt-20 { margin-top: 12px; }
+  .el-tabs__header { margin: 0 0 12px; }
+  .el-tabs__nav-wrap { overflow-x: auto; }
+  .el-tabs__item { padding: 0 12px; font-size: 13px; height: 40px; line-height: 40px; }
+
+  .stat-value { font-size: 18px; white-space: normal; }
+  .stat-main .stat-value { font-size: 24px; }
+  .stat-sub { white-space: normal; }
+
+  .perf-metric-value { font-size: 16px; }
+  .perf-metric-sub { white-space: normal; overflow: visible; text-overflow: unset; }
+  .perf-summary-main, .perf-summary-sub { white-space: normal; overflow: visible; text-overflow: unset; }
+
+  .el-dialog { width: calc(100vw - 24px) !important; max-width: 100%; margin: 8vh auto !important; }
+  .el-message-box { width: calc(100vw - 32px) !important; }
+
+  .el-table { font-size: 12px; }
+  .el-table .cell { padding-left: 6px; padding-right: 6px; }
+
+  .home-status-main { font-size: 14px; }
+}

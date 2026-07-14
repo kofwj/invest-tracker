@@ -62,6 +62,8 @@ def clear_backend_module_cache():
         'discipline',
         'routers_discipline',
         'trading_calendar',
+        'broker_reconcile',
+        'routers_broker_reconcile',
     ]
     for name in module_names:
         sys.modules.pop(name, None)
