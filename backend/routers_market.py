@@ -1,7 +1,7 @@
 import sqlite3
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 try:
@@ -11,6 +11,7 @@ try:
         check_alerts,
         create_alert_rule,
         delete_alert_rule,
+        list_alert_events,
         list_alert_rules,
         update_alert_rule,
     )
@@ -21,6 +22,7 @@ except ImportError:
         check_alerts,
         create_alert_rule,
         delete_alert_rule,
+        list_alert_events,
         list_alert_rules,
         update_alert_rule,
     )
@@ -46,11 +48,14 @@ class AlertRuleUpdate(BaseModel):
     enabled: Optional[bool] = None
 
 
+class AlertCheckRequest(BaseModel):
+    notify: bool = False
+
+
 @router.get("/market/summary")
 def market_summary():
     with db_session(row_factory=sqlite3.Row) as conn:
         data = build_market_summary(conn)
-        # ensure_cash_base may write settings
         conn.commit()
     return data
 
@@ -104,9 +109,19 @@ def remove_alert_rule(rule_id: int):
     return {"status": "success", "id": rule_id}
 
 
-@router.post("/market/alerts/check")
-def post_alerts_check():
+@router.get("/market/alert-events")
+def get_alert_events(
+    limit: int = Query(50, ge=1, le=500),
+    code: Optional[str] = None,
+):
     with db_session(row_factory=sqlite3.Row) as conn:
-        result = check_alerts(conn, record_events=True)
+        return list_alert_events(conn, limit=limit, code=code)
+
+
+@router.post("/market/alerts/check")
+def post_alerts_check(body: AlertCheckRequest = AlertCheckRequest()):
+    notify = bool(body.notify)
+    with db_session(row_factory=sqlite3.Row) as conn:
+        result = check_alerts(conn, record_events=True, notify=notify)
         conn.commit()
     return result

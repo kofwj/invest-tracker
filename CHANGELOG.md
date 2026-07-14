@@ -5,6 +5,18 @@
 
 ---
 
+## [2026-07-14] — 市场预警增强：定时检查 / 历史 / 缓存
+
+### 功能
+- cron：`cron_sync_prices.sh --check-alerts`（可选 `--notify-alerts` + `FEISHU_ALERT_WEBHOOK`）
+- `GET /market/alert-events` 预警历史；市场页展示历史表 + 代码筛选
+- 东财行情进程内缓存（`MARKET_QUOTE_CACHE_SECONDS`，默认 120s）；涨跌% 可从昨收推导
+
+### 文档
+- `docs/deploy-vps.md` crontab 示例；`.env.example` 新增相关变量
+
+---
+
 ## [2026-07-14] — 市场摘要 + 简单价格预警（MVP）
 
 ### 功能

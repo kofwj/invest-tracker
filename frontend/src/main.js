@@ -726,10 +726,13 @@ const app = createApp({
 
         const marketSummary = ref({});
         const alertRules = ref([]);
+        const alertEvents = ref([]);
         const marketLoading = ref(false);
         const alertChecking = ref(false);
+        const alertEventsLoading = ref(false);
         const alertEditDialog = ref(false);
         const triggeredAlerts = ref([]);
+        const alertEventCodeFilter = ref('');
         const alertForm = ref({
             target_type: 'holding',
             code: '',
@@ -742,6 +745,7 @@ const app = createApp({
         const {
             fetchMarketSummary,
             fetchAlertRules,
+            fetchAlertEvents,
             refreshMarket,
             resetAlertForm,
             saveAlertRule,
@@ -754,14 +758,18 @@ const app = createApp({
             holdingsDayRows,
             marketSignals,
             marketUpdatedAt,
+            quoteCacheSeconds,
         } = createMarketModule({
             marketSummary,
             alertRules,
+            alertEvents,
             marketLoading,
             alertChecking,
+            alertEventsLoading,
             alertForm,
             alertEditDialog,
             triggeredAlerts,
+            alertEventCodeFilter,
             computed,
         });
 
@@ -822,9 +830,9 @@ const app = createApp({
             perfSummary, perfTimeline, perfContribution, perfFlows, perfLoading, perfFlowForm, hasPerfFlows, perfGuideSteps, perfLensRows, perfReadTips, perfCards,
             displayedPerfContribution, perfContributionFilter, perfContributionSort, perfContributionHeadline, perfContributionMix,
             fetchPerformance, addPerfFlow, deletePerfFlow, contributionBarStyle, fetchMaintenance, createDbBackup, downloadBackup, restoreBackup, deleteBackup, restoreUploadedBackup,
-            marketSummary, alertRules, marketLoading, alertChecking, alertForm, alertEditDialog, triggeredAlerts,
-            fetchMarketSummary, fetchAlertRules, refreshMarket, resetAlertForm, saveAlertRule, openAlertCreate, openAlertEdit,
-            toggleAlertEnabled, deleteAlertRule, checkAlerts, indexRows, holdingsDayRows, marketSignals, marketUpdatedAt,
+            marketSummary, alertRules, alertEvents, marketLoading, alertChecking, alertEventsLoading, alertForm, alertEditDialog, triggeredAlerts, alertEventCodeFilter,
+            fetchMarketSummary, fetchAlertRules, fetchAlertEvents, refreshMarket, resetAlertForm, saveAlertRule, openAlertCreate, openAlertEdit,
+            toggleAlertEnabled, deleteAlertRule, checkAlerts, indexRows, holdingsDayRows, marketSignals, marketUpdatedAt, quoteCacheSeconds,
         };
         provide(APP_CTX_KEY, appCtx);
         return appCtx;

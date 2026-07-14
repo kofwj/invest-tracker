@@ -4,11 +4,14 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 const createMarketModule = ({
     marketSummary,
     alertRules,
+    alertEvents,
     marketLoading,
     alertChecking,
+    alertEventsLoading,
     alertForm,
     alertEditDialog,
     triggeredAlerts,
+    alertEventCodeFilter,
     computed,
 }) => {
     const defaultAlertForm = () => ({
@@ -42,8 +45,22 @@ const createMarketModule = ({
         }
     };
 
+    const fetchAlertEvents = async () => {
+        if (!alertEvents) return;
+        alertEventsLoading.value = true;
+        try {
+            const code = (alertEventCodeFilter?.value || '').trim();
+            const res = await api.listAlertEvents({ limit: 50, code: code || undefined });
+            alertEvents.value = res.data || [];
+        } catch (e) {
+            ElMessage.error(e?.response?.data?.detail || '加载预警历史失败');
+        } finally {
+            alertEventsLoading.value = false;
+        }
+    };
+
     const refreshMarket = async () => {
-        await Promise.all([fetchMarketSummary(), fetchAlertRules()]);
+        await Promise.all([fetchMarketSummary(), fetchAlertRules(), fetchAlertEvents()]);
     };
 
     const resetAlertForm = () => {
@@ -128,10 +145,10 @@ const createMarketModule = ({
         }
     };
 
-    const checkAlerts = async () => {
+    const checkAlerts = async (notify = false) => {
         alertChecking.value = true;
         try {
-            const res = await api.checkAlerts();
+            const res = await api.checkAlerts({ notify: !!notify });
             const data = res.data || {};
             triggeredAlerts.value = data.triggered || [];
             const n = data.trigger_count || 0;
@@ -140,6 +157,7 @@ const createMarketModule = ({
             } else {
                 ElMessage.success(`未触发预警（已检查 ${data.checked_count || 0} 条规则）`);
             }
+            await fetchAlertEvents();
         } catch (e) {
             ElMessage.error(e?.response?.data?.detail || '检查失败');
         } finally {
@@ -151,10 +169,12 @@ const createMarketModule = ({
     const holdingsDayRows = computed(() => marketSummary.value?.holdings_day || []);
     const marketSignals = computed(() => marketSummary.value?.signals || {});
     const marketUpdatedAt = computed(() => marketSummary.value?.last_updated || '');
+    const quoteCacheSeconds = computed(() => marketSummary.value?.quote_cache_seconds);
 
     return {
         fetchMarketSummary,
         fetchAlertRules,
+        fetchAlertEvents,
         refreshMarket,
         resetAlertForm,
         saveAlertRule,
@@ -167,6 +187,7 @@ const createMarketModule = ({
         holdingsDayRows,
         marketSignals,
         marketUpdatedAt,
+        quoteCacheSeconds,
     };
 };
 

@@ -105,7 +105,14 @@ const api = {
     createAlertRule: (payload) => axios.post(API + '/market/alert-rules', payload),
     updateAlertRule: (id, payload) => axios.put(API + '/market/alert-rules/' + id, payload),
     deleteAlertRule: (id) => axios.delete(API + '/market/alert-rules/' + id),
-    checkAlerts: () => axios.post(API + '/market/alerts/check', null, { timeout: 60000 }),
+    listAlertEvents: (params = {}) => {
+        const qs = new URLSearchParams();
+        Object.entries(params || {}).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && value !== '') qs.set(key, value);
+        });
+        return axios.get(API + '/market/alert-events' + (qs.toString() ? '?' + qs.toString() : ''));
+    },
+    checkAlerts: (payload = {}) => axios.post(API + '/market/alerts/check', payload || {}, { timeout: 60000 }),
 
     download: (url) => axios.get(API + url, { responseType: 'blob' }),
     uploadCsv: (url, formData) => axios.post(API + url, formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 180000 }),

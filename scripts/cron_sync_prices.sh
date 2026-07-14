@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# VPS 定时同步最新价（可选顺带记今日快照）。
+# VPS 定时同步最新价（可选快照 + 预警检查）。
 # 优先：docker compose exec 直接调后端实现（绕过密码门与 OAuth）。
 # 回退：Python urllib 登录后 POST（避免 shell 拼接 Authorization 头被环境脱敏）。
 #
 # 建议 crontab（交易日 15:20 / 16:40 各一次）：
 #   20 15 * * 1-5 /home/kofwj/invest-tracker/scripts/cron_sync_prices.sh >> /home/kofwj/invest-tracker/backups/cron_sync_prices.log 2>&1
-#   40 16 * * 1-5 /home/kofwj/invest-tracker/scripts/cron_sync_prices.sh --snapshot >> /home/kofwj/invest-tracker/backups/cron_sync_prices.log 2>&1
+#   40 16 * * 1-5 /home/kofwj/invest-tracker/scripts/cron_sync_prices.sh --snapshot --check-alerts >> /home/kofwj/invest-tracker/backups/cron_sync_prices.log 2>&1
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -13,23 +13,38 @@ cd "$ROOT"
 
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 WITH_SNAPSHOT=0
+WITH_ALERTS=0
+ALERTS_NOTIFY=0
 for arg in "$@"; do
   case "$arg" in
     --snapshot|-s) WITH_SNAPSHOT=1 ;;
+    --check-alerts|-a) WITH_ALERTS=1 ;;
+    --notify-alerts) ALERTS_NOTIFY=1 ;;
     -h|--help)
       cat <<'EOF'
-Usage: cron_sync_prices.sh [--snapshot]
+Usage: cron_sync_prices.sh [--snapshot] [--check-alerts] [--notify-alerts]
 
-  --snapshot   同步价格后记录/更新今日资产快照
+  --snapshot        同步价格后记录/更新今日资产快照
+  --check-alerts    同步（及可选快照）后检查价格预警规则
+  --notify-alerts   检查时若触发则尝试飞书推送（需 FEISHU_ALERT_WEBHOOK）
+
+环境变量：
+  FEISHU_ALERT_WEBHOOK   飞书机器人 webhook（可选）
+  CRON_CHECK_ALERTS=1    等价于总是 --check-alerts
+  CRON_NOTIFY_ALERTS=1   等价于总是 --notify-alerts
 EOF
       exit 0
       ;;
   esac
 done
 
+# Env can force flags without changing crontab
+if [ "${CRON_CHECK_ALERTS:-0}" = "1" ]; then WITH_ALERTS=1; fi
+if [ "${CRON_NOTIFY_ALERTS:-0}" = "1" ]; then ALERTS_NOTIFY=1; WITH_ALERTS=1; fi
+
 ts() { date '+%Y-%m-%d %H:%M:%S'; }
 
-echo "[$(ts)] start price sync (snapshot=${WITH_SNAPSHOT})"
+echo "[$(ts)] start price sync (snapshot=${WITH_SNAPSHOT} alerts=${WITH_ALERTS} notify=${ALERTS_NOTIFY})"
 
 if [ -f .env ]; then
   set -a
@@ -68,7 +83,8 @@ PY
 # HTTP fallback: pure Python so password-gate auth header is built in-process
 run_api_post() {
   local path="$1"
-  python3 - "$path" <<'PY'
+  local body="${2:-{}}"
+  python3 - "$path" "$body" <<'PY'
 import json
 import os
 import sys
@@ -76,6 +92,7 @@ import urllib.error
 import urllib.request
 
 path = sys.argv[1]
+body = sys.argv[2] if len(sys.argv) > 2 else "{}"
 base = os.environ.get("CRON_API_BASE", "http://127.0.0.1:8080/api").rstrip("/")
 password = os.environ.get("INVEST_TRACKER_PASSWORD", "").strip()
 headers = {"Content-Type": "application/json", "Accept": "application/json"}
@@ -94,11 +111,15 @@ if password:
         scheme = "Bea" + "rer"
         headers["Authorization"] = scheme + " " + token
 
-req = urllib.request.Request(base + path, data=b"{}", headers=headers, method="POST")
+req = urllib.request.Request(
+    base + path,
+    data=body.encode("utf-8"),
+    headers=headers,
+    method="POST",
+)
 try:
     with urllib.request.urlopen(req, timeout=180) as resp:
-        body = resp.read().decode("utf-8", errors="replace")
-        print(body)
+        print(resp.read().decode("utf-8", errors="replace"))
 except urllib.error.HTTPError as e:
     detail = e.read().decode("utf-8", errors="replace")
     print(detail, file=sys.stderr)
@@ -143,6 +164,40 @@ run_snapshot_curl() {
   run_api_post "/snapshots"
 }
 
+run_alerts_docker() {
+  local notify_flag="$1"
+  docker compose -f "$COMPOSE_FILE" exec -T -e ALERT_NOTIFY="$notify_flag" -e FEISHU_ALERT_WEBHOOK="${FEISHU_ALERT_WEBHOOK:-}" backend python - <<'PY'
+import json
+import os
+import sys
+import sqlite3
+
+try:
+    from database import db_session
+    from market import check_alerts
+except Exception as e:
+    print(json.dumps({"status": "error", "stage": "import_alerts", "detail": str(e)}), file=sys.stderr)
+    sys.exit(2)
+
+notify = os.environ.get("ALERT_NOTIFY", "0") == "1"
+webhook = os.environ.get("FEISHU_ALERT_WEBHOOK", "").strip() or None
+with db_session(row_factory=sqlite3.Row) as conn:
+    result = check_alerts(conn, record_events=True, notify=notify, webhook=webhook)
+    conn.commit()
+result["status"] = "success"
+print(json.dumps(result, ensure_ascii=False, default=str))
+PY
+}
+
+run_alerts_curl() {
+  local notify_flag="$1"
+  if [ "$notify_flag" = "1" ]; then
+    run_api_post "/market/alerts/check" '{"notify":true}'
+  else
+    run_api_post "/market/alerts/check" '{"notify":false}'
+  fi
+}
+
 SYNC_OUT=""
 if SYNC_OUT="$(run_via_docker 2>&1)"; then
   echo "[$(ts)] docker sync ok: ${SYNC_OUT}"
@@ -159,6 +214,16 @@ if [ "$WITH_SNAPSHOT" = "1" ]; then
     echo "[$(ts)] docker snapshot unavailable/fail, try HTTP… (${SNAP_OUT})" >&2
     SNAP_OUT="$(run_snapshot_curl)"
     echo "[$(ts)] HTTP snapshot ok: ${SNAP_OUT}"
+  fi
+fi
+
+if [ "$WITH_ALERTS" = "1" ]; then
+  if ALERT_OUT="$(run_alerts_docker "$ALERTS_NOTIFY" 2>&1)"; then
+    echo "[$(ts)] docker alerts ok: ${ALERT_OUT}"
+  else
+    echo "[$(ts)] docker alerts unavailable/fail, try HTTP… (${ALERT_OUT})" >&2
+    ALERT_OUT="$(run_alerts_curl "$ALERTS_NOTIFY")"
+    echo "[$(ts)] HTTP alerts ok: ${ALERT_OUT}"
   fi
 fi
 

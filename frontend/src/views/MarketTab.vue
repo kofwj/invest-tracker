@@ -4,13 +4,14 @@
       <div>
         <h3 class="market-page-title">市场摘要</h3>
         <div class="market-page-subtitle">
-          只读观察：关键指数 + 持仓今日贡献粗估 + 价格阈值预警。不改真实账本。
+          只读观察：关键指数 + 持仓今日贡献粗估 + 价格阈值预警。不改真实账本。交易日 cron 可自动检查；飞书推送需配置 FEISHU_ALERT_WEBHOOK。
         </div>
       </div>
       <div class="market-page-actions">
         <el-tag v-if="marketUpdatedAt" size="small" type="info">更新 {{ marketUpdatedAt }}</el-tag>
+        <el-tag v-if="quoteCacheSeconds != null" size="small" type="info">行情缓存 {{ quoteCacheSeconds }}s</el-tag>
         <el-button size="small" :loading="marketLoading" @click="refreshMarket">刷新摘要</el-button>
-        <el-button size="small" type="warning" :loading="alertChecking" @click="checkAlerts">立即检查预警</el-button>
+        <el-button size="small" type="warning" :loading="alertChecking" @click="() => checkAlerts(false)">立即检查预警</el-button>
       </div>
     </div>
 
@@ -123,7 +124,7 @@
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
           <div>
             <div class="allocation-section-title">价格预警规则</div>
-            <div style="font-size:12px;color:#909399;margin-top:4px;">持仓或指数代码，上穿/下穿阈值。仅手动「立即检查」，暂不自动推送。</div>
+            <div style="font-size:12px;color:#909399;margin-top:4px;">持仓或指数代码，上穿/下穿阈值。可手动检查；VPS 可在同步快照后自动检查。</div>
           </div>
           <el-button type="primary" size="small" @click="openAlertCreate">添加规则</el-button>
         </div>
@@ -157,7 +158,7 @@
       </el-table>
     </el-card>
 
-    <el-card v-if="triggeredAlerts && triggeredAlerts.length" shadow="never">
+    <el-card v-if="triggeredAlerts && triggeredAlerts.length" shadow="never" style="margin-bottom: 16px;">
       <template #header>
         <span class="allocation-section-title">最近一次检查触发</span>
       </template>
@@ -165,6 +166,43 @@
         <el-table-column prop="message" label="说明" min-width="260" show-overflow-tooltip />
         <el-table-column prop="price" label="触发价" width="110" align="right" header-align="right">
           <template #default="scope">{{ Number(scope.row.price).toFixed(4) }}</template>
+        </el-table-column>
+        <el-table-column prop="trigger_time" label="时间" width="180" />
+      </el-table>
+    </el-card>
+
+    <el-card shadow="never" style="margin-bottom: 16px;">
+      <template #header>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div>
+            <div class="allocation-section-title">预警历史</div>
+            <div style="font-size:12px;color:#909399;margin-top:4px;">来自 alert_events，默认最近 50 条</div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <el-input
+              v-model="alertEventCodeFilter"
+              clearable
+              placeholder="按代码筛选"
+              style="width:140px"
+              size="small"
+              @keyup.enter="fetchAlertEvents"
+            />
+            <el-button size="small" :loading="alertEventsLoading" @click="fetchAlertEvents">刷新历史</el-button>
+          </div>
+        </div>
+      </template>
+      <el-table :data="alertEvents" stripe empty-text="暂无触发记录" v-loading="alertEventsLoading">
+        <el-table-column prop="target_code" label="代码" width="100" />
+        <el-table-column prop="message" label="说明" min-width="260" show-overflow-tooltip />
+        <el-table-column label="触发价" width="110" align="right" header-align="right">
+          <template #default="scope">
+            {{ scope.row.triggered_price == null ? '—' : Number(scope.row.triggered_price).toFixed(4) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="阈值" width="100" align="right" header-align="right">
+          <template #default="scope">
+            {{ scope.row.threshold == null ? '—' : Number(scope.row.threshold).toFixed(4) }}
+          </template>
         </el-table-column>
         <el-table-column prop="trigger_time" label="时间" width="180" />
       </el-table>
@@ -211,7 +249,10 @@ import { useAppCtx } from '../composables/useAppCtx.js';
 const {
   marketLoading,
   alertChecking,
+  alertEventsLoading,
   alertRules,
+  alertEvents,
+  alertEventCodeFilter,
   alertForm,
   alertEditDialog,
   triggeredAlerts,
@@ -219,6 +260,7 @@ const {
   holdingsDayRows,
   marketSignals,
   marketUpdatedAt,
+  quoteCacheSeconds,
   refreshMarket,
   openAlertCreate,
   openAlertEdit,
@@ -226,6 +268,7 @@ const {
   deleteAlertRule,
   toggleAlertEnabled,
   checkAlerts,
+  fetchAlertEvents,
   formatMoney,
 } = useAppCtx();
 

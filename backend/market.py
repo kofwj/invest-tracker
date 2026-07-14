@@ -4,9 +4,13 @@ Does not mutate holdings/transactions. Index/holding quotes come from Eastmoney.
 """
 from __future__ import annotations
 
+import logging
+import os
 import sqlite3
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
+
+import requests
 
 try:
     from .database import LOCAL_TZ
@@ -16,6 +20,8 @@ except ImportError:
     from database import LOCAL_TZ
     from portfolio_totals import compute_portfolio_totals
     from price_sync import fetch_eastmoney_quotes
+
+logger = logging.getLogger(__name__)
 
 # Configurable watchlist of major A-share indices (explicit Eastmoney secid).
 DEFAULT_INDICES = [
@@ -70,6 +76,37 @@ def list_alert_rules(conn) -> List[Dict[str, Any]]:
     rows = conn.execute(
         "SELECT * FROM alert_rules ORDER BY enabled DESC, id DESC"
     ).fetchall()
+    return [_row_to_dict(r) for r in rows]
+
+
+def list_alert_events(
+    conn,
+    *,
+    limit: int = 50,
+    code: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    ensure_alert_tables(conn)
+    limit = max(1, min(int(limit or 50), 500))
+    code = str(code or "").strip()
+    if code:
+        rows = conn.execute(
+            """
+            SELECT * FROM alert_events
+            WHERE target_code = ?
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (code, limit),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """
+            SELECT * FROM alert_events
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
     return [_row_to_dict(r) for r in rows]
 
 
@@ -185,7 +222,6 @@ def fetch_index_quotes(indices: Optional[List[Dict[str, str]]] = None) -> Dict[s
     codes = [i["code"] for i in items]
     secid_map = {i["code"]: i.get("secid") for i in items if i.get("secid")}
     quotes = fetch_eastmoney_quotes(codes, secid_map=secid_map or None)
-    # Fill default names when API omits them
     name_map = {i["code"]: i["name"] for i in items}
     for code, q in quotes.items():
         if not q.get("name"):
@@ -216,11 +252,17 @@ def _holding_price_map(conn) -> Dict[str, Dict[str, Any]]:
         price = q.get("price")
         if price is None or price <= 0:
             price = float(h.get("last_price") or 0)
+        change_pct = q.get("change_pct")
+        prev_close = q.get("prev_close")
+        # Stable contrib: if live % missing but have prev_close + price, derive
+        if change_pct is None and prev_close and price and float(prev_close) > 0:
+            change_pct = (float(price) / float(prev_close) - 1.0) * 100.0
         out[code] = {
             "code": code,
             "name": q.get("name") or h.get("name") or code,
             "price": float(price or 0),
-            "change_pct": q.get("change_pct"),
+            "change_pct": change_pct,
+            "prev_close": prev_close,
             "quantity": float(h.get("quantity") or 0),
             "avg_cost": float(h.get("avg_cost") or 0),
             "last_price_db": float(h.get("last_price") or 0),
@@ -250,6 +292,7 @@ def build_market_summary(conn) -> Dict[str, Any]:
                 "name": q.get("name") or item["name"],
                 "price": q.get("price"),
                 "change_pct": q.get("change_pct"),
+                "prev_close": q.get("prev_close"),
                 "available": q.get("price") is not None,
             }
         )
@@ -270,7 +313,7 @@ def build_market_summary(conn) -> Dict[str, Any]:
                 "name": h["name"],
                 "market_value": round(mv, 2),
                 "price": h["price"],
-                "change_pct": chg,
+                "change_pct": None if chg is None else round(float(chg), 4),
                 "day_contrib": None if day_pnl is None else round(day_pnl, 2),
                 "source": h["source"],
             }
@@ -297,6 +340,7 @@ def build_market_summary(conn) -> Dict[str, Any]:
         else:
             signal_text = f"今日持仓约 {p:+.2f}%，沪深300 {m:+.2f}%。"
 
+    cache_ttl = os.environ.get("MARKET_QUOTE_CACHE_SECONDS", "120")
     return {
         "indices": indices,
         "holdings_day": contrib_rows[:20],
@@ -309,6 +353,7 @@ def build_market_summary(conn) -> Dict[str, Any]:
             "lifetime_profit": round(float(totals.get("lifetime_profit") or 0), 2),
         },
         "index_error": index_err,
+        "quote_cache_seconds": int(cache_ttl) if str(cache_ttl).isdigit() else 120,
         "last_updated": now.isoformat(sep=" ", timespec="seconds"),
     }
 
@@ -325,11 +370,9 @@ def _resolve_price(
         price = q.get("price")
         name = q.get("name") or rule.get("name") or code
         return (None if price is None else float(price), name)
-    # holding
     h = holding_map.get(code)
     if h:
         return float(h.get("price") or 0) or None, h.get("name") or code
-    # allow watching a non-held code via live quote
     try:
         q = fetch_eastmoney_quotes([code]).get(code) or {}
         if q.get("price") is not None:
@@ -339,7 +382,42 @@ def _resolve_price(
     return None, rule.get("name") or code
 
 
-def check_alerts(conn, *, record_events: bool = True) -> Dict[str, Any]:
+def notify_feishu_alerts(triggered: List[Dict[str, Any]], webhook: Optional[str] = None) -> Dict[str, Any]:
+    """Send triggered alerts to Feishu bot webhook. No-op if webhook empty."""
+    webhook = (webhook if webhook is not None else os.environ.get("FEISHU_ALERT_WEBHOOK", "")).strip()
+    if not webhook:
+        return {"sent": False, "reason": "no_webhook"}
+    if not triggered:
+        return {"sent": False, "reason": "no_triggers"}
+    lines = ["【invest-tracker 价格预警】"]
+    for t in triggered[:30]:
+        lines.append(str(t.get("message") or t))
+    if len(triggered) > 30:
+        lines.append(f"…共 {len(triggered)} 条")
+    payload = {"msg_type": "text", "content": {"text": "\n".join(lines)}}
+    try:
+        res = requests.post(webhook, json=payload, timeout=10)
+        ok = 200 <= res.status_code < 300
+        if not ok:
+            logger.warning("feishu alert webhook status=%s body=%s", res.status_code, res.text[:200])
+        return {
+            "sent": ok,
+            "status_code": res.status_code,
+            "count": len(triggered),
+            "reason": None if ok else f"http_{res.status_code}",
+        }
+    except Exception as exc:
+        logger.warning("feishu alert webhook failed: %s", exc)
+        return {"sent": False, "reason": str(exc), "count": len(triggered)}
+
+
+def check_alerts(
+    conn,
+    *,
+    record_events: bool = True,
+    notify: bool = False,
+    webhook: Optional[str] = None,
+) -> Dict[str, Any]:
     ensure_alert_tables(conn)
     rules = [
         r
@@ -347,7 +425,13 @@ def check_alerts(conn, *, record_events: bool = True) -> Dict[str, Any]:
         if int(r.get("enabled") or 0) == 1
     ]
     if not rules:
-        return {"triggered": [], "checked_count": 0, "message": "没有启用的预警规则"}
+        return {
+            "triggered": [],
+            "checked_count": 0,
+            "trigger_count": 0,
+            "message": "没有启用的预警规则",
+            "notify": {"sent": False, "reason": "no_rules"},
+        }
 
     need_index = any(str(r.get("target_type")) == "index" for r in rules)
     index_map: Dict[str, Dict[str, Any]] = {}
@@ -356,7 +440,6 @@ def check_alerts(conn, *, record_events: bool = True) -> Dict[str, Any]:
             index_map = fetch_index_quotes()
         except Exception:
             index_map = {}
-    # also allow custom index codes via rule-level fetch
     for r in rules:
         if str(r.get("target_type")) != "index":
             continue
@@ -406,8 +489,14 @@ def check_alerts(conn, *, record_events: bool = True) -> Dict[str, Any]:
                 """,
                 (r["id"], now, r.get("code"), price, thr, msg),
             )
+
+    notify_result = {"sent": False, "reason": "skipped"}
+    if notify:
+        notify_result = notify_feishu_alerts(triggered, webhook=webhook)
+
     return {
         "triggered": triggered,
         "checked_count": len(rules),
         "trigger_count": len(triggered),
+        "notify": notify_result,
     }

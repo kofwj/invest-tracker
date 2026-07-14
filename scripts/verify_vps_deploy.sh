@@ -164,7 +164,7 @@ cat <<'EOF'
 
   # 交易日收盘后同步价 + 晚盘再同步并写快照
   20 15 * * 1-5 /home/kofwj/invest-tracker/scripts/cron_sync_prices.sh >> /home/kofwj/invest-tracker/backups/cron_sync_prices.log 2>&1
-  40 16 * * 1-5 /home/kofwj/invest-tracker/scripts/cron_sync_prices.sh --snapshot >> /home/kofwj/invest-tracker/backups/cron_sync_prices.log 2>&1
+  40 16 * * 1-5 /home/kofwj/invest-tracker/scripts/cron_sync_prices.sh --snapshot --check-alerts >> /home/kofwj/invest-tracker/backups/cron_sync_prices.log 2>&1
 EOF
 
 echo

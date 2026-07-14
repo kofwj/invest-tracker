@@ -300,10 +300,15 @@ chmod +x scripts/verify_vps_deploy.sh scripts/cron_sync_prices.sh
 
 ```cron
 20 15 * * 1-5 /home/kofwj/invest-tracker/scripts/cron_sync_prices.sh >> /home/kofwj/invest-tracker/backups/cron_sync_prices.log 2>&1
-40 16 * * 1-5 /home/kofwj/invest-tracker/scripts/cron_sync_prices.sh --snapshot >> /home/kofwj/invest-tracker/backups/cron_sync_prices.log 2>&1
+40 16 * * 1-5 /home/kofwj/invest-tracker/scripts/cron_sync_prices.sh --snapshot --check-alerts >> /home/kofwj/invest-tracker/backups/cron_sync_prices.log 2>&1
 ```
 
-`--snapshot` 会在同步价后记录/更新今日资产快照。先手动跑一次确认日志正常再写入 crontab。
+- `--snapshot`：同步价后记录/更新今日资产快照
+- `--check-alerts`：再跑一遍价格预警检查（写入 `alert_events`）
+- `--notify-alerts`：触发时推飞书（需在 `.env` 设置 `FEISHU_ALERT_WEBHOOK`）
+- 也可用环境变量 `CRON_CHECK_ALERTS=1` / `CRON_NOTIFY_ALERTS=1` 强制打开
+
+先手动跑一次确认日志正常再写入 crontab。
 
 备份 cron（示例）：
 
