@@ -101,6 +101,9 @@ const api = {
     deletePortfolioCashFlow: (id) => axios.delete(API + '/portfolio-cash-flows/' + id),
 
     getMarketSummary: () => axios.get(API + '/market/summary', { timeout: 60000 }),
+    getTradingDay: (date) => axios.get(API + '/market/trading-day' + (date ? ('?date=' + encodeURIComponent(date)) : '')),
+    getWatchlist: () => axios.get(API + '/market/watchlist'),
+    saveWatchlist: (payload) => axios.put(API + '/market/watchlist', payload || { items: [] }),
     listAlertRules: () => axios.get(API + '/market/alert-rules'),
     createAlertRule: (payload) => axios.post(API + '/market/alert-rules', payload),
     updateAlertRule: (id, payload) => axios.put(API + '/market/alert-rules/' + id, payload),
@@ -112,6 +115,14 @@ const api = {
         });
         return axios.get(API + '/market/alert-events' + (qs.toString() ? '?' + qs.toString() : ''));
     },
+    exportAlertEvents: (params = {}) => {
+        const qs = new URLSearchParams();
+        Object.entries(params || {}).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && value !== '') qs.set(key, value);
+        });
+        return axios.get(API + '/market/alert-events/export' + (qs.toString() ? '?' + qs.toString() : ''), { responseType: 'blob' });
+    },
+    clearAlertEvents: (payload = {}) => axios.post(API + '/market/alert-events/clear', payload || {}),
     checkAlerts: (payload = {}) => axios.post(API + '/market/alerts/check', payload || {}, { timeout: 60000 }),
 
     download: (url) => axios.get(API + url, { responseType: 'blob' }),

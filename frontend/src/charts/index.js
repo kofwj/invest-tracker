@@ -159,11 +159,37 @@ const waitForChartDom = (ids, { timeoutMs = 2500, intervalMs = 50 } = {}) => {
     });
 };
 
+/** 窗口缩放时重算所有已挂载图表尺寸 */
+const resizeAllCharts = () => {
+    [
+        allocationChart,
+        categoryChart,
+        snapshotTrendChart,
+        snapshotStructureChart,
+        perfTimelineChart,
+    ].forEach((c) => {
+        try {
+            if (c && typeof c.resize === 'function') c.resize();
+        } catch (_) { /* ignore */ }
+    });
+};
+
+let chartResizeBound = false;
+const ensureChartResizeListener = () => {
+    if (chartResizeBound || typeof window === 'undefined') return;
+    chartResizeBound = true;
+    window.addEventListener('resize', () => {
+        resizeAllCharts();
+    });
+};
+ensureChartResizeListener();
+
 export {
     renderSnapshotChartsView,
     renderAllocationChartsView,
     renderPerfTimelineChartView,
     waitForChartDom,
+    resizeAllCharts,
 };
 
 export default {
@@ -171,4 +197,5 @@ export default {
     renderAllocationChartsView,
     renderPerfTimelineChartView,
     waitForChartDom,
+    resizeAllCharts,
 };

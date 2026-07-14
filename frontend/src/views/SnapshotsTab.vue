@@ -125,6 +125,18 @@
                                     </span>
                                 </template>
                             </el-table-column>
+                            <el-table-column label="全周期盈亏" min-width="125" align="center" header-align="center">
+                                <template #header>
+                                    <el-tooltip content="快照时点的全周期盈亏（摊薄成本口径，接近券商累计）。旧快照可能为 0。" placement="top">
+                                        <span>全周期盈亏</span>
+                                    </el-tooltip>
+                                </template>
+                                <template #default="scope">
+                                    <span class="nowrap-cell" :style="{color: (scope.row.lifetime_profit || 0) >= 0 ? '#F56C6C' : '#67C23A'}">
+                                        {{ formatMoney(scope.row.lifetime_profit || 0, 2, true) }}
+                                    </span>
+                                </template>
+                            </el-table-column>
                             <el-table-column label="投资占比" width="100" align="center" header-align="center">
                                 <template #default="scope">{{ pct(scope.row.total_market_value, scope.row.total_assets) }}</template>
                             </el-table-column>

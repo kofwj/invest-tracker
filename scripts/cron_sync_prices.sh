@@ -15,23 +15,28 @@ COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 WITH_SNAPSHOT=0
 WITH_ALERTS=0
 ALERTS_NOTIFY=0
+FORCE_SNAPSHOT=0
 for arg in "$@"; do
   case "$arg" in
     --snapshot|-s) WITH_SNAPSHOT=1 ;;
     --check-alerts|-a) WITH_ALERTS=1 ;;
     --notify-alerts) ALERTS_NOTIFY=1 ;;
+    --force-snapshot) FORCE_SNAPSHOT=1 ;;
     -h|--help)
       cat <<'EOF'
-Usage: cron_sync_prices.sh [--snapshot] [--check-alerts] [--notify-alerts]
+Usage: cron_sync_prices.sh [--snapshot] [--check-alerts] [--notify-alerts] [--force-snapshot]
 
-  --snapshot        同步价格后记录/更新今日资产快照
-  --check-alerts    同步（及可选快照）后检查价格预警规则
-  --notify-alerts   检查时若触发则尝试飞书推送（需 FEISHU_ALERT_WEBHOOK）
+  --snapshot         同步价格后记录/更新今日资产快照（默认跳过非交易日）
+  --check-alerts     同步（及可选快照）后检查价格预警规则
+  --notify-alerts    检查时若触发则尝试飞书推送（需 FEISHU_ALERT_WEBHOOK）
+  --force-snapshot   强制写快照（忽略交易日历）
 
 环境变量：
   FEISHU_ALERT_WEBHOOK   飞书机器人 webhook（可选）
   CRON_CHECK_ALERTS=1    等价于总是 --check-alerts
   CRON_NOTIFY_ALERTS=1   等价于总是 --notify-alerts
+  CRON_FORCE_SNAPSHOT=1  等价于 --force-snapshot
+  ALERT_COOLDOWN_MINUTES 预警冷却分钟（默认读 settings / 240）
 EOF
       exit 0
       ;;
@@ -41,10 +46,11 @@ done
 # Env can force flags without changing crontab
 if [ "${CRON_CHECK_ALERTS:-0}" = "1" ]; then WITH_ALERTS=1; fi
 if [ "${CRON_NOTIFY_ALERTS:-0}" = "1" ]; then ALERTS_NOTIFY=1; WITH_ALERTS=1; fi
+if [ "${CRON_FORCE_SNAPSHOT:-0}" = "1" ]; then FORCE_SNAPSHOT=1; fi
 
 ts() { date '+%Y-%m-%d %H:%M:%S'; }
 
-echo "[$(ts)] start price sync (snapshot=${WITH_SNAPSHOT} alerts=${WITH_ALERTS} notify=${ALERTS_NOTIFY})"
+echo "[$(ts)] start price sync (snapshot=${WITH_SNAPSHOT} alerts=${WITH_ALERTS} notify=${ALERTS_NOTIFY} force_snapshot=${FORCE_SNAPSHOT})"
 
 if [ -f .env ]; then
   set -a
@@ -131,6 +137,63 @@ run_via_curl() {
   run_api_post "/sync-prices"
 }
 
+# Returns 0 if trading day (or force), 1 if should skip snapshot
+should_write_snapshot() {
+  if [ "$FORCE_SNAPSHOT" = "1" ]; then
+    return 0
+  fi
+  if docker compose -f "$COMPOSE_FILE" ps --status running --services 2>/dev/null | grep -qx backend; then
+    local out
+    if out="$(docker compose -f "$COMPOSE_FILE" exec -T backend python - <<'PY'
+import json
+import sqlite3
+try:
+    from database import db_session, local_today_iso
+    from trading_calendar import trading_day_status
+except Exception as e:
+    print(json.dumps({"is_trading_day": True, "error": str(e)}))
+    raise SystemExit(0)
+with db_session(row_factory=sqlite3.Row) as conn:
+    st = trading_day_status(local_today_iso(), conn=conn)
+print(json.dumps(st, ensure_ascii=False))
+PY
+)"; then
+      if echo "$out" | python3 -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get("is_trading_day") else 1)' 2>/dev/null; then
+        return 0
+      else
+        echo "[$(ts)] skip snapshot: non-trading day ($out)"
+        return 1
+      fi
+    fi
+  fi
+  # HTTP fallback
+  local path="/market/trading-day"
+  if SNAP_DAY="$(python3 - "$path" <<'PY'
+import json, os, sys, urllib.request
+base = os.environ.get("CRON_API_BASE", "http://127.0.0.1:8080/api").rstrip("/")
+password = os.environ.get("INVEST_TRACKER_PASSWORD", "").strip()
+headers = {"Accept": "application/json"}
+if password:
+    req = urllib.request.Request(base + "/login", data=json.dumps({"password": password}).encode(), headers={"Content-Type":"application/json"}, method="POST")
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        token = json.load(resp).get("token") or ""
+    if token:
+        headers["Authorization"] = "Bearer " + token
+with urllib.request.urlopen(urllib.request.Request(base + sys.argv[1], headers=headers), timeout=30) as resp:
+    print(resp.read().decode())
+PY
+)"; then
+    if echo "$SNAP_DAY" | python3 -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get("is_trading_day") else 1)' 2>/dev/null; then
+      return 0
+    fi
+    echo "[$(ts)] skip snapshot: non-trading day ($SNAP_DAY)"
+    return 1
+  fi
+  # If calendar check fails, write snapshot (safe default for old deploys)
+  echo "[$(ts)] trading-day check failed; proceed snapshot" >&2
+  return 0
+}
+
 run_snapshot_docker() {
   docker compose -f "$COMPOSE_FILE" exec -T backend python - <<'PY'
 import json
@@ -166,7 +229,7 @@ run_snapshot_curl() {
 
 run_alerts_docker() {
   local notify_flag="$1"
-  docker compose -f "$COMPOSE_FILE" exec -T -e ALERT_NOTIFY="$notify_flag" -e FEISHU_ALERT_WEBHOOK="${FEISHU_ALERT_WEBHOOK:-}" backend python - <<'PY'
+  docker compose -f "$COMPOSE_FILE" exec -T -e ALERT_NOTIFY="$notify_flag" -e FEISHU_ALERT_WEBHOOK="${FEISHU_ALERT_WEBHOOK:-}" -e ALERT_COOLDOWN_MINUTES="${ALERT_COOLDOWN_MINUTES:-}" backend python - <<'PY'
 import json
 import os
 import sys
@@ -208,12 +271,14 @@ else
 fi
 
 if [ "$WITH_SNAPSHOT" = "1" ]; then
-  if SNAP_OUT="$(run_snapshot_docker 2>&1)"; then
-    echo "[$(ts)] docker snapshot ok: ${SNAP_OUT}"
-  else
-    echo "[$(ts)] docker snapshot unavailable/fail, try HTTP… (${SNAP_OUT})" >&2
-    SNAP_OUT="$(run_snapshot_curl)"
-    echo "[$(ts)] HTTP snapshot ok: ${SNAP_OUT}"
+  if should_write_snapshot; then
+    if SNAP_OUT="$(run_snapshot_docker 2>&1)"; then
+      echo "[$(ts)] docker snapshot ok: ${SNAP_OUT}"
+    else
+      echo "[$(ts)] docker snapshot unavailable/fail, try HTTP… (${SNAP_OUT})" >&2
+      SNAP_OUT="$(run_snapshot_curl)"
+      echo "[$(ts)] HTTP snapshot ok: ${SNAP_OUT}"
+    fi
   fi
 fi
 

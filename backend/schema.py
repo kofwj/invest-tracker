@@ -14,7 +14,7 @@ except ImportError:
     from snapshots import ensure_snapshot_columns, ensure_portfolio_cash_flows_table
 
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 SCHEMA_VERSION_KEY = "schema_version"
 
 
@@ -109,6 +109,7 @@ def ensure_app_tables(conn):
         securities_cash REAL,
         pending_purchase REAL DEFAULT 0,
         total_profit REAL,
+        lifetime_profit REAL DEFAULT 0,
         holdings_count INTEGER,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )""")
@@ -162,12 +163,37 @@ def migrate_to_v5_market_alerts(conn):
     ensure_alert_tables(conn)
 
 
+def migrate_to_v6_snapshot_lifetime_and_watchlist(conn):
+    """Snapshot lifetime_profit column + market watchlist setting defaults."""
+    ensure_snapshot_columns(conn)
+    row = conn.execute(
+        "SELECT value FROM settings WHERE key = ?",
+        ("market_watchlist",),
+    ).fetchone()
+    if not row:
+        set_setting(conn, "market_watchlist", "[]")
+    row2 = conn.execute(
+        "SELECT value FROM settings WHERE key = ?",
+        ("market_extra_closed_dates",),
+    ).fetchone()
+    if not row2:
+        set_setting(conn, "market_extra_closed_dates", "[]")
+    # alert cooldown minutes (per rule, default 240)
+    row3 = conn.execute(
+        "SELECT value FROM settings WHERE key = ?",
+        ("alert_cooldown_minutes",),
+    ).fetchone()
+    if not row3:
+        set_setting(conn, "alert_cooldown_minutes", "240")
+
+
 MIGRATIONS = [
     (1, migrate_to_v1_core_compat),
     (2, migrate_to_v2_holdings_and_snapshots),
     (3, migrate_to_v3_performance_cash_flows),
     (4, migrate_to_v4_cash_settings),
     (5, migrate_to_v5_market_alerts),
+    (6, migrate_to_v6_snapshot_lifetime_and_watchlist),
 ]
 
 

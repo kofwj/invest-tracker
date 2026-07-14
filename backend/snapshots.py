@@ -12,6 +12,8 @@ def ensure_snapshot_columns(conn):
     cols = [row[1] for row in conn.execute("PRAGMA table_info(daily_snapshots)").fetchall()]
     if "pending_purchase" not in cols:
         conn.execute("ALTER TABLE daily_snapshots ADD COLUMN pending_purchase REAL DEFAULT 0")
+    if "lifetime_profit" not in cols:
+        conn.execute("ALTER TABLE daily_snapshots ADD COLUMN lifetime_profit REAL DEFAULT 0")
 
 
 def ensure_portfolio_cash_flows_table(conn):
@@ -29,12 +31,13 @@ def ensure_portfolio_cash_flows_table(conn):
 def create_snapshot_record(conn, today_iso, dashboard):
     ensure_snapshot_columns(conn)
     now = datetime.now(LOCAL_TZ).replace(tzinfo=None)
+    lifetime = dashboard.get("lifetime_profit", 0)
     existing = conn.execute("SELECT id FROM daily_snapshots WHERE date = ?", (today_iso,)).fetchone()
     if existing:
         conn.execute("""
             UPDATE daily_snapshots
             SET total_assets = ?, total_market_value = ?, bank_balance = ?, securities_cash = ?,
-                pending_purchase = ?, total_profit = ?, holdings_count = ?, created_at = ?
+                pending_purchase = ?, total_profit = ?, lifetime_profit = ?, holdings_count = ?, created_at = ?
             WHERE date = ?
         """, (
             dashboard['total_assets'],
@@ -43,6 +46,7 @@ def create_snapshot_record(conn, today_iso, dashboard):
             dashboard['securities_cash'],
             dashboard.get('pending_purchase', 0),
             dashboard['total_profit'],
+            lifetime,
             dashboard['holdings_count'],
             now,
             today_iso,
@@ -51,8 +55,9 @@ def create_snapshot_record(conn, today_iso, dashboard):
 
     conn.execute("""
         INSERT INTO daily_snapshots
-        (date, total_assets, total_market_value, bank_balance, securities_cash, pending_purchase, total_profit, holdings_count, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (date, total_assets, total_market_value, bank_balance, securities_cash, pending_purchase,
+         total_profit, lifetime_profit, holdings_count, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         today_iso,
         dashboard['total_assets'],
@@ -61,6 +66,7 @@ def create_snapshot_record(conn, today_iso, dashboard):
         dashboard['securities_cash'],
         dashboard.get('pending_purchase', 0),
         dashboard['total_profit'],
+        lifetime,
         dashboard['holdings_count'],
         now,
     ))
@@ -133,5 +139,10 @@ def snapshots_summary_data(conn, start_date: Optional[str] = None, end_date: Opt
             "start": first.get('pending_purchase', 0),
             "end": last.get('pending_purchase', 0),
             "change": (last.get('pending_purchase', 0) or 0) - (first.get('pending_purchase', 0) or 0),
+        },
+        "lifetime_profit": {
+            "start": first.get('lifetime_profit', 0) or 0,
+            "end": last.get('lifetime_profit', 0) or 0,
+            "change": (last.get('lifetime_profit', 0) or 0) - (first.get('lifetime_profit', 0) or 0),
         },
     }

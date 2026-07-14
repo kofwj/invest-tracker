@@ -49,6 +49,7 @@ test -f frontend/src/views/MaintenanceTab.vue
 test -f frontend/src/modules/market.js
 test -f backend/market.py
 test -f backend/routers_market.py
+test -f backend/trading_calendar.py
 grep -q 'type="module" src="/src/main.js"' frontend/index.html
 grep -q '@vitejs/plugin-vue' frontend/package.json
 grep -q 'unplugin-vue-components' frontend/package.json
@@ -82,10 +83,14 @@ assert 'useAppCtx' in holdings, 'views should inject app ctx'
 market_tab = Path('frontend/src/views/MarketTab.vue').read_text(encoding='utf-8')
 assert 'useAppCtx' in market_tab, 'market tab should inject app ctx'
 assert 'checkAlerts' in market_tab, 'market tab missing checkAlerts'
+assert 'exportAlertEvents' in market_tab or 'exportAlertEvents' in Path('frontend/src/modules/market.js').read_text(encoding='utf-8'), 'market should support alert export'
 backend_main = Path('backend/main.py').read_text(encoding='utf-8')
 assert 'market_router' in backend_main, 'backend should register market router'
 schema = Path('backend/schema.py').read_text(encoding='utf-8')
 assert 'migrate_to_v5_market_alerts' in schema, 'schema missing v5 market alerts migration'
+assert 'migrate_to_v6_snapshot_lifetime_and_watchlist' in schema, 'schema missing v6 snapshot lifetime migration'
+assert 'lifetime_profit' in Path('backend/snapshots.py').read_text(encoding='utf-8'), 'snapshots should store lifetime_profit'
+assert 'is_a_share_trading_day' in Path('backend/trading_calendar.py').read_text(encoding='utf-8'), 'trading calendar missing'
 PY
 
 echo "==> Checking frontend build"

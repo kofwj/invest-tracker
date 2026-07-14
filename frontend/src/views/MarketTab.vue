@@ -4,7 +4,9 @@
       <div>
         <h3 class="market-page-title">市场摘要</h3>
         <div class="market-page-subtitle">
-          只读观察：关键指数 + 持仓今日贡献粗估 + 价格阈值预警。不改真实账本。交易日 cron 可自动检查；飞书推送需配置 FEISHU_ALERT_WEBHOOK。
+          只读观察：关键指数 + 自选 + 持仓今日贡献 + 价格预警。不改真实账本。
+          交易日 cron 可自动检查；飞书推送需 FEISHU_ALERT_WEBHOOK；同规则默认冷却
+          {{ alertCooldownMinutes == null ? 240 : alertCooldownMinutes }} 分钟。
         </div>
       </div>
       <div class="market-page-actions">
@@ -22,6 +24,18 @@
       :closable="false"
       style="margin-bottom: 14px;"
     />
+
+    <el-card v-if="marketHighlights && marketHighlights.length" shadow="never" style="margin-bottom: 16px;">
+      <template #header>
+        <span class="allocation-section-title">今天看点</span>
+      </template>
+      <ul class="market-highlights">
+        <li v-for="(line, idx) in marketHighlights" :key="idx">{{ line }}</li>
+      </ul>
+      <div v-if="marketComparisons && marketComparisons.length" style="margin-top: 8px; font-size: 12px; color: #606266;">
+        <div v-for="(c, i) in marketComparisons" :key="i">{{ c.text }}</div>
+      </div>
+    </el-card>
 
     <el-row :gutter="12" style="margin-bottom: 16px;">
       <el-col :xs="12" :sm="8" :md="6">
@@ -90,6 +104,54 @@
     <el-card shadow="never" style="margin-bottom: 16px;">
       <template #header>
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div>
+            <div class="allocation-section-title">自选关注</div>
+            <div style="font-size:12px;color:#909399;margin-top:4px;">额外代码（股票/指数/ETF），不替代默认指数。指数建议填 secid（如 1.000300）。</div>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <el-button size="small" @click="addWatchlistRow">添加一行</el-button>
+            <el-button size="small" type="primary" :loading="watchlistSaving" @click="saveWatchlist">保存自选</el-button>
+          </div>
+        </div>
+      </template>
+      <el-table :data="watchlistDraft" stripe empty-text="暂无自选，点「添加一行」">
+        <el-table-column label="代码" min-width="120">
+          <template #default="scope">
+            <el-input v-model="scope.row.code" size="small" placeholder="代码" />
+          </template>
+        </el-table-column>
+        <el-table-column label="名称" min-width="120">
+          <template #default="scope">
+            <el-input v-model="scope.row.name" size="small" placeholder="可选" />
+          </template>
+        </el-table-column>
+        <el-table-column label="secid" min-width="120">
+          <template #default="scope">
+            <el-input v-model="scope.row.secid" size="small" placeholder="指数可选" />
+          </template>
+        </el-table-column>
+        <el-table-column label="行情" width="160" align="right" header-align="right">
+          <template #default="scope">
+            <span v-if="quoteForWatch(scope.row.code)">
+              {{ quoteForWatch(scope.row.code).price == null ? '—' : Number(quoteForWatch(scope.row.code).price).toFixed(2) }}
+              <span :style="{ color: changeColor(quoteForWatch(scope.row.code).change_pct), marginLeft: '6px' }">
+                {{ formatChangePct(quoteForWatch(scope.row.code).change_pct) }}
+              </span>
+            </span>
+            <span v-else style="color:#c0c4cc;">—</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="90" align="center">
+          <template #default="scope">
+            <el-button type="danger" link @click="removeWatchlistRow(scope.$index)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
+
+    <el-card shadow="never" style="margin-bottom: 16px;">
+      <template #header>
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
           <span class="allocation-section-title">持仓今日贡献粗估（按绝对值排序）</span>
           <span style="font-size:12px;color:#909399;">最多显示 20 条</span>
         </div>
@@ -124,7 +186,9 @@
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
           <div>
             <div class="allocation-section-title">价格预警规则</div>
-            <div style="font-size:12px;color:#909399;margin-top:4px;">持仓或指数代码，上穿/下穿阈值。可手动检查；VPS 可在同步快照后自动检查。</div>
+            <div style="font-size:12px;color:#909399;margin-top:4px;">
+              持仓或指数代码，上穿/下穿阈值。同规则默认 {{ alertCooldownMinutes == null ? 240 : alertCooldownMinutes }} 分钟内不重复记录/推送。
+            </div>
           </div>
           <el-button type="primary" size="small" @click="openAlertCreate">添加规则</el-button>
         </div>
@@ -163,9 +227,14 @@
         <span class="allocation-section-title">最近一次检查触发</span>
       </template>
       <el-table :data="triggeredAlerts" stripe>
-        <el-table-column prop="message" label="说明" min-width="260" show-overflow-tooltip />
+        <el-table-column prop="message" label="说明" min-width="280" show-overflow-tooltip />
         <el-table-column prop="price" label="触发价" width="110" align="right" header-align="right">
           <template #default="scope">{{ Number(scope.row.price).toFixed(4) }}</template>
+        </el-table-column>
+        <el-table-column label="涨跌%" width="100" align="right" header-align="right">
+          <template #default="scope">
+            <span :style="{ color: changeColor(scope.row.change_pct) }">{{ formatChangePct(scope.row.change_pct) }}</span>
+          </template>
         </el-table-column>
         <el-table-column prop="trigger_time" label="时间" width="180" />
       </el-table>
@@ -176,24 +245,42 @@
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
           <div>
             <div class="allocation-section-title">预警历史</div>
-            <div style="font-size:12px;color:#909399;margin-top:4px;">来自 alert_events，默认最近 50 条</div>
+            <div style="font-size:12px;color:#909399;margin-top:4px;">来自 alert_events，支持代码/日期筛选、导出、清空</div>
           </div>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
             <el-input
               v-model="alertEventCodeFilter"
               clearable
               placeholder="按代码筛选"
-              style="width:140px"
+              style="width:120px"
               size="small"
               @keyup.enter="fetchAlertEvents"
             />
+            <el-date-picker
+              v-model="alertEventStartDate"
+              type="date"
+              value-format="YYYY-MM-DD"
+              placeholder="开始日期"
+              size="small"
+              style="width:140px"
+            />
+            <el-date-picker
+              v-model="alertEventEndDate"
+              type="date"
+              value-format="YYYY-MM-DD"
+              placeholder="结束日期"
+              size="small"
+              style="width:140px"
+            />
             <el-button size="small" :loading="alertEventsLoading" @click="fetchAlertEvents">刷新历史</el-button>
+            <el-button size="small" @click="exportAlertEvents">导出 CSV</el-button>
+            <el-button size="small" type="danger" plain @click="clearAlertEvents">清空</el-button>
           </div>
         </div>
       </template>
       <el-table :data="alertEvents" stripe empty-text="暂无触发记录" v-loading="alertEventsLoading">
         <el-table-column prop="target_code" label="代码" width="100" />
-        <el-table-column prop="message" label="说明" min-width="260" show-overflow-tooltip />
+        <el-table-column prop="message" label="说明" min-width="280" show-overflow-tooltip />
         <el-table-column label="触发价" width="110" align="right" header-align="right">
           <template #default="scope">
             {{ scope.row.triggered_price == null ? '—' : Number(scope.row.triggered_price).toFixed(4) }}
@@ -253,14 +340,22 @@ const {
   alertRules,
   alertEvents,
   alertEventCodeFilter,
+  alertEventStartDate,
+  alertEventEndDate,
+  watchlistDraft,
+  watchlistSaving,
   alertForm,
   alertEditDialog,
   triggeredAlerts,
   indexRows,
+  watchlistRows,
   holdingsDayRows,
   marketSignals,
+  marketHighlights,
+  marketComparisons,
   marketUpdatedAt,
   quoteCacheSeconds,
+  alertCooldownMinutes,
   refreshMarket,
   openAlertCreate,
   openAlertEdit,
@@ -269,6 +364,11 @@ const {
   toggleAlertEnabled,
   checkAlerts,
   fetchAlertEvents,
+  exportAlertEvents,
+  clearAlertEvents,
+  addWatchlistRow,
+  removeWatchlistRow,
+  saveWatchlist,
   formatMoney,
 } = useAppCtx();
 
@@ -284,6 +384,12 @@ const changeColor = (v) => {
   const n = Number(v);
   if (Number.isNaN(n) || n === 0) return '#909399';
   return n > 0 ? '#F56C6C' : '#67C23A';
+};
+
+const quoteForWatch = (code) => {
+  const c = String(code || '').trim();
+  if (!c) return null;
+  return (watchlistRows.value || []).find((x) => String(x.code) === c) || null;
 };
 </script>
 
@@ -325,5 +431,12 @@ const changeColor = (v) => {
 .market-metric-sub {
   font-size: 12px;
   color: #a8abb2;
+}
+.market-highlights {
+  margin: 0;
+  padding-left: 18px;
+  color: #303133;
+  line-height: 1.7;
+  font-size: 13px;
 }
 </style>

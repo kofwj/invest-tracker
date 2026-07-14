@@ -30,7 +30,7 @@ def test_database_initialization_records_schema_version(app_module):
         ('schema_version',),
     )
 
-    assert rows == [{'value': '5'}]
+    assert rows == [{'value': '6'}]
 
 
 def test_database_initialization_migrates_missing_transaction_account(app_module):

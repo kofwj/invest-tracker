@@ -303,10 +303,27 @@ chmod +x scripts/verify_vps_deploy.sh scripts/cron_sync_prices.sh
 40 16 * * 1-5 /home/kofwj/invest-tracker/scripts/cron_sync_prices.sh --snapshot --check-alerts >> /home/kofwj/invest-tracker/backups/cron_sync_prices.log 2>&1
 ```
 
-- `--snapshot`：同步价后记录/更新今日资产快照
-- `--check-alerts`：再跑一遍价格预警检查（写入 `alert_events`）
+- `--snapshot`：同步价后记录/更新今日资产快照（**默认跳过周末/节假日**；强制写用 `--force-snapshot` 或 `CRON_FORCE_SNAPSHOT=1`）
+- `--check-alerts`：再跑一遍价格预警检查（写入 `alert_events`；同规则默认冷却 240 分钟）
 - `--notify-alerts`：触发时推飞书（需在 `.env` 设置 `FEISHU_ALERT_WEBHOOK`）
 - 也可用环境变量 `CRON_CHECK_ALERTS=1` / `CRON_NOTIFY_ALERTS=1` 强制打开
+- `ALERT_COOLDOWN_MINUTES`：冷却分钟数（也可在 settings 表 `alert_cooldown_minutes`）
+- 额外休市日可在 settings 写 `market_extra_closed_dates`（JSON 日期数组）
+
+### VPS 上线清单（本机无 SSH 时在 VPS 执行）
+
+```bash
+cd /home/kofwj/invest-tracker
+git pull
+python3 scripts/backup_db.py --label before_market_1_5 || true
+./scripts/deploy_vps.sh
+# 或：docker compose -f docker-compose.prod.yml up -d --build
+
+# 确认 crontab（crontab -e）晚盘行含 --check-alerts
+# 可选飞书：.env 加 FEISHU_ALERT_WEBHOOK=...，cron 再加 --notify-alerts
+chmod +x scripts/cron_sync_prices.sh
+./scripts/cron_sync_prices.sh --check-alerts   # 手动试跑
+```
 
 先手动跑一次确认日志正常再写入 crontab。
 

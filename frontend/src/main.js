@@ -738,6 +738,10 @@ const app = createApp({
         const alertEditDialog = ref(false);
         const triggeredAlerts = ref([]);
         const alertEventCodeFilter = ref('');
+        const alertEventStartDate = ref('');
+        const alertEventEndDate = ref('');
+        const watchlistDraft = ref([]);
+        const watchlistSaving = ref(false);
         const alertForm = ref({
             target_type: 'holding',
             code: '',
@@ -751,6 +755,8 @@ const app = createApp({
             fetchMarketSummary,
             fetchAlertRules,
             fetchAlertEvents,
+            exportAlertEvents,
+            clearAlertEvents,
             refreshMarket,
             resetAlertForm,
             saveAlertRule,
@@ -759,11 +765,18 @@ const app = createApp({
             toggleAlertEnabled,
             deleteAlertRule,
             checkAlerts,
+            addWatchlistRow,
+            removeWatchlistRow,
+            saveWatchlist,
             indexRows,
+            watchlistRows,
             holdingsDayRows,
             marketSignals,
+            marketHighlights,
+            marketComparisons,
             marketUpdatedAt,
             quoteCacheSeconds,
+            alertCooldownMinutes,
         } = createMarketModule({
             marketSummary,
             alertRules,
@@ -775,6 +788,10 @@ const app = createApp({
             alertEditDialog,
             triggeredAlerts,
             alertEventCodeFilter,
+            alertEventStartDate,
+            alertEventEndDate,
+            watchlistDraft,
+            watchlistSaving,
             computed,
         });
 
@@ -835,9 +852,11 @@ const app = createApp({
             perfSummary, perfTimeline, perfContribution, perfFlows, perfLoading, perfFlowForm, hasPerfFlows, perfGuideSteps, perfLensRows, perfReadTips, perfCards,
             displayedPerfContribution, perfContributionFilter, perfContributionSort, perfContributionHeadline, perfContributionMix,
             fetchPerformance, addPerfFlow, deletePerfFlow, contributionBarStyle, fetchMaintenance, createDbBackup, downloadBackup, restoreBackup, deleteBackup, restoreUploadedBackup,
-            marketSummary, alertRules, alertEvents, marketLoading, alertChecking, alertEventsLoading, alertForm, alertEditDialog, triggeredAlerts, alertEventCodeFilter,
-            fetchMarketSummary, fetchAlertRules, fetchAlertEvents, refreshMarket, resetAlertForm, saveAlertRule, openAlertCreate, openAlertEdit,
-            toggleAlertEnabled, deleteAlertRule, checkAlerts, indexRows, holdingsDayRows, marketSignals, marketUpdatedAt, quoteCacheSeconds,
+            marketSummary, alertRules, alertEvents, marketLoading, alertChecking, alertEventsLoading, alertForm, alertEditDialog, triggeredAlerts,
+            alertEventCodeFilter, alertEventStartDate, alertEventEndDate, watchlistDraft, watchlistSaving,
+            fetchMarketSummary, fetchAlertRules, fetchAlertEvents, exportAlertEvents, clearAlertEvents, refreshMarket, resetAlertForm, saveAlertRule, openAlertCreate, openAlertEdit,
+            toggleAlertEnabled, deleteAlertRule, checkAlerts, addWatchlistRow, removeWatchlistRow, saveWatchlist,
+            indexRows, watchlistRows, holdingsDayRows, marketSignals, marketHighlights, marketComparisons, marketUpdatedAt, quoteCacheSeconds, alertCooldownMinutes,
         };
         provide(APP_CTX_KEY, appCtx);
         return appCtx;

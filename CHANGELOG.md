@@ -5,6 +5,30 @@
 
 ---
 
+## [2026-07-14] — 市场能力 1–5：VPS 清单 / 预警增强 / 交易日历 / 摘要 / 快照字段
+
+### 1 VPS 收尾文档
+- `docs/deploy-vps.md` 上线清单 + crontab（`--check-alerts` / 可选飞书）
+
+### 2 预警增强
+- 同规则冷却（默认 240 分钟，`ALERT_COOLDOWN_MINUTES` / settings）
+- 历史：日期筛选、CSV 导出、清空
+- 触发消息含涨跌% / 昨收
+
+### 3 交易日历
+- `backend/trading_calendar.py`；cron `--snapshot` 默认跳过周末/节假日（`--force-snapshot` 可强制）
+- `GET /market/trading-day`
+
+### 4 市场摘要增强
+- 自选关注 CRUD（settings `market_watchlist`）
+- 持仓 vs 沪深300/A500 对比；规则生成「今天看点」
+
+### 5 快照 / 图表
+- schema v6：`daily_snapshots.lifetime_profit`；快照表展示全周期盈亏
+- 图表 `window.resize` 自动重算
+
+---
+
 ## [2026-07-14] — 修复资产配置饼图不显示
 
 ### 修复
