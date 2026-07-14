@@ -125,6 +125,21 @@ const api = {
     clearAlertEvents: (payload = {}) => axios.post(API + '/market/alert-events/clear', payload || {}),
     checkAlerts: (payload = {}) => axios.post(API + '/market/alerts/check', payload || {}, { timeout: 60000 }),
 
+    getDisciplineReport: () => axios.get(API + '/discipline/report', { timeout: 60000 }),
+    getDisciplinePolicy: () => axios.get(API + '/discipline/policy'),
+    saveDisciplinePolicy: (payload) => axios.put(API + '/discipline/policy', payload || {}),
+    listDisciplineDrafts: (params = {}) => {
+        const qs = new URLSearchParams();
+        Object.entries(params || {}).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && value !== '') qs.set(key, value);
+        });
+        return axios.get(API + '/discipline/drafts' + (qs.toString() ? '?' + qs.toString() : ''));
+    },
+    createDisciplineDrafts: (payload = {}) => axios.post(API + '/discipline/drafts', payload || {}),
+    deleteDisciplineDraft: (id) => axios.delete(API + '/discipline/drafts/' + id),
+    confirmDisciplineDraft: (id) => axios.post(API + '/discipline/drafts/' + id + '/confirm'),
+    confirmDisciplineDrafts: (payload) => axios.post(API + '/discipline/drafts/confirm', payload || {}),
+
     download: (url) => axios.get(API + url, { responseType: 'blob' }),
     uploadCsv: (url, formData) => axios.post(API + url, formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 180000 }),
 };

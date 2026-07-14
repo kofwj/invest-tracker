@@ -3,18 +3,20 @@ import sqlite3
 try:
     from .cash import ensure_cash_base, set_setting
     from .database import open_db
+    from .discipline import ensure_discipline_tables
     from .holdings import ensure_holding_return_columns
     from .market import ensure_alert_tables
     from .snapshots import ensure_snapshot_columns, ensure_portfolio_cash_flows_table
 except ImportError:
     from cash import ensure_cash_base, set_setting
     from database import open_db
+    from discipline import ensure_discipline_tables
     from holdings import ensure_holding_return_columns
     from market import ensure_alert_tables
     from snapshots import ensure_snapshot_columns, ensure_portfolio_cash_flows_table
 
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 SCHEMA_VERSION_KEY = "schema_version"
 
 
@@ -127,6 +129,7 @@ def ensure_app_tables(conn):
     )""")
     ensure_portfolio_cash_flows_table(conn)
     ensure_alert_tables(conn)
+    ensure_discipline_tables(conn)
 
 
 def migrate_to_v1_core_compat(conn):
@@ -187,6 +190,18 @@ def migrate_to_v6_snapshot_lifetime_and_watchlist(conn):
         set_setting(conn, "alert_cooldown_minutes", "240")
 
 
+def migrate_to_v7_discipline(conn):
+    """Discipline rules + rebalance drafts (real portfolio, no auto-trade)."""
+    ensure_discipline_tables(conn)
+    row = conn.execute(
+        "SELECT value FROM settings WHERE key = ?",
+        ("discipline_policy",),
+    ).fetchone()
+    if not row:
+        # empty → runtime DEFAULT_POLICY used until user saves
+        set_setting(conn, "discipline_policy", "{}")
+
+
 MIGRATIONS = [
     (1, migrate_to_v1_core_compat),
     (2, migrate_to_v2_holdings_and_snapshots),
@@ -194,6 +209,7 @@ MIGRATIONS = [
     (4, migrate_to_v4_cash_settings),
     (5, migrate_to_v5_market_alerts),
     (6, migrate_to_v6_snapshot_lifetime_and_watchlist),
+    (7, migrate_to_v7_discipline),
 ]
 
 

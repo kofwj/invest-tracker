@@ -5,6 +5,23 @@
 
 ---
 
+## [2026-07-14] — 纪律 + 再平衡 + 交易草稿（真实仓位）
+
+### 功能
+- 新 Tab「纪律与再平衡」：基于真实持仓做纪律检查、目标比例差距、买卖建议
+- 默认**不自动下单**；「建议→草稿」写入 `discipline_drafts`；用户确认后才进真实交易
+- 默认纪律：权益 35–55%、防守≥40%、单票≤20%、格力≤15%；目标权益/固收/存款 45/30/25；优先加仓 A500
+- 买入金额类确认默认记「申购待确认」（不虚增份额）
+
+### 后端
+- schema **v7**：`discipline_drafts` + settings `discipline_policy`
+- `backend/discipline.py`、`routers_discipline.py`
+
+### 前端
+- `views/DisciplineTab.vue` + `modules/discipline.js`
+
+---
+
 ## [2026-07-14] — 市场能力 1–5：VPS 清单 / 预警增强 / 交易日历 / 摘要 / 快照字段
 
 ### 1 VPS 收尾文档

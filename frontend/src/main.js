@@ -25,6 +25,7 @@ import { createCashModule } from './modules/cash.js';
 import { createSnapshotsModule } from './modules/snapshots.js';
 import { createPerformanceModule } from './modules/performance.js';
 import { createMarketModule } from './modules/market.js';
+import { createDisciplineModule } from './modules/discipline.js';
 import { createAuthMask } from './composables/authMask.js';
 import {
     createFeeHelpers,
@@ -47,7 +48,7 @@ const app = createApp({
     extends: App,
     setup() {
         const screenshotParams = new URLSearchParams(window.location.search);
-        const screenshotTabs = ['snapshots', 'allocation', 'performance', 'market', 'holdings', 'deposits', 'transactions', 'cash', 'maintenance'];
+        const screenshotTabs = ['snapshots', 'allocation', 'performance', 'market', 'discipline', 'holdings', 'deposits', 'transactions', 'cash', 'maintenance'];
         const requestedTab = screenshotParams.get('tab');
 
         // Deferred bootstrap after login unlock (wired below after helpers exist)
@@ -795,11 +796,56 @@ const app = createApp({
             computed,
         });
 
+        const disciplineReport = ref({});
+        const disciplineDrafts = ref([]);
+        const disciplinePolicy = ref({
+            equity_min_pct: 35,
+            equity_max_pct: 55,
+            defensive_min_pct: 40,
+            single_holding_max_pct: 20,
+            rebalance_band_pct: 3,
+            preferred_buy_code: '159352',
+            preferred_buy_name: '中证A500ETF',
+            preferred_buy_category: 'A股ETF',
+            preferred_buy_account: '华泰证券',
+            targets: { equity_pct: 45, fixed_income_pct: 30, deposit_pct: 25 },
+            named_limits: [],
+            no_new_codes: [],
+        });
+        const disciplineLoading = ref(false);
+        const disciplineDraftLoading = ref(false);
+        const disciplinePolicyDialog = ref(false);
+
+        const {
+            fetchDisciplineReport,
+            fetchDisciplineDrafts,
+            refreshDiscipline,
+            openPolicyDialog,
+            savePolicy,
+            createDraftsFromReport,
+            deleteDraft,
+            confirmDraft,
+            breaches,
+            actions,
+            snapshot,
+            targets,
+            summaryText,
+        } = createDisciplineModule({
+            disciplineReport,
+            disciplineDrafts,
+            disciplinePolicy,
+            disciplineLoading,
+            disciplineDraftLoading,
+            disciplinePolicyDialog,
+            computed,
+        });
+
         watch(activeTab, (val) => {
             if (val === 'transactions') queryTransactions();
             if (val === 'allocation') nextTick(renderAllocationCharts);
             if (val === 'performance') fetchPerformance();
             if (val === 'market') refreshMarket();
+            if (val === 'discipline') refreshDiscipline();
             if (val === 'snapshots') {
                 fetchSnapshots().then(() => nextTick(renderSnapshotCharts));
             }
@@ -857,6 +903,9 @@ const app = createApp({
             fetchMarketSummary, fetchAlertRules, fetchAlertEvents, exportAlertEvents, clearAlertEvents, refreshMarket, resetAlertForm, saveAlertRule, openAlertCreate, openAlertEdit,
             toggleAlertEnabled, deleteAlertRule, checkAlerts, addWatchlistRow, removeWatchlistRow, saveWatchlist,
             indexRows, watchlistRows, holdingsDayRows, marketSignals, marketHighlights, marketComparisons, marketUpdatedAt, quoteCacheSeconds, alertCooldownMinutes,
+            disciplineReport, disciplineDrafts, disciplinePolicy, disciplineLoading, disciplineDraftLoading, disciplinePolicyDialog,
+            fetchDisciplineReport, fetchDisciplineDrafts, refreshDiscipline, openPolicyDialog, savePolicy, createDraftsFromReport, deleteDraft, confirmDraft,
+            breaches, actions, snapshot, targets, summaryText,
         };
         provide(APP_CTX_KEY, appCtx);
         return appCtx;

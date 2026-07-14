@@ -17,6 +17,9 @@
         <el-tab-pane label="市场摘要" name="market" lazy>
           <MarketTab />
         </el-tab-pane>
+        <el-tab-pane label="纪律与再平衡" name="discipline" lazy>
+          <DisciplineTab />
+        </el-tab-pane>
         <el-tab-pane label="持仓明细" name="holdings" lazy>
           <HoldingsTab />
         </el-tab-pane>
@@ -58,6 +61,7 @@ export default {
     AllocationTab: defineAsyncComponent(() => import('./views/AllocationTab.vue')),
     PerformanceTab: defineAsyncComponent(() => import('./views/PerformanceTab.vue')),
     MarketTab: defineAsyncComponent(() => import('./views/MarketTab.vue')),
+    DisciplineTab: defineAsyncComponent(() => import('./views/DisciplineTab.vue')),
     HoldingsTab: defineAsyncComponent(() => import('./views/HoldingsTab.vue')),
     DepositsTab: defineAsyncComponent(() => import('./views/DepositsTab.vue')),
     TransactionsTab: defineAsyncComponent(() => import('./views/TransactionsTab.vue')),

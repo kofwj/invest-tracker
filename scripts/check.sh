@@ -50,6 +50,10 @@ test -f frontend/src/modules/market.js
 test -f backend/market.py
 test -f backend/routers_market.py
 test -f backend/trading_calendar.py
+test -f backend/discipline.py
+test -f backend/routers_discipline.py
+test -f frontend/src/modules/discipline.js
+test -f frontend/src/views/DisciplineTab.vue
 grep -q 'type="module" src="/src/main.js"' frontend/index.html
 grep -q '@vitejs/plugin-vue' frontend/package.json
 grep -q 'unplugin-vue-components' frontend/package.json
