@@ -30,11 +30,11 @@ import { createDisciplineModule } from './modules/discipline.js';
 import { createAuthMask } from './composables/authMask.js';
 import {
     createFeeHelpers,
-    createDividendHelpers,
     createMaintenanceHelpers,
     createImportExportHelpers,
     createAllocationAnalysis,
 } from './composables/domainHelpers.js';
+import { createDividendHelpers } from './modules/dividends.js';
 import './styles/styles.css';
 
 const todayLocalIso = () => {
@@ -594,6 +594,8 @@ const app = createApp({
             downloadDepositsTemplate,
             exportDeposits,
             importDeposits,
+            downloadDividendTemplate,
+            importDividends,
         } = createImportExportHelpers({
             todayLocalIso,
             queryTransactions,
@@ -983,7 +985,7 @@ const app = createApp({
             allocationSummary, allocationHealth, portfolioExpectedReturn, expectedReturnDialog, holdingCorrectionDialog, holdingCorrectionHistoryDialog,
             allTransactions, filteredTransactions, pendingTransactions, pendingPurchaseTotal, transQuery, transPage, transEditDialog,
             syncPrices, syncTrailingReturns, openDividendDraftDialog, openEveningBrief, eveningBriefDialog, scanDividendDrafts, confirmSelectedDividends, selectSelectableDividendDrafts, clearDividendDraftSelection, onDividendSelectionChange, isDividendDraftSelectable, dividendStatusLabel, dividendStatusType, submitTrans, resetForm, fetchData, markFeeManual, saveFeeSettings, resetFeeSettings, addFeeAccount, removeFeeAccount, onActiveFeeAccountChange,
-            downloadTransactionsTemplate, exportTransactions, importTransactions, downloadDepositsTemplate, exportDeposits, importDeposits,
+            downloadTransactionsTemplate, exportTransactions, importTransactions, downloadDepositsTemplate, exportDeposits, importDeposits, downloadDividendTemplate, importDividends,
             queryAssetByCode, queryAssetByName, selectTransAsset, autoMatchTransAsset,
             openDepositDialog, saveDeposit, deleteDeposit, updateCash, queryCashFlows, resetCashFlowQuery, addCashFlow, openCashFlowEditDialog, saveCashFlowEdit, deleteCashFlow, cashFlowTagType,
             createSnapshot, fetchSnapshots, exportSnapshots, compactSnapshots, showTransactions,

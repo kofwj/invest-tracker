@@ -2,29 +2,47 @@ import logging
 from datetime import date as dt_date
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 try:
-    from .csv_utils import create_safety_backup
-    from .database import db_session
+    from .csv_utils import (
+        create_import_backup,
+        create_safety_backup,
+        csv_response,
+        normalize_csv_row,
+        normalize_date_string,
+        parse_float,
+        read_upload_csv,
+    )
+    from .database import db_session, local_today_iso
     from .dividend_sync import (
         DEFAULT_LOOKBACK_DAYS,
         confirm_dividend_drafts,
         scan_dividend_drafts,
     )
-    from .holding_calculator import recalc_holdings
+    from .holding_calculator import infer_category, recalc_holdings
 except ImportError:
-    from csv_utils import create_safety_backup
-    from database import db_session
+    from csv_utils import (
+        create_import_backup,
+        create_safety_backup,
+        csv_response,
+        normalize_csv_row,
+        normalize_date_string,
+        parse_float,
+        read_upload_csv,
+    )
+    from database import db_session, local_today_iso
     from dividend_sync import (
         DEFAULT_LOOKBACK_DAYS,
         confirm_dividend_drafts,
         scan_dividend_drafts,
     )
-    from holding_calculator import recalc_holdings
+    from holding_calculator import infer_category, recalc_holdings
 
 import sqlite3
+
+DIVIDEND_CSV_COLUMNS = ["date", "account", "code", "name", "category", "amount", "fee", "remark"]
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -105,4 +123,89 @@ def confirm_dividends(payload: DividendConfirmRequest):
         "status": "success",
         "backup": backup_path,
         **result,
+    }
+
+
+@router.get("/dividends/template")
+def download_dividend_template():
+    """下载分红手工模板（纯现金分红专用，数量/单价固定为0）。"""
+    rows = [
+        [local_today_iso(), "华泰证券", "601288", "农业银行", "A股权益", "1234.56", "0", "手工补录：某债基或不支持标的的分红"],
+        [local_today_iso(), "华泰证券", "f004388", "鹏华丰享", "债基", "80.00", "0", "场外基金分红示例"],
+    ]
+    return csv_response("dividends_template.csv", DIVIDEND_CSV_COLUMNS, rows)
+
+
+@router.post("/dividends/import")
+def import_dividends(file: UploadFile = File(...)):
+    """从CSV导入手工分红（direction 固定为'分红'，qty/price=0）。"""
+    if not (file and file.filename and file.filename.lower().endswith(".csv")):
+        raise HTTPException(status_code=400, detail="请上传 .csv 文件")
+
+    content = file.file.read()
+    backup_path = create_import_backup("before_import_dividends")
+
+    rows = read_upload_csv(content)
+    aliases = {
+        "date": "date", "日期": "date",
+        "account": "account", "证券账户": "account", "账户": "account",
+        "code": "code", "代码": "code",
+        "name": "name", "名称": "name",
+        "category": "category", "分类": "category",
+        "amount": "amount", "金额": "amount", "总金额": "amount",
+        "fee": "fee", "手续费": "fee",
+        "remark": "remark", "备注": "remark",
+    }
+
+    success = 0
+    errors = []
+    affected_codes = set()
+
+    try:
+        with db_session(row_factory=sqlite3.Row) as conn:
+            for idx, raw in enumerate(rows):
+                try:
+                    row = normalize_csv_row(raw, aliases)
+                    if not row.get("date") or not row.get("code"):
+                        raise ValueError("日期和代码必填")
+
+                    date_str = normalize_date_string(row.get("date"))
+                    code = str(row.get("code") or "").strip()
+                    name = str(row.get("name") or "").strip() or code
+                    category = row.get("category") or infer_category(code, name)
+                    account = row.get("account") or "华泰证券"
+                    amount = parse_float(row.get("amount"), 0.0)
+                    fee = parse_float(row.get("fee"), 0.0)
+                    remark = str(row.get("remark") or "").strip() or "手工分红导入"
+
+                    if amount <= 0:
+                        raise ValueError("分红金额必须 > 0")
+
+                    conn.execute(
+                        """
+                        INSERT INTO transactions
+                        (date, code, name, category, account, direction, quantity, price, amount, fee, remark)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (date_str, code, name, category, account, "分红", 0.0, 0.0, amount, fee, remark),
+                    )
+                    affected_codes.add(code)
+                    success += 1
+                except Exception as e:
+                    errors.append({"row": idx + 1, "error": str(e)})
+
+            if success > 0:
+                recalc_holdings(conn, codes=list(affected_codes) if affected_codes else None)
+            conn.commit()
+    except Exception as e:
+        logger.exception("dividend import failed")
+        raise HTTPException(status_code=500, detail=f"分红导入失败: {e}")
+
+    return {
+        "status": "success",
+        "imported": success,
+        "failed": len(errors),
+        "errors": errors[:30],
+        "backup": backup_path,
+        "affected_codes": list(affected_codes),
     }

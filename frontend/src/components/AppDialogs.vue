@@ -266,7 +266,7 @@
             ></el-alert>
             <el-alert
                 v-if="(dividendDialog.unsupported || []).length"
-                :title="`当前有 ${dividendDialog.unsupported.length} 只持仓不支持自动扫描（常见：开放式债基）。请到券商对账后，在「交易管理」手工补分红。`"
+                :title="`当前有 有 ${dividendDialog.unsupported.length} 只持仓不支持自动扫描（常见：开放式债基、场外基金）。请下载分红模板手工补录后导入，或在「交易记录」新增方向选「分红」录入。`"
                 type="warning"
                 show-icon
                 :closable="false"
@@ -339,6 +339,10 @@
                 <div style="display:flex;justify-content:space-between;align-items:center;width:100%;gap:12px;flex-wrap:wrap;">
                     <span style="color:#909399;font-size:13px;">已选 {{ dividendDialog.selected.length }} 条，确认后写入「分红」交易并重算持仓/现金</span>
                     <div>
+                        <el-button size="small" @click="downloadDividendTemplate">下载分红模板</el-button>
+                        <el-upload action="#" :auto-upload="false" :show-file-list="false" accept=".csv" :on-change="importDividends" style="display:inline-block;margin-right:8px;">
+                            <el-button size="small" type="success">导入分红CSV</el-button>
+                        </el-upload>
                         <el-button @click="dividendDialog.visible = false">关闭</el-button>
                         <el-button type="primary" :loading="dividendConfirming" @click="confirmSelectedDividends">确认入账</el-button>
                     </div>
@@ -358,5 +362,5 @@
 
 <script setup>
 import { useAppCtx } from '../composables/useAppCtx.js';
-const { dividendLoading, dividendConfirming, dividendDialog, dividendTableRef, feeAccounts, depositDialog, cashFlowEditDialog, transDialog, expectedReturnDialog, holdingCorrectionDialog, holdingCorrectionHistoryDialog, transEditDialog, eveningBriefDialog, openEveningBrief, scanDividendDrafts, confirmSelectedDividends, selectSelectableDividendDrafts, clearDividendDraftSelection, onDividendSelectionChange, isDividendDraftSelectable, dividendStatusLabel, dividendStatusType, saveDeposit, saveCashFlowEdit, saveTransactionEdit, saveExpectedReturn, saveHoldingCorrection, deleteHoldingCorrection, formatMoney } = useAppCtx();
+const { dividendLoading, dividendConfirming, dividendDialog, dividendTableRef, feeAccounts, depositDialog, cashFlowEditDialog, transDialog, expectedReturnDialog, holdingCorrectionDialog, holdingCorrectionHistoryDialog, transEditDialog, eveningBriefDialog, openEveningBrief, scanDividendDrafts, confirmSelectedDividends, selectSelectableDividendDrafts, clearDividendDraftSelection, onDividendSelectionChange, isDividendDraftSelectable, dividendStatusLabel, dividendStatusType, saveDeposit, saveCashFlowEdit, saveTransactionEdit, saveExpectedReturn, saveHoldingCorrection, deleteHoldingCorrection, formatMoney, downloadDividendTemplate, importDividends } = useAppCtx();
 </script>
