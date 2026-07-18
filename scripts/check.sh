@@ -73,9 +73,11 @@ assert 'vue.esm-bundler' not in main, 'full compiler build should not be used af
 assert "import App from './App.vue'" in main, 'missing App.vue import'
 assert 'extends: App' in main, 'root component should extend App.vue template'
 assert "element-plus/dist/index.css" not in main, 'full Element Plus CSS should not be imported after on-demand'
-for module in ['./utils/index.js', './api/index.js', './modules/transactions.js', './modules/deposits.js', './modules/cash.js', './modules/snapshots.js', './modules/performance.js', './modules/market.js', './composables/authMask.js', './composables/domainHelpers.js']:
+for module in ['./utils/index.js', './api/index.js', './modules/transactions.js', './modules/deposits.js', './modules/cash.js', './modules/snapshots.js', './modules/performance.js', './modules/market.js', './modules/allocation.js', './modules/dataSync.js', './modules/appInit.js', './modules/brief.js', './modules/holdingCorrections.js', './composables/authMask.js', './composables/domainHelpers.js']:
     assert module in main, f'missing frontend module import: {module}'
-assert './charts/index.js' in main, 'missing charts dynamic/static import reference'
+# charts import may now live in allocation module after extraction
+allocation = Path('frontend/src/modules/allocation.js').read_text(encoding='utf-8')
+assert ('./charts/index.js' in main or '../charts/index.js' in allocation or './charts/index.js' in allocation), 'missing charts dynamic/static import reference'
 assert "'market'" in main or '"market"' in main, 'screenshotTabs should include market'
 app_vue = Path('frontend/src/App.vue').read_text(encoding='utf-8')
 for needle in ['el-tabs', 'activeTab', 'SnapshotsTab', 'MarketTab', 'defineAsyncComponent']:
@@ -115,6 +117,11 @@ if command -v node >/dev/null 2>&1; then
   node --check frontend/src/modules/cash.js
   node --check frontend/src/modules/snapshots.js
   node --check frontend/src/modules/performance.js
+  node --check frontend/src/modules/allocation.js
+  node --check frontend/src/modules/dataSync.js
+  node --check frontend/src/modules/appInit.js
+  node --check frontend/src/modules/brief.js
+  node --check frontend/src/modules/holdingCorrections.js
   node --check frontend/src/composables/authMask.js
   node --check frontend/src/composables/domainHelpers.js
 else

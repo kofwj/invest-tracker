@@ -12,6 +12,7 @@ const createSnapshotsModule = ({
     snapshotLoading,
     fetchData,
     nextTick,
+    computed,
 }) => {
     const createSnapshot = async () => {
         snapshotLoading.value = true;
@@ -124,7 +125,50 @@ const createSnapshotsModule = ({
         } catch (e) { console.error('获取快照失败', e); }
     };
 
-    return { createSnapshot, buildSnapshotAnalysis, renderSnapshotCharts, fetchSnapshots, exportSnapshots, compactSnapshots };
+    const snapshotInsights = computed ? computed(() => {
+        const rowsAsc = [...(snapshots.value || [])].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+        const latest = rowsAsc[rowsAsc.length - 1] || null;
+        const first = rowsAsc[0] || null;
+        const total = Number(latest?.total_assets || 0);
+        const liquid = Number(latest?.bank_balance || 0) + Number(latest?.securities_cash || 0) + Number(latest?.pending_purchase || 0);
+        const latestMain = latest ? `${latest.date} · ${latest.holdings_count || 0} 个持仓` : '暂无快照';
+        const latestSub = latest ? `总资产 ${formatMoney(latest.total_assets)}，投资市值 ${formatMoney(latest.total_market_value)}` : '请先记录快照';
+
+        let focusMain = '至少需要两条快照';
+        let focusSub = '区间变化需要期初与期末对比';
+        if (rowsAsc.length >= 2 && first && latest) {
+            const totalDelta = Number(latest.total_assets || 0) - Number(first.total_assets || 0);
+            const profitDelta = Number(latest.total_profit || 0) - Number(first.total_profit || 0);
+            focusMain = `总资产 ${formatMoney(totalDelta, 2, true)}`;
+            focusSub = `投资盈亏 ${formatMoney(profitDelta, 2, true)} · 区间 ${first.date} → ${latest.date}`;
+        }
+
+        const defensiveRatio = total > 0 ? liquid / total * 100 : 0;
+        const bufferMain = total > 0 ? `缓冲资产 ${defensiveRatio.toFixed(1)}%` : '暂无缓冲数据';
+        const bufferSub = total > 0 ? `现金+存款+在途 ${formatMoney(liquid)}，总资产 ${formatMoney(total)}` : '请先记录快照';
+
+        const anomaly = snapshotSummary?.value?.day_over_day_anomaly;
+        if (anomaly?.text) {
+            focusMain = `盘后异常 ${formatMoney(anomaly.change_amount, 2, true)}`;
+            focusSub = anomaly.text;
+        }
+
+        return [
+            { main: latestMain, sub: latestSub },
+            { main: focusMain, sub: focusSub },
+            { main: bufferMain, sub: bufferSub }
+        ];
+    }) : null;
+
+    return {
+        createSnapshot,
+        buildSnapshotAnalysis,
+        renderSnapshotCharts,
+        fetchSnapshots,
+        exportSnapshots,
+        compactSnapshots,
+        snapshotInsights,
+    };
 };
 
 export { createSnapshotsModule };

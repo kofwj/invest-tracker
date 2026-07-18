@@ -17,6 +17,7 @@ import {
     holdingLifetimeProfit,
     holdingFloatProfitRate,
     holdingLifetimeProfitRate,
+    todayLocalIso,
 } from './utils/index.js';
 import api, { API } from './api/index.js';
 import { createTransactionsModule } from './modules/transactions.js';
@@ -27,23 +28,20 @@ import { createPerformanceModule } from './modules/performance.js';
 import { createBrokerReconcileModule } from './modules/brokerReconcile.js';
 import { createMarketModule } from './modules/market.js';
 import { createDisciplineModule } from './modules/discipline.js';
+import { createHoldingCorrectionHelpers } from './modules/holdingCorrections.js';
+import { createDataSync } from './modules/dataSync.js';
 import { createAuthMask } from './composables/authMask.js';
 import {
     createFeeHelpers,
     createMaintenanceHelpers,
     createImportExportHelpers,
-    createAllocationAnalysis,
+
 } from './composables/domainHelpers.js';
 import { createDividendHelpers } from './modules/dividends.js';
+import { createAllocationModule } from './modules/allocation.js';
+import { createAppInit } from './modules/appInit.js';
+import { createBriefHelpers } from './modules/brief.js';
 import './styles/styles.css';
-
-const todayLocalIso = () => {
-    const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-};
 
 const app = createApp({
     extends: App,
@@ -208,7 +206,7 @@ const app = createApp({
             transForm,
         });
 
-        const { calculateAllocationAnalysis } = createAllocationAnalysis({
+        const { calculateAllocationAnalysis, allocationSummary, allocationHealth, renderAllocationCharts } = createAllocationModule({
             holdings,
             deposits,
             dashboard,
@@ -216,298 +214,36 @@ const app = createApp({
             allocationAnalysis,
             macroAllocationAnalysis,
             portfolioExpectedReturn,
+            computed,
         });
 
-        const allocationSummary = computed(() => {
-            const total = Number(dashboard.value.total_assets || 0);
-            const getGroup = (name) => macroAllocationAnalysis.value.find(x => x.group === name) || { amount: 0, percentage: 0, expected_return: 0 };
-            const equity = getGroup('权益');
-            const fixed = getGroup('固收');
-            const deposit = getGroup('存款');
-            const defensiveAmount = Number(fixed.amount || 0) + Number(deposit.amount || 0);
-            const equityRatio = Number(equity.percentage || 0);
-            const defensiveRatio = total > 0 ? defensiveAmount / total * 100 : 0;
-            let comment = '当前配置以稳健防守为主，权益、固收和存款比例可在这里快速核对。';
-            if (equityRatio > 55) comment = '权益资产占比偏高，若市场回撤，组合波动会明显放大。';
-            else if (equityRatio < 35) comment = '权益资产占比较低，组合更稳，但长期收益弹性可能不足。';
-            else comment = '权益占比处于相对均衡区间，固收和存款仍能提供较强缓冲。';
-            return { total, equityAmount: Number(equity.amount || 0), equityRatio, defensiveAmount, defensiveRatio, fixedAmount: Number(fixed.amount || 0), depositAmount: Number(deposit.amount || 0), comment };
+        // Core data + sync (extracted to module)
+        const {
+            fetchData,
+            syncPrices,
+            syncTrailingReturns,
+            todayIso,
+            todaySnapshotDone,
+            latestPriceStatusText,
+            latestBackupText,
+        } = createDataSync({
+            dashboard,
+            holdings,
+            deposits,
+            cashForm,
+            cashFlowForm,
+            activeFeeAccount,
+            syncing,
+            trailingSyncing,
+            syncNotice,
+            maintenanceStatus,
+            loadFeeSettingsToForm,
+            calculateAllocationAnalysis,
+            activeTab,
+            showSyncNotice,
+            renderAllocationCharts,
+            computed,
         });
-
-        const allocationHealth = computed(() => {
-            const eq = allocationSummary.value.equityRatio;
-            const defensive = allocationSummary.value.defensiveRatio;
-            const maxCat = allocationAnalysis.value.length ? allocationAnalysis.value[0] : null;
-            const pending = Number(dashboard.value.pending_purchase || 0);
-            return [
-                {
-                    label: '权益波动暴露',
-                    status: eq > 55 ? '偏高' : (eq < 35 ? '偏低' : '适中'),
-                    type: eq > 55 ? 'warning' : 'success',
-                    text: `权益占总资产 ${eq.toFixed(1)}%，用于判断组合对股市波动的敏感度。`
-                },
-                {
-                    label: '防守缓冲',
-                    status: defensive >= 40 ? '充足' : '偏少',
-                    type: defensive >= 40 ? 'success' : 'warning',
-                    text: `固收、证券现金、银行存款和申购在途合计 ${defensive.toFixed(1)}%，是组合回撤缓冲。`
-                },
-                {
-                    label: '单类集中度',
-                    status: maxCat && maxCat.percentage > 35 ? '集中' : '分散',
-                    type: maxCat && maxCat.percentage > 35 ? 'warning' : 'success',
-                    text: maxCat ? `${maxCat.category} 占 ${maxCat.percentage.toFixed(1)}%，金额 ${formatMoney(maxCat.market_value)}。` : '暂无资产分类数据。'
-                },
-                {
-                    label: '申购在途',
-                    status: pending > 0 ? '待确认' : '无',
-                    type: pending > 0 ? 'info' : 'success',
-                    text: pending > 0 ? `当前申购在途 ${formatMoney(pending)}，已计入固收/总资产，但不计入持仓盈亏。` : '当前没有申购待确认资产。'
-                }
-            ];
-        });
-
-        const depositRows = computed(() => {
-            const total = deposits.value.reduce((sum, d) => sum + Number(d.amount || 0), 0);
-            return [...deposits.value]
-                .map(d => {
-                    const amount = Number(d.amount || 0);
-                    const rate = Number(d.interest_rate || 0);
-                    return {
-                        ...d,
-                        amount,
-                        interest_rate: rate,
-                        annual_interest: amount * rate / 100,
-                        percentage: total > 0 ? amount / total * 100 : 0,
-                        daysLeft: daysUntil(d.due_date)
-                    };
-                })
-                .sort((a, b) => {
-                    if (a.daysLeft === null && b.daysLeft === null) return 0;
-                    if (a.daysLeft === null) return 1;
-                    if (b.daysLeft === null) return -1;
-                    return a.daysLeft - b.daysLeft;
-                });
-        });
-
-        const depositSummary = computed(() => {
-            const rows = depositRows.value;
-            const total = rows.reduce((sum, d) => sum + d.amount, 0);
-            const annualInterest = rows.reduce((sum, d) => sum + d.annual_interest, 0);
-            const weightedRate = total > 0 ? annualInterest / total * 100 : 0;
-            const nextDue = rows.find(d => d.daysLeft !== null && d.daysLeft >= 0) || null;
-            return { total, annualInterest, weightedRate, count: rows.length, nextDue };
-        });
-
-        const depositBankBreakdown = computed(() => {
-            const map = {};
-            depositRows.value.forEach(d => {
-                const key = d.bank_name || '未命名';
-                map[key] = (map[key] || 0) + d.amount;
-            });
-            const total = depositSummary.value.total;
-            return Object.keys(map)
-                .map(bank_name => ({ bank_name, amount: map[bank_name], percentage: total > 0 ? map[bank_name] / total * 100 : 0 }))
-                .sort((a, b) => b.amount - a.amount);
-        });
-
-        const depositMaturityBuckets = computed(() => {
-            const buckets = [
-                { bucket: '30天内', amount: 0 },
-                { bucket: '31-90天', amount: 0 },
-                { bucket: '91-180天', amount: 0 },
-                { bucket: '180天以上', amount: 0 },
-                { bucket: '未设置到期', amount: 0 }
-            ];
-            depositRows.value.forEach(d => {
-                const days = d.daysLeft;
-                if (days === null) buckets[4].amount += d.amount;
-                else if (days <= 30) buckets[0].amount += d.amount;
-                else if (days <= 90) buckets[1].amount += d.amount;
-                else if (days <= 180) buckets[2].amount += d.amount;
-                else buckets[3].amount += d.amount;
-            });
-            const total = depositSummary.value.total;
-            return buckets.map(b => ({ ...b, percentage: total > 0 ? b.amount / total * 100 : 0 }));
-        });
-
-        const snapshotInsights = computed(() => {
-            const rowsAsc = [...snapshots.value].sort((a, b) => String(a.date).localeCompare(String(b.date)));
-            const latest = rowsAsc[rowsAsc.length - 1] || null;
-            const first = rowsAsc[0] || null;
-            const total = Number(latest?.total_assets || 0);
-            const liquid = Number(latest?.bank_balance || 0) + Number(latest?.securities_cash || 0) + Number(latest?.pending_purchase || 0);
-            const latestMain = latest ? `${latest.date} · ${latest.holdings_count || 0} 个持仓` : '暂无快照';
-            const latestSub = latest ? `总资产 ${formatMoney(latest.total_assets)}，投资市值 ${formatMoney(latest.total_market_value)}` : '请先记录快照';
-
-            let focusMain = '至少需要两条快照';
-            let focusSub = '区间变化需要期初与期末对比';
-            if (rowsAsc.length >= 2 && first && latest) {
-                const totalDelta = Number(latest.total_assets || 0) - Number(first.total_assets || 0);
-                const profitDelta = Number(latest.total_profit || 0) - Number(first.total_profit || 0);
-                focusMain = `总资产 ${formatMoney(totalDelta, 2, true)}`;
-                focusSub = `投资盈亏 ${formatMoney(profitDelta, 2, true)} · 区间 ${first.date} → ${latest.date}`;
-            }
-
-            const defensiveRatio = total > 0 ? liquid / total * 100 : 0;
-            const bufferMain = total > 0 ? `缓冲资产 ${defensiveRatio.toFixed(1)}%` : '暂无缓冲数据';
-            const bufferSub = total > 0 ? `现金+存款+在途 ${formatMoney(liquid)}，总资产 ${formatMoney(total)}` : '请先记录快照';
-
-            const anomaly = snapshotSummary.value?.day_over_day_anomaly;
-            if (anomaly?.text) {
-                focusMain = `盘后异常 ${formatMoney(anomaly.change_amount, 2, true)}`;
-                focusSub = anomaly.text;
-            }
-
-            return [
-                { main: latestMain, sub: latestSub },
-                { main: focusMain, sub: focusSub },
-                { main: bufferMain, sub: bufferSub }
-            ];
-        });
-
-        const renderAllocationCharts = async () => {
-            const { renderAllocationChartsView, waitForChartDom } = await import('./charts/index.js');
-            // lazy tab + 异步 SFC：单次 nextTick 时 #allocationChart 往往还没挂上
-            const ready = await waitForChartDom(['allocationChart', 'categoryChart']);
-            if (!ready) return;
-            // 再等一帧，避免容器宽高仍为 0
-            await new Promise((r) => requestAnimationFrame(() => r()));
-            renderAllocationChartsView(macroAllocationAnalysis.value, allocationAnalysis.value);
-        };
-
-        const fetchData = async () => {
-            const [dashRes, holdRes, depRes, cashRes, feeRes] = await Promise.all([
-                api.getDashboard(),
-                api.getHoldings(),
-                api.getDeposits(),
-                api.getSecuritiesCash(),
-                api.getFeeSettings()
-            ]);
-            dashboard.value = dashRes.data;
-            holdings.value = holdRes.data;
-            deposits.value = depRes.data;
-            cashForm.value.amount = cashRes.data.amount;
-            loadFeeSettingsToForm(feeRes.data || {});
-            if (!cashFlowForm.value.account) cashFlowForm.value.account = activeFeeAccount.value || '华泰证券';
-            calculateAllocationAnalysis();
-            if (activeTab.value === 'allocation') renderAllocationCharts();
-        };
-
-        const syncPrices = async () => {
-            syncing.value = true;
-            showSyncNotice('正在同步最新价...', 'success');
-            try {
-                const priceRes = await api.syncPrices();
-                const priceData = priceRes.data || {};
-                const priceFailedCount = Array.isArray(priceData.failed) ? priceData.failed.length : 0;
-                const msg = `最新价同步完成：检查 ${priceData.checked || 0} 个，价格变化 ${priceData.updated || 0} 个，无变化 ${priceData.unchanged || 0} 个，失败 ${priceFailedCount} 个`;
-                const priceFailedText = priceFailedCount > 0
-                    ? priceData.failed.slice(0, 3).map(x => `${x.code} ${x.name || ''}: ${x.reason || '失败'}`).join('；')
-                    : '';
-
-                syncing.value = false;
-                if (priceFailedText) {
-                    showSyncNotice(msg + '。' + priceFailedText, 'warning');
-                } else {
-                    showSyncNotice(msg, 'success');
-                }
-
-                fetchData().catch(refreshErr => {
-                    const refreshDetail = refreshErr?.response?.data?.detail || refreshErr?.message || '未知错误';
-                    showSyncNotice(msg + `。但刷新页面数据失败：${refreshDetail}`, 'warning');
-                });
-            } catch (e) {
-                const detail = e?.response?.data?.detail || e?.message || '未知错误';
-                showSyncNotice('最新价同步失败：' + detail, 'error');
-            } finally {
-                syncing.value = false;
-            }
-        };
-
-        const syncTrailingReturns = async () => {
-            trailingSyncing.value = true;
-            const loading = ElLoading.service({ text: '正在同步近一年标的收益率...', background: 'rgba(255, 255, 255, 0.65)' });
-            try {
-                const res = await api.syncTrailingReturns();
-                await fetchData();
-                const data = res.data || {};
-                const failedCount = Array.isArray(data.failed) ? data.failed.length : 0;
-                const msg = `近一年收益率同步完成：检查 ${data.checked || 0} 个，成功 ${data.updated || 0} 个，失败 ${failedCount} 个`;
-                if (failedCount > 0) {
-                    const failedText = data.failed.slice(0, 3).map(x => `${x.code} ${x.name || ''}: ${x.reason || '失败'}`).join('；');
-                    showSyncNotice(msg + '。' + failedText, 'warning');
-                    ElMessage.warning(msg + '。' + failedText);
-                } else {
-                    showSyncNotice(msg, '');
-                }
-            } catch (e) {
-                const detail = e?.response?.data?.detail || e?.message || '未知错误';
-                showSyncNotice('近一年收益率同步失败：' + detail, 'error');
-                ElMessage.error('近一年收益率同步失败：' + detail);
-            } finally {
-                loading.close();
-                trailingSyncing.value = false;
-            }
-        };
-
-        const assetOptions = () => holdings.value.map(h => ({
-            value: `${h.code} ${h.name} ${h.category || ''}`,
-            code: h.code,
-            name: h.name,
-            category: h.category || '',
-            label: `${h.code} - ${h.name} - ${h.category || '未分类'}`
-        }));
-
-        const queryAssetByCode = (queryString, cb) => {
-            const q = normalizeText(queryString);
-            const results = assetOptions()
-                .filter(a => !q || normalizeText(a.code).includes(q) || normalizeText(a.name).includes(q))
-                .map(a => ({ ...a, value: a.code, label: a.label }));
-            cb(results);
-        };
-
-        const queryAssetByName = (queryString, cb) => {
-            const q = normalizeText(queryString);
-            const results = assetOptions()
-                .filter(a => !q || normalizeText(a.name).includes(q) || normalizeText(a.code).includes(q))
-                .map(a => ({ ...a, value: a.name, label: a.label }));
-            cb(results);
-        };
-
-        const selectTransAsset = (asset) => {
-            transForm.value.code = asset.code;
-            transForm.value.name = asset.name;
-            transForm.value.category = asset.category || '';
-        };
-
-        const autoMatchTransAsset = (field, rawValue = null) => {
-            const codeQ = normalizeText(field === 'code' && rawValue !== null ? rawValue : transForm.value.code);
-            const nameQ = normalizeText(field === 'name' && rawValue !== null ? rawValue : transForm.value.name);
-            if (!codeQ && !nameQ) {
-                transForm.value.category = '';
-                return;
-            }
-
-            let match = null;
-            if (field === 'code' && codeQ) {
-                match = holdings.value.find(h => normalizeText(h.code) === codeQ);
-            } else if (field === 'name' && nameQ) {
-                match = holdings.value.find(h => normalizeText(h.name) === nameQ);
-                if (!match) {
-                    const candidates = holdings.value.filter(h => normalizeText(h.name).includes(nameQ));
-                    if (candidates.length === 1) match = candidates[0];
-                }
-            }
-
-            if (match) {
-                transForm.value.code = match.code;
-                transForm.value.name = match.name;
-                transForm.value.category = match.category || inferCategoryByCode(match.code, match.name);
-            } else {
-                transForm.value.category = inferCategoryByCode(transForm.value.code, transForm.value.name);
-            }
-        };
 
         const {
             submitTrans,
@@ -523,6 +259,11 @@ const app = createApp({
             openTransEditDialog,
             saveTransactionEdit,
             deleteTransaction,
+            // now provided by transactions module (asset helpers merged in)
+            queryAssetByCode,
+            queryAssetByName,
+            selectTransAsset,
+            autoMatchTransAsset,
         } = createTransactionsModule({
             activeTab,
             allTransactions,
@@ -538,12 +279,15 @@ const app = createApp({
             feeAccounts,
             feeManuallyEdited,
             feeAutoHint,
-            autoMatchTransAsset,
+            holdings,
             estimateFeeIfAuto,
             fetchData,
         });
 
-        const { openDepositDialog, saveDeposit, deleteDeposit } = createDepositsModule({ depositDialog, fetchData });
+        const {
+            openDepositDialog, saveDeposit, deleteDeposit,
+            depositRows, depositSummary, depositBankBreakdown, depositMaturityBuckets,
+        } = createDepositsModule({ depositDialog, deposits, fetchData, computed });
 
         const {
             updateCash,
@@ -603,7 +347,7 @@ const app = createApp({
             transQuery,
         });
 
-        const { createSnapshot, buildSnapshotAnalysis, renderSnapshotCharts, fetchSnapshots, exportSnapshots, compactSnapshots } = createSnapshotsModule({
+        const { createSnapshot, buildSnapshotAnalysis, renderSnapshotCharts, fetchSnapshots, exportSnapshots, compactSnapshots, snapshotInsights } = createSnapshotsModule({
             activeTab,
             snapshots,
             snapshotRange,
@@ -613,6 +357,7 @@ const app = createApp({
             snapshotLoading,
             fetchData,
             nextTick,
+            computed,
         });
 
         const {
@@ -632,96 +377,7 @@ const app = createApp({
             API,
         });
 
-        const openExpectedReturnDialog = (row) => {
-            expectedReturnDialog.value = {
-                visible: true,
-                form: {
-                    code: row.code,
-                    name: row.name,
-                    expected_return: row.expected_return ?? 0
-                }
-            };
-        };
 
-        const saveExpectedReturn = async () => {
-            try {
-                const code = expectedReturnDialog.value.form.code;
-                const expected_return = expectedReturnDialog.value.form.expected_return;
-                await api.updateExpectedReturn(code, expected_return);
-                ElMessage.success('更新成功');
-                expectedReturnDialog.value.visible = false;
-                await fetchData();
-            } catch (e) {
-                ElMessage.error('更新失败');
-            }
-        };
-
-        const openHoldingCorrectionDialog = (row) => {
-            holdingCorrectionDialog.value = {
-                visible: true,
-                current: { ...row },
-                form: {
-                    date: todayLocalIso(),
-                    code: row.code,
-                    name: row.name,
-                    category: row.category || '',
-                    actual_quantity: Number(row.quantity || 0),
-                    actual_avg_cost: Number(row.avg_cost || 0),
-                    actual_total_dividend: Number(row.total_dividend || 0),
-                    remark: '按券商持仓页面强制校正'
-                }
-            };
-        };
-
-        const saveHoldingCorrection = async () => {
-            try {
-                const f = holdingCorrectionDialog.value.form;
-                if (!f.date || !f.code) return ElMessage.warning('校正日期和代码不能为空');
-                await api.addHoldingCorrection(f);
-                ElMessage.success('持仓校正已保存，并已重新计算持仓');
-                holdingCorrectionDialog.value.visible = false;
-                await fetchData();
-            } catch (e) {
-                ElMessage.error(e?.response?.data?.detail || '保存持仓校正失败');
-            }
-        };
-
-        const openHoldingCorrectionHistory = async (row) => {
-            try {
-                const res = await api.listHoldingCorrections(row.code);
-                holdingCorrectionHistoryDialog.value = {
-                    visible: true,
-                    title: `${row.name} (${row.code}) 持仓校正记录`,
-                    records: res.data || []
-                };
-            } catch (e) {
-                ElMessage.error('获取校正记录失败');
-            }
-        };
-
-        const deleteHoldingCorrection = async (row) => {
-            try {
-                await ElMessageBox.confirm(`确定删除 ${row.date} ${row.code} 的持仓校正？删除后会按交易记录重新计算。`, '确认删除', { type: 'warning' });
-                await api.deleteHoldingCorrection(row.id);
-                ElMessage.success('校正记录已删除，并已重新计算持仓');
-                holdingCorrectionHistoryDialog.value.records = holdingCorrectionHistoryDialog.value.records.filter(x => x.id !== row.id);
-                await fetchData();
-            } catch (e) {}
-        };
-
-        const todayIso = computed(() => todayLocalIso());
-        const todaySnapshotDone = computed(() => dashboard.value.latest_snapshot_date === todayIso.value);
-        const latestPriceStatusText = computed(() => {
-            const raw = dashboard.value.latest_price_updated_at;
-            if (!raw) return '暂无同步记录';
-            const t = String(raw).replace('T', ' ').slice(0, 19);
-            if (dashboard.value.price_stale) {
-                const h = dashboard.value.price_age_hours;
-                return h != null ? `${t}（已偏旧约 ${h} 小时）` : `${t}（已偏旧）`;
-            }
-            return t;
-        });
-        const latestBackupText = computed(() => maintenanceStatus.value.latest_backup_at ? String(maintenanceStatus.value.latest_backup_at).replace('T', ' ').slice(0, 19) : '暂无备份');
 
         const perfSummary = ref(null);
         const perfTimeline = ref([]);
@@ -931,49 +587,24 @@ const app = createApp({
             if (val === 'maintenance') fetchMaintenance();
         });
 
-        bootstrapAfterAuth = async () => {
-            await Promise.all([
-                fetchData(),
-                queryTransactions(),
-                queryCashFlows(),
-                fetchSnapshots(),
-                fetchMaintenance(),
-            ]);
-        };
-
-        onMounted(async () => {
-            try {
-                const statusRes = await api.getAuthStatus();
-                authEnabled.value = statusRes.data.auth_enabled;
-                if (authEnabled.value) {
-                    const token = localStorage.getItem('invest_tracker_token');
-                    if (!token) {
-                        showLoginOverlay.value = true;
-                        return;
-                    }
-                }
-            } catch (e) {
-                console.error('获取登录状态失败', e);
-            }
-            await bootstrapAfterAuth();
+        // Bootstrap + init extracted
+        const { bootstrapAfterAuth: doBootstrap, setupOnMounted } = createAppInit({
+            api,
+            authEnabled,
+            showLoginOverlay,
+            fetchData,
+            queryTransactions,
+            queryCashFlows,
+            fetchSnapshots,
+            fetchMaintenance,
         });
 
+        bootstrapAfterAuth = doBootstrap;
 
-        const eveningBriefDialog = ref({ visible: false, text: '', loading: false });
-        const openEveningBrief = async (notify = false) => {
-            eveningBriefDialog.value.loading = true;
-            try {
-                const res = await api.eveningBrief(!!notify);
-                eveningBriefDialog.value.text = res.data?.text || '';
-                eveningBriefDialog.value.visible = true;
-                if (notify && res.data?.notify?.sent) ElMessage.success('已推送飞书');
-                else if (notify && res.data?.notify?.reason === 'no_webhook') ElMessage.warning('未配置 FEISHU_ALERT_WEBHOOK，仅本地预览');
-            } catch (e) {
-                ElMessage.error(e?.response?.data?.detail || e?.message || '简报失败');
-            } finally {
-                eveningBriefDialog.value.loading = false;
-            }
-        };
+        onMounted(setupOnMounted);
+
+
+        const { eveningBriefDialog, openEveningBrief } = createBriefHelpers();
 
         const appCtx = {
             zhCn,

@@ -1,4 +1,5 @@
 import api from '../api/index.js';
+import { createAssetHelpers } from './assets.js';
 import { ElMessage, ElMessageBox } from 'element-plus';
 
 const createTransactionsModule = ({
@@ -16,10 +17,19 @@ const createTransactionsModule = ({
     feeAccounts,
     feeManuallyEdited,
     feeAutoHint,
-    autoMatchTransAsset,
+    holdings,
     estimateFeeIfAuto,
     fetchData,
 }) => {
+    // Asset query helpers (queryAssetBy*, selectTransAsset, autoMatchTransAsset)
+    // merged into transactions module for form autocomplete ownership
+    const {
+        queryAssetByCode,
+        queryAssetByName,
+        selectTransAsset,
+        autoMatchTransAsset,
+    } = createAssetHelpers({ holdings, transForm });
+
     const resetForm = () => {
         transForm.value = {
             date: new Date().toISOString().split('T')[0],
@@ -151,7 +161,13 @@ const createTransactionsModule = ({
         } catch (e) { /* 用户取消 */ }
     };
 
-    return { submitTrans, resetForm, showTransactions, updatePendingTransactions, queryTransactions, applyTransFilter, resetTransQuery, handleTransPageChange, handleTransPageSizeChange, goPendingTransactions, openTransEditDialog, saveTransactionEdit, deleteTransaction };
+    return {
+        submitTrans, resetForm, showTransactions, updatePendingTransactions, queryTransactions,
+        applyTransFilter, resetTransQuery, handleTransPageChange, handleTransPageSizeChange,
+        goPendingTransactions, openTransEditDialog, saveTransactionEdit, deleteTransaction,
+        // asset query helpers now owned here
+        queryAssetByCode, queryAssetByName, selectTransAsset, autoMatchTransAsset,
+    };
 };
 
 export { createTransactionsModule };

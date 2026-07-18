@@ -90,7 +90,15 @@ const holdingLifetimeProfitRate = (row) => {
     return holdingLifetimeProfit(row) / net * 100;
 };
 
-Object.assign(window, { normalizeText, daysUntil, formatMoney, formatPercent, pct, inferCategoryByCode, holdingFloatProfit, holdingLifetimeProfit, holdingFloatProfitRate, holdingLifetimeProfitRate });
+const todayLocalIso = () => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+};
+
+Object.assign(window, { normalizeText, daysUntil, formatMoney, formatPercent, pct, inferCategoryByCode, holdingFloatProfit, holdingLifetimeProfit, holdingFloatProfitRate, holdingLifetimeProfitRate, todayLocalIso });
 
 export {
     normalizeText,
@@ -103,4 +111,5 @@ export {
     holdingLifetimeProfit,
     holdingFloatProfitRate,
     holdingLifetimeProfitRate,
+    todayLocalIso,
 };
