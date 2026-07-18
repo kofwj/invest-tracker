@@ -2,7 +2,7 @@ import api from '../api/index.js';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { formatMoney } from '../utils/index.js';
 
-const createDepositsModule = ({ depositDialog, fetchData }) => {
+const createDepositsModule = ({ depositDialog, deposits, fetchData, computed }) => {
     const openDepositDialog = (row) => {
         if (row) {
             depositDialog.value = {

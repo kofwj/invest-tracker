@@ -246,6 +246,21 @@ const app = createApp({
         });
 
         const {
+            openExpectedReturnDialog,
+            saveExpectedReturn,
+            openHoldingCorrectionDialog,
+            saveHoldingCorrection,
+            openHoldingCorrectionHistory,
+            deleteHoldingCorrection,
+        } = createHoldingCorrectionHelpers({
+            expectedReturnDialog,
+            holdingCorrectionDialog,
+            holdingCorrectionHistoryDialog,
+            fetchData,
+            todayLocalIso,
+        });
+
+        const {
             submitTrans,
             resetForm,
             showTransactions,

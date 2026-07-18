@@ -7,11 +7,7 @@ import api from '../api/index.js';
  * Extracted small dialog open function + state.
  */
 export function createBriefHelpers() {
-    const eveningBriefDialog = {
-        visible: false,
-        text: '',
-        loading: false,
-    };
+    const eveningBriefDialog = ref({ visible: false, text: '', loading: false });
 
     const openEveningBrief = async (notify = false) => {
         eveningBriefDialog.value.loading = true;
