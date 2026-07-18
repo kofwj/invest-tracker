@@ -1,6 +1,6 @@
 import api from '../api/index.js';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { formatMoney } from '../utils/index.js';
+import { formatMoney, todayLocalIso } from '../utils/index.js';
 
 const createSnapshotsModule = ({
     activeTab,
@@ -87,7 +87,7 @@ const createSnapshotsModule = ({
             const blobUrl = window.URL.createObjectURL(new Blob([res.data], { type: 'text/csv;charset=utf-8;' }));
             const link = document.createElement('a');
             link.href = blobUrl;
-            link.download = `snapshots_${new Date().toISOString().slice(0, 10)}.csv`;
+            link.download = `snapshots_${todayLocalIso()}.csv`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -125,7 +125,7 @@ const createSnapshotsModule = ({
         } catch (e) { console.error('获取快照失败', e); }
     };
 
-    const snapshotInsights = computed ? computed(() => {
+    const snapshotInsights = computed(() => {
         const rowsAsc = [...(snapshots.value || [])].sort((a, b) => String(a.date).localeCompare(String(b.date)));
         const latest = rowsAsc[rowsAsc.length - 1] || null;
         const first = rowsAsc[0] || null;
@@ -158,7 +158,7 @@ const createSnapshotsModule = ({
             { main: focusMain, sub: focusSub },
             { main: bufferMain, sub: bufferSub }
         ];
-    }) : null;
+    });
 
     return {
         createSnapshot,

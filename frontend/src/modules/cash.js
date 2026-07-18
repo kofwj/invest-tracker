@@ -1,6 +1,6 @@
 import api from '../api/index.js';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { formatMoney } from '../utils/index.js';
+import { formatMoney, todayLocalIso } from '../utils/index.js';
 
 const createCashModule = ({ dashboard, cashForm, cashFlows, cashFlowForm, cashFlowQuery, cashFlowEditDialog, activeFeeAccount, fetchData, computed }) => {
     const queryCashFlows = async () => {
@@ -53,7 +53,7 @@ const createCashModule = ({ dashboard, cashForm, cashFlows, cashFlowForm, cashFl
             if (!cashFlowForm.value.amount) return ElMessage.warning('请输入金额');
             await api.addCashFlow(cashFlowForm.value);
             ElMessage.success('资金流水已新增');
-            cashFlowForm.value = { date: new Date().toISOString().split('T')[0], account: cashFlowForm.value.account || activeFeeAccount.value || '华泰证券', flow_type: '银证转入', amount: 0, remark: '' };
+            cashFlowForm.value = { date: todayLocalIso(), account: cashFlowForm.value.account || activeFeeAccount.value || '华泰证券', flow_type: '银证转入', amount: 0, remark: '' };
             await fetchData();
             await queryCashFlows();
         } catch (e) { ElMessage.error('新增资金流水失败'); }

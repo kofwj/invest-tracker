@@ -174,7 +174,7 @@ const createAllocationModule = ({
         portfolioExpectedReturn.value = totalWeight > 0 ? weightedSum / totalWeight : 0;
     };
 
-    const allocationSummary = computed ? computed(() => {
+    const allocationSummary = computed(() => {
         const total = Number(dashboard.value.total_assets || 0);
         const getGroup = (name) => macroAllocationAnalysis.value.find(x => x.group === name) || { amount: 0, percentage: 0, expected_return: 0 };
         const equity = getGroup('权益');
@@ -188,10 +188,9 @@ const createAllocationModule = ({
         else if (equityRatio < 35) comment = '权益资产占比较低，组合更稳，但长期收益弹性可能不足。';
         else comment = '权益占比处于相对均衡区间，固收和存款仍能提供较强缓冲。';
         return { total, equityAmount: Number(equity.amount || 0), equityRatio, defensiveAmount, defensiveRatio, fixedAmount: Number(fixed.amount || 0), depositAmount: Number(deposit.amount || 0), comment };
-    }) : null;
+    });
 
-    const allocationHealth = computed ? computed(() => {
-        if (!allocationSummary || !allocationSummary.value) return [];
+    const allocationHealth = computed(() => {
         const eq = allocationSummary.value.equityRatio;
         const defensive = allocationSummary.value.defensiveRatio;
         const maxCat = allocationAnalysis.value.length ? allocationAnalysis.value[0] : null;
@@ -222,7 +221,7 @@ const createAllocationModule = ({
                 text: pending > 0 ? `当前申购在途 ${formatMoney(pending)}，已计入固收/总资产，但不计入持仓盈亏。` : '当前没有申购待确认资产。'
             }
         ];
-    }) : null;
+    });
 
     const renderAllocationCharts = async () => {
         const { renderAllocationChartsView, waitForChartDom } = await import('../charts/index.js');

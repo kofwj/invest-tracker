@@ -1,6 +1,7 @@
 import api from '../api/index.js';
 import { createAssetHelpers } from './assets.js';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { todayLocalIso } from '../utils/index.js';
 
 const createTransactionsModule = ({
     activeTab,
@@ -32,7 +33,7 @@ const createTransactionsModule = ({
 
     const resetForm = () => {
         transForm.value = {
-            date: new Date().toISOString().split('T')[0],
+            date: todayLocalIso(),
             code: '', name: '', category: '', account: activeFeeAccount.value || feeAccounts.value[0] || '华泰证券', direction: '买入',
             quantity: 0, price: 0, amount: 0, fee: 0,
         };
