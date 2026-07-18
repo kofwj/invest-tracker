@@ -144,7 +144,7 @@ const app = createApp({
 
         const depositDialog = ref({
             visible: false, isEdit: false, editId: null,
-            form: { bank_name: '', amount: 0, interest_rate: 0, due_date: '', remark: '' }
+            form: { bank_name: '', amount: 0, interest_rate: 0, start_date: '', due_date: '', remark: '' }
         });
 
         const transDialog = ref({

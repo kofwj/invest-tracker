@@ -10,6 +10,15 @@ const daysUntil = (dateStr) => {
     return Math.ceil((due - today) / 86400000);
 };
 
+/** Inclusive day count between two YYYY-MM-DD dates (start → end). */
+const daysBetween = (startStr, endStr) => {
+    if (!startStr || !endStr) return null;
+    const start = new Date(String(startStr) + 'T00:00:00');
+    const end = new Date(String(endStr) + 'T00:00:00');
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+    return Math.round((end - start) / 86400000);
+};
+
 const formatMoney = (value, digits = 2, showSign = false) => {
     if (value === null || value === undefined || value === '') return '—';
     const num = Number(value);
@@ -98,11 +107,12 @@ const todayLocalIso = () => {
     return `${y}-${m}-${day}`;
 };
 
-Object.assign(window, { normalizeText, daysUntil, formatMoney, formatPercent, pct, inferCategoryByCode, holdingFloatProfit, holdingLifetimeProfit, holdingFloatProfitRate, holdingLifetimeProfitRate, todayLocalIso });
+Object.assign(window, { normalizeText, daysUntil, daysBetween, formatMoney, formatPercent, pct, inferCategoryByCode, holdingFloatProfit, holdingLifetimeProfit, holdingFloatProfitRate, holdingLifetimeProfitRate, todayLocalIso });
 
 export {
     normalizeText,
     daysUntil,
+    daysBetween,
     formatMoney,
     formatPercent,
     pct,

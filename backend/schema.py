@@ -16,7 +16,7 @@ except ImportError:
     from snapshots import ensure_snapshot_columns, ensure_portfolio_cash_flows_table
 
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 SCHEMA_VERSION_KEY = "schema_version"
 
 
@@ -82,6 +82,7 @@ def ensure_core_tables(conn):
         bank_name TEXT,
         amount REAL,
         interest_rate REAL,
+        start_date TEXT,
         due_date TEXT,
         remark TEXT
     )""")
@@ -202,6 +203,13 @@ def migrate_to_v7_discipline(conn):
         set_setting(conn, "discipline_policy", "{}")
 
 
+def migrate_to_v8_deposit_start_date(conn):
+    """Optional deposit start_date for full-term interest estimates."""
+    cols = table_columns(conn, "deposits")
+    if "start_date" not in cols:
+        conn.execute("ALTER TABLE deposits ADD COLUMN start_date TEXT")
+
+
 MIGRATIONS = [
     (1, migrate_to_v1_core_compat),
     (2, migrate_to_v2_holdings_and_snapshots),
@@ -210,6 +218,7 @@ MIGRATIONS = [
     (5, migrate_to_v5_market_alerts),
     (6, migrate_to_v6_snapshot_lifetime_and_watchlist),
     (7, migrate_to_v7_discipline),
+    (8, migrate_to_v8_deposit_start_date),
 ]
 
 

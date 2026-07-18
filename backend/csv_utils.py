@@ -14,10 +14,10 @@ except ImportError:
 
 
 TRANSACTION_CSV_COLUMNS = ["date", "account", "code", "name", "category", "direction", "quantity", "price", "amount", "fee", "remark"]
-DEPOSIT_CSV_COLUMNS = ["bank_name", "amount", "interest_rate", "due_date", "remark"]
+DEPOSIT_CSV_COLUMNS = ["bank_name", "amount", "interest_rate", "start_date", "due_date", "remark"]
 
 TRANSACTION_CSV_HEADERS_CN = ["日期", "证券账户", "代码", "名称", "分类", "方向", "数量", "价格", "金额", "手续费", "备注"]
-DEPOSIT_CSV_HEADERS_CN = ["银行", "金额", "年利率", "到期日", "备注"]
+DEPOSIT_CSV_HEADERS_CN = ["银行", "金额", "年利率", "起存日", "到期日", "备注"]
 
 TRANSACTION_HEADER_ALIASES = {
     "date": "date", "日期": "date",
@@ -37,6 +37,7 @@ DEPOSIT_HEADER_ALIASES = {
     "bank_name": "bank_name", "银行": "bank_name", "银行名称": "bank_name",
     "amount": "amount", "金额": "amount", "本金": "amount",
     "interest_rate": "interest_rate", "年利率": "interest_rate", "利率": "interest_rate",
+    "start_date": "start_date", "起存日": "start_date", "起息日": "start_date", "存入日": "start_date", "开始日期": "start_date",
     "due_date": "due_date", "到期日": "due_date", "到期时间": "due_date",
     "remark": "remark", "备注": "remark",
 }

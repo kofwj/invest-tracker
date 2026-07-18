@@ -32,6 +32,9 @@
                 <el-form-item label="年利率(%)">
                     <el-input-number v-model="depositDialog.form.interest_rate" :precision="2" :min="0" style="width: 100%"></el-input-number>
                 </el-form-item>
+                <el-form-item label="起存日">
+                    <el-date-picker v-model="depositDialog.form.start_date" type="date" placeholder="可选，算整期利息" value-format="YYYY-MM-DD" style="width: 100%"></el-date-picker>
+                </el-form-item>
                 <el-form-item label="到期时间">
                     <el-date-picker v-model="depositDialog.form.due_date" type="date" placeholder="选择到期日" value-format="YYYY-MM-DD" style="width: 100%"></el-date-picker>
                 </el-form-item>

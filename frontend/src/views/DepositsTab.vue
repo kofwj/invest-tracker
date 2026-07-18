@@ -35,7 +35,12 @@
                         <el-card shadow="hover" class="deposit-stat-card">
                             <div class="deposit-stat-label">预计年利息</div>
                             <div class="deposit-stat-value" style="color:#E6A23C;">{{ formatMoney(depositSummary.annualInterest) }}</div>
-                            <div class="deposit-stat-sub">未考虑复利/提前支取</div>
+                            <div class="deposit-stat-sub">若按当前利率放满一年</div>
+                        </el-card>
+                        <el-card shadow="hover" class="deposit-stat-card">
+                            <div class="deposit-stat-label">到期前预计利息</div>
+                            <div class="deposit-stat-value" style="color:#67C23A;">{{ formatMoney(depositSummary.remainingInterest) }}</div>
+                            <div class="deposit-stat-sub">按剩余天数合计（单利/365）</div>
                         </el-card>
                         <el-card shadow="hover" class="deposit-stat-card">
                             <div class="deposit-stat-label">下一笔到期</div>
@@ -83,10 +88,19 @@
                         <el-table-column label="年利率" width="90" align="center" header-align="center">
                             <template #default="scope">{{ Number(scope.row.interest_rate || 0).toFixed(2) }}%</template>
                         </el-table-column>
-                        <el-table-column label="预计年利息" min-width="120" align="right" header-align="right">
+                        <el-table-column label="预计年利息" min-width="110" align="right" header-align="right">
                             <template #default="scope">{{ formatMoney(scope.row.annual_interest) }}</template>
                         </el-table-column>
-                        <el-table-column label="到期时间" width="120" align="center" header-align="center">
+                        <el-table-column label="到期前利息" min-width="110" align="right" header-align="right">
+                            <template #default="scope">{{ scope.row.remaining_interest == null ? '—' : formatMoney(scope.row.remaining_interest) }}</template>
+                        </el-table-column>
+                        <el-table-column label="整期利息" min-width="110" align="right" header-align="right">
+                            <template #default="scope">{{ scope.row.term_interest == null ? '—' : formatMoney(scope.row.term_interest) }}</template>
+                        </el-table-column>
+                        <el-table-column label="起存日" width="110" align="center" header-align="center">
+                            <template #default="scope">{{ scope.row.start_date || '—' }}</template>
+                        </el-table-column>
+                        <el-table-column label="到期时间" width="110" align="center" header-align="center">
                             <template #default="scope">{{ scope.row.due_date || '—' }}</template>
                         </el-table-column>
                         <el-table-column label="剩余天数" width="100" align="center" header-align="center">

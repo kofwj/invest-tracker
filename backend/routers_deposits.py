@@ -40,6 +40,7 @@ class DepositSchema(BaseModel):
     bank_name: str
     amount: float
     interest_rate: Optional[float] = None
+    start_date: Optional[str] = None
     due_date: Optional[str] = None
     remark: Optional[str] = None
 
@@ -48,6 +49,7 @@ class DepositUpdate(BaseModel):
     bank_name: Optional[str] = None
     amount: Optional[float] = None
     interest_rate: Optional[float] = None
+    start_date: Optional[str] = None
     due_date: Optional[str] = None
     remark: Optional[str] = None
 
@@ -61,7 +63,7 @@ def list_deposits():
 
 @router.get("/deposits/template")
 def download_deposits_template():
-    rows = [["招商银行", "100000.00", "1.80", "2026-12-31", "示例：请删除后填写真实存款"]]
+    rows = [["招商银行", "100000.00", "1.80", "2026-01-01", "2026-12-31", "示例：请删除后填写真实存款"]]
     return csv_response("deposits_template.csv", DEPOSIT_CSV_COLUMNS, rows)
 
 
@@ -70,12 +72,12 @@ def export_deposits():
     with db_session(row_factory=sqlite3.Row) as conn:
         rows = conn.execute(
             """
-            SELECT bank_name, amount, interest_rate, due_date, remark
+            SELECT bank_name, amount, interest_rate, start_date, due_date, remark
             FROM deposits
             ORDER BY COALESCE(due_date, '9999-12-31'), id
             """
         ).fetchall()
-    data = [[r[k] for k in DEPOSIT_CSV_COLUMNS] for r in rows]
+    data = [[r[k] if k in r.keys() else None for k in DEPOSIT_CSV_COLUMNS] for r in rows]
     return csv_response(f"deposits_{local_today_iso()}.csv", DEPOSIT_CSV_COLUMNS, data)
 
 
@@ -105,14 +107,15 @@ async def import_deposits(file: UploadFile = File(...)):
                         if row.get("interest_rate") != ""
                         else None
                     )
+                    start_date = normalize_date_string(row.get("start_date"), required=False) or None
                     due_date = normalize_date_string(row.get("due_date"), required=False) or None
                     remark = row.get("remark") or ""
                     conn.execute(
                         """
-                        INSERT INTO deposits (bank_name, amount, interest_rate, due_date, remark)
-                        VALUES (?, ?, ?, ?, ?)
+                        INSERT INTO deposits (bank_name, amount, interest_rate, start_date, due_date, remark)
+                        VALUES (?, ?, ?, ?, ?, ?)
                         """,
-                        (bank_name, amount, interest_rate, due_date, remark),
+                        (bank_name, amount, interest_rate, start_date, due_date, remark),
                     )
                     success += 1
                 except Exception as e:
@@ -135,10 +138,10 @@ def add_deposit(dep: DepositSchema):
     with db_session() as conn:
         conn.execute(
             """
-            INSERT INTO deposits (bank_name, amount, interest_rate, due_date, remark)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO deposits (bank_name, amount, interest_rate, start_date, due_date, remark)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (dep.bank_name, dep.amount, dep.interest_rate, dep.due_date, dep.remark),
+            (dep.bank_name, dep.amount, dep.interest_rate, dep.start_date, dep.due_date, dep.remark),
         )
         new_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
         conn.commit()
@@ -150,7 +153,7 @@ def update_deposit(deposit_id: int, dep: DepositUpdate):
     backup_path = create_safety_backup("before_update_deposit")
     updates = []
     vals = []
-    for field in ["bank_name", "amount", "interest_rate", "due_date", "remark"]:
+    for field in ["bank_name", "amount", "interest_rate", "start_date", "due_date", "remark"]:
         v = getattr(dep, field)
         if v is not None:
             updates.append(f"{field} = ?")
