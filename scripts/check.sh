@@ -32,7 +32,11 @@ test -f frontend/src/modules/snapshots.js
 test -f frontend/src/modules/performance.js
 test -f frontend/src/composables/authMask.js
 test -f frontend/src/composables/domainHelpers.js
+test -f frontend/src/composables/feeHelpers.js
+test -f frontend/src/composables/maintenanceHelpers.js
+test -f frontend/src/composables/importExportHelpers.js
 test -f frontend/src/composables/useAppCtx.js
+test -f frontend/src/modules/tabNav.js
 test -f frontend/src/components/AppHeader.vue
 test -f frontend/src/components/HomeDashboard.vue
 test -f frontend/src/components/AppDialogs.vue
@@ -73,8 +77,17 @@ assert 'vue.esm-bundler' not in main, 'full compiler build should not be used af
 assert "import App from './App.vue'" in main, 'missing App.vue import'
 assert 'extends: App' in main, 'root component should extend App.vue template'
 assert "element-plus/dist/index.css" not in main, 'full Element Plus CSS should not be imported after on-demand'
-for module in ['./utils/index.js', './api/index.js', './modules/transactions.js', './modules/deposits.js', './modules/cash.js', './modules/snapshots.js', './modules/performance.js', './modules/market.js', './modules/allocation.js', './modules/dataSync.js', './modules/appInit.js', './modules/brief.js', './modules/holdingCorrections.js', './composables/authMask.js', './composables/domainHelpers.js']:
+for module in ['./utils/index.js', './api/index.js', './modules/transactions.js', './modules/deposits.js', './modules/cash.js', './modules/snapshots.js', './modules/performance.js', './modules/market.js', './modules/allocation.js', './modules/dataSync.js', './modules/appInit.js', './modules/brief.js', './modules/holdingCorrections.js', './modules/tabNav.js', './composables/authMask.js', './composables/domainHelpers.js']:
     assert module in main, f'missing frontend module import: {module}'
+assert 'createFeeHelpers' in main or 'feeHelpers' in main or "from './composables/domainHelpers.js'" in main
+# modules import computed themselves; main should not pass computed into factories
+assert "computed," not in main
+fee = Path('frontend/src/composables/feeHelpers.js').read_text(encoding='utf-8')
+assert 'createFeeHelpers' in fee
+assert 'apiErrorDetail' in Path('frontend/src/utils/index.js').read_text(encoding='utf-8')
+assert '已到期' in Path('frontend/src/modules/deposits.js').read_text(encoding='utf-8')
+deposits_mod = Path('frontend/src/modules/deposits.js').read_text(encoding='utf-8')
+assert "import { computed } from 'vue'" in deposits_mod
 # charts import may now live in allocation module after extraction
 allocation = Path('frontend/src/modules/allocation.js').read_text(encoding='utf-8')
 assert ('./charts/index.js' in main or '../charts/index.js' in allocation or './charts/index.js' in allocation), 'missing charts dynamic/static import reference'

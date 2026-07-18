@@ -1,8 +1,9 @@
+import { computed } from 'vue';
 import api from '../api/index.js';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { formatMoney, todayLocalIso } from '../utils/index.js';
+import { formatMoney, todayLocalIso, apiErrorDetail } from '../utils/index.js';
 
-const createCashModule = ({ dashboard, cashForm, cashFlows, cashFlowForm, cashFlowQuery, cashFlowEditDialog, activeFeeAccount, fetchData, computed }) => {
+const createCashModule = ({ dashboard, cashForm, cashFlows, cashFlowForm, cashFlowQuery, cashFlowEditDialog, activeFeeAccount, fetchData }) => {
     const queryCashFlows = async () => {
         try {
             const params = [];
@@ -15,7 +16,9 @@ const createCashModule = ({ dashboard, cashForm, cashFlows, cashFlowForm, cashFl
             if (q.flow_type) params.push(`flow_type=${encodeURIComponent(q.flow_type)}`);
             const res = await api.listCashFlows(params);
             cashFlows.value = res.data || [];
-        } catch (e) { ElMessage.error('获取资金流水失败'); }
+        } catch (e) {
+            ElMessage.error('获取资金流水失败：' + apiErrorDetail(e));
+        }
     };
 
     const updateCash = async () => {
@@ -26,7 +29,9 @@ const createCashModule = ({ dashboard, cashForm, cashFlows, cashFlowForm, cashFl
             ElMessage.success(`证券现金已校准，差额 ${formatMoney(after - before, 2, true)} 已写入资金流水`);
             await fetchData();
             await queryCashFlows();
-        } catch (e) { ElMessage.error('更新失败'); }
+        } catch (e) {
+            ElMessage.error('更新证券现金失败：' + apiErrorDetail(e));
+        }
     };
 
     const resetCashFlowQuery = async () => {
@@ -56,7 +61,9 @@ const createCashModule = ({ dashboard, cashForm, cashFlows, cashFlowForm, cashFl
             cashFlowForm.value = { date: todayLocalIso(), account: cashFlowForm.value.account || activeFeeAccount.value || '华泰证券', flow_type: '银证转入', amount: 0, remark: '' };
             await fetchData();
             await queryCashFlows();
-        } catch (e) { ElMessage.error('新增资金流水失败'); }
+        } catch (e) {
+            ElMessage.error('新增资金流水失败：' + apiErrorDetail(e));
+        }
     };
 
     const openCashFlowEditDialog = (row) => {
@@ -70,7 +77,9 @@ const createCashModule = ({ dashboard, cashForm, cashFlows, cashFlowForm, cashFl
             cashFlowEditDialog.value.visible = false;
             await fetchData();
             await queryCashFlows();
-        } catch (e) { ElMessage.error('更新资金流水失败'); }
+        } catch (e) {
+            ElMessage.error('更新资金流水失败：' + apiErrorDetail(e));
+        }
     };
 
     const deleteCashFlow = async (row) => {
@@ -80,7 +89,10 @@ const createCashModule = ({ dashboard, cashForm, cashFlows, cashFlowForm, cashFl
             ElMessage.success('资金流水已删除');
             await fetchData();
             await queryCashFlows();
-        } catch (e) {}
+        } catch (e) {
+            if (e === 'cancel' || e === 'close') return;
+            ElMessage.error('删除资金流水失败：' + apiErrorDetail(e));
+        }
     };
 
     return { updateCash, queryCashFlows, resetCashFlowQuery, cashFlowSummary, cashFlowTagType, addCashFlow, openCashFlowEditDialog, saveCashFlowEdit, deleteCashFlow };

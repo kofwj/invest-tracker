@@ -1,6 +1,7 @@
 import api from '../api/index.js';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { formatMoney, todayLocalIso } from '../utils/index.js';
+import { computed } from 'vue';
 
 const createSnapshotsModule = ({
     activeTab,
@@ -12,7 +13,6 @@ const createSnapshotsModule = ({
     snapshotLoading,
     fetchData,
     nextTick,
-    computed,
 }) => {
     const createSnapshot = async () => {
         snapshotLoading.value = true;

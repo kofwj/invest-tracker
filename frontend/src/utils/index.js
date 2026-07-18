@@ -107,7 +107,34 @@ const todayLocalIso = () => {
     return `${y}-${m}-${day}`;
 };
 
-Object.assign(window, { normalizeText, daysUntil, daysBetween, formatMoney, formatPercent, pct, inferCategoryByCode, holdingFloatProfit, holdingLifetimeProfit, holdingFloatProfitRate, holdingLifetimeProfitRate, todayLocalIso });
+/** Simple interest for N days at annual rate % (365-day year). */
+const interestForDays = (amount, ratePct, days) => {
+    if (days == null || Number.isNaN(Number(days))) return null;
+    const d = Number(days);
+    if (d < 0) return 0;
+    return Number(amount || 0) * Number(ratePct || 0) / 100 * d / 365;
+};
+
+/** Extract FastAPI/axios error message for UI toasts. */
+const apiErrorDetail = (e, fallback = '未知错误') => {
+    const d = e?.response?.data?.detail;
+    if (typeof d === 'string' && d.trim()) return d;
+    if (Array.isArray(d) && d.length) {
+        const first = d[0];
+        if (typeof first === 'string') return first;
+        if (first?.msg) return String(first.msg);
+    }
+    if (d && typeof d === 'object' && d.msg) return String(d.msg);
+    if (e?.message) return String(e.message);
+    return fallback;
+};
+
+Object.assign(window, {
+    normalizeText, daysUntil, daysBetween, formatMoney, formatPercent, pct,
+    inferCategoryByCode, holdingFloatProfit, holdingLifetimeProfit,
+    holdingFloatProfitRate, holdingLifetimeProfitRate, todayLocalIso,
+    interestForDays, apiErrorDetail,
+});
 
 export {
     normalizeText,
@@ -122,4 +149,6 @@ export {
     holdingFloatProfitRate,
     holdingLifetimeProfitRate,
     todayLocalIso,
+    interestForDays,
+    apiErrorDetail,
 };

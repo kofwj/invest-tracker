@@ -1,5 +1,6 @@
 import api from '../api/index.js';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { computed } from 'vue';
 
 const numOr = (v, fallback) => {
     const n = Number(v);
@@ -18,7 +19,6 @@ const createDisciplineModule = ({
     disciplineSelectedDraftIds,
     fetchData,
     queryTransactions,
-    computed,
 }) => {
     const refreshAfterLedgerChange = async () => {
         await refreshDiscipline();

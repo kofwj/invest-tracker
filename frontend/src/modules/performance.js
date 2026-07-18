@@ -1,5 +1,6 @@
 import api from '../api/index.js';
 import { formatMoney } from '../utils/index.js';
+import { computed } from 'vue';
 
 const createPerformanceModule = ({
     perfSummary,
@@ -13,7 +14,6 @@ const createPerformanceModule = ({
     perfFlowForm,
     showSyncNotice,
     nextTick,
-    computed,
 }) => {
     const hasPerfFlows = computed(() => Number(perfSummary.value?.flow_count || 0) > 0);
     const perfStoryToneType = computed(() => {

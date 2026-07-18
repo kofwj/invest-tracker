@@ -91,8 +91,8 @@ def fetch_tencent_kline_closes(code: str, start: dt_date, end: dt_date):
             d = str(row[0])
             if d >= start.isoformat() and d <= end.isoformat():
                 out.append((d, float(row[2])))
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("skip kline row for %s: %s", symbol, exc)
     return out
 
 
@@ -110,7 +110,8 @@ def calculate_trailing_return_1y(code: str, current_price: float = None):
                 df = ak.fund_open_fund_info_em(symbol=fund_code, indicator="累计净值走势")
                 value_cols = ["累计净值", "净值"]
                 source_name = "天天基金累计净值"
-            except Exception:
+            except Exception as exc:
+                logger.info("fund cumulative NAV unavailable for %s, fallback unit NAV: %s", fund_code, exc)
                 df = ak.fund_open_fund_info_em(symbol=fund_code, indicator="单位净值走势")
                 value_cols = ["单位净值", "净值"]
                 source_name = "天天基金单位净值"
@@ -127,7 +128,8 @@ def calculate_trailing_return_1y(code: str, current_price: float = None):
                 else:
                     start_val = end_val = start_date = end_date = None
                     source_name = "腾讯前复权K线"
-            except Exception:
+            except Exception as exc:
+                logger.info("tencent kline failed for %s, fallback akshare: %s", symbol, exc)
                 df = ak.stock_zh_a_hist(
                     symbol=symbol,
                     period="daily",

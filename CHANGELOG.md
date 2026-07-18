@@ -5,6 +5,25 @@
 
 ---
 
+## [2026-07-19] — P1/P2 体验与可维护性
+
+### P1
+- 错误提示：存款/交易/资金/费率等失败时展示后端 detail
+- 存款到期分布：单独「已到期」档；剩余天数标签区分已到期
+- 缺起存日：顶部提示 + 表格「待填」高亮
+- 模块内自 `import { computed } from 'vue'`，不再从 main 注入（防漏传白屏）
+
+### P2
+- `domainHelpers` 拆为 `feeHelpers` / `maintenanceHelpers` / `importExportHelpers`（barrel 兼容）
+- Tab 导航抽到 `modules/tabNav.js`，main 略瘦
+- 后端：晚间简报/快照异常/一年收益同步等静默 except 改为 warning/info 日志
+- 工具：`apiErrorDetail`、`interestForDays`；利息纯函数单测
+
+### 存款利息（schema v8，此前已上）
+- 预计年利息 / 到期前利息 / 整期利息（单利 365 天）；可选起存日
+
+---
+
 ## [2026-07-14] — 立刻/中等/技术债体验包
 
 ### 立刻

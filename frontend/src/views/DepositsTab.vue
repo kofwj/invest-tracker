@@ -49,6 +49,15 @@
                         </el-card>
                     </div>
 
+                    <el-alert
+                        v-if="depositSummary.missingStartCount > 0"
+                        type="warning"
+                        show-icon
+                        :closable="false"
+                        style="margin-bottom: 14px;"
+                        :title="`有 ${depositSummary.missingStartCount} 笔存款还没填起存日，整期利息会显示 —。点编辑补上即可。`"
+                    ></el-alert>
+
                     <el-row :gutter="20" style="margin-bottom: 16px;">
                         <el-col :span="12">
                             <el-card shadow="never" header="银行集中度">
@@ -98,16 +107,30 @@
                             <template #default="scope">{{ scope.row.term_interest == null ? '—' : formatMoney(scope.row.term_interest) }}</template>
                         </el-table-column>
                         <el-table-column label="起存日" width="110" align="center" header-align="center">
-                            <template #default="scope">{{ scope.row.start_date || '—' }}</template>
+                            <template #default="scope">
+                                <span :style="scope.row.missing_start_date ? 'color:#E6A23C' : ''">{{ scope.row.start_date || '待填' }}</span>
+                            </template>
                         </el-table-column>
                         <el-table-column label="到期时间" width="110" align="center" header-align="center">
                             <template #default="scope">{{ scope.row.due_date || '—' }}</template>
                         </el-table-column>
                         <el-table-column label="剩余天数" width="100" align="center" header-align="center">
                             <template #default="scope">
-                                <el-tag :type="scope.row.daysLeft <= 30 ? 'danger' : (scope.row.daysLeft <= 90 ? 'warning' : 'info')" effect="light">
-                                    {{ scope.row.daysLeft === null ? '—' : `${scope.row.daysLeft}天` }}
-                                </el-tag>
+                                <el-tag
+                                    v-if="scope.row.daysLeft === null"
+                                    type="info"
+                                    effect="light"
+                                >—</el-tag>
+                                <el-tag
+                                    v-else-if="scope.row.daysLeft < 0"
+                                    type="danger"
+                                    effect="dark"
+                                >已到期</el-tag>
+                                <el-tag
+                                    v-else
+                                    :type="scope.row.daysLeft <= 30 ? 'danger' : (scope.row.daysLeft <= 90 ? 'warning' : 'info')"
+                                    effect="light"
+                                >{{ scope.row.daysLeft }}天</el-tag>
                             </template>
                         </el-table-column>
                         <el-table-column prop="remark" label="备注" min-width="120">

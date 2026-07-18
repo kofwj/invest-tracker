@@ -1,6 +1,7 @@
 import api from '../api/index.js';
 import { ElLoading, ElMessage } from 'element-plus';
 import { todayLocalIso } from '../utils/index.js';
+import { computed } from 'vue';
 
 /**
  * Core data fetching and sync helpers.
@@ -22,7 +23,6 @@ const createDataSync = ({
     activeTab,
     showSyncNotice,
     renderAllocationCharts,
-    computed,
 }) => {
     const fetchData = async () => {
         const [dashRes, holdRes, depRes, cashRes, feeRes] = await Promise.all([

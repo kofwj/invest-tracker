@@ -1,7 +1,7 @@
 import api from '../api/index.js';
 import { createAssetHelpers } from './assets.js';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { todayLocalIso } from '../utils/index.js';
+import { todayLocalIso, apiErrorDetail } from '../utils/index.js';
 
 const createTransactionsModule = ({
     activeTab,
@@ -50,14 +50,14 @@ const createTransactionsModule = ({
             ElMessage.success('录入成功');
             await fetchData();
             resetForm();
-        } catch (e) { ElMessage.error('录入失败'); }
+        } catch (e) { ElMessage.error('录入失败：' + apiErrorDetail(e)); }
     };
 
     const showTransactions = async (row) => {
         try {
             const res = await api.listTransactionsByCode(row.code);
             transDialog.value = { visible: true, title: `${row.name} (${row.code}) 交易记录`, transactions: res.data };
-        } catch (e) { ElMessage.error('获取交易记录失败'); }
+        } catch (e) { ElMessage.error('获取交易记录失败：' + apiErrorDetail(e)); }
     };
 
     const updatePendingTransactions = () => {
@@ -95,7 +95,7 @@ const createTransactionsModule = ({
             filteredTransactions.value = items;
             transPage.value.total = Array.isArray(data) ? items.length : Number(data.total || 0);
             updatePendingTransactions();
-        } catch (e) { ElMessage.error('获取交易记录失败'); }
+        } catch (e) { ElMessage.error('获取交易记录失败：' + apiErrorDetail(e)); }
     };
 
     const resetTransQuery = async () => {
@@ -149,7 +149,7 @@ const createTransactionsModule = ({
             transEditDialog.value.visible = false;
             await queryTransactions();
             await fetchData();
-        } catch (e) { ElMessage.error('更新失败'); }
+        } catch (e) { ElMessage.error('更新失败：' + apiErrorDetail(e)); }
     };
 
     const deleteTransaction = async (row) => {
@@ -159,7 +159,10 @@ const createTransactionsModule = ({
             ElMessage.success('已删除');
             await queryTransactions();
             await fetchData();
-        } catch (e) { /* 用户取消 */ }
+        } catch (e) {
+            if (e === 'cancel' || e === 'close') return;
+            ElMessage.error('删除失败：' + apiErrorDetail(e));
+        }
     };
 
     return {

@@ -1,6 +1,9 @@
+import logging
 import sqlite3
 from datetime import date as dt_date, datetime
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 try:
     from .database import LOCAL_TZ
@@ -133,7 +136,8 @@ def snapshots_summary_data(conn, start_date: Optional[str] = None, end_date: Opt
                         f"可能是行情、入金/出金或记账变动，建议对照资金流水。"
                     ),
                 }
-    except Exception:
+    except Exception as exc:
+        logger.warning("snapshots_summary_data: day_over_day_anomaly failed: %s", exc)
         anomaly = None
 
     return {

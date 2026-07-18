@@ -1,4 +1,4 @@
-import { createApp, ref, onMounted, nextTick, watch, computed, provide } from 'vue';
+import { createApp, ref, onMounted, nextTick, watch, provide } from 'vue';
 import { ElLoading, ElMessage, ElMessageBox } from 'element-plus';
 import zhCn from 'element-plus/es/locale/lang/zh-cn';
 import 'element-plus/es/components/message/style/css';
@@ -41,23 +41,13 @@ import { createDividendHelpers } from './modules/dividends.js';
 import { createAllocationModule } from './modules/allocation.js';
 import { createAppInit } from './modules/appInit.js';
 import { createBriefHelpers } from './modules/brief.js';
+import { TAB_GROUPS, tabGroupOf, resolveInitialTab } from './modules/tabNav.js';
 import './styles/styles.css';
 
 const app = createApp({
     extends: App,
     setup() {
-        const screenshotParams = new URLSearchParams(window.location.search);
-        const screenshotTabs = ['snapshots', 'allocation', 'performance', 'market', 'discipline', 'holdings', 'deposits', 'transactions', 'broker', 'cash', 'maintenance'];
-        const requestedTab = screenshotParams.get('tab');
-        const tabGroups = [
-            { id: 'daily', label: '日常', tabs: ['holdings', 'transactions', 'broker', 'deposits', 'cash'] },
-            { id: 'analysis', label: '分析', tabs: ['performance', 'allocation', 'snapshots', 'market', 'discipline'] },
-            { id: 'ops', label: '维护', tabs: ['maintenance'] },
-        ];
-        const tabGroupOf = (tab) => {
-            const hit = tabGroups.find(g => g.tabs.includes(tab));
-            return hit ? hit.id : 'analysis';
-        };
+        const tabGroups = TAB_GROUPS;
 
         // Deferred bootstrap after login unlock (wired below after helpers exist)
         let bootstrapAfterAuth = async () => {};
@@ -76,7 +66,7 @@ const app = createApp({
             onUnlocked: () => bootstrapAfterAuth(),
         });
 
-        const activeTab = ref(screenshotTabs.includes(requestedTab) ? requestedTab : 'snapshots');
+        const activeTab = ref(resolveInitialTab());
         const tabGroup = ref(tabGroupOf(activeTab.value));
         watch(tabGroup, (gid) => {
             const g = tabGroups.find(x => x.id === gid);
@@ -214,7 +204,6 @@ const app = createApp({
             allocationAnalysis,
             macroAllocationAnalysis,
             portfolioExpectedReturn,
-            computed,
         });
 
         // Core data + sync (extracted to module)
@@ -242,7 +231,6 @@ const app = createApp({
             activeTab,
             showSyncNotice,
             renderAllocationCharts,
-            computed,
         });
 
         const {
@@ -302,7 +290,7 @@ const app = createApp({
         const {
             openDepositDialog, saveDeposit, deleteDeposit,
             depositRows, depositSummary, depositBankBreakdown, depositMaturityBuckets,
-        } = createDepositsModule({ depositDialog, deposits, fetchData, computed });
+        } = createDepositsModule({ depositDialog, deposits, fetchData });
 
         const {
             updateCash,
@@ -323,7 +311,6 @@ const app = createApp({
             cashFlowEditDialog,
             activeFeeAccount,
             fetchData,
-            computed,
         });
 
         const {
@@ -372,7 +359,6 @@ const app = createApp({
             snapshotLoading,
             fetchData,
             nextTick,
-            computed,
         });
 
         const {
@@ -439,7 +425,6 @@ const app = createApp({
             perfFlowForm,
             showSyncNotice,
             nextTick,
-            computed,
         });
 
         const brokerResult = ref(null);
@@ -528,7 +513,6 @@ const app = createApp({
             alertEventEndDate,
             watchlistDraft,
             watchlistSaving,
-            computed,
         });
 
         const disciplineReport = ref({});
@@ -587,7 +571,6 @@ const app = createApp({
             disciplineSelectedDraftIds,
             fetchData,
             queryTransactions,
-            computed,
         });
 
         watch(activeTab, (val) => {

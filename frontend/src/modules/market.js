@@ -1,5 +1,6 @@
 import api from '../api/index.js';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import { computed } from 'vue';
 
 const createMarketModule = ({
     marketSummary,
@@ -16,7 +17,6 @@ const createMarketModule = ({
     alertEventEndDate,
     watchlistDraft,
     watchlistSaving,
-    computed,
 }) => {
     const defaultAlertForm = () => ({
         target_type: 'holding',

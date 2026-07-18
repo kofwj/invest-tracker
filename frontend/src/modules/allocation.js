@@ -1,4 +1,5 @@
 import { formatMoney } from '../utils/index.js';
+import { computed } from 'vue';
 
 /**
  * Allocation analysis + summary + health + chart rendering.
@@ -12,7 +13,6 @@ const createAllocationModule = ({
     allocationAnalysis,
     macroAllocationAnalysis,
     portfolioExpectedReturn,
-    computed,
 }) => {
     const defaultExpectedReturns = {
         'A股权益': 6.0,

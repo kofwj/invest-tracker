@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 try:
     from .database import local_today_iso
@@ -48,7 +51,8 @@ def suggest_portfolio_cash_flows(conn) -> Dict[str, Any]:
                 """
             ).fetchall()
         ]
-    except Exception:
+    except Exception as exc:
+        logger.warning("suggest_portfolio_cash_flows: read cash_flows failed: %s", exc)
         cash_rows = []
 
     drafts: List[Dict[str, Any]] = []
@@ -103,7 +107,8 @@ def build_evening_brief(conn, *, check_price_alerts: bool = True) -> Dict[str, A
     summary = build_performance_summary(conn)
     try:
         disc = build_discipline_report(conn)
-    except Exception:
+    except Exception as exc:
+        logger.warning("evening_brief: discipline report failed: %s", exc)
         disc = {"summary_text": "纪律报告暂不可用", "breaches": [], "plans": []}
 
     alert_part: Dict[str, Any] = {"triggered_count": 0, "messages": []}
@@ -117,6 +122,7 @@ def build_evening_brief(conn, *, check_price_alerts: bool = True) -> Dict[str, A
                     (t.get("message") or t.get("title") or str(t))[:120] for t in triggered[:8]
                 ]
         except Exception as exc:
+            logger.warning("evening_brief: check_alerts failed: %s", exc)
             alert_part["error"] = str(exc)
 
     anomaly_text = None
@@ -127,8 +133,8 @@ def build_evening_brief(conn, *, check_price_alerts: bool = True) -> Dict[str, A
         an = (snap_sum or {}).get("day_over_day_anomaly")
         if an:
             anomaly_text = an.get("text") or str(an)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("evening_brief: snapshot anomaly failed: %s", exc)
 
     plan_lines = []
     for p in (disc.get("plans") or [])[:4]:

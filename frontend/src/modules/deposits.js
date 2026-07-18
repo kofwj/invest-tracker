@@ -1,16 +1,9 @@
+import { computed } from 'vue';
 import api from '../api/index.js';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { formatMoney, daysUntil, daysBetween } from '../utils/index.js';
+import { formatMoney, daysUntil, daysBetween, interestForDays, apiErrorDetail } from '../utils/index.js';
 
-/** Simple interest for N days at annual rate % (365-day year). */
-const interestForDays = (amount, ratePct, days) => {
-    if (days == null || Number.isNaN(Number(days))) return null;
-    const d = Number(days);
-    if (d < 0) return 0;
-    return Number(amount || 0) * Number(ratePct || 0) / 100 * d / 365;
-};
-
-const createDepositsModule = ({ depositDialog, deposits, fetchData, computed }) => {
+const createDepositsModule = ({ depositDialog, deposits, fetchData }) => {
     const openDepositDialog = (row) => {
         if (row) {
             depositDialog.value = {
@@ -56,7 +49,9 @@ const createDepositsModule = ({ depositDialog, deposits, fetchData, computed }) 
             }
             depositDialog.value.visible = false;
             await fetchData();
-        } catch (e) { ElMessage.error('操作失败'); }
+        } catch (e) {
+            ElMessage.error('存款操作失败：' + apiErrorDetail(e));
+        }
     };
 
     const deleteDeposit = async (row) => {
@@ -65,7 +60,10 @@ const createDepositsModule = ({ depositDialog, deposits, fetchData, computed }) 
             await api.deleteDeposit(row.id);
             ElMessage.success('已删除');
             await fetchData();
-        } catch (e) { /* 用户取消 */ }
+        } catch (e) {
+            if (e === 'cancel' || e === 'close') return;
+            ElMessage.error('删除失败：' + apiErrorDetail(e));
+        }
     };
 
     const depositRows = computed(() => {
@@ -80,15 +78,13 @@ const createDepositsModule = ({ depositDialog, deposits, fetchData, computed }) 
                     ...d,
                     amount,
                     interest_rate: rate,
-                    // 组合视角：若一直按此利率放满一年
                     annual_interest: amount * rate / 100,
-                    // 到期前还能拿多少（剩余天数，已到期=0）
                     remaining_interest: interestForDays(amount, rate, daysLeft),
-                    // 整期利息（起存→到期）；缺起存日则为 null
                     term_interest: termDays == null ? null : interestForDays(amount, rate, termDays),
                     term_days: termDays,
                     percentage: total > 0 ? amount / total * 100 : 0,
                     daysLeft,
+                    missing_start_date: !d.start_date,
                 };
             })
             .sort((a, b) => {
@@ -106,6 +102,7 @@ const createDepositsModule = ({ depositDialog, deposits, fetchData, computed }) 
         const remainingInterest = rows.reduce((sum, d) => sum + Number(d.remaining_interest || 0), 0);
         const weightedRate = total > 0 ? annualInterest / total * 100 : 0;
         const nextDue = rows.find(d => d.daysLeft !== null && d.daysLeft >= 0) || null;
+        const missingStartCount = rows.filter(d => d.missing_start_date).length;
         return {
             total,
             annualInterest,
@@ -113,6 +110,7 @@ const createDepositsModule = ({ depositDialog, deposits, fetchData, computed }) 
             weightedRate,
             count: rows.length,
             nextDue,
+            missingStartCount,
         };
     });
 
@@ -130,19 +128,21 @@ const createDepositsModule = ({ depositDialog, deposits, fetchData, computed }) 
 
     const depositMaturityBuckets = computed(() => {
         const buckets = [
+            { bucket: '已到期', amount: 0 },
             { bucket: '30天内', amount: 0 },
             { bucket: '31-90天', amount: 0 },
             { bucket: '91-180天', amount: 0 },
             { bucket: '180天以上', amount: 0 },
-            { bucket: '未设置到期', amount: 0 }
+            { bucket: '未设置到期', amount: 0 },
         ];
         depositRows.value.forEach(d => {
             const days = d.daysLeft;
-            if (days === null) buckets[4].amount += d.amount;
-            else if (days <= 30) buckets[0].amount += d.amount;
-            else if (days <= 90) buckets[1].amount += d.amount;
-            else if (days <= 180) buckets[2].amount += d.amount;
-            else buckets[3].amount += d.amount;
+            if (days === null) buckets[5].amount += d.amount;
+            else if (days < 0) buckets[0].amount += d.amount;
+            else if (days <= 30) buckets[1].amount += d.amount;
+            else if (days <= 90) buckets[2].amount += d.amount;
+            else if (days <= 180) buckets[3].amount += d.amount;
+            else buckets[4].amount += d.amount;
         });
         const total = depositSummary.value.total;
         return buckets.map(b => ({ ...b, percentage: total > 0 ? b.amount / total * 100 : 0 }));
