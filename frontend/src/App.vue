@@ -2,56 +2,62 @@
   <el-config-provider :locale="zhCn">
     <div class="app-container">
       <AppHeader />
-      <HomeDashboard />
-
-      <div class="tab-group-bar">
-        <button
-          v-for="g in tabGroups"
-          :key="g.id"
-          type="button"
-          class="tab-group-btn"
-          :class="{ active: tabGroup === g.id }"
-          @click="tabGroup = g.id"
-        >{{ g.label }}</button>
+      <div class="home-panel">
+        <HomeDashboard />
       </div>
 
-      <el-tabs v-model="activeTab" class="mt-20 main-tabs">
-        <el-tab-pane v-if="tabGroup === 'daily'" label="持仓明细" name="holdings" lazy>
-          <HoldingsTab />
-        </el-tab-pane>
-        <el-tab-pane v-if="tabGroup === 'daily'" label="交易录入/管理" name="transactions" lazy>
-          <TransactionsTab />
-        </el-tab-pane>
-        <el-tab-pane v-if="tabGroup === 'daily'" label="券商对账" name="broker" lazy>
-          <BrokerReconcileTab />
-        </el-tab-pane>
-        <el-tab-pane v-if="tabGroup === 'daily'" label="银行存款" name="deposits" lazy>
-          <DepositsTab />
-        </el-tab-pane>
-        <el-tab-pane v-if="tabGroup === 'daily'" label="现金设置" name="cash" lazy>
-          <CashTab />
-        </el-tab-pane>
+      <div class="content-shell">
+        <div class="tab-group-bar" role="tablist" aria-label="功能分组">
+          <button
+            v-for="g in tabGroups"
+            :key="g.id"
+            type="button"
+            class="tab-group-btn"
+            :class="{ active: tabGroup === g.id }"
+            role="tab"
+            :aria-selected="tabGroup === g.id"
+            @click="tabGroup = g.id"
+          >{{ g.label }}</button>
+        </div>
 
-        <el-tab-pane v-if="tabGroup === 'analysis'" label="收益分析" name="performance" lazy>
-          <PerformanceTab />
-        </el-tab-pane>
-        <el-tab-pane v-if="tabGroup === 'analysis'" label="资产配置" name="allocation" lazy>
-          <AllocationTab />
-        </el-tab-pane>
-        <el-tab-pane v-if="tabGroup === 'analysis'" label="资产快照" name="snapshots" lazy>
-          <SnapshotsTab />
-        </el-tab-pane>
-        <el-tab-pane v-if="tabGroup === 'analysis'" label="市场摘要" name="market" lazy>
-          <MarketTab />
-        </el-tab-pane>
-        <el-tab-pane v-if="tabGroup === 'analysis'" label="纪律与再平衡" name="discipline" lazy>
-          <DisciplineTab />
-        </el-tab-pane>
+        <el-tabs v-model="activeTab" class="main-tabs">
+          <el-tab-pane v-if="tabGroup === 'daily'" label="持仓明细" name="holdings" lazy>
+            <HoldingsTab />
+          </el-tab-pane>
+          <el-tab-pane v-if="tabGroup === 'daily'" label="交易录入/管理" name="transactions" lazy>
+            <TransactionsTab />
+          </el-tab-pane>
+          <el-tab-pane v-if="tabGroup === 'daily'" label="券商对账" name="broker" lazy>
+            <BrokerReconcileTab />
+          </el-tab-pane>
+          <el-tab-pane v-if="tabGroup === 'daily'" label="银行存款" name="deposits" lazy>
+            <DepositsTab />
+          </el-tab-pane>
+          <el-tab-pane v-if="tabGroup === 'daily'" label="现金设置" name="cash" lazy>
+            <CashTab />
+          </el-tab-pane>
 
-        <el-tab-pane v-if="tabGroup === 'ops'" label="数据维护" name="maintenance" lazy>
-          <MaintenanceTab />
-        </el-tab-pane>
-      </el-tabs>
+          <el-tab-pane v-if="tabGroup === 'analysis'" label="收益分析" name="performance" lazy>
+            <PerformanceTab />
+          </el-tab-pane>
+          <el-tab-pane v-if="tabGroup === 'analysis'" label="资产配置" name="allocation" lazy>
+            <AllocationTab />
+          </el-tab-pane>
+          <el-tab-pane v-if="tabGroup === 'analysis'" label="资产快照" name="snapshots" lazy>
+            <SnapshotsTab />
+          </el-tab-pane>
+          <el-tab-pane v-if="tabGroup === 'analysis'" label="市场摘要" name="market" lazy>
+            <MarketTab />
+          </el-tab-pane>
+          <el-tab-pane v-if="tabGroup === 'analysis'" label="纪律与再平衡" name="discipline" lazy>
+            <DisciplineTab />
+          </el-tab-pane>
+
+          <el-tab-pane v-if="tabGroup === 'ops'" label="数据维护" name="maintenance" lazy>
+            <MaintenanceTab />
+          </el-tab-pane>
+        </el-tabs>
+      </div>
 
       <AppDialogs />
       <LoginOverlay />

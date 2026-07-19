@@ -1,6 +1,9 @@
 <template>
         <div class="header">
-            <h2>投资资产管理系统</h2>
+            <div class="header-brand">
+                <h2>投资资产管理系统</h2>
+                <div class="header-subtitle">真仓总览 · 同步 · 简报</div>
+            </div>
             <div class="header-actions">
                 <el-button :type="isMasked ? 'danger' : 'info'" plain @click="toggleMask">
                     {{ isMasked ? '显示数据' : '隐藏数据' }}
