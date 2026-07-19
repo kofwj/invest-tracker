@@ -16,25 +16,33 @@ WITH_SNAPSHOT=0
 WITH_ALERTS=0
 ALERTS_NOTIFY=0
 FORCE_SNAPSHOT=0
+WITH_NOTIFY_EVENTS=0
 for arg in "$@"; do
   case "$arg" in
     --snapshot|-s) WITH_SNAPSHOT=1 ;;
     --check-alerts|-a) WITH_ALERTS=1 ;;
     --notify-alerts) ALERTS_NOTIFY=1 ;;
     --force-snapshot) FORCE_SNAPSHOT=1 ;;
+    --notify-events) WITH_NOTIFY_EVENTS=1 ;;
     -h|--help)
       cat <<'EOF'
-Usage: cron_sync_prices.sh [--snapshot] [--check-alerts] [--notify-alerts] [--force-snapshot]
+Usage: cron_sync_prices.sh [--snapshot] [--check-alerts] [--notify-alerts] [--notify-events] [--force-snapshot]
 
   --snapshot         同步价格后记录/更新今日资产快照（默认跳过非交易日）
   --check-alerts     同步（及可选快照）后检查价格预警规则
-  --notify-alerts    检查时若触发则尝试飞书推送（需 FEISHU_ALERT_WEBHOOK）
+  --notify-alerts    检查时若触发则多通道推送（飞书/钉钉/企微/TG，见 .env NOTIFY_*）
+  --notify-events    跑存款到期 + 纪律破线摘要推送（POST /notify/run）
   --force-snapshot   强制写快照（忽略交易日历）
 
 环境变量：
-  FEISHU_ALERT_WEBHOOK   飞书机器人 webhook（可选）
+  NOTIFY_FEISHU_WEBHOOK / FEISHU_ALERT_WEBHOOK  飞书（兼容旧名）
+  NOTIFY_DINGTALK_WEBHOOK / NOTIFY_DINGTALK_SECRET
+  NOTIFY_WECOM_WEBHOOK
+  NOTIFY_TELEGRAM_BOT_TOKEN / NOTIFY_TELEGRAM_CHAT_ID
+  NOTIFY_ENABLED=1
   CRON_CHECK_ALERTS=1    等价于总是 --check-alerts
   CRON_NOTIFY_ALERTS=1   等价于总是 --notify-alerts
+  CRON_NOTIFY_EVENTS=1   等价于总是 --notify-events
   CRON_FORCE_SNAPSHOT=1  等价于 --force-snapshot
   ALERT_COOLDOWN_MINUTES 预警冷却分钟（默认读 settings / 240）
 EOF
@@ -46,11 +54,12 @@ done
 # Env can force flags without changing crontab
 if [ "${CRON_CHECK_ALERTS:-0}" = "1" ]; then WITH_ALERTS=1; fi
 if [ "${CRON_NOTIFY_ALERTS:-0}" = "1" ]; then ALERTS_NOTIFY=1; WITH_ALERTS=1; fi
+if [ "${CRON_NOTIFY_EVENTS:-0}" = "1" ]; then WITH_NOTIFY_EVENTS=1; fi
 if [ "${CRON_FORCE_SNAPSHOT:-0}" = "1" ]; then FORCE_SNAPSHOT=1; fi
 
 ts() { date '+%Y-%m-%d %H:%M:%S'; }
 
-echo "[$(ts)] start price sync (snapshot=${WITH_SNAPSHOT} alerts=${WITH_ALERTS} notify=${ALERTS_NOTIFY} force_snapshot=${FORCE_SNAPSHOT})"
+echo "[$(ts)] start price sync (snapshot=${WITH_SNAPSHOT} alerts=${WITH_ALERTS} notify=${ALERTS_NOTIFY} notify_events=${WITH_NOTIFY_EVENTS} force_snapshot=${FORCE_SNAPSHOT})"
 
 if [ -f .env ]; then
   set -a
@@ -289,6 +298,28 @@ if [ "$WITH_ALERTS" = "1" ]; then
     echo "[$(ts)] docker alerts unavailable/fail, try HTTP… (${ALERT_OUT})" >&2
     ALERT_OUT="$(run_alerts_curl "$ALERTS_NOTIFY")"
     echo "[$(ts)] HTTP alerts ok: ${ALERT_OUT}"
+  fi
+fi
+
+if [ "$WITH_NOTIFY_EVENTS" = "1" ]; then
+  if NOTIFY_OUT="$(
+    docker compose -f "$COMPOSE_FILE" exec -T backend python - <<'PY'
+from database import open_db
+from notify import run_scheduled_events
+conn = open_db()
+try:
+    r = run_scheduled_events(conn, deposit=True, discipline=True, force=False)
+    conn.commit()
+    print(r)
+finally:
+    conn.close()
+PY
+  2>&1)"; then
+    echo "[$(ts)] docker notify-events ok: ${NOTIFY_OUT}"
+  else
+    echo "[$(ts)] docker notify-events fail, try HTTP… (${NOTIFY_OUT})" >&2
+    NOTIFY_OUT="$(run_api_post "/notify/run" '{"deposit":true,"discipline":true,"force":false}')"
+    echo "[$(ts)] HTTP notify-events ok: ${NOTIFY_OUT}"
   fi
 fi
 

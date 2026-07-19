@@ -133,6 +133,16 @@ const api = {
     clearAlertEvents: (payload = {}) => axios.post(API + '/market/alert-events/clear', payload || {}),
     checkAlerts: (payload = {}) => axios.post(API + '/market/alerts/check', payload || {}, { timeout: 60000 }),
 
+    getNotifyStatus: () => axios.get(API + '/notify/status'),
+    saveNotifySettings: (payload) => axios.put(API + '/notify/settings', payload || {}),
+    listNotifyLogs: (limit = 20) => axios.get(API + '/notify/logs?limit=' + encodeURIComponent(limit)),
+    testNotify: (payload = {}) => axios.post(API + '/notify/test', payload || {}),
+    getNotifyDepositDue: () => axios.get(API + '/notify/deposit-due'),
+    pushNotifyDepositDue: (force = false) => axios.post(API + '/notify/deposit-due?force=' + (force ? 'true' : 'false')),
+    getNotifyDiscipline: () => axios.get(API + '/notify/discipline'),
+    pushNotifyDiscipline: (force = false) => axios.post(API + '/notify/discipline?force=' + (force ? 'true' : 'false') + '&only_if_breaches=' + (force ? 'false' : 'true')),
+    runNotifyScheduled: (payload = {}) => axios.post(API + '/notify/run', payload || {}),
+
     getDisciplineReport: () => axios.get(API + '/discipline/report', { timeout: 60000 }),
     getDisciplinePolicy: () => axios.get(API + '/discipline/policy'),
     saveDisciplinePolicy: (payload) => axios.put(API + '/discipline/policy', payload || {}),

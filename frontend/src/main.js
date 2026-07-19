@@ -368,6 +368,15 @@ const app = createApp({
             restoreBackup,
             deleteBackup,
             restoreUploadedBackup,
+            notifyStatus,
+            notifyLogs,
+            notifyLoading,
+            notifyEventDraft,
+            fetchNotifyPanel,
+            saveNotifyPanel,
+            testNotifyPush,
+            pushDepositDueNow,
+            pushDisciplineNow,
         } = createMaintenanceHelpers({
             maintenanceStatus,
             backups,
@@ -582,7 +591,10 @@ const app = createApp({
             if (val === 'snapshots') {
                 fetchSnapshots().then(() => nextTick(renderSnapshotCharts));
             }
-            if (val === 'maintenance') fetchMaintenance();
+            if (val === 'maintenance') {
+                fetchMaintenance();
+                fetchNotifyPanel();
+            }
         });
 
         // Bootstrap + init extracted
@@ -623,6 +635,7 @@ const app = createApp({
             perfSummary, perfTimeline, perfContribution, perfFlows, perfStory, perfLoading, perfFlowForm, hasPerfFlows, perfStoryToneType, perfGuideSteps, perfLensRows, perfReadTips, perfCards,
             displayedPerfContribution, perfContributionFilter, perfContributionSort, perfContributionHeadline, perfContributionMix,
             fetchPerformance, addPerfFlow, deletePerfFlow, loadPerfFlowSuggestions, applyPerfFlowSuggestion, contributionBarStyle, fetchMaintenance, createDbBackup, downloadBackup, restoreBackup, deleteBackup, restoreUploadedBackup,
+            notifyStatus, notifyLogs, notifyLoading, notifyEventDraft, fetchNotifyPanel, saveNotifyPanel, testNotifyPush, pushDepositDueNow, pushDisciplineNow,
             brokerResult, brokerLoading, brokerSelected, brokerAsOfDate, brokerCashInput,
             statusLabel: brokerStatusLabel, statusType: brokerStatusType,
             onBrokerFileChange, onBrokerSelectionChange, selectAllSuggestions, clearBrokerSelection, applySelectedCorrections,

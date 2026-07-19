@@ -56,6 +56,8 @@ test -f backend/routers_market.py
 test -f backend/trading_calendar.py
 test -f backend/discipline.py
 test -f backend/routers_discipline.py
+test -f backend/notify.py
+test -f backend/routers_notify.py
 test -f frontend/src/modules/discipline.js
 test -f frontend/src/views/DisciplineTab.vue
 grep -q 'type="module" src="/src/main.js"' frontend/index.html

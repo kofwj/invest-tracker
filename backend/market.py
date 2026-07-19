@@ -745,32 +745,42 @@ def _rule_in_cooldown(conn, rule_id: int, cooldown_minutes: int, now: datetime) 
 
 
 def notify_feishu_alerts(triggered: List[Dict[str, Any]], webhook: Optional[str] = None) -> Dict[str, Any]:
-    """Send triggered alerts to Feishu bot webhook. No-op if webhook empty."""
-    webhook = (webhook if webhook is not None else os.environ.get("FEISHU_ALERT_WEBHOOK", "")).strip()
-    if not webhook:
-        return {"sent": False, "reason": "no_webhook"}
+    """Backward-compatible alias → multi-channel notify_price_alerts.
+
+    ``webhook`` is only used as a one-off Feishu override when provided;
+    otherwise channels come from notify event map / env.
+    """
     if not triggered:
-        return {"sent": False, "reason": "no_triggers"}
-    lines = ["【invest-tracker 价格预警】"]
-    for t in triggered[:30]:
-        lines.append(str(t.get("message") or t))
-    if len(triggered) > 30:
-        lines.append(f"…共 {len(triggered)} 条")
-    payload = {"msg_type": "text", "content": {"text": "\n".join(lines)}}
+        return {"sent": False, "reason": "no_triggers", "results": []}
     try:
-        res = requests.post(webhook, json=payload, timeout=10)
-        ok = 200 <= res.status_code < 300
-        if not ok:
-            logger.warning("feishu alert webhook status=%s body=%s", res.status_code, res.text[:200])
-        return {
-            "sent": ok,
-            "status_code": res.status_code,
-            "count": len(triggered),
-            "reason": None if ok else f"http_{res.status_code}",
-        }
+        try:
+            from .notify import dispatch, build_price_alert_text
+        except ImportError:
+            from notify import dispatch, build_price_alert_text
+
+        text = build_price_alert_text(triggered)
+        if webhook:
+            # legacy: force only this feishu webhook via temporary env-less path
+            import os
+            import requests
+
+            payload = {"msg_type": "text", "content": {"text": f"【invest-tracker 价格预警】\n{text}"}}
+            try:
+                res = requests.post(webhook, json=payload, timeout=10)
+                ok = 200 <= res.status_code < 300
+                return {
+                    "sent": ok,
+                    "status_code": res.status_code,
+                    "count": len(triggered),
+                    "reason": None if ok else f"http_{res.status_code}",
+                    "results": [{"channel": "feishu", "ok": ok, "status_code": res.status_code}],
+                }
+            except Exception as exc:
+                return {"sent": False, "reason": str(exc), "count": len(triggered), "results": []}
+        return dispatch(text, title="价格预警", event="price_alert", respect_cooldown=False)
     except Exception as exc:
-        logger.warning("feishu alert webhook failed: %s", exc)
-        return {"sent": False, "reason": str(exc), "count": len(triggered)}
+        logger.warning("notify_price_alerts failed: %s", exc)
+        return {"sent": False, "reason": str(exc), "count": len(triggered), "results": []}
 
 
 def check_alerts(
@@ -881,7 +891,19 @@ def check_alerts(
 
     notify_result = {"sent": False, "reason": "skipped"}
     if notify:
-        notify_result = notify_feishu_alerts(triggered, webhook=webhook)
+        try:
+            try:
+                from .notify import notify_price_alerts
+            except ImportError:
+                from notify import notify_price_alerts
+
+            if webhook:
+                notify_result = notify_feishu_alerts(triggered, webhook=webhook)
+            else:
+                notify_result = notify_price_alerts(triggered, conn=conn)
+        except Exception as exc:
+            logger.warning("alert notify failed: %s", exc)
+            notify_result = {"sent": False, "reason": str(exc)}
 
     return {
         "triggered": triggered,

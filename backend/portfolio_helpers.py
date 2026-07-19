@@ -177,22 +177,29 @@ def build_evening_brief(conn, *, check_price_alerts: bool = True) -> Dict[str, A
 
 def send_evening_brief(conn, *, webhook: Optional[str] = None, notify: bool = True) -> Dict[str, Any]:
     brief = build_evening_brief(conn, check_price_alerts=True)
-    webhook = (webhook if webhook is not None else os.environ.get("FEISHU_ALERT_WEBHOOK", "")).strip()
-    sent = {"sent": False, "reason": "skipped"}
-    if notify and webhook:
+    sent: Dict[str, Any] = {"sent": False, "reason": "skipped"}
+    if notify:
         try:
-            import requests
+            try:
+                from .notify import notify_evening_brief, dispatch
+            except ImportError:
+                from notify import notify_evening_brief, dispatch
 
-            payload = {
-                "msg_type": "text",
-                "content": {"text": brief.get("text") or "（空简报）"},
-            }
-            res = requests.post(webhook, json=payload, timeout=10)
-            sent = {"sent": res.ok, "status_code": res.status_code}
-            if not res.ok:
-                sent["reason"] = res.text[:200]
+            text = brief.get("text") or "（空简报）"
+            if webhook:
+                # legacy one-off Feishu webhook override
+                import requests
+
+                payload = {"msg_type": "text", "content": {"text": text}}
+                try:
+                    res = requests.post(webhook, json=payload, timeout=10)
+                    sent = {"sent": res.ok, "status_code": res.status_code}
+                    if not res.ok:
+                        sent["reason"] = res.text[:200]
+                except Exception as exc:
+                    sent = {"sent": False, "reason": str(exc)}
+            else:
+                sent = notify_evening_brief(text, conn=conn, force=True)
         except Exception as exc:
             sent = {"sent": False, "reason": str(exc)}
-    elif notify and not webhook:
-        sent = {"sent": False, "reason": "no_webhook"}
     return {**brief, "notify": sent}

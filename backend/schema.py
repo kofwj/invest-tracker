@@ -6,6 +6,7 @@ try:
     from .discipline import ensure_discipline_tables
     from .holdings import ensure_holding_return_columns
     from .market import ensure_alert_tables
+    from .notify import ensure_notify_tables
     from .snapshots import ensure_snapshot_columns, ensure_portfolio_cash_flows_table
 except ImportError:
     from cash import ensure_cash_base, set_setting
@@ -13,10 +14,11 @@ except ImportError:
     from discipline import ensure_discipline_tables
     from holdings import ensure_holding_return_columns
     from market import ensure_alert_tables
+    from notify import ensure_notify_tables
     from snapshots import ensure_snapshot_columns, ensure_portfolio_cash_flows_table
 
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 SCHEMA_VERSION_KEY = "schema_version"
 
 
@@ -131,6 +133,7 @@ def ensure_app_tables(conn):
     ensure_portfolio_cash_flows_table(conn)
     ensure_alert_tables(conn)
     ensure_discipline_tables(conn)
+    ensure_notify_tables(conn)
 
 
 def migrate_to_v1_core_compat(conn):
@@ -210,6 +213,20 @@ def migrate_to_v8_deposit_start_date(conn):
         conn.execute("ALTER TABLE deposits ADD COLUMN start_date TEXT")
 
 
+def migrate_to_v9_notify(conn):
+    """Multi-channel notify log + default settings keys."""
+    ensure_notify_tables(conn)
+    for key, default in (
+        ("notify_enabled", "1"),
+        ("notify_cooldown_minutes", "240"),
+        ("notify_template", "medium"),
+        ("notify_event_channels", "{}"),
+    ):
+        row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+        if not row:
+            set_setting(conn, key, default)
+
+
 MIGRATIONS = [
     (1, migrate_to_v1_core_compat),
     (2, migrate_to_v2_holdings_and_snapshots),
@@ -219,6 +236,7 @@ MIGRATIONS = [
     (6, migrate_to_v6_snapshot_lifetime_and_watchlist),
     (7, migrate_to_v7_discipline),
     (8, migrate_to_v8_deposit_start_date),
+    (9, migrate_to_v9_notify),
 ]
 
 

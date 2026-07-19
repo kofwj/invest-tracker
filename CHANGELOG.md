@@ -5,6 +5,26 @@
 
 ---
 
+## [2026-07-19] — 多通道消息推送（A/B/C）
+
+### 基建
+- 新模块 `backend/notify.py`：飞书 / 钉钉 / 企微 / Telegram 统一 `dispatch`
+- 兼容旧 `FEISHU_ALERT_WEBHOOK`；推荐 `NOTIFY_*` 环境变量
+- 价格预警、晚间简报改走统一入口；`POST /notify/test` 试推
+- schema **v9**：`notify_send_log` + 通知相关 settings
+
+### 账本事件
+- 价格预警（多通道）
+- 晚间简报（页面/API `notify=true`）
+- 存款到期（已到期 / 今天 / 7 天 / 30 天）
+- 纪律破线摘要（只提示）
+- cron：`cron_sync_prices.sh --notify-events` 或 `CRON_NOTIFY_EVENTS=1`
+
+### 体验
+- 维护页：通道状态、事件订阅、试推、最近 20 条日志、冷却与短/中模板
+
+---
+
 ## [2026-07-19] — P1/P2 体验与可维护性
 
 ### P1
