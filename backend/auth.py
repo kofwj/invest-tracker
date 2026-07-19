@@ -44,6 +44,11 @@ def get_password_hash() -> bytes:
     return hashlib.sha256(pw.encode("utf-8")).digest()
 
 
+# Token is valid for TOKEN_TTL_DAYS (default 30). Change password invalidates via hash bind.
+TOKEN_TTL_DAYS = int(os.environ.get("TOKEN_TTL_DAYS", "30"))
+TOKEN_TTL_SECONDS = max(1, TOKEN_TTL_DAYS) * 24 * 3600
+
+
 def generate_token() -> str:
     timestamp = str(int(time.time()))
     pw_hash = get_password_hash()
@@ -60,8 +65,7 @@ def verify_token(token: str) -> bool:
             return False
         timestamp_str, signature = parts
         timestamp = int(timestamp_str)
-        # Token is valid for 30 days
-        if time.time() - timestamp > 30 * 24 * 3600:
+        if time.time() - timestamp > TOKEN_TTL_SECONDS:
             return False
         pw_hash = get_password_hash()
         expected_signature = hmac.new(

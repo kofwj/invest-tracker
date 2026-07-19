@@ -257,7 +257,8 @@
                             <el-input v-model="perfFlowForm.remark" style="width:120px;"></el-input>
                         </el-form-item>
                         <el-form-item>
-                            <el-button type="primary" @click="addPerfFlow">新增</el-button>
+                            <el-button type="primary" @click="savePerfFlow">{{ perfFlowEditId ? '保存' : '新增' }}</el-button>
+                            <el-button v-if="perfFlowEditId" @click="cancelPerfFlowEdit">取消编辑</el-button>
                         </el-form-item>
                     </el-form>
                     <el-table :data="perfFlows" stripe size="small" style="width:100%;">
@@ -270,8 +271,9 @@
                         </el-table-column>
                         <el-table-column prop="source" label="来源" width="100"></el-table-column>
                         <el-table-column prop="remark" label="备注" min-width="120"></el-table-column>
-                        <el-table-column label="操作" width="80" align="center">
+                        <el-table-column label="操作" width="140" align="center">
                             <template #default="s">
+                                <el-button type="primary" size="small" text @click="startPerfFlowEdit(s.row)">编辑</el-button>
                                 <el-button type="danger" size="small" text @click="deletePerfFlow(s.row.id)">删除</el-button>
                             </template>
                         </el-table-column>
@@ -301,9 +303,41 @@
 <script setup>
 import { ref } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
-const { formatMoney, pct, perfSummary, perfTimeline, perfContribution, perfFlows, perfStory, perfLoading, perfFlowForm, hasPerfFlows, perfStoryToneType, perfGuideSteps, perfLensRows, perfReadTips, perfCards, displayedPerfContribution, perfContributionFilter, perfContributionSort, perfContributionHeadline, perfContributionMix, fetchPerformance, addPerfFlow, deletePerfFlow, loadPerfFlowSuggestions, applyPerfFlowSuggestion, contributionBarStyle } = useAppCtx();
+const {
+    formatMoney, pct, perfSummary, perfTimeline, perfContribution, perfFlows, perfStory, perfLoading, perfFlowForm,
+    hasPerfFlows, perfStoryToneType, perfGuideSteps, perfLensRows, perfReadTips, perfCards,
+    displayedPerfContribution, perfContributionFilter, perfContributionSort, perfContributionHeadline, perfContributionMix,
+    fetchPerformance, addPerfFlow, updatePerfFlow, deletePerfFlow, loadPerfFlowSuggestions, applyPerfFlowSuggestion, contributionBarStyle,
+} = useAppCtx();
 const perfFlowSuggestions = ref([]);
 const perfSuggestLoading = ref(false);
+const perfFlowEditId = ref(null);
+
+const startPerfFlowEdit = (row) => {
+    if (!row) return;
+    perfFlowEditId.value = row.id;
+    perfFlowForm.value = {
+        date: row.date,
+        flow_type: row.flow_type || '投入',
+        amount: Number(row.amount || 0),
+        source: row.source || '',
+        remark: row.remark || '',
+    };
+};
+
+const cancelPerfFlowEdit = () => {
+    perfFlowEditId.value = null;
+};
+
+const savePerfFlow = async () => {
+    if (perfFlowEditId.value) {
+        await updatePerfFlow(perfFlowEditId.value, { ...perfFlowForm.value });
+        perfFlowEditId.value = null;
+    } else {
+        await addPerfFlow();
+    }
+};
+
 const onLoadFlowSuggest = async () => {
     perfSuggestLoading.value = true;
     try {

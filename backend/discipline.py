@@ -6,6 +6,7 @@ real transactions when the user explicitly confirms.
 from __future__ import annotations
 
 import json
+import logging
 import math
 import sqlite3
 from datetime import datetime
@@ -31,6 +32,8 @@ except ImportError:
         validate_transaction_payload,
     )
     from portfolio_totals import compute_portfolio_totals
+
+logger = logging.getLogger(__name__)
 
 POLICY_KEY = "discipline_policy"
 DRAFT_REMARK_PREFIX = "[纪律草稿]"
@@ -967,7 +970,8 @@ def confirm_draft(conn, draft_id: int, *, make_backup: bool = True) -> Dict[str,
     if make_backup:
         try:
             backup_path = create_safety_backup("before_confirm_discipline_draft")
-        except Exception:
+        except Exception as exc:
+            logger.warning("confirm_draft backup failed draft_id=%s: %s", draft_id, exc)
             backup_path = None
 
     cur = conn.execute(
@@ -1016,7 +1020,8 @@ def confirm_drafts(conn, draft_ids: List[int]) -> Dict[str, Any]:
     backup_path = None
     try:
         backup_path = create_safety_backup("before_confirm_discipline_drafts")
-    except Exception:
+    except Exception as exc:
+        logger.warning("confirm_drafts shared backup failed: %s", exc)
         backup_path = None
     for did in draft_ids:
         try:

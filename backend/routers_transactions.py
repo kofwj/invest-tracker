@@ -248,7 +248,15 @@ def list_transactions(
 
 
 @router.post("/transactions")
-def add_transaction(trans: TransactionBase):
+def add_transaction(trans: TransactionBase, backup: bool = True):
+    """新增交易。默认写安全备份；?backup=false 可跳过（导入/批量场景）。"""
+    backup_path = None
+    if backup:
+        try:
+            backup_path = create_safety_backup("before_add_transaction")
+        except Exception:
+            # 备份失败不阻断入账，但调用方应看到 backup=None
+            backup_path = None
     with db_session(row_factory=sqlite3.Row) as conn:
         ensure_transaction_columns(conn)
         try:
@@ -284,7 +292,7 @@ def add_transaction(trans: TransactionBase):
         )
         recalc_holdings(conn, codes=[trans.code])
         conn.commit()
-    return {"status": "success"}
+    return {"status": "success", "backup": backup_path}
 
 
 @router.put("/transactions/{transaction_id}")

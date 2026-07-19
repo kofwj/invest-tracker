@@ -245,6 +245,14 @@ const createPerformanceModule = ({
         } catch (e) { showSyncNotice('新增失败: ' + (e.response?.data?.detail || e.message), 'error'); }
     }
 
+    async function updatePerfFlow(id, payload) {
+        try {
+            await api.updatePortfolioCashFlow(id, payload || {});
+            showSyncNotice('已更新');
+            fetchPerformance();
+        } catch (e) { showSyncNotice('更新失败: ' + (e?.response?.data?.detail || e.message), 'error'); }
+    }
+
     async function deletePerfFlow(id) {
         try {
             await api.deletePortfolioCashFlow(id);
@@ -293,6 +301,7 @@ const createPerformanceModule = ({
         renderPerfChart,
         fetchPerformance,
         addPerfFlow,
+        updatePerfFlow,
         deletePerfFlow,
         loadPerfFlowSuggestions,
         applyPerfFlowSuggestion,

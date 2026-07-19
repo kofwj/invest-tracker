@@ -358,7 +358,7 @@
             <pre style="white-space:pre-wrap;font-family:inherit;font-size:13px;line-height:1.6;margin:0;color:#303133;">{{ eveningBriefDialog.text || '（空）' }}</pre>
             <template #footer>
                 <el-button @click="eveningBriefDialog.visible = false">关闭</el-button>
-                <el-button type="primary" plain :loading="eveningBriefDialog.loading" @click="openEveningBrief(true)">推送到飞书</el-button>
+                <el-button type="primary" plain :loading="eveningBriefDialog.loading" @click="openEveningBrief(true)">推送通知</el-button>
             </template>
         </el-dialog>
 </template>

@@ -132,9 +132,23 @@ export function createMaintenanceHelpers({
         }
     };
 
-    const downloadBackup = (row) => {
+    const downloadBackup = async (row) => {
         if (!row?.filename) return;
-        window.location.href = `${API}/maintenance/backups/${encodeURIComponent(row.filename)}/download`;
+        try {
+            const res = await api.download(
+                `/maintenance/backups/${encodeURIComponent(row.filename)}/download`,
+            );
+            const blobUrl = window.URL.createObjectURL(new Blob([res.data], { type: 'application/octet-stream' }));
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = row.filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (e) {
+            ElMessage.error('下载备份失败：' + apiErrorDetail(e));
+        }
     };
 
     const restoreBackup = async (row) => {

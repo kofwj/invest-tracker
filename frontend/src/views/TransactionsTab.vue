@@ -142,14 +142,14 @@
 
                 <el-divider content-position="left">交易管理</el-divider>
                 <el-alert
-                    v-if="pendingTransactions.length > 0"
+                    v-if="Number(dashboard?.pending_count || pendingTransactions.length || 0) > 0"
                     type="warning"
                     show-icon
                     :closable="false"
                     style="margin-bottom: 12px;"
                 >
                     <template #title>
-                        申购在途提醒：{{ pendingTransactions.length }} 笔，合计 {{ formatMoney(pendingPurchaseTotal) }}。份额/净值确认后，点击对应记录“编辑”，把方向改为“买入”并补充数量/单价。
+                        申购在途提醒：{{ Number(dashboard?.pending_count || pendingTransactions.length || 0) }} 笔，合计 {{ formatMoney(dashboard?.pending_purchase != null ? dashboard.pending_purchase : pendingPurchaseTotal) }}。份额/净值确认后，点击对应记录“编辑”，把方向改为“买入”并补充数量/单价。
                     </template>
                 </el-alert>
                 <el-card>
@@ -258,5 +258,5 @@
 
 <script setup>
 import { useAppCtx } from '../composables/useAppCtx.js';
-const { transForm, feeAccounts, feeAutoHint, filteredTransactions, pendingTransactions, pendingPurchaseTotal, transQuery, transPage, submitTrans, resetForm, markFeeManual, downloadTransactionsTemplate, exportTransactions, importTransactions, queryAssetByCode, queryAssetByName, selectTransAsset, autoMatchTransAsset, applyTransFilter, resetTransQuery, handleTransPageChange, handleTransPageSizeChange, openTransEditDialog, deleteTransaction, formatMoney } = useAppCtx();
+const { transForm, feeAccounts, feeAutoHint, filteredTransactions, pendingTransactions, pendingPurchaseTotal, transQuery, transPage, submitTrans, resetForm, markFeeManual, downloadTransactionsTemplate, exportTransactions, importTransactions, queryAssetByCode, queryAssetByName, selectTransAsset, autoMatchTransAsset, applyTransFilter, resetTransQuery, handleTransPageChange, handleTransPageSizeChange, openTransEditDialog, deleteTransaction, formatMoney, dashboard } = useAppCtx();
 </script>

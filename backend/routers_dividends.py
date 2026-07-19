@@ -88,8 +88,9 @@ def scan_dividends(payload: DividendScanRequest = DividendScanRequest()):
         raise HTTPException(status_code=500, detail=f"分红扫描失败: {e}")
 
 
-@router.get("/dividends/scan")
+@router.get("/dividends/scan", deprecated=True)
 def scan_dividends_get(lookback_days: int = DEFAULT_LOOKBACK_DAYS, codes: Optional[str] = None):
+    """已弃用：请用 POST /dividends/scan。GET 仍可用，避免误依赖为唯一入口。"""
     code_list = [c.strip() for c in (codes or "").split(",") if c.strip()] or None
     return scan_dividends(DividendScanRequest(lookback_days=lookback_days, codes=code_list))
 

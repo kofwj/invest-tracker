@@ -5,6 +5,27 @@
 
 ---
 
+## [2026-07-19] — 结构审计 P0–P2 修复
+
+### P0
+- 备份下载改走带 Authorization 的 axios blob，避免开密码后 401
+
+### P1
+- `GET /evening-brief` 只读；推送改为 `POST /evening-brief/notify`
+- `GET /dividends/scan` 标记 deprecated（请用 POST）
+- 组合外部流水：类型仅「投入/取出」，金额存正数并校验
+- 交易页申购在途横幅用 dashboard 全量笔数/金额
+- `/health` 不再返回 `db_path`
+- 新增交易默认安全备份（`?backup=false` 可关）
+
+### P2
+- 绩效页支持编辑组合外部流水（PUT）
+- 资产配置「申购在途」笔数用 `pending_count`
+- 生产 CORS=* 时告警；token TTL 可配 `TOKEN_TTL_DAYS`
+- 纪律确认备份失败写 warning 日志
+
+---
+
 ## [2026-07-19] — 多通道消息推送（A/B/C）
 
 ### 基建

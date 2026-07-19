@@ -27,6 +27,23 @@ except ImportError:
 router = APIRouter()
 
 
+PORTFOLIO_FLOW_TYPES = ("投入", "取出")
+
+
+def normalize_portfolio_cash_flow(flow_type: str, amount) -> tuple:
+    """组合外部流水：类型只允许投入/取出，金额存为正数。"""
+    t = str(flow_type or "").strip()
+    if t not in PORTFOLIO_FLOW_TYPES:
+        raise HTTPException(status_code=400, detail="flow_type 只能是「投入」或「取出」")
+    try:
+        amt = abs(float(amount or 0))
+    except (TypeError, ValueError) as e:
+        raise HTTPException(status_code=400, detail="金额无效") from e
+    if amt <= 0:
+        raise HTTPException(status_code=400, detail="金额必须大于 0")
+    return t, amt
+
+
 class PortfolioCashFlowBase(BaseModel):
     date: dt_date
     flow_type: str
@@ -66,14 +83,15 @@ def list_portfolio_cash_flows(start_date: Optional[str] = None, end_date: Option
 
 @router.post("/portfolio-cash-flows")
 def add_portfolio_cash_flow(flow: PortfolioCashFlowBase):
+    flow_type, amount = normalize_portfolio_cash_flow(flow.flow_type, flow.amount)
     with db_session() as conn:
         ensure_portfolio_cash_flows_table(conn)
         conn.execute(
             "INSERT INTO portfolio_cash_flows (date, flow_type, amount, source, remark) VALUES (?,?,?,?,?)",
-            (flow.date.isoformat(), flow.flow_type, flow.amount, flow.source, flow.remark),
+            (flow.date.isoformat(), flow_type, amount, flow.source, flow.remark),
         )
         conn.commit()
-    return {"status": "success"}
+    return {"status": "success", "flow_type": flow_type, "amount": amount}
 
 
 @router.put("/portfolio-cash-flows/{flow_id}")
@@ -84,8 +102,9 @@ def update_portfolio_cash_flow(flow_id: int, flow: PortfolioCashFlowUpdate):
         if not existing:
             raise HTTPException(status_code=404, detail="Flow not found")
         d = flow.date.isoformat() if flow.date else existing["date"]
-        t = flow.flow_type if flow.flow_type else existing["flow_type"]
+        t = flow.flow_type if flow.flow_type is not None else existing["flow_type"]
         a = flow.amount if flow.amount is not None else existing["amount"]
+        t, a = normalize_portfolio_cash_flow(t, a)
         s = flow.source if flow.source is not None else existing["source"]
         r = flow.remark if flow.remark is not None else existing["remark"]
         conn.execute(
@@ -93,7 +112,7 @@ def update_portfolio_cash_flow(flow_id: int, flow: PortfolioCashFlowUpdate):
             (d, t, a, s, r, flow_id),
         )
         conn.commit()
-    return {"status": "success"}
+    return {"status": "success", "flow_type": t, "amount": a}
 
 
 @router.delete("/portfolio-cash-flows/{flow_id}")
@@ -155,13 +174,29 @@ def portfolio_cash_flow_suggest():
 
 
 @router.get("/evening-brief")
-def evening_brief(notify: bool = False):
+def evening_brief():
+    """只读预览晚间简报。推送请用 POST /evening-brief/notify（避免 GET 副作用）。"""
     try:
         from .portfolio_helpers import send_evening_brief
     except ImportError:
         from portfolio_helpers import send_evening_brief
     with db_session(row_factory=sqlite3.Row) as conn:
         ensure_portfolio_cash_flows_table(conn)
-        data = send_evening_brief(conn, notify=notify)
+        # 故意忽略历史 ?notify=true：GET 永不推送
+        data = send_evening_brief(conn, notify=False)
+        conn.commit()
+    return data
+
+
+@router.post("/evening-brief/notify")
+def evening_brief_notify():
+    """生成晚间简报并走多通道推送。"""
+    try:
+        from .portfolio_helpers import send_evening_brief
+    except ImportError:
+        from portfolio_helpers import send_evening_brief
+    with db_session(row_factory=sqlite3.Row) as conn:
+        ensure_portfolio_cash_flows_table(conn)
+        data = send_evening_brief(conn, notify=True)
         conn.commit()
     return data

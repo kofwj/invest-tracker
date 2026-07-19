@@ -78,6 +78,13 @@ app = FastAPI(title="Investment Tracker API", lifespan=lifespan)
 _cors_origins = os.environ.get("CORS_ALLOW_ORIGINS", "*")
 if _cors_origins.strip() == "*":
     _allow_origins = ["*"]
+    if os.environ.get("INVEST_TRACKER_PASSWORD") or os.environ.get("ENV", "").lower() in (
+        "prod",
+        "production",
+    ):
+        logging.getLogger(__name__).warning(
+            "CORS_ALLOW_ORIGINS=* with auth/prod — 生产建议设为具体域名，例如 https://asset.anemy.org"
+        )
 else:
     _allow_origins = [o.strip() for o in _cors_origins.split(",") if o.strip()]
 
@@ -109,11 +116,11 @@ def check_database_health():
 
 
 def health_payload():
+    # 不暴露本机绝对路径（外网 /health 可达时避免信息泄露）
     return {
         "status": "ok",
         "database": check_database_health(),
         "timezone": str(APP_CONFIG.local_timezone),
-        "db_path": DB_PATH,
     }
 
 

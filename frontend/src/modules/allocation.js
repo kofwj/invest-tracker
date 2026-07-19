@@ -121,7 +121,8 @@ const createAllocationModule = ({
 
         const pendingPurchase = Number(dashboard.value.pending_purchase || 0);
         if (pendingPurchase > 0) {
-            addSyntheticCategory('基金申购在途', pendingPurchase, defaultExpectedReturns['债基'], pendingTransactions.value.length || 1);
+            const pendingCount = Math.max(1, Number(dashboard.value.pending_count || 0));
+            addSyntheticCategory('基金申购在途', pendingPurchase, defaultExpectedReturns['债基'], pendingCount);
             macroGroups['固收'].amount += pendingPurchase;
             macroGroups['固收'].cost += pendingPurchase;
             macroGroups['固收'].weighted_expected_return_sum += defaultExpectedReturns['债基'] * pendingPurchase;

@@ -101,9 +101,11 @@ const api = {
     performanceStory: () => axios.get(API + '/performance/story'),
     listPortfolioCashFlows: () => axios.get(API + '/portfolio-cash-flows'),
     addPortfolioCashFlow: (payload) => axios.post(API + '/portfolio-cash-flows', payload),
+    updatePortfolioCashFlow: (id, payload) => axios.put(API + '/portfolio-cash-flows/' + id, payload),
     deletePortfolioCashFlow: (id) => axios.delete(API + '/portfolio-cash-flows/' + id),
     portfolioCashFlowSuggest: () => axios.get(API + '/portfolio-cash-flows/suggest'),
-    eveningBrief: (notify=false) => axios.get(API + '/evening-brief' + (notify ? '?notify=true' : '')),
+    eveningBrief: () => axios.get(API + '/evening-brief'),
+    eveningBriefNotify: () => axios.post(API + '/evening-brief/notify'),
 
     brokerReconcilePreview: (formData) => axios.post(API + '/broker-reconcile/preview', formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120000 }),
     brokerReconcileApply: (payload) => axios.post(API + '/broker-reconcile/apply', payload || {}, { timeout: 120000 }),
