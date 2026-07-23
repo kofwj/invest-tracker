@@ -110,6 +110,7 @@
                                 <el-button type="primary" link @click.stop="openExpectedReturnDialog(scope.row)">年化</el-button>
                                 <el-button type="warning" link @click.stop="openHoldingCorrectionDialog(scope.row)">校正</el-button>
                                 <el-button type="info" link @click.stop="openHoldingCorrectionHistory(scope.row)">记录</el-button>
+                                <el-button type="success" link @click.stop="openUziAnalysisDialog(scope.row)">UZI 分析</el-button>
                             </el-space>
                         </template>
                     </el-table-column>
@@ -118,5 +119,5 @@
 
 <script setup>
 import { useAppCtx } from '../composables/useAppCtx.js';
-const { holdings, showTransactions, openExpectedReturnDialog, openHoldingCorrectionDialog, openHoldingCorrectionHistory, formatMoney, formatPercent, holdingFloatProfit, holdingLifetimeProfit, holdingFloatProfitRate, holdingLifetimeProfitRate } = useAppCtx();
+const { holdings, showTransactions, openExpectedReturnDialog, openHoldingCorrectionDialog, openHoldingCorrectionHistory, openUziAnalysisDialog, formatMoney, formatPercent, holdingFloatProfit, holdingLifetimeProfit, holdingFloatProfitRate, holdingLifetimeProfitRate } = useAppCtx();
 </script>

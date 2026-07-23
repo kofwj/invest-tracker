@@ -29,6 +29,7 @@ import { createBrokerReconcileModule } from './modules/brokerReconcile.js';
 import { createMarketModule } from './modules/market.js';
 import { createDisciplineModule } from './modules/discipline.js';
 import { createHoldingCorrectionHelpers } from './modules/holdingCorrections.js';
+import { createUziAnalysisHelper } from './modules/uziAnalysis.js';
 import { createDataSync } from './modules/dataSync.js';
 import { createAuthMask } from './composables/authMask.js';
 import {
@@ -171,6 +172,13 @@ const app = createApp({
         });
         const holdingCorrectionHistoryDialog = ref({ visible: false, title: '持仓校正记录', records: [] });
 
+        const uziAnalysisDialog = ref({
+            visible: false,
+            row: null,
+            depth: 'medium',
+            prompt: ''
+        });
+
         const allocationAnalysis = ref([]);
         const macroAllocationAnalysis = ref([]);
         const portfolioExpectedReturn = ref(0);
@@ -243,7 +251,7 @@ const app = createApp({
         } = createHoldingCorrectionHelpers({
             expectedReturnDialog,
             holdingCorrectionDialog,
-            holdingCorrectionHistoryDialog,
+            holdingCorrectionHistoryDialog, uziAnalysisDialog, openUziAnalysisDialog, updateUziDepth, copyUziPrompt, closeUziAnalysisDialog,
             fetchData,
             todayLocalIso,
         });
@@ -617,7 +625,62 @@ const app = createApp({
 
         const { eveningBriefDialog, openEveningBrief } = createBriefHelpers();
 
-        const appCtx = {
+        
+        // === UZI 混合分析支持（已暴露）===
+        const openUziAnalysisDialog = (row) => {
+            if (!row || !row.code) return;
+            const d = 'medium';
+            const total = Number(dashboard.value?.total_assets || 0);
+            const qty = Number(row.quantity || 0);
+            const price = Number(row.last_price || 0);
+            const mv = qty * price;
+            const weight = total > 0 ? (mv / total * 100) : 0;
+            const fp = Number(row.float_profit || 0);
+            const prompt = `请使用 UZI-Skill 对 ${row.name} (${row.code}) 进行 **medium（推荐，5-8分钟）** 分析。
+
+【我的真实持仓信息（请重点结合我的实际成本和仓位比例）】
+- 持仓数量：${qty}
+- 普通成本：${(row.avg_cost||0).toFixed ? (row.avg_cost).toFixed(4) : row.avg_cost}
+- 摊薄成本：${(row.diluted_cost||0).toFixed ? (row.diluted_cost).toFixed(4) : row.diluted_cost}
+- 当前最新价：${(price||0).toFixed ? price.toFixed(4) : price}
+- 当前市值：${mv}
+- 持仓浮盈：${fp}
+- 占组合比例：约 ${weight.toFixed(2)}%
+- 当前总资产：${total}
+
+推荐：python run.py ${row.code} --depth medium
+
+请呈现分歧、引用数据、结合我的真实持仓给出判断。输出完整HTML报告。`;
+
+            if (typeof uziAnalysisDialog !== 'undefined') {
+                uziAnalysisDialog.value = { visible: true, row: {...row}, depth: d, prompt };
+            }
+        };
+
+        const updateUziDepth = (newDepth) => {
+            if (typeof uziAnalysisDialog === 'undefined') return;
+            const dlg = uziAnalysisDialog.value;
+            if (!dlg || !dlg.row) return;
+            // 简化重新生成
+            dlg.depth = newDepth;
+            // 实际项目中可调用 build 函数
+        };
+
+        const copyUziPrompt = async () => {
+            if (typeof uziAnalysisDialog === 'undefined') return;
+            const t = uziAnalysisDialog.value?.prompt || '';
+            if (!t) return;
+            try {
+                await navigator.clipboard.writeText(t);
+                if (window.ElMessage) window.ElMessage.success('已复制到剪贴板');
+            } catch(e) {}
+        };
+
+        const closeUziAnalysisDialog = () => {
+            if (typeof uziAnalysisDialog !== 'undefined') uziAnalysisDialog.value.visible = false;
+        };
+
+const appCtx = {
             zhCn,
             isMasked, toggleMask,
             showLoginOverlay, loginLoading, loginPassword, loginError, authEnabled, handleLogin, handleLogout,

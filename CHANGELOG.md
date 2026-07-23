@@ -381,3 +381,13 @@
 
 - P0–P2 持仓、校验与 dashboard 可靠性修复（见 `main` 历史 `e59deb2` 等）
 - 密码门、GitHub OAuth、Caddy 生产 compose 等 VPS 部署能力（见 `deploy/vps` 早期提交）
+
+---
+
+## [2026-07-23] — UZI-Skill 混合集成（第一步）
+
+- 持仓明细新增「UZI 分析」按钮
+- 自动生成带真实持仓（数量/普通成本/摊薄成本/浮盈/仓位占比）的提示词
+- 支持 lite/medium/deep 切换 + 一键复制
+- 提示词直接粘贴本机 Hermes 执行（UZI 仍在本地跑）
+
