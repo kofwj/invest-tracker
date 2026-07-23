@@ -104,7 +104,7 @@
                             </el-tooltip>
                         </template>
                     </el-table-column>
-                    <el-table-column label="操作" width="150" align="center" header-align="center" fixed="right">
+                    <el-table-column label="操作" min-width="220" width="240" align="center" header-align="center" fixed="right">
                         <template #default="scope">
                             <el-space wrap :size="4" style="justify-content:center;">
                                 <el-button type="primary" link @click.stop="openExpectedReturnDialog(scope.row)">年化</el-button>

@@ -4,15 +4,34 @@
  */
 
 export function createUziAnalysisHelper({ dashboard, formatMoney }) {
+    const money = (value, digits = 2, showSign = false) => {
+        if (typeof formatMoney === 'function') {
+            try {
+                return formatMoney(value, digits, showSign);
+            } catch (_) {
+                // fall through
+            }
+        }
+        const num = Number(value);
+        if (Number.isNaN(num)) return '—';
+        const sign = showSign && num > 0 ? '+' : (num < 0 ? '-' : '');
+        return `${sign}¥${Math.abs(num).toFixed(digits)}`;
+    };
+
     const buildPrompt = (row, depth = 'medium') => {
         if (!row || !row.code) return '';
 
-        const total = Number(dashboard.value?.total_assets || 0);
+        const total = Number(dashboard?.value?.total_assets || dashboard?.total_assets || 0);
         const qty = Number(row.quantity || 0);
         const price = Number(row.last_price || 0);
         const mv = qty * price;
         const weight = total > 0 ? (mv / total * 100) : 0;
-        const floatProfit = Number(row.float_profit || 0);
+        // 后端可能不直接给 float_profit，这里兜底自己算
+        const floatProfit = Number(
+            row.float_profit != null
+                ? row.float_profit
+                : ((price - Number(row.avg_cost || 0)) * qty + Number(row.total_dividend || 0))
+        );
 
         const depthLabel = depth === 'lite'
             ? 'lite（1-2分钟快速判断）'
@@ -22,17 +41,17 @@ export function createUziAnalysisHelper({ dashboard, formatMoney }) {
 
         return `请使用 UZI-Skill 对以下标的进行 **${depthLabel}** 分析：
 
-股票：${row.name} (${row.code})，分类：${row.category || '未分类'}
+股票：${row.name || ''} (${row.code})，分类：${row.category || '未分类'}
 
 【我的真实持仓信息（请重点结合我的实际成本和仓位比例给出针对性判断）】
 - 持仓数量：${qty}
-- 普通成本：${formatMoney(row.avg_cost, 4)}
-- 摊薄成本：${formatMoney(row.diluted_cost, 4)}
-- 当前最新价：${formatMoney(price, 4)}
-- 当前市值：${formatMoney(mv)}
-- 持仓浮盈：${formatMoney(floatProfit, 2, true)}
+- 普通成本：${money(row.avg_cost, 4)}
+- 摊薄成本：${money(row.diluted_cost, 4)}
+- 当前最新价：${money(price, 4)}
+- 当前市值：${money(mv)}
+- 持仓浮盈：${money(floatProfit, 2, true)}
 - 占组合总资产比例：约 ${weight.toFixed(2)}%
-- 当前总资产参考：${formatMoney(total)}
+- 当前总资产参考：${money(total)}
 
 推荐执行命令：
 python run.py ${row.code} --depth ${depth}

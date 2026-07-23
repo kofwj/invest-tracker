@@ -256,89 +256,54 @@ const app = createApp({
             todayLocalIso,
         });
 
-        // === UZI-Skill 混合分析（防御包装，不影响主流程）===
-        let uziFns = {};
-        try {
-            const uziHelper = createUziAnalysisHelper({ dashboard, formatMoney });
-
-            const openUziAnalysisDialog = (row) => {
-                if (!row || !row.code) return;
-                const d = 'medium';
-                uziAnalysisDialog.value = {
-                    visible: true,
-                    row: { ...row },
-                    depth: d,
-                    prompt: uziHelper.buildUziPrompt(row, d)
-                };
-            };
-
-            const updateUziDepth = (newDepth) => {
-                const dlg = uziAnalysisDialog.value;
-                if (!dlg || !dlg.row) return;
-                dlg.depth = newDepth;
-                dlg.prompt = uziHelper.buildUziPrompt(dlg.row, newDepth);
-            };
-
-            const copyUziPrompt = async () => {
-                const t = uziAnalysisDialog.value?.prompt || '';
-                if (!t) return;
-                try {
-                    await navigator.clipboard.writeText(t);
-                    ElMessage.success('提示词已复制，可直接粘贴到本地 Hermes 执行');
-                } catch (e) {
-                    ElMessage.warning('复制失败，请手动全选复制');
-                }
-            };
-
-            const closeUziAnalysisDialog = () => {
-                uziAnalysisDialog.value.visible = false;
-            };
-
-            uziFns = {
-                uziAnalysisDialog,
-                openUziAnalysisDialog,
-                updateUziDepth,
-                copyUziPrompt,
-                closeUziAnalysisDialog,
-            };
-        } catch (e) {
-            console.warn('[UZI] 初始化失败（不影响主功能）', e);
-            uziFns = {
-                uziAnalysisDialog: ref({ visible: false, row: null, depth: 'medium', prompt: '' }),
-                openUziAnalysisDialog: () => {},
-                updateUziDepth: () => {},
-                copyUziPrompt: async () => {},
-                closeUziAnalysisDialog: () => {},
-            };
-        }
+        // UZI 混合分析：生成可复制到本机 Hermes 的提示词
         const { buildUziPrompt } = createUziAnalysisHelper({ dashboard, formatMoney });
 
         const openUziAnalysisDialog = (row) => {
-            if (!row || !row.code) return;
-            const d = "medium";
+            if (!row || !row.code) {
+                ElMessage.warning('该持仓缺少代码，无法生成 UZI 提示词');
+                return;
+            }
+            const d = 'medium';
+            let prompt = '';
+            try {
+                prompt = buildUziPrompt(row, d) || '';
+            } catch (e) {
+                console.warn('[UZI] build prompt failed', e);
+                prompt = `请使用 UZI-Skill 分析 ${row.name || ''} (${row.code})，深度 medium。`;
+            }
             uziAnalysisDialog.value = {
                 visible: true,
                 row: { ...row },
                 depth: d,
-                prompt: buildUziPrompt(row, d)
+                prompt,
             };
         };
 
         const updateUziDepth = (newDepth) => {
             const dlg = uziAnalysisDialog.value;
             if (!dlg || !dlg.row) return;
-            dlg.depth = newDepth;
-            dlg.prompt = buildUziPrompt(dlg.row, newDepth);
+            const depth = newDepth || dlg.depth || 'medium';
+            dlg.depth = depth;
+            try {
+                dlg.prompt = buildUziPrompt(dlg.row, depth) || dlg.prompt || '';
+            } catch (e) {
+                console.warn('[UZI] update depth failed', e);
+            }
         };
 
         const copyUziPrompt = async () => {
-            const t = uziAnalysisDialog.value?.prompt || "";
-            if (!t) return;
+            const t = uziAnalysisDialog.value?.prompt || '';
+            if (!t) {
+                ElMessage.warning('提示词为空');
+                return;
+            }
             try {
                 await navigator.clipboard.writeText(t);
-                ElMessage.success("提示词已复制，可直接粘贴到本地 Hermes 执行");
+                ElMessage.success('提示词已复制，可直接粘贴到本地 Hermes 执行');
             } catch (e) {
-                ElMessage.warning("复制失败，请手动全选复制");
+                // 降级：选中文本框内容
+                ElMessage.warning('自动复制失败，请手动全选复制提示词');
             }
         };
 
@@ -729,7 +694,9 @@ const app = createApp({
             openDepositDialog, saveDeposit, deleteDeposit, updateCash, queryCashFlows, resetCashFlowQuery, addCashFlow, openCashFlowEditDialog, saveCashFlowEdit, deleteCashFlow, cashFlowTagType,
             createSnapshot, fetchSnapshots, exportSnapshots, compactSnapshots, showTransactions,
             queryTransactions, applyTransFilter, resetTransQuery, handleTransPageChange, handleTransPageSizeChange, goPendingTransactions, openTransEditDialog, saveTransactionEdit, deleteTransaction,
-            openExpectedReturnDialog, saveExpectedReturn, openHoldingCorrectionDialog, saveHoldingCorrection, openHoldingCorrectionHistory, deleteHoldingCorrection, ...Object.values(uziFns), uziAnalysisDialog: uziFns.uziAnalysisDialog, openUziAnalysisDialog: uziFns.openUziAnalysisDialog, updateUziDepth: uziFns.updateUziDepth, copyUziPrompt: uziFns.copyUziPrompt, closeUziAnalysisDialog: uziFns.closeUziAnalysisDialog, formatMoney, formatPercent, pct, holdingFloatProfit, holdingLifetimeProfit, holdingFloatProfitRate, holdingLifetimeProfitRate,
+            openExpectedReturnDialog, saveExpectedReturn, openHoldingCorrectionDialog, saveHoldingCorrection, openHoldingCorrectionHistory, deleteHoldingCorrection,
+            uziAnalysisDialog, openUziAnalysisDialog, updateUziDepth, copyUziPrompt, closeUziAnalysisDialog,
+            formatMoney, formatPercent, pct, holdingFloatProfit, holdingLifetimeProfit, holdingFloatProfitRate, holdingLifetimeProfitRate,
             perfSummary, perfTimeline, perfContribution, perfFlows, perfStory, perfLoading, perfFlowForm, hasPerfFlows, perfStoryToneType, perfGuideSteps, perfLensRows, perfReadTips, perfCards,
             displayedPerfContribution, perfContributionFilter, perfContributionSort, perfContributionHeadline, perfContributionMix,
             fetchPerformance, addPerfFlow, updatePerfFlow, deletePerfFlow, loadPerfFlowSuggestions, applyPerfFlowSuggestion, contributionBarStyle, fetchMaintenance, createDbBackup, downloadBackup, restoreBackup, deleteBackup, restoreUploadedBackup,

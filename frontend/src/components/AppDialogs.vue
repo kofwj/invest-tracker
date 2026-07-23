@@ -368,10 +368,15 @@
                 <div style="margin-bottom:8px; color:#606266;">
                     {{ uziAnalysisDialog.row.name }} ({{ uziAnalysisDialog.row.code }})
                     <span style="margin-left:12px;">当前深度：</span>
-                    <el-radio-group v-model="uziAnalysisDialog.depth" @change="updateUziDepth" size="small" style="margin-left:6px;">
-                        <el-radio-button label="lite">lite</el-radio-button>
-                        <el-radio-button label="medium">medium（推荐）</el-radio-button>
-                        <el-radio-button label="deep">deep</el-radio-button>
+                    <el-radio-group
+                        v-model="uziAnalysisDialog.depth"
+                        size="small"
+                        style="margin-left:6px;"
+                        @change="updateUziDepth"
+                    >
+                        <el-radio-button value="lite">lite</el-radio-button>
+                        <el-radio-button value="medium">medium（推荐）</el-radio-button>
+                        <el-radio-button value="deep">deep</el-radio-button>
                     </el-radio-group>
                 </div>
 
