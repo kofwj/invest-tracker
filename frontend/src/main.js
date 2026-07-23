@@ -251,12 +251,66 @@ const app = createApp({
         } = createHoldingCorrectionHelpers({
             expectedReturnDialog,
             holdingCorrectionDialog,
-            holdingCorrectionHistoryDialog, uziAnalysisDialog, openUziAnalysisDialog, updateUziDepth, copyUziPrompt, closeUziAnalysisDialog,
+            holdingCorrectionHistoryDialog,
             fetchData,
             todayLocalIso,
         });
 
-        // UZI 混合分析（干净版）
+        // === UZI-Skill 混合分析（防御包装，不影响主流程）===
+        let uziFns = {};
+        try {
+            const uziHelper = createUziAnalysisHelper({ dashboard, formatMoney });
+
+            const openUziAnalysisDialog = (row) => {
+                if (!row || !row.code) return;
+                const d = 'medium';
+                uziAnalysisDialog.value = {
+                    visible: true,
+                    row: { ...row },
+                    depth: d,
+                    prompt: uziHelper.buildUziPrompt(row, d)
+                };
+            };
+
+            const updateUziDepth = (newDepth) => {
+                const dlg = uziAnalysisDialog.value;
+                if (!dlg || !dlg.row) return;
+                dlg.depth = newDepth;
+                dlg.prompt = uziHelper.buildUziPrompt(dlg.row, newDepth);
+            };
+
+            const copyUziPrompt = async () => {
+                const t = uziAnalysisDialog.value?.prompt || '';
+                if (!t) return;
+                try {
+                    await navigator.clipboard.writeText(t);
+                    ElMessage.success('提示词已复制，可直接粘贴到本地 Hermes 执行');
+                } catch (e) {
+                    ElMessage.warning('复制失败，请手动全选复制');
+                }
+            };
+
+            const closeUziAnalysisDialog = () => {
+                uziAnalysisDialog.value.visible = false;
+            };
+
+            uziFns = {
+                uziAnalysisDialog,
+                openUziAnalysisDialog,
+                updateUziDepth,
+                copyUziPrompt,
+                closeUziAnalysisDialog,
+            };
+        } catch (e) {
+            console.warn('[UZI] 初始化失败（不影响主功能）', e);
+            uziFns = {
+                uziAnalysisDialog: ref({ visible: false, row: null, depth: 'medium', prompt: '' }),
+                openUziAnalysisDialog: () => {},
+                updateUziDepth: () => {},
+                copyUziPrompt: async () => {},
+                closeUziAnalysisDialog: () => {},
+            };
+        }
         const { buildUziPrompt } = createUziAnalysisHelper({ dashboard, formatMoney });
 
         const openUziAnalysisDialog = (row) => {
@@ -675,7 +729,7 @@ const app = createApp({
             openDepositDialog, saveDeposit, deleteDeposit, updateCash, queryCashFlows, resetCashFlowQuery, addCashFlow, openCashFlowEditDialog, saveCashFlowEdit, deleteCashFlow, cashFlowTagType,
             createSnapshot, fetchSnapshots, exportSnapshots, compactSnapshots, showTransactions,
             queryTransactions, applyTransFilter, resetTransQuery, handleTransPageChange, handleTransPageSizeChange, goPendingTransactions, openTransEditDialog, saveTransactionEdit, deleteTransaction,
-            openExpectedReturnDialog, saveExpectedReturn, openHoldingCorrectionDialog, saveHoldingCorrection, openHoldingCorrectionHistory, deleteHoldingCorrection, formatMoney, formatPercent, pct, holdingFloatProfit, holdingLifetimeProfit, holdingFloatProfitRate, holdingLifetimeProfitRate,
+            openExpectedReturnDialog, saveExpectedReturn, openHoldingCorrectionDialog, saveHoldingCorrection, openHoldingCorrectionHistory, deleteHoldingCorrection, ...Object.values(uziFns), uziAnalysisDialog: uziFns.uziAnalysisDialog, openUziAnalysisDialog: uziFns.openUziAnalysisDialog, updateUziDepth: uziFns.updateUziDepth, copyUziPrompt: uziFns.copyUziPrompt, closeUziAnalysisDialog: uziFns.closeUziAnalysisDialog, formatMoney, formatPercent, pct, holdingFloatProfit, holdingLifetimeProfit, holdingFloatProfitRate, holdingLifetimeProfitRate,
             perfSummary, perfTimeline, perfContribution, perfFlows, perfStory, perfLoading, perfFlowForm, hasPerfFlows, perfStoryToneType, perfGuideSteps, perfLensRows, perfReadTips, perfCards,
             displayedPerfContribution, perfContributionFilter, perfContributionSort, perfContributionHeadline, perfContributionMix,
             fetchPerformance, addPerfFlow, updatePerfFlow, deletePerfFlow, loadPerfFlowSuggestions, applyPerfFlowSuggestion, contributionBarStyle, fetchMaintenance, createDbBackup, downloadBackup, restoreBackup, deleteBackup, restoreUploadedBackup,
