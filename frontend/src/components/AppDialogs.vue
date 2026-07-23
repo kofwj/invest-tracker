@@ -5,176 +5,16 @@
                 <el-table-column prop="date" label="日期" width="120"></el-table-column>
                 <el-table-column prop="direction" label="方向" width="80"></el-table-column>
                 <el-table-column label="数量">
-                    <template #default="scope">{{ scope.row.quantity }}
-        <!-- UZI-Skill 混合分析提示（复制到本地 Hermes 执行） -->
-        <el-dialog v-model="uziAnalysisDialog.visible" title="UZI 深度分析提示" width="820px" top="8vh">
-            <div v-if="uziAnalysisDialog.row">
-                <div style="margin-bottom:8px; color:#606266;">
-                    {{ uziAnalysisDialog.row.name }} ({{ uziAnalysisDialog.row.code }})
-                    <span style="margin-left:12px;">当前深度：</span>
-                    <el-radio-group v-model="uziAnalysisDialog.depth" @change="updateUziDepth" size="small" style="margin-left:6px;">
-                        <el-radio-button label="lite">lite</el-radio-button>
-                        <el-radio-button label="medium">medium（推荐）</el-radio-button>
-                        <el-radio-button label="deep">deep</el-radio-button>
-                    </el-radio-group>
-                </div>
-
-                <el-alert
-                    title="此为混合模式：点击下方按钮复制提示词后，在你本机的 Hermes 中直接粘贴执行 UZI-Skill。"
-                    type="info"
-                    :closable="false"
-                    style="margin-bottom:10px;"
-                />
-
-                <el-input
-                    type="textarea"
-                    v-model="uziAnalysisDialog.prompt"
-                    :rows="12"
-                    readonly
-                    style="font-family: monospace; font-size: 13px;"
-                />
-
-                <div style="margin-top:8px; font-size:12px; color:#909399;">
-                    提示：推荐先用 medium，复杂标的再用 deep。执行后把生成的 HTML 报告保存即可。
-                </div>
-            </div>
-
-            <template #footer>
-                <el-button @click="closeUziAnalysisDialog">关闭</el-button>
-                <el-button type="primary" @click="copyUziPrompt">复制提示词</el-button>
-            </template>
-        </el-dialog>
-
-</template>
+                    <template #default="scope">{{ scope.row.quantity }}</template>
                 </el-table-column>
                 <el-table-column label="单价">
-                    <template #default="scope">{{ formatMoney(scope.row.price, 4) }}
-        <!-- UZI-Skill 混合分析提示（复制到本地 Hermes 执行） -->
-        <el-dialog v-model="uziAnalysisDialog.visible" title="UZI 深度分析提示" width="820px" top="8vh">
-            <div v-if="uziAnalysisDialog.row">
-                <div style="margin-bottom:8px; color:#606266;">
-                    {{ uziAnalysisDialog.row.name }} ({{ uziAnalysisDialog.row.code }})
-                    <span style="margin-left:12px;">当前深度：</span>
-                    <el-radio-group v-model="uziAnalysisDialog.depth" @change="updateUziDepth" size="small" style="margin-left:6px;">
-                        <el-radio-button label="lite">lite</el-radio-button>
-                        <el-radio-button label="medium">medium（推荐）</el-radio-button>
-                        <el-radio-button label="deep">deep</el-radio-button>
-                    </el-radio-group>
-                </div>
-
-                <el-alert
-                    title="此为混合模式：点击下方按钮复制提示词后，在你本机的 Hermes 中直接粘贴执行 UZI-Skill。"
-                    type="info"
-                    :closable="false"
-                    style="margin-bottom:10px;"
-                />
-
-                <el-input
-                    type="textarea"
-                    v-model="uziAnalysisDialog.prompt"
-                    :rows="12"
-                    readonly
-                    style="font-family: monospace; font-size: 13px;"
-                />
-
-                <div style="margin-top:8px; font-size:12px; color:#909399;">
-                    提示：推荐先用 medium，复杂标的再用 deep。执行后把生成的 HTML 报告保存即可。
-                </div>
-            </div>
-
-            <template #footer>
-                <el-button @click="closeUziAnalysisDialog">关闭</el-button>
-                <el-button type="primary" @click="copyUziPrompt">复制提示词</el-button>
-            </template>
-        </el-dialog>
-
-</template>
+                    <template #default="scope">{{ formatMoney(scope.row.price, 4) }}</template>
                 </el-table-column>
                 <el-table-column label="金额">
-                    <template #default="scope">{{ formatMoney(scope.row.amount) }}
-        <!-- UZI-Skill 混合分析提示（复制到本地 Hermes 执行） -->
-        <el-dialog v-model="uziAnalysisDialog.visible" title="UZI 深度分析提示" width="820px" top="8vh">
-            <div v-if="uziAnalysisDialog.row">
-                <div style="margin-bottom:8px; color:#606266;">
-                    {{ uziAnalysisDialog.row.name }} ({{ uziAnalysisDialog.row.code }})
-                    <span style="margin-left:12px;">当前深度：</span>
-                    <el-radio-group v-model="uziAnalysisDialog.depth" @change="updateUziDepth" size="small" style="margin-left:6px;">
-                        <el-radio-button label="lite">lite</el-radio-button>
-                        <el-radio-button label="medium">medium（推荐）</el-radio-button>
-                        <el-radio-button label="deep">deep</el-radio-button>
-                    </el-radio-group>
-                </div>
-
-                <el-alert
-                    title="此为混合模式：点击下方按钮复制提示词后，在你本机的 Hermes 中直接粘贴执行 UZI-Skill。"
-                    type="info"
-                    :closable="false"
-                    style="margin-bottom:10px;"
-                />
-
-                <el-input
-                    type="textarea"
-                    v-model="uziAnalysisDialog.prompt"
-                    :rows="12"
-                    readonly
-                    style="font-family: monospace; font-size: 13px;"
-                />
-
-                <div style="margin-top:8px; font-size:12px; color:#909399;">
-                    提示：推荐先用 medium，复杂标的再用 deep。执行后把生成的 HTML 报告保存即可。
-                </div>
-            </div>
-
-            <template #footer>
-                <el-button @click="closeUziAnalysisDialog">关闭</el-button>
-                <el-button type="primary" @click="copyUziPrompt">复制提示词</el-button>
-            </template>
-        </el-dialog>
-
-</template>
+                    <template #default="scope">{{ formatMoney(scope.row.amount) }}</template>
                 </el-table-column>
                 <el-table-column label="手续费">
-                    <template #default="scope">{{ formatMoney(scope.row.fee) }}
-        <!-- UZI-Skill 混合分析提示（复制到本地 Hermes 执行） -->
-        <el-dialog v-model="uziAnalysisDialog.visible" title="UZI 深度分析提示" width="820px" top="8vh">
-            <div v-if="uziAnalysisDialog.row">
-                <div style="margin-bottom:8px; color:#606266;">
-                    {{ uziAnalysisDialog.row.name }} ({{ uziAnalysisDialog.row.code }})
-                    <span style="margin-left:12px;">当前深度：</span>
-                    <el-radio-group v-model="uziAnalysisDialog.depth" @change="updateUziDepth" size="small" style="margin-left:6px;">
-                        <el-radio-button label="lite">lite</el-radio-button>
-                        <el-radio-button label="medium">medium（推荐）</el-radio-button>
-                        <el-radio-button label="deep">deep</el-radio-button>
-                    </el-radio-group>
-                </div>
-
-                <el-alert
-                    title="此为混合模式：点击下方按钮复制提示词后，在你本机的 Hermes 中直接粘贴执行 UZI-Skill。"
-                    type="info"
-                    :closable="false"
-                    style="margin-bottom:10px;"
-                />
-
-                <el-input
-                    type="textarea"
-                    v-model="uziAnalysisDialog.prompt"
-                    :rows="12"
-                    readonly
-                    style="font-family: monospace; font-size: 13px;"
-                />
-
-                <div style="margin-top:8px; font-size:12px; color:#909399;">
-                    提示：推荐先用 medium，复杂标的再用 deep。执行后把生成的 HTML 报告保存即可。
-                </div>
-            </div>
-
-            <template #footer>
-                <el-button @click="closeUziAnalysisDialog">关闭</el-button>
-                <el-button type="primary" @click="copyUziPrompt">复制提示词</el-button>
-            </template>
-        </el-dialog>
-
-</template>
+                    <template #default="scope">{{ formatMoney(scope.row.fee) }}</template>
                 </el-table-column>
                 <el-table-column prop="remark" label="备注"></el-table-column>
             </el-table>
@@ -205,47 +45,7 @@
             <template #footer>
                 <el-button @click="depositDialog.visible = false">取消</el-button>
                 <el-button type="primary" @click="saveDeposit">确定</el-button>
-            
-        <!-- UZI-Skill 混合分析提示（复制到本地 Hermes 执行） -->
-        <el-dialog v-model="uziAnalysisDialog.visible" title="UZI 深度分析提示" width="820px" top="8vh">
-            <div v-if="uziAnalysisDialog.row">
-                <div style="margin-bottom:8px; color:#606266;">
-                    {{ uziAnalysisDialog.row.name }} ({{ uziAnalysisDialog.row.code }})
-                    <span style="margin-left:12px;">当前深度：</span>
-                    <el-radio-group v-model="uziAnalysisDialog.depth" @change="updateUziDepth" size="small" style="margin-left:6px;">
-                        <el-radio-button label="lite">lite</el-radio-button>
-                        <el-radio-button label="medium">medium（推荐）</el-radio-button>
-                        <el-radio-button label="deep">deep</el-radio-button>
-                    </el-radio-group>
-                </div>
-
-                <el-alert
-                    title="此为混合模式：点击下方按钮复制提示词后，在你本机的 Hermes 中直接粘贴执行 UZI-Skill。"
-                    type="info"
-                    :closable="false"
-                    style="margin-bottom:10px;"
-                />
-
-                <el-input
-                    type="textarea"
-                    v-model="uziAnalysisDialog.prompt"
-                    :rows="12"
-                    readonly
-                    style="font-family: monospace; font-size: 13px;"
-                />
-
-                <div style="margin-top:8px; font-size:12px; color:#909399;">
-                    提示：推荐先用 medium，复杂标的再用 deep。执行后把生成的 HTML 报告保存即可。
-                </div>
-            </div>
-
-            <template #footer>
-                <el-button @click="closeUziAnalysisDialog">关闭</el-button>
-                <el-button type="primary" @click="copyUziPrompt">复制提示词</el-button>
             </template>
-        </el-dialog>
-
-</template>
         </el-dialog>
 
         <!-- 交易编辑弹窗 -->
@@ -335,47 +135,7 @@
             <template #footer>
                 <el-button @click="transEditDialog.visible = false">取消</el-button>
                 <el-button type="primary" @click="saveTransactionEdit">确定</el-button>
-            
-        <!-- UZI-Skill 混合分析提示（复制到本地 Hermes 执行） -->
-        <el-dialog v-model="uziAnalysisDialog.visible" title="UZI 深度分析提示" width="820px" top="8vh">
-            <div v-if="uziAnalysisDialog.row">
-                <div style="margin-bottom:8px; color:#606266;">
-                    {{ uziAnalysisDialog.row.name }} ({{ uziAnalysisDialog.row.code }})
-                    <span style="margin-left:12px;">当前深度：</span>
-                    <el-radio-group v-model="uziAnalysisDialog.depth" @change="updateUziDepth" size="small" style="margin-left:6px;">
-                        <el-radio-button label="lite">lite</el-radio-button>
-                        <el-radio-button label="medium">medium（推荐）</el-radio-button>
-                        <el-radio-button label="deep">deep</el-radio-button>
-                    </el-radio-group>
-                </div>
-
-                <el-alert
-                    title="此为混合模式：点击下方按钮复制提示词后，在你本机的 Hermes 中直接粘贴执行 UZI-Skill。"
-                    type="info"
-                    :closable="false"
-                    style="margin-bottom:10px;"
-                />
-
-                <el-input
-                    type="textarea"
-                    v-model="uziAnalysisDialog.prompt"
-                    :rows="12"
-                    readonly
-                    style="font-family: monospace; font-size: 13px;"
-                />
-
-                <div style="margin-top:8px; font-size:12px; color:#909399;">
-                    提示：推荐先用 medium，复杂标的再用 deep。执行后把生成的 HTML 报告保存即可。
-                </div>
-            </div>
-
-            <template #footer>
-                <el-button @click="closeUziAnalysisDialog">关闭</el-button>
-                <el-button type="primary" @click="copyUziPrompt">复制提示词</el-button>
             </template>
-        </el-dialog>
-
-</template>
         </el-dialog>
 
         <!-- 证券资金流水编辑弹窗 -->
@@ -407,47 +167,7 @@
             <template #footer>
                 <el-button @click="cashFlowEditDialog.visible = false">取消</el-button>
                 <el-button type="primary" @click="saveCashFlowEdit">保存</el-button>
-            
-        <!-- UZI-Skill 混合分析提示（复制到本地 Hermes 执行） -->
-        <el-dialog v-model="uziAnalysisDialog.visible" title="UZI 深度分析提示" width="820px" top="8vh">
-            <div v-if="uziAnalysisDialog.row">
-                <div style="margin-bottom:8px; color:#606266;">
-                    {{ uziAnalysisDialog.row.name }} ({{ uziAnalysisDialog.row.code }})
-                    <span style="margin-left:12px;">当前深度：</span>
-                    <el-radio-group v-model="uziAnalysisDialog.depth" @change="updateUziDepth" size="small" style="margin-left:6px;">
-                        <el-radio-button label="lite">lite</el-radio-button>
-                        <el-radio-button label="medium">medium（推荐）</el-radio-button>
-                        <el-radio-button label="deep">deep</el-radio-button>
-                    </el-radio-group>
-                </div>
-
-                <el-alert
-                    title="此为混合模式：点击下方按钮复制提示词后，在你本机的 Hermes 中直接粘贴执行 UZI-Skill。"
-                    type="info"
-                    :closable="false"
-                    style="margin-bottom:10px;"
-                />
-
-                <el-input
-                    type="textarea"
-                    v-model="uziAnalysisDialog.prompt"
-                    :rows="12"
-                    readonly
-                    style="font-family: monospace; font-size: 13px;"
-                />
-
-                <div style="margin-top:8px; font-size:12px; color:#909399;">
-                    提示：推荐先用 medium，复杂标的再用 deep。执行后把生成的 HTML 报告保存即可。
-                </div>
-            </div>
-
-            <template #footer>
-                <el-button @click="closeUziAnalysisDialog">关闭</el-button>
-                <el-button type="primary" @click="copyUziPrompt">复制提示词</el-button>
             </template>
-        </el-dialog>
-
-</template>
         </el-dialog>
 
         <!-- 持仓强制校正弹窗 -->
@@ -493,47 +213,7 @@
             <template #footer>
                 <el-button @click="holdingCorrectionDialog.visible = false">取消</el-button>
                 <el-button type="primary" @click="saveHoldingCorrection">保存校正</el-button>
-            
-        <!-- UZI-Skill 混合分析提示（复制到本地 Hermes 执行） -->
-        <el-dialog v-model="uziAnalysisDialog.visible" title="UZI 深度分析提示" width="820px" top="8vh">
-            <div v-if="uziAnalysisDialog.row">
-                <div style="margin-bottom:8px; color:#606266;">
-                    {{ uziAnalysisDialog.row.name }} ({{ uziAnalysisDialog.row.code }})
-                    <span style="margin-left:12px;">当前深度：</span>
-                    <el-radio-group v-model="uziAnalysisDialog.depth" @change="updateUziDepth" size="small" style="margin-left:6px;">
-                        <el-radio-button label="lite">lite</el-radio-button>
-                        <el-radio-button label="medium">medium（推荐）</el-radio-button>
-                        <el-radio-button label="deep">deep</el-radio-button>
-                    </el-radio-group>
-                </div>
-
-                <el-alert
-                    title="此为混合模式：点击下方按钮复制提示词后，在你本机的 Hermes 中直接粘贴执行 UZI-Skill。"
-                    type="info"
-                    :closable="false"
-                    style="margin-bottom:10px;"
-                />
-
-                <el-input
-                    type="textarea"
-                    v-model="uziAnalysisDialog.prompt"
-                    :rows="12"
-                    readonly
-                    style="font-family: monospace; font-size: 13px;"
-                />
-
-                <div style="margin-top:8px; font-size:12px; color:#909399;">
-                    提示：推荐先用 medium，复杂标的再用 deep。执行后把生成的 HTML 报告保存即可。
-                </div>
-            </div>
-
-            <template #footer>
-                <el-button @click="closeUziAnalysisDialog">关闭</el-button>
-                <el-button type="primary" @click="copyUziPrompt">复制提示词</el-button>
             </template>
-        </el-dialog>
-
-</template>
         </el-dialog>
 
         <!-- 持仓校正记录弹窗 -->
@@ -541,224 +221,24 @@
             <el-table :data="holdingCorrectionHistoryDialog.records" stripe style="width:100%;">
                 <el-table-column prop="date" label="日期" width="105" align="center"></el-table-column>
                 <el-table-column label="数量" width="115" align="right" header-align="right">
-                    <template #default="scope">{{ Number(scope.row.actual_quantity || 0).toLocaleString() }}
-        <!-- UZI-Skill 混合分析提示（复制到本地 Hermes 执行） -->
-        <el-dialog v-model="uziAnalysisDialog.visible" title="UZI 深度分析提示" width="820px" top="8vh">
-            <div v-if="uziAnalysisDialog.row">
-                <div style="margin-bottom:8px; color:#606266;">
-                    {{ uziAnalysisDialog.row.name }} ({{ uziAnalysisDialog.row.code }})
-                    <span style="margin-left:12px;">当前深度：</span>
-                    <el-radio-group v-model="uziAnalysisDialog.depth" @change="updateUziDepth" size="small" style="margin-left:6px;">
-                        <el-radio-button label="lite">lite</el-radio-button>
-                        <el-radio-button label="medium">medium（推荐）</el-radio-button>
-                        <el-radio-button label="deep">deep</el-radio-button>
-                    </el-radio-group>
-                </div>
-
-                <el-alert
-                    title="此为混合模式：点击下方按钮复制提示词后，在你本机的 Hermes 中直接粘贴执行 UZI-Skill。"
-                    type="info"
-                    :closable="false"
-                    style="margin-bottom:10px;"
-                />
-
-                <el-input
-                    type="textarea"
-                    v-model="uziAnalysisDialog.prompt"
-                    :rows="12"
-                    readonly
-                    style="font-family: monospace; font-size: 13px;"
-                />
-
-                <div style="margin-top:8px; font-size:12px; color:#909399;">
-                    提示：推荐先用 medium，复杂标的再用 deep。执行后把生成的 HTML 报告保存即可。
-                </div>
-            </div>
-
-            <template #footer>
-                <el-button @click="closeUziAnalysisDialog">关闭</el-button>
-                <el-button type="primary" @click="copyUziPrompt">复制提示词</el-button>
-            </template>
-        </el-dialog>
-
-</template>
+                    <template #default="scope">{{ Number(scope.row.actual_quantity || 0).toLocaleString() }}</template>
                 </el-table-column>
                 <el-table-column label="普通成本" width="115" align="right" header-align="right">
-                    <template #default="scope">{{ formatMoney(scope.row.actual_avg_cost, 4) }}
-        <!-- UZI-Skill 混合分析提示（复制到本地 Hermes 执行） -->
-        <el-dialog v-model="uziAnalysisDialog.visible" title="UZI 深度分析提示" width="820px" top="8vh">
-            <div v-if="uziAnalysisDialog.row">
-                <div style="margin-bottom:8px; color:#606266;">
-                    {{ uziAnalysisDialog.row.name }} ({{ uziAnalysisDialog.row.code }})
-                    <span style="margin-left:12px;">当前深度：</span>
-                    <el-radio-group v-model="uziAnalysisDialog.depth" @change="updateUziDepth" size="small" style="margin-left:6px;">
-                        <el-radio-button label="lite">lite</el-radio-button>
-                        <el-radio-button label="medium">medium（推荐）</el-radio-button>
-                        <el-radio-button label="deep">deep</el-radio-button>
-                    </el-radio-group>
-                </div>
-
-                <el-alert
-                    title="此为混合模式：点击下方按钮复制提示词后，在你本机的 Hermes 中直接粘贴执行 UZI-Skill。"
-                    type="info"
-                    :closable="false"
-                    style="margin-bottom:10px;"
-                />
-
-                <el-input
-                    type="textarea"
-                    v-model="uziAnalysisDialog.prompt"
-                    :rows="12"
-                    readonly
-                    style="font-family: monospace; font-size: 13px;"
-                />
-
-                <div style="margin-top:8px; font-size:12px; color:#909399;">
-                    提示：推荐先用 medium，复杂标的再用 deep。执行后把生成的 HTML 报告保存即可。
-                </div>
-            </div>
-
-            <template #footer>
-                <el-button @click="closeUziAnalysisDialog">关闭</el-button>
-                <el-button type="primary" @click="copyUziPrompt">复制提示词</el-button>
-            </template>
-        </el-dialog>
-
-</template>
+                    <template #default="scope">{{ formatMoney(scope.row.actual_avg_cost, 4) }}</template>
                 </el-table-column>
                 <el-table-column label="累计分红" width="115" align="right" header-align="right">
-                    <template #default="scope">{{ formatMoney(scope.row.actual_total_dividend || 0) }}
-        <!-- UZI-Skill 混合分析提示（复制到本地 Hermes 执行） -->
-        <el-dialog v-model="uziAnalysisDialog.visible" title="UZI 深度分析提示" width="820px" top="8vh">
-            <div v-if="uziAnalysisDialog.row">
-                <div style="margin-bottom:8px; color:#606266;">
-                    {{ uziAnalysisDialog.row.name }} ({{ uziAnalysisDialog.row.code }})
-                    <span style="margin-left:12px;">当前深度：</span>
-                    <el-radio-group v-model="uziAnalysisDialog.depth" @change="updateUziDepth" size="small" style="margin-left:6px;">
-                        <el-radio-button label="lite">lite</el-radio-button>
-                        <el-radio-button label="medium">medium（推荐）</el-radio-button>
-                        <el-radio-button label="deep">deep</el-radio-button>
-                    </el-radio-group>
-                </div>
-
-                <el-alert
-                    title="此为混合模式：点击下方按钮复制提示词后，在你本机的 Hermes 中直接粘贴执行 UZI-Skill。"
-                    type="info"
-                    :closable="false"
-                    style="margin-bottom:10px;"
-                />
-
-                <el-input
-                    type="textarea"
-                    v-model="uziAnalysisDialog.prompt"
-                    :rows="12"
-                    readonly
-                    style="font-family: monospace; font-size: 13px;"
-                />
-
-                <div style="margin-top:8px; font-size:12px; color:#909399;">
-                    提示：推荐先用 medium，复杂标的再用 deep。执行后把生成的 HTML 报告保存即可。
-                </div>
-            </div>
-
-            <template #footer>
-                <el-button @click="closeUziAnalysisDialog">关闭</el-button>
-                <el-button type="primary" @click="copyUziPrompt">复制提示词</el-button>
-            </template>
-        </el-dialog>
-
-</template>
+                    <template #default="scope">{{ formatMoney(scope.row.actual_total_dividend || 0) }}</template>
                 </el-table-column>
                 <el-table-column prop="remark" label="备注" min-width="160" show-overflow-tooltip></el-table-column>
                 <el-table-column label="操作" width="80" align="center">
                     <template #default="scope">
                         <el-button type="danger" link @click="deleteHoldingCorrection(scope.row)">删除</el-button>
-                    
-        <!-- UZI-Skill 混合分析提示（复制到本地 Hermes 执行） -->
-        <el-dialog v-model="uziAnalysisDialog.visible" title="UZI 深度分析提示" width="820px" top="8vh">
-            <div v-if="uziAnalysisDialog.row">
-                <div style="margin-bottom:8px; color:#606266;">
-                    {{ uziAnalysisDialog.row.name }} ({{ uziAnalysisDialog.row.code }})
-                    <span style="margin-left:12px;">当前深度：</span>
-                    <el-radio-group v-model="uziAnalysisDialog.depth" @change="updateUziDepth" size="small" style="margin-left:6px;">
-                        <el-radio-button label="lite">lite</el-radio-button>
-                        <el-radio-button label="medium">medium（推荐）</el-radio-button>
-                        <el-radio-button label="deep">deep</el-radio-button>
-                    </el-radio-group>
-                </div>
-
-                <el-alert
-                    title="此为混合模式：点击下方按钮复制提示词后，在你本机的 Hermes 中直接粘贴执行 UZI-Skill。"
-                    type="info"
-                    :closable="false"
-                    style="margin-bottom:10px;"
-                />
-
-                <el-input
-                    type="textarea"
-                    v-model="uziAnalysisDialog.prompt"
-                    :rows="12"
-                    readonly
-                    style="font-family: monospace; font-size: 13px;"
-                />
-
-                <div style="margin-top:8px; font-size:12px; color:#909399;">
-                    提示：推荐先用 medium，复杂标的再用 deep。执行后把生成的 HTML 报告保存即可。
-                </div>
-            </div>
-
-            <template #footer>
-                <el-button @click="closeUziAnalysisDialog">关闭</el-button>
-                <el-button type="primary" @click="copyUziPrompt">复制提示词</el-button>
-            </template>
-        </el-dialog>
-
-</template>
+                    </template>
                 </el-table-column>
             </el-table>
             <template #footer>
                 <el-button @click="holdingCorrectionHistoryDialog.visible = false">关闭</el-button>
-            
-        <!-- UZI-Skill 混合分析提示（复制到本地 Hermes 执行） -->
-        <el-dialog v-model="uziAnalysisDialog.visible" title="UZI 深度分析提示" width="820px" top="8vh">
-            <div v-if="uziAnalysisDialog.row">
-                <div style="margin-bottom:8px; color:#606266;">
-                    {{ uziAnalysisDialog.row.name }} ({{ uziAnalysisDialog.row.code }})
-                    <span style="margin-left:12px;">当前深度：</span>
-                    <el-radio-group v-model="uziAnalysisDialog.depth" @change="updateUziDepth" size="small" style="margin-left:6px;">
-                        <el-radio-button label="lite">lite</el-radio-button>
-                        <el-radio-button label="medium">medium（推荐）</el-radio-button>
-                        <el-radio-button label="deep">deep</el-radio-button>
-                    </el-radio-group>
-                </div>
-
-                <el-alert
-                    title="此为混合模式：点击下方按钮复制提示词后，在你本机的 Hermes 中直接粘贴执行 UZI-Skill。"
-                    type="info"
-                    :closable="false"
-                    style="margin-bottom:10px;"
-                />
-
-                <el-input
-                    type="textarea"
-                    v-model="uziAnalysisDialog.prompt"
-                    :rows="12"
-                    readonly
-                    style="font-family: monospace; font-size: 13px;"
-                />
-
-                <div style="margin-top:8px; font-size:12px; color:#909399;">
-                    提示：推荐先用 medium，复杂标的再用 deep。执行后把生成的 HTML 报告保存即可。
-                </div>
-            </div>
-
-            <template #footer>
-                <el-button @click="closeUziAnalysisDialog">关闭</el-button>
-                <el-button type="primary" @click="copyUziPrompt">复制提示词</el-button>
             </template>
-        </el-dialog>
-
-</template>
         </el-dialog>
 
         <!-- 预计年化收益编辑弹窗 -->
@@ -774,47 +254,7 @@
             <template #footer>
                 <el-button @click="expectedReturnDialog.visible = false">取消</el-button>
                 <el-button type="primary" @click="saveExpectedReturn">确定</el-button>
-            
-        <!-- UZI-Skill 混合分析提示（复制到本地 Hermes 执行） -->
-        <el-dialog v-model="uziAnalysisDialog.visible" title="UZI 深度分析提示" width="820px" top="8vh">
-            <div v-if="uziAnalysisDialog.row">
-                <div style="margin-bottom:8px; color:#606266;">
-                    {{ uziAnalysisDialog.row.name }} ({{ uziAnalysisDialog.row.code }})
-                    <span style="margin-left:12px;">当前深度：</span>
-                    <el-radio-group v-model="uziAnalysisDialog.depth" @change="updateUziDepth" size="small" style="margin-left:6px;">
-                        <el-radio-button label="lite">lite</el-radio-button>
-                        <el-radio-button label="medium">medium（推荐）</el-radio-button>
-                        <el-radio-button label="deep">deep</el-radio-button>
-                    </el-radio-group>
-                </div>
-
-                <el-alert
-                    title="此为混合模式：点击下方按钮复制提示词后，在你本机的 Hermes 中直接粘贴执行 UZI-Skill。"
-                    type="info"
-                    :closable="false"
-                    style="margin-bottom:10px;"
-                />
-
-                <el-input
-                    type="textarea"
-                    v-model="uziAnalysisDialog.prompt"
-                    :rows="12"
-                    readonly
-                    style="font-family: monospace; font-size: 13px;"
-                />
-
-                <div style="margin-top:8px; font-size:12px; color:#909399;">
-                    提示：推荐先用 medium，复杂标的再用 deep。执行后把生成的 HTML 报告保存即可。
-                </div>
-            </div>
-
-            <template #footer>
-                <el-button @click="closeUziAnalysisDialog">关闭</el-button>
-                <el-button type="primary" @click="copyUziPrompt">复制提示词</el-button>
             </template>
-        </el-dialog>
-
-</template>
         </el-dialog>
 
 
@@ -863,181 +303,21 @@
                 <el-table-column label="状态" width="110" align="center">
                     <template #default="scope">
                         <el-tag :type="dividendStatusType(scope.row.status)" size="small">{{ dividendStatusLabel(scope.row.status) }}</el-tag>
-                    
-        <!-- UZI-Skill 混合分析提示（复制到本地 Hermes 执行） -->
-        <el-dialog v-model="uziAnalysisDialog.visible" title="UZI 深度分析提示" width="820px" top="8vh">
-            <div v-if="uziAnalysisDialog.row">
-                <div style="margin-bottom:8px; color:#606266;">
-                    {{ uziAnalysisDialog.row.name }} ({{ uziAnalysisDialog.row.code }})
-                    <span style="margin-left:12px;">当前深度：</span>
-                    <el-radio-group v-model="uziAnalysisDialog.depth" @change="updateUziDepth" size="small" style="margin-left:6px;">
-                        <el-radio-button label="lite">lite</el-radio-button>
-                        <el-radio-button label="medium">medium（推荐）</el-radio-button>
-                        <el-radio-button label="deep">deep</el-radio-button>
-                    </el-radio-group>
-                </div>
-
-                <el-alert
-                    title="此为混合模式：点击下方按钮复制提示词后，在你本机的 Hermes 中直接粘贴执行 UZI-Skill。"
-                    type="info"
-                    :closable="false"
-                    style="margin-bottom:10px;"
-                />
-
-                <el-input
-                    type="textarea"
-                    v-model="uziAnalysisDialog.prompt"
-                    :rows="12"
-                    readonly
-                    style="font-family: monospace; font-size: 13px;"
-                />
-
-                <div style="margin-top:8px; font-size:12px; color:#909399;">
-                    提示：推荐先用 medium，复杂标的再用 deep。执行后把生成的 HTML 报告保存即可。
-                </div>
-            </div>
-
-            <template #footer>
-                <el-button @click="closeUziAnalysisDialog">关闭</el-button>
-                <el-button type="primary" @click="copyUziPrompt">复制提示词</el-button>
-            </template>
-        </el-dialog>
-
-</template>
+                    </template>
                 </el-table-column>
                 <el-table-column prop="event_date" label="除权/事件日" width="115" align="center"></el-table-column>
                 <el-table-column label="标的" min-width="150">
                     <template #default="scope">
                         <div>{{ scope.row.name }}</div>
                         <div style="color:#909399;font-size:12px;">{{ scope.row.code }} · {{ scope.row.category || '未分类' }}</div>
-                    
-        <!-- UZI-Skill 混合分析提示（复制到本地 Hermes 执行） -->
-        <el-dialog v-model="uziAnalysisDialog.visible" title="UZI 深度分析提示" width="820px" top="8vh">
-            <div v-if="uziAnalysisDialog.row">
-                <div style="margin-bottom:8px; color:#606266;">
-                    {{ uziAnalysisDialog.row.name }} ({{ uziAnalysisDialog.row.code }})
-                    <span style="margin-left:12px;">当前深度：</span>
-                    <el-radio-group v-model="uziAnalysisDialog.depth" @change="updateUziDepth" size="small" style="margin-left:6px;">
-                        <el-radio-button label="lite">lite</el-radio-button>
-                        <el-radio-button label="medium">medium（推荐）</el-radio-button>
-                        <el-radio-button label="deep">deep</el-radio-button>
-                    </el-radio-group>
-                </div>
-
-                <el-alert
-                    title="此为混合模式：点击下方按钮复制提示词后，在你本机的 Hermes 中直接粘贴执行 UZI-Skill。"
-                    type="info"
-                    :closable="false"
-                    style="margin-bottom:10px;"
-                />
-
-                <el-input
-                    type="textarea"
-                    v-model="uziAnalysisDialog.prompt"
-                    :rows="12"
-                    readonly
-                    style="font-family: monospace; font-size: 13px;"
-                />
-
-                <div style="margin-top:8px; font-size:12px; color:#909399;">
-                    提示：推荐先用 medium，复杂标的再用 deep。执行后把生成的 HTML 报告保存即可。
-                </div>
-            </div>
-
-            <template #footer>
-                <el-button @click="closeUziAnalysisDialog">关闭</el-button>
-                <el-button type="primary" @click="copyUziPrompt">复制提示词</el-button>
-            </template>
-        </el-dialog>
-
-</template>
+                    </template>
                 </el-table-column>
                 <el-table-column prop="plan_profile" label="方案" min-width="150" show-overflow-tooltip></el-table-column>
                 <el-table-column label="登记日数量" width="110" align="right">
-                    <template #default="scope">{{ Number(scope.row.quantity_on_record_date || 0).toLocaleString() }}
-        <!-- UZI-Skill 混合分析提示（复制到本地 Hermes 执行） -->
-        <el-dialog v-model="uziAnalysisDialog.visible" title="UZI 深度分析提示" width="820px" top="8vh">
-            <div v-if="uziAnalysisDialog.row">
-                <div style="margin-bottom:8px; color:#606266;">
-                    {{ uziAnalysisDialog.row.name }} ({{ uziAnalysisDialog.row.code }})
-                    <span style="margin-left:12px;">当前深度：</span>
-                    <el-radio-group v-model="uziAnalysisDialog.depth" @change="updateUziDepth" size="small" style="margin-left:6px;">
-                        <el-radio-button label="lite">lite</el-radio-button>
-                        <el-radio-button label="medium">medium（推荐）</el-radio-button>
-                        <el-radio-button label="deep">deep</el-radio-button>
-                    </el-radio-group>
-                </div>
-
-                <el-alert
-                    title="此为混合模式：点击下方按钮复制提示词后，在你本机的 Hermes 中直接粘贴执行 UZI-Skill。"
-                    type="info"
-                    :closable="false"
-                    style="margin-bottom:10px;"
-                />
-
-                <el-input
-                    type="textarea"
-                    v-model="uziAnalysisDialog.prompt"
-                    :rows="12"
-                    readonly
-                    style="font-family: monospace; font-size: 13px;"
-                />
-
-                <div style="margin-top:8px; font-size:12px; color:#909399;">
-                    提示：推荐先用 medium，复杂标的再用 deep。执行后把生成的 HTML 报告保存即可。
-                </div>
-            </div>
-
-            <template #footer>
-                <el-button @click="closeUziAnalysisDialog">关闭</el-button>
-                <el-button type="primary" @click="copyUziPrompt">复制提示词</el-button>
-            </template>
-        </el-dialog>
-
-</template>
+                    <template #default="scope">{{ Number(scope.row.quantity_on_record_date || 0).toLocaleString() }}</template>
                 </el-table-column>
                 <el-table-column label="每股分红" width="95" align="right">
-                    <template #default="scope">{{ formatMoney(scope.row.cash_per_share, 4) }}
-        <!-- UZI-Skill 混合分析提示（复制到本地 Hermes 执行） -->
-        <el-dialog v-model="uziAnalysisDialog.visible" title="UZI 深度分析提示" width="820px" top="8vh">
-            <div v-if="uziAnalysisDialog.row">
-                <div style="margin-bottom:8px; color:#606266;">
-                    {{ uziAnalysisDialog.row.name }} ({{ uziAnalysisDialog.row.code }})
-                    <span style="margin-left:12px;">当前深度：</span>
-                    <el-radio-group v-model="uziAnalysisDialog.depth" @change="updateUziDepth" size="small" style="margin-left:6px;">
-                        <el-radio-button label="lite">lite</el-radio-button>
-                        <el-radio-button label="medium">medium（推荐）</el-radio-button>
-                        <el-radio-button label="deep">deep</el-radio-button>
-                    </el-radio-group>
-                </div>
-
-                <el-alert
-                    title="此为混合模式：点击下方按钮复制提示词后，在你本机的 Hermes 中直接粘贴执行 UZI-Skill。"
-                    type="info"
-                    :closable="false"
-                    style="margin-bottom:10px;"
-                />
-
-                <el-input
-                    type="textarea"
-                    v-model="uziAnalysisDialog.prompt"
-                    :rows="12"
-                    readonly
-                    style="font-family: monospace; font-size: 13px;"
-                />
-
-                <div style="margin-top:8px; font-size:12px; color:#909399;">
-                    提示：推荐先用 medium，复杂标的再用 deep。执行后把生成的 HTML 报告保存即可。
-                </div>
-            </div>
-
-            <template #footer>
-                <el-button @click="closeUziAnalysisDialog">关闭</el-button>
-                <el-button type="primary" @click="copyUziPrompt">复制提示词</el-button>
-            </template>
-        </el-dialog>
-
-</template>
+                    <template #default="scope">{{ formatMoney(scope.row.cash_per_share, 4) }}</template>
                 </el-table-column>
                 <el-table-column label="估算金额" width="120" align="right">
                     <template #default="scope">
@@ -1050,92 +330,12 @@
                             style="width:110px;"
                         ></el-input-number>
                         <span v-else>{{ formatMoney(scope.row.amount) }}</span>
-                    
-        <!-- UZI-Skill 混合分析提示（复制到本地 Hermes 执行） -->
-        <el-dialog v-model="uziAnalysisDialog.visible" title="UZI 深度分析提示" width="820px" top="8vh">
-            <div v-if="uziAnalysisDialog.row">
-                <div style="margin-bottom:8px; color:#606266;">
-                    {{ uziAnalysisDialog.row.name }} ({{ uziAnalysisDialog.row.code }})
-                    <span style="margin-left:12px;">当前深度：</span>
-                    <el-radio-group v-model="uziAnalysisDialog.depth" @change="updateUziDepth" size="small" style="margin-left:6px;">
-                        <el-radio-button label="lite">lite</el-radio-button>
-                        <el-radio-button label="medium">medium（推荐）</el-radio-button>
-                        <el-radio-button label="deep">deep</el-radio-button>
-                    </el-radio-group>
-                </div>
-
-                <el-alert
-                    title="此为混合模式：点击下方按钮复制提示词后，在你本机的 Hermes 中直接粘贴执行 UZI-Skill。"
-                    type="info"
-                    :closable="false"
-                    style="margin-bottom:10px;"
-                />
-
-                <el-input
-                    type="textarea"
-                    v-model="uziAnalysisDialog.prompt"
-                    :rows="12"
-                    readonly
-                    style="font-family: monospace; font-size: 13px;"
-                />
-
-                <div style="margin-top:8px; font-size:12px; color:#909399;">
-                    提示：推荐先用 medium，复杂标的再用 deep。执行后把生成的 HTML 报告保存即可。
-                </div>
-            </div>
-
-            <template #footer>
-                <el-button @click="closeUziAnalysisDialog">关闭</el-button>
-                <el-button type="primary" @click="copyUziPrompt">复制提示词</el-button>
-            </template>
-        </el-dialog>
-
-</template>
+                    </template>
                 </el-table-column>
                 <el-table-column label="匹配/说明" min-width="180" show-overflow-tooltip>
                     <template #default="scope">
                         <span style="color:#909399;font-size:12px;">{{ scope.row.reason || scope.row.assign_progress || '' }}</span>
-                    
-        <!-- UZI-Skill 混合分析提示（复制到本地 Hermes 执行） -->
-        <el-dialog v-model="uziAnalysisDialog.visible" title="UZI 深度分析提示" width="820px" top="8vh">
-            <div v-if="uziAnalysisDialog.row">
-                <div style="margin-bottom:8px; color:#606266;">
-                    {{ uziAnalysisDialog.row.name }} ({{ uziAnalysisDialog.row.code }})
-                    <span style="margin-left:12px;">当前深度：</span>
-                    <el-radio-group v-model="uziAnalysisDialog.depth" @change="updateUziDepth" size="small" style="margin-left:6px;">
-                        <el-radio-button label="lite">lite</el-radio-button>
-                        <el-radio-button label="medium">medium（推荐）</el-radio-button>
-                        <el-radio-button label="deep">deep</el-radio-button>
-                    </el-radio-group>
-                </div>
-
-                <el-alert
-                    title="此为混合模式：点击下方按钮复制提示词后，在你本机的 Hermes 中直接粘贴执行 UZI-Skill。"
-                    type="info"
-                    :closable="false"
-                    style="margin-bottom:10px;"
-                />
-
-                <el-input
-                    type="textarea"
-                    v-model="uziAnalysisDialog.prompt"
-                    :rows="12"
-                    readonly
-                    style="font-family: monospace; font-size: 13px;"
-                />
-
-                <div style="margin-top:8px; font-size:12px; color:#909399;">
-                    提示：推荐先用 medium，复杂标的再用 deep。执行后把生成的 HTML 报告保存即可。
-                </div>
-            </div>
-
-            <template #footer>
-                <el-button @click="closeUziAnalysisDialog">关闭</el-button>
-                <el-button type="primary" @click="copyUziPrompt">复制提示词</el-button>
-            </template>
-        </el-dialog>
-
-</template>
+                    </template>
                 </el-table-column>
             </el-table>
             <template #footer>
@@ -1150,47 +350,7 @@
                         <el-button type="primary" :loading="dividendConfirming" @click="confirmSelectedDividends">确认入账</el-button>
                     </div>
                 </div>
-            
-        <!-- UZI-Skill 混合分析提示（复制到本地 Hermes 执行） -->
-        <el-dialog v-model="uziAnalysisDialog.visible" title="UZI 深度分析提示" width="820px" top="8vh">
-            <div v-if="uziAnalysisDialog.row">
-                <div style="margin-bottom:8px; color:#606266;">
-                    {{ uziAnalysisDialog.row.name }} ({{ uziAnalysisDialog.row.code }})
-                    <span style="margin-left:12px;">当前深度：</span>
-                    <el-radio-group v-model="uziAnalysisDialog.depth" @change="updateUziDepth" size="small" style="margin-left:6px;">
-                        <el-radio-button label="lite">lite</el-radio-button>
-                        <el-radio-button label="medium">medium（推荐）</el-radio-button>
-                        <el-radio-button label="deep">deep</el-radio-button>
-                    </el-radio-group>
-                </div>
-
-                <el-alert
-                    title="此为混合模式：点击下方按钮复制提示词后，在你本机的 Hermes 中直接粘贴执行 UZI-Skill。"
-                    type="info"
-                    :closable="false"
-                    style="margin-bottom:10px;"
-                />
-
-                <el-input
-                    type="textarea"
-                    v-model="uziAnalysisDialog.prompt"
-                    :rows="12"
-                    readonly
-                    style="font-family: monospace; font-size: 13px;"
-                />
-
-                <div style="margin-top:8px; font-size:12px; color:#909399;">
-                    提示：推荐先用 medium，复杂标的再用 deep。执行后把生成的 HTML 报告保存即可。
-                </div>
-            </div>
-
-            <template #footer>
-                <el-button @click="closeUziAnalysisDialog">关闭</el-button>
-                <el-button type="primary" @click="copyUziPrompt">复制提示词</el-button>
             </template>
-        </el-dialog>
-
-</template>
         </el-dialog>
 
         <!-- 晚间简报 -->
@@ -1199,47 +359,7 @@
             <template #footer>
                 <el-button @click="eveningBriefDialog.visible = false">关闭</el-button>
                 <el-button type="primary" plain :loading="eveningBriefDialog.loading" @click="openEveningBrief(true)">推送通知</el-button>
-            
-        <!-- UZI-Skill 混合分析提示（复制到本地 Hermes 执行） -->
-        <el-dialog v-model="uziAnalysisDialog.visible" title="UZI 深度分析提示" width="820px" top="8vh">
-            <div v-if="uziAnalysisDialog.row">
-                <div style="margin-bottom:8px; color:#606266;">
-                    {{ uziAnalysisDialog.row.name }} ({{ uziAnalysisDialog.row.code }})
-                    <span style="margin-left:12px;">当前深度：</span>
-                    <el-radio-group v-model="uziAnalysisDialog.depth" @change="updateUziDepth" size="small" style="margin-left:6px;">
-                        <el-radio-button label="lite">lite</el-radio-button>
-                        <el-radio-button label="medium">medium（推荐）</el-radio-button>
-                        <el-radio-button label="deep">deep</el-radio-button>
-                    </el-radio-group>
-                </div>
-
-                <el-alert
-                    title="此为混合模式：点击下方按钮复制提示词后，在你本机的 Hermes 中直接粘贴执行 UZI-Skill。"
-                    type="info"
-                    :closable="false"
-                    style="margin-bottom:10px;"
-                />
-
-                <el-input
-                    type="textarea"
-                    v-model="uziAnalysisDialog.prompt"
-                    :rows="12"
-                    readonly
-                    style="font-family: monospace; font-size: 13px;"
-                />
-
-                <div style="margin-top:8px; font-size:12px; color:#909399;">
-                    提示：推荐先用 medium，复杂标的再用 deep。执行后把生成的 HTML 报告保存即可。
-                </div>
-            </div>
-
-            <template #footer>
-                <el-button @click="closeUziAnalysisDialog">关闭</el-button>
-                <el-button type="primary" @click="copyUziPrompt">复制提示词</el-button>
             </template>
-        </el-dialog>
-
-</template>
         </el-dialog>
 
         <!-- UZI-Skill 混合分析提示（复制到本地 Hermes 执行） -->

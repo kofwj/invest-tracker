@@ -29,7 +29,6 @@ import { createBrokerReconcileModule } from './modules/brokerReconcile.js';
 import { createMarketModule } from './modules/market.js';
 import { createDisciplineModule } from './modules/discipline.js';
 import { createHoldingCorrectionHelpers } from './modules/holdingCorrections.js';
-import { createUziAnalysisHelper } from './modules/uziAnalysis.js';
 import { createDataSync } from './modules/dataSync.js';
 import { createAuthMask } from './composables/authMask.js';
 import {
@@ -172,13 +171,6 @@ const app = createApp({
         });
         const holdingCorrectionHistoryDialog = ref({ visible: false, title: '持仓校正记录', records: [] });
 
-        const uziAnalysisDialog = ref({
-            visible: false,
-            row: null,
-            depth: 'medium',
-            prompt: ''
-        });
-
         const allocationAnalysis = ref([]);
         const macroAllocationAnalysis = ref([]);
         const portfolioExpectedReturn = ref(0);
@@ -251,10 +243,46 @@ const app = createApp({
         } = createHoldingCorrectionHelpers({
             expectedReturnDialog,
             holdingCorrectionDialog,
-            holdingCorrectionHistoryDialog, uziAnalysisDialog, openUziAnalysisDialog, updateUziDepth, copyUziPrompt, closeUziAnalysisDialog,
+            holdingCorrectionHistoryDialog,
             fetchData,
             todayLocalIso,
         });
+
+        // UZI 混合分析（干净版）
+        const { buildUziPrompt } = createUziAnalysisHelper({ dashboard, formatMoney });
+
+        const openUziAnalysisDialog = (row) => {
+            if (!row || !row.code) return;
+            const d = "medium";
+            uziAnalysisDialog.value = {
+                visible: true,
+                row: { ...row },
+                depth: d,
+                prompt: buildUziPrompt(row, d)
+            };
+        };
+
+        const updateUziDepth = (newDepth) => {
+            const dlg = uziAnalysisDialog.value;
+            if (!dlg || !dlg.row) return;
+            dlg.depth = newDepth;
+            dlg.prompt = buildUziPrompt(dlg.row, newDepth);
+        };
+
+        const copyUziPrompt = async () => {
+            const t = uziAnalysisDialog.value?.prompt || "";
+            if (!t) return;
+            try {
+                await navigator.clipboard.writeText(t);
+                ElMessage.success("提示词已复制，可直接粘贴到本地 Hermes 执行");
+            } catch (e) {
+                ElMessage.warning("复制失败，请手动全选复制");
+            }
+        };
+
+        const closeUziAnalysisDialog = () => {
+            uziAnalysisDialog.value.visible = false;
+        };
 
         const {
             submitTrans,
@@ -625,69 +653,13 @@ const app = createApp({
 
         const { eveningBriefDialog, openEveningBrief } = createBriefHelpers();
 
-        
-        // === UZI 混合分析支持（已暴露）===
-        const openUziAnalysisDialog = (row) => {
-            if (!row || !row.code) return;
-            const d = 'medium';
-            const total = Number(dashboard.value?.total_assets || 0);
-            const qty = Number(row.quantity || 0);
-            const price = Number(row.last_price || 0);
-            const mv = qty * price;
-            const weight = total > 0 ? (mv / total * 100) : 0;
-            const fp = Number(row.float_profit || 0);
-            const prompt = `请使用 UZI-Skill 对 ${row.name} (${row.code}) 进行 **medium（推荐，5-8分钟）** 分析。
-
-【我的真实持仓信息（请重点结合我的实际成本和仓位比例）】
-- 持仓数量：${qty}
-- 普通成本：${(row.avg_cost||0).toFixed ? (row.avg_cost).toFixed(4) : row.avg_cost}
-- 摊薄成本：${(row.diluted_cost||0).toFixed ? (row.diluted_cost).toFixed(4) : row.diluted_cost}
-- 当前最新价：${(price||0).toFixed ? price.toFixed(4) : price}
-- 当前市值：${mv}
-- 持仓浮盈：${fp}
-- 占组合比例：约 ${weight.toFixed(2)}%
-- 当前总资产：${total}
-
-推荐：python run.py ${row.code} --depth medium
-
-请呈现分歧、引用数据、结合我的真实持仓给出判断。输出完整HTML报告。`;
-
-            if (typeof uziAnalysisDialog !== 'undefined') {
-                uziAnalysisDialog.value = { visible: true, row: {...row}, depth: d, prompt };
-            }
-        };
-
-        const updateUziDepth = (newDepth) => {
-            if (typeof uziAnalysisDialog === 'undefined') return;
-            const dlg = uziAnalysisDialog.value;
-            if (!dlg || !dlg.row) return;
-            // 简化重新生成
-            dlg.depth = newDepth;
-            // 实际项目中可调用 build 函数
-        };
-
-        const copyUziPrompt = async () => {
-            if (typeof uziAnalysisDialog === 'undefined') return;
-            const t = uziAnalysisDialog.value?.prompt || '';
-            if (!t) return;
-            try {
-                await navigator.clipboard.writeText(t);
-                if (window.ElMessage) window.ElMessage.success('已复制到剪贴板');
-            } catch(e) {}
-        };
-
-        const closeUziAnalysisDialog = () => {
-            if (typeof uziAnalysisDialog !== 'undefined') uziAnalysisDialog.value.visible = false;
-        };
-
-const appCtx = {
+        const appCtx = {
             zhCn,
             isMasked, toggleMask,
             showLoginOverlay, loginLoading, loginPassword, loginError, authEnabled, handleLogin, handleLogout,
             activeTab, tabGroup, tabGroups, dashboard, holdings, deposits, depositRows, depositSummary, depositBankBreakdown, depositMaturityBuckets, syncing, trailingSyncing, syncNotice,
             snapshots, snapshotRange, snapshotSummary, snapshotMetrics, snapshotChangeRows, snapshotInsights, snapshotLoading, maintenanceStatus, backups, maintenanceLoading, dividendLoading, dividendConfirming, dividendDialog, dividendTableRef, todayIso, todaySnapshotDone, latestPriceStatusText, latestBackupText,
             transForm, feeSettings, feeAccounts, activeFeeAccount, newFeeAccountName, feeCategories, feeSettingRows, feeAutoHint, depositDialog, cashForm, cashFlows, cashFlowForm, cashFlowQuery, cashFlowSummary, cashFlowEditDialog, transDialog, allocationAnalysis, macroAllocationAnalysis,
-            allocationSummary, allocationHealth, portfolioExpectedReturn, expectedReturnDialog, holdingCorrectionDialog, holdingCorrectionHistoryDialog,
             allTransactions, filteredTransactions, pendingTransactions, pendingPurchaseTotal, transQuery, transPage, transEditDialog,
             syncPrices, syncTrailingReturns, openDividendDraftDialog, openEveningBrief, eveningBriefDialog, scanDividendDrafts, confirmSelectedDividends, selectSelectableDividendDrafts, clearDividendDraftSelection, onDividendSelectionChange, isDividendDraftSelectable, dividendStatusLabel, dividendStatusType, submitTrans, resetForm, fetchData, markFeeManual, saveFeeSettings, resetFeeSettings, addFeeAccount, removeFeeAccount, onActiveFeeAccountChange,
             downloadTransactionsTemplate, exportTransactions, importTransactions, downloadDepositsTemplate, exportDeposits, importDeposits, downloadDividendTemplate, importDividends,
