@@ -29,6 +29,7 @@ import { createBrokerReconcileModule } from './modules/brokerReconcile.js';
 import { createMarketModule } from './modules/market.js';
 import { createDisciplineModule } from './modules/discipline.js';
 import { createHoldingCorrectionHelpers } from './modules/holdingCorrections.js';
+import { createUziAnalysisHelper } from './modules/uziAnalysis.js';
 import { createDataSync } from './modules/dataSync.js';
 import { createAuthMask } from './composables/authMask.js';
 import {
@@ -171,6 +172,13 @@ const app = createApp({
         });
         const holdingCorrectionHistoryDialog = ref({ visible: false, title: '持仓校正记录', records: [] });
 
+        const uziAnalysisDialog = ref({
+            visible: false,
+            row: null,
+            depth: "medium",
+            prompt: ""
+        });
+
         const allocationAnalysis = ref([]);
         const macroAllocationAnalysis = ref([]);
         const portfolioExpectedReturn = ref(0);
@@ -243,7 +251,7 @@ const app = createApp({
         } = createHoldingCorrectionHelpers({
             expectedReturnDialog,
             holdingCorrectionDialog,
-            holdingCorrectionHistoryDialog,
+            holdingCorrectionHistoryDialog, uziAnalysisDialog, openUziAnalysisDialog, updateUziDepth, copyUziPrompt, closeUziAnalysisDialog,
             fetchData,
             todayLocalIso,
         });
