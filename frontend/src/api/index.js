@@ -96,7 +96,7 @@ const api = {
     deleteBackup: (filename) => axios.delete(API + '/maintenance/backups/' + encodeURIComponent(filename)),
 
     performanceSummary: () => axios.get(API + '/performance/summary'),
-    performanceTimeline: () => axios.get(API + '/performance/timeline'),
+    performanceTimeline: (params = {}) => axios.get(API + '/performance/timeline', { params }),
     performanceContribution: () => axios.get(API + '/performance/contribution'),
     performanceStory: () => axios.get(API + '/performance/story'),
     listPortfolioCashFlows: () => axios.get(API + '/portfolio-cash-flows'),

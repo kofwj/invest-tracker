@@ -406,6 +406,7 @@ const app = createApp({
         const perfLoading = ref(false);
         const perfContributionFilter = ref('all');
         const perfContributionSort = ref('contribution');
+        const perfTimelineRange = ref('all');
         const perfFlowForm = ref({
             date: todayLocalIso(),
             flow_type: '投入',
@@ -419,14 +420,17 @@ const app = createApp({
             perfStoryToneType,
             perfGuideSteps,
             perfLensRows,
-            perfReadTips,
+            perfPrimaryCards,
+            perfSecondaryCards,
             perfCards,
+            perfCategoryBars,
             displayedPerfContribution,
             perfContributionHeadline,
             perfContributionMix,
             contributionBarStyle,
             renderPerfChart,
             fetchPerformance,
+            setPerfTimelineRange,
             addPerfFlow,
             updatePerfFlow,
             deletePerfFlow,
@@ -441,6 +445,7 @@ const app = createApp({
             perfLoading,
             perfContributionFilter,
             perfContributionSort,
+            perfTimelineRange,
             perfFlowForm,
             showSyncNotice,
             nextTick,
@@ -646,9 +651,9 @@ const app = createApp({
             queryTransactions, applyTransFilter, resetTransQuery, handleTransPageChange, handleTransPageSizeChange, goPendingTransactions, openTransEditDialog, saveTransactionEdit, deleteTransaction,
             openExpectedReturnDialog, saveExpectedReturn, openHoldingCorrectionDialog, saveHoldingCorrection, openHoldingCorrectionHistory, deleteHoldingCorrection,
             formatMoney, formatPercent, pct, holdingFloatProfit, holdingLifetimeProfit, holdingFloatProfitRate, holdingLifetimeProfitRate,
-            perfSummary, perfTimeline, perfContribution, perfFlows, perfStory, perfLoading, perfFlowForm, hasPerfFlows, perfStoryToneType, perfGuideSteps, perfLensRows, perfReadTips, perfCards,
-            displayedPerfContribution, perfContributionFilter, perfContributionSort, perfContributionHeadline, perfContributionMix,
-            fetchPerformance, addPerfFlow, updatePerfFlow, deletePerfFlow, loadPerfFlowSuggestions, applyPerfFlowSuggestion, contributionBarStyle, fetchMaintenance, createDbBackup, downloadBackup, restoreBackup, deleteBackup, restoreUploadedBackup,
+            perfSummary, perfTimeline, perfContribution, perfFlows, perfStory, perfLoading, perfFlowForm, hasPerfFlows, perfStoryToneType, perfGuideSteps, perfLensRows, perfPrimaryCards, perfSecondaryCards, perfCards, perfCategoryBars,
+            displayedPerfContribution, perfContributionFilter, perfContributionSort, perfContributionHeadline, perfContributionMix, perfTimelineRange,
+            fetchPerformance, setPerfTimelineRange, addPerfFlow, updatePerfFlow, deletePerfFlow, loadPerfFlowSuggestions, applyPerfFlowSuggestion, contributionBarStyle, fetchMaintenance, createDbBackup, downloadBackup, restoreBackup, deleteBackup, restoreUploadedBackup,
             notifyStatus, notifyLogs, notifyLoading, notifyEventDraft, fetchNotifyPanel, saveNotifyPanel, testNotifyPush, pushDepositDueNow, pushDisciplineNow,
             brokerResult, brokerLoading, brokerSelected, brokerAsOfDate, brokerCashInput,
             statusLabel: brokerStatusLabel, statusType: brokerStatusType,
