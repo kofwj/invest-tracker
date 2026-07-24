@@ -2,9 +2,6 @@
   <el-config-provider :locale="zhCn">
     <div class="app-container">
       <AppHeader />
-      <div class="home-panel">
-        <HomeDashboard />
-      </div>
 
       <div class="content-shell">
         <div class="tab-group-bar" role="tablist" aria-label="功能分组">
@@ -71,7 +68,6 @@
 <script>
 import { defineAsyncComponent } from 'vue';
 import AppHeader from './components/AppHeader.vue';
-import HomeDashboard from './components/HomeDashboard.vue';
 import AppDialogs from './components/AppDialogs.vue';
 import LoginOverlay from './components/LoginOverlay.vue';
 
@@ -79,7 +75,6 @@ export default {
   name: 'App',
   components: {
     AppHeader,
-    HomeDashboard,
     AppDialogs,
     LoginOverlay,
     DecisionTab: defineAsyncComponent(() => import('./views/DecisionTab.vue')),

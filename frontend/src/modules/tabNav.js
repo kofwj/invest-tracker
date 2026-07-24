@@ -19,5 +19,5 @@ export function tabGroupOf(tab) {
 export function resolveInitialTab(searchParams = null) {
     const params = searchParams || new URLSearchParams(window.location.search);
     const requested = params.get('tab');
-    return SCREENSHOT_TABS.includes(requested) ? requested : 'snapshots';
+    return SCREENSHOT_TABS.includes(requested) ? requested : 'holdings';
 }

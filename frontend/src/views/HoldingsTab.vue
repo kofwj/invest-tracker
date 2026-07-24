@@ -1,11 +1,12 @@
 <template>
   <div class="holdings-tab">
+    <HomeDashboard />
     <el-alert
       title="近一年标的收益率 = 标的自身过去一年价格/净值涨跌；不是你的账户实际持有收益。若为空，请点右上角“同步近一年收益率”。持仓浮盈只看当前仓；全周期盈亏含历史买卖，接近券商累计盈亏。"
       type="info"
       show-icon
       :closable="false"
-      style="margin-bottom: 12px;"
+      style="margin: 14px 0 12px;"
     />
     <el-table :data="holdings" stripe class="holdings-table" style="width: 100%" @row-click="showTransactions">
       <el-table-column prop="name" label="名称" width="150" fixed="left" align="center" header-align="center" />
@@ -196,6 +197,7 @@ import { reactive } from 'vue';
 import { ElMessage } from 'element-plus';
 import { useAppCtx } from '../composables/useAppCtx.js';
 import { createUziAnalysisHelper, UZI_FOCUS_TEMPLATES } from '../modules/uziAnalysis.js';
+import HomeDashboard from '../components/HomeDashboard.vue';
 
 const {
   holdings,

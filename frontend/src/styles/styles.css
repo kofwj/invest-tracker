@@ -69,6 +69,7 @@ body {
   font-weight: 600;
   letter-spacing: 0.1px;
 }
+.holdings-overview { margin-bottom: 4px; }
 .header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .header-actions .el-button { border-radius: 10px; }
 .inline-sync-status { display: inline-flex; align-items: center; min-height: 28px; max-width: 520px; padding: 4px 10px; border-radius: 999px; background: #f0f9eb; color: #67c23a; font-size: 13px; line-height: 1.4; white-space: normal; border: 1px solid #e1f3d8; }
