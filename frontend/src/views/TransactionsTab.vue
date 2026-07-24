@@ -157,6 +157,7 @@
                         <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
                             <span>交易记录查询</span>
                             <el-space wrap>
+                                <el-button type="success" plain :loading="dividendLoading" @click="openDividendDraftDialog">分红草稿</el-button>
                                 <el-button @click="downloadTransactionsTemplate">下载交易模板</el-button>
                                 <el-button @click="exportTransactions">导出交易</el-button>
                                 <el-upload
@@ -258,5 +259,5 @@
 
 <script setup>
 import { useAppCtx } from '../composables/useAppCtx.js';
-const { transForm, feeAccounts, feeAutoHint, filteredTransactions, pendingTransactions, pendingPurchaseTotal, transQuery, transPage, submitTrans, resetForm, markFeeManual, downloadTransactionsTemplate, exportTransactions, importTransactions, queryAssetByCode, queryAssetByName, selectTransAsset, autoMatchTransAsset, applyTransFilter, resetTransQuery, handleTransPageChange, handleTransPageSizeChange, openTransEditDialog, deleteTransaction, formatMoney, dashboard } = useAppCtx();
+const { transForm, feeAccounts, feeAutoHint, filteredTransactions, pendingTransactions, pendingPurchaseTotal, transQuery, transPage, submitTrans, resetForm, markFeeManual, downloadTransactionsTemplate, exportTransactions, importTransactions, queryAssetByCode, queryAssetByName, selectTransAsset, autoMatchTransAsset, applyTransFilter, resetTransQuery, handleTransPageChange, handleTransPageSizeChange, openTransEditDialog, deleteTransaction, formatMoney, dashboard, dividendLoading, openDividendDraftDialog } = useAppCtx();
 </script>

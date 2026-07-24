@@ -7,8 +7,11 @@ import api from '../api/index.js';
  * Keeps HTML template field names stable (isMasked, showLoginOverlay, ...).
  */
 export function createAuthMask({ onUnlocked } = {}) {
+    // 仅截图/演示时打码：?mask=1 或 ?screenshot=1；日常默认不隐藏
     const screenshotParams = new URLSearchParams(window.location.search);
-    const isMasked = ref(screenshotParams.get('mask') !== '0' && screenshotParams.get('screenshot') !== '0');
+    const isMasked = ref(
+        screenshotParams.get('mask') === '1' || screenshotParams.get('screenshot') === '1'
+    );
     if (isMasked.value) {
         document.documentElement.classList.add('screenshot-mask');
     } else {

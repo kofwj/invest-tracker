@@ -59,6 +59,8 @@
                     </el-table>
 
                     <el-space wrap style="margin-bottom:16px;">
+                        <el-button size="small" type="primary" plain :loading="eveningBriefDialog?.loading" @click="() => openEveningBrief(false)">生成晚间简报</el-button>
+                        <el-button size="small" type="success" plain :loading="eveningBriefDialog?.loading" @click="() => openEveningBrief(true)">生成并推送晚报</el-button>
                         <el-button size="small" :loading="notifyLoading" @click="pushDepositDueNow">立即推送·存款到期</el-button>
                         <el-button size="small" :loading="notifyLoading" @click="pushDisciplineNow">立即推送·纪律摘要</el-button>
                     </el-space>
@@ -140,6 +142,7 @@ const {
     fetchMaintenance, createDbBackup, downloadBackup, restoreBackup, deleteBackup, restoreUploadedBackup,
     notifyStatus, notifyLogs, notifyLoading, notifyEventDraft,
     fetchNotifyPanel, saveNotifyPanel, testNotifyPush, pushDepositDueNow, pushDisciplineNow,
+    eveningBriefDialog, openEveningBrief,
 } = useAppCtx();
 
 const CHANNEL_LABEL = {
