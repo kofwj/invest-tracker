@@ -362,54 +362,11 @@
             </template>
         </el-dialog>
 
-        <!-- UZI-Skill 混合分析提示（复制到本地 Hermes 执行） -->
-        <el-dialog v-model="uziAnalysisDialog.visible" title="UZI 深度分析提示" width="820px" top="8vh">
-            <div v-if="uziAnalysisDialog.row">
-                <div style="margin-bottom:8px; color:#606266;">
-                    {{ uziAnalysisDialog.row.name }} ({{ uziAnalysisDialog.row.code }})
-                    <span style="margin-left:12px;">当前深度：</span>
-                    <el-radio-group
-                        v-model="uziAnalysisDialog.depth"
-                        size="small"
-                        style="margin-left:6px;"
-                        @change="updateUziDepth"
-                    >
-                        <el-radio-button value="lite">lite</el-radio-button>
-                        <el-radio-button value="medium">medium（推荐）</el-radio-button>
-                        <el-radio-button value="deep">deep</el-radio-button>
-                    </el-radio-group>
-                </div>
-
-                <el-alert
-                    title="此为混合模式：点击下方按钮复制提示词后，在你本机的 Hermes 中直接粘贴执行 UZI-Skill。"
-                    type="info"
-                    :closable="false"
-                    style="margin-bottom:10px;"
-                />
-
-                <el-input
-                    type="textarea"
-                    v-model="uziAnalysisDialog.prompt"
-                    :rows="12"
-                    readonly
-                    style="font-family: monospace; font-size: 13px;"
-                />
-
-                <div style="margin-top:8px; font-size:12px; color:#909399;">
-                    提示：推荐先用 medium，复杂标的再用 deep。执行后把生成的 HTML 报告保存即可。
-                </div>
-            </div>
-
-            <template #footer>
-                <el-button @click="closeUziAnalysisDialog">关闭</el-button>
-                <el-button type="primary" @click="copyUziPrompt">复制提示词</el-button>
-            </template>
-        </el-dialog>
-
+        <!-- UZI 弹窗已迁至 HoldingsTab 本地，避免跨组件状态不同步 -->
 
 </template>
 
 <script setup>
 import { useAppCtx } from '../composables/useAppCtx.js';
-const { dividendLoading, dividendConfirming, dividendDialog, dividendTableRef, feeAccounts, depositDialog, cashFlowEditDialog, transDialog, expectedReturnDialog, holdingCorrectionDialog, holdingCorrectionHistoryDialog, transEditDialog, eveningBriefDialog, openEveningBrief, scanDividendDrafts, confirmSelectedDividends, selectSelectableDividendDrafts, clearDividendDraftSelection, onDividendSelectionChange, isDividendDraftSelectable, dividendStatusLabel, dividendStatusType, saveDeposit, saveCashFlowEdit, saveTransactionEdit, saveExpectedReturn, saveHoldingCorrection, deleteHoldingCorrection, uziAnalysisDialog, updateUziDepth, copyUziPrompt, closeUziAnalysisDialog, formatMoney, downloadDividendTemplate, importDividends } = useAppCtx();
+const { dividendLoading, dividendConfirming, dividendDialog, dividendTableRef, feeAccounts, depositDialog, cashFlowEditDialog, transDialog, expectedReturnDialog, holdingCorrectionDialog, holdingCorrectionHistoryDialog, transEditDialog, eveningBriefDialog, openEveningBrief, scanDividendDrafts, confirmSelectedDividends, selectSelectableDividendDrafts, clearDividendDraftSelection, onDividendSelectionChange, isDividendDraftSelectable, dividendStatusLabel, dividendStatusType, saveDeposit, saveCashFlowEdit, saveTransactionEdit, saveExpectedReturn, saveHoldingCorrection, deleteHoldingCorrection, formatMoney, downloadDividendTemplate, importDividends } = useAppCtx();
 </script>

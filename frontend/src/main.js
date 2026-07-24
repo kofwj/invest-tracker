@@ -29,7 +29,6 @@ import { createBrokerReconcileModule } from './modules/brokerReconcile.js';
 import { createMarketModule } from './modules/market.js';
 import { createDisciplineModule } from './modules/discipline.js';
 import { createHoldingCorrectionHelpers } from './modules/holdingCorrections.js';
-import { createUziAnalysisHelper } from './modules/uziAnalysis.js';
 import { createDataSync } from './modules/dataSync.js';
 import { createAuthMask } from './composables/authMask.js';
 import {
@@ -172,13 +171,6 @@ const app = createApp({
         });
         const holdingCorrectionHistoryDialog = ref({ visible: false, title: '持仓校正记录', records: [] });
 
-        const uziAnalysisDialog = ref({
-            visible: false,
-            row: null,
-            depth: "medium",
-            prompt: ""
-        });
-
         const allocationAnalysis = ref([]);
         const macroAllocationAnalysis = ref([]);
         const portfolioExpectedReturn = ref(0);
@@ -256,60 +248,7 @@ const app = createApp({
             todayLocalIso,
         });
 
-        // UZI 混合分析：生成可复制到本机 Hermes 的提示词
-        const { buildUziPrompt } = createUziAnalysisHelper({ dashboard, formatMoney });
-
-        const openUziAnalysisDialog = (row) => {
-            if (!row || !row.code) {
-                ElMessage.warning('该持仓缺少代码，无法生成 UZI 提示词');
-                return;
-            }
-            const d = 'medium';
-            let prompt = '';
-            try {
-                prompt = buildUziPrompt(row, d) || '';
-            } catch (e) {
-                console.warn('[UZI] build prompt failed', e);
-                prompt = `请使用 UZI-Skill 分析 ${row.name || ''} (${row.code})，深度 medium。`;
-            }
-            uziAnalysisDialog.value = {
-                visible: true,
-                row: { ...row },
-                depth: d,
-                prompt,
-            };
-        };
-
-        const updateUziDepth = (newDepth) => {
-            const dlg = uziAnalysisDialog.value;
-            if (!dlg || !dlg.row) return;
-            const depth = newDepth || dlg.depth || 'medium';
-            dlg.depth = depth;
-            try {
-                dlg.prompt = buildUziPrompt(dlg.row, depth) || dlg.prompt || '';
-            } catch (e) {
-                console.warn('[UZI] update depth failed', e);
-            }
-        };
-
-        const copyUziPrompt = async () => {
-            const t = uziAnalysisDialog.value?.prompt || '';
-            if (!t) {
-                ElMessage.warning('提示词为空');
-                return;
-            }
-            try {
-                await navigator.clipboard.writeText(t);
-                ElMessage.success('提示词已复制，可直接粘贴到本地 Hermes 执行');
-            } catch (e) {
-                // 降级：选中文本框内容
-                ElMessage.warning('自动复制失败，请手动全选复制提示词');
-            }
-        };
-
-        const closeUziAnalysisDialog = () => {
-            uziAnalysisDialog.value.visible = false;
-        };
+        // UZI 弹窗已迁至 HoldingsTab 本地（openLocalUzi），不再走 appCtx
 
         const {
             submitTrans,
@@ -695,7 +634,6 @@ const app = createApp({
             createSnapshot, fetchSnapshots, exportSnapshots, compactSnapshots, showTransactions,
             queryTransactions, applyTransFilter, resetTransQuery, handleTransPageChange, handleTransPageSizeChange, goPendingTransactions, openTransEditDialog, saveTransactionEdit, deleteTransaction,
             openExpectedReturnDialog, saveExpectedReturn, openHoldingCorrectionDialog, saveHoldingCorrection, openHoldingCorrectionHistory, deleteHoldingCorrection,
-            uziAnalysisDialog, openUziAnalysisDialog, updateUziDepth, copyUziPrompt, closeUziAnalysisDialog,
             formatMoney, formatPercent, pct, holdingFloatProfit, holdingLifetimeProfit, holdingFloatProfitRate, holdingLifetimeProfitRate,
             perfSummary, perfTimeline, perfContribution, perfFlows, perfStory, perfLoading, perfFlowForm, hasPerfFlows, perfStoryToneType, perfGuideSteps, perfLensRows, perfReadTips, perfCards,
             displayedPerfContribution, perfContributionFilter, perfContributionSort, perfContributionHeadline, perfContributionMix,
