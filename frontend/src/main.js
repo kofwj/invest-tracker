@@ -589,6 +589,10 @@ const app = createApp({
             if (val === 'transactions') queryTransactions();
             if (val === 'allocation') nextTick(renderAllocationCharts);
             if (val === 'performance') fetchPerformance();
+            if (val === 'decision') {
+                refreshMarket();
+                refreshDiscipline();
+            }
             if (val === 'market') refreshMarket();
             if (val === 'discipline') refreshDiscipline();
             if (val === 'snapshots') {

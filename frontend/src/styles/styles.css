@@ -58,6 +58,17 @@ body {
   color: var(--app-muted);
   line-height: 1.4;
 }
+.home-tagline {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, rgba(45, 125, 210, 0.08), rgba(45, 125, 210, 0.02));
+  border: 1px solid rgba(45, 125, 210, 0.12);
+  color: #475569;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.1px;
+}
 .header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .header-actions .el-button { border-radius: 10px; }
 .inline-sync-status { display: inline-flex; align-items: center; min-height: 28px; max-width: 520px; padding: 4px 10px; border-radius: 999px; background: #f0f9eb; color: #67c23a; font-size: 13px; line-height: 1.4; white-space: normal; border: 1px solid #e1f3d8; }

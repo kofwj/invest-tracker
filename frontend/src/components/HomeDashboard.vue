@@ -1,4 +1,5 @@
 <template>
+        <div class="home-tagline">真仓账本 · 记清每一笔，再决定怎么调 · 分析只读不改仓</div>
         <!-- 顶部资产概览 -->
         <div class="top-stats">
             <el-card shadow="hover" class="stat-card stat-main">

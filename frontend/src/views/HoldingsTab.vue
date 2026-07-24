@@ -121,39 +121,65 @@
     <el-dialog
       v-model="uziDialog.visible"
       title="UZI 深度分析提示"
-      width="820px"
-      top="8vh"
+      width="860px"
+      top="6vh"
       append-to-body
       destroy-on-close
     >
       <div v-if="uziDialog.row">
-        <div style="margin-bottom:8px; color:#606266;">
-          {{ uziDialog.row.name }} ({{ uziDialog.row.code }})
-          <span style="margin-left:12px;">当前深度：</span>
-          <el-radio-group v-model="uziDialog.depth" size="small" style="margin-left:6px;" @change="onUziDepthChange">
+        <el-alert
+          title="只读分析：不改持仓、不下单、不自动入账。复制提示词后，在本机 Hermes 粘贴执行 UZI-Skill。"
+          type="warning"
+          show-icon
+          :closable="false"
+          style="margin-bottom:12px;"
+        />
+
+        <div style="margin-bottom:10px; color:#606266;">
+          <strong>{{ uziDialog.row.name }}</strong> ({{ uziDialog.row.code }})
+          <span style="margin-left:12px;">深度：</span>
+          <el-radio-group v-model="uziDialog.depth" size="small" style="margin-left:6px;" @change="rebuildUziPrompt">
             <el-radio-button value="lite">lite</el-radio-button>
             <el-radio-button value="medium">medium（推荐）</el-radio-button>
             <el-radio-button value="deep">deep</el-radio-button>
           </el-radio-group>
         </div>
 
-        <el-alert
-          title="只读分析，不改持仓、不下单。复制提示词后，在你本机 Hermes 粘贴执行 UZI-Skill。"
-          type="info"
-          :closable="false"
-          style="margin-bottom:10px;"
-        />
+        <div style="margin-bottom:10px;">
+          <div style="font-size:13px; color:#606266; margin-bottom:6px;">问题模板（点一下换侧重点）</div>
+          <el-space wrap>
+            <el-button
+              v-for="t in uziTemplates"
+              :key="t.key"
+              size="small"
+              :type="uziDialog.focus === t.key ? 'primary' : 'default'"
+              @click="applyFocus(t.key)"
+            >{{ t.label }}</el-button>
+          </el-space>
+        </div>
 
         <el-input
           v-model="uziDialog.prompt"
           type="textarea"
-          :rows="12"
+          :rows="11"
           readonly
           style="font-family: monospace; font-size: 13px;"
         />
 
-        <div style="margin-top:8px; font-size:12px; color:#909399;">
-          提示：推荐先用 medium，复杂标的再用 deep。执行后把生成的 HTML 报告保存即可。
+        <div style="margin-top:12px;">
+          <div style="font-size:13px; color:#606266; margin-bottom:6px;">
+            分析备忘（只存在本机浏览器，不进真仓）
+          </div>
+          <el-input
+            v-model="uziDialog.note"
+            type="textarea"
+            :rows="3"
+            placeholder="可粘贴 Hermes/UZI 结论摘要或报告路径，方便下次对照"
+          />
+          <div style="margin-top:6px;">
+            <el-button size="small" type="primary" plain @click="saveNote">保存备忘</el-button>
+            <span style="margin-left:8px; font-size:12px; color:#909399;">换电脑/清缓存会丢，重要结论请另存</span>
+          </div>
         </div>
       </div>
 
@@ -169,7 +195,7 @@
 import { reactive } from 'vue';
 import { ElMessage } from 'element-plus';
 import { useAppCtx } from '../composables/useAppCtx.js';
-import { createUziAnalysisHelper } from '../modules/uziAnalysis.js';
+import { createUziAnalysisHelper, UZI_FOCUS_TEMPLATES } from '../modules/uziAnalysis.js';
 
 const {
   holdings,
@@ -186,14 +212,26 @@ const {
   holdingLifetimeProfitRate,
 } = useAppCtx();
 
-const { buildUziPrompt } = createUziAnalysisHelper({ dashboard, formatMoney });
+const { buildUziPrompt, loadUziNote, saveUziNote } = createUziAnalysisHelper({ dashboard, formatMoney });
+const uziTemplates = UZI_FOCUS_TEMPLATES;
 
 const uziDialog = reactive({
   visible: false,
   row: null,
   depth: 'medium',
+  focus: 'default',
   prompt: '',
+  note: '',
 });
+
+function rebuildUziPrompt() {
+  if (!uziDialog.row) return;
+  try {
+    uziDialog.prompt = buildUziPrompt(uziDialog.row, uziDialog.depth, uziDialog.focus) || '';
+  } catch (e) {
+    console.warn('[UZI] rebuild prompt failed', e);
+  }
+}
 
 function openLocalUzi(row) {
   try {
@@ -203,17 +241,14 @@ function openLocalUzi(row) {
       return;
     }
     const safeRow = { ...row, code };
-    const depth = 'medium';
-    let prompt = '';
-    try {
-      prompt = buildUziPrompt(safeRow, depth) || '';
-    } catch (e) {
-      console.warn('[UZI] build prompt failed', e);
-      prompt = `请使用 UZI-Skill 分析 ${safeRow.name || ''} (${code})，深度 medium。`;
-    }
     uziDialog.row = safeRow;
-    uziDialog.depth = depth;
-    uziDialog.prompt = prompt;
+    uziDialog.depth = 'medium';
+    uziDialog.focus = 'default';
+    uziDialog.note = loadUziNote(code) || '';
+    rebuildUziPrompt();
+    if (!uziDialog.prompt) {
+      uziDialog.prompt = `请使用 UZI-Skill 分析 ${safeRow.name || ''} (${code})，深度 medium。`;
+    }
     uziDialog.visible = true;
   } catch (e) {
     console.error('[UZI] open failed', e);
@@ -221,14 +256,19 @@ function openLocalUzi(row) {
   }
 }
 
-function onUziDepthChange(depth) {
-  if (!uziDialog.row) return;
-  const d = depth || uziDialog.depth || 'medium';
-  uziDialog.depth = d;
-  try {
-    uziDialog.prompt = buildUziPrompt(uziDialog.row, d) || uziDialog.prompt || '';
-  } catch (e) {
-    console.warn('[UZI] update depth failed', e);
+function applyFocus(key) {
+  uziDialog.focus = key || 'default';
+  rebuildUziPrompt();
+}
+
+function saveNote() {
+  if (!uziDialog.row?.code) return;
+  const ok = saveUziNote(uziDialog.row.code, uziDialog.note);
+  if (ok) {
+    ElMessage.success('备忘已保存到本机浏览器');
+    rebuildUziPrompt();
+  } else {
+    ElMessage.warning('保存失败（可能浏览器禁用了本地存储）');
   }
 }
 

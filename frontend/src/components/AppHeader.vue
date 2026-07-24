@@ -2,7 +2,7 @@
         <div class="header">
             <div class="header-brand">
                 <h2>投资资产管理系统</h2>
-                <div class="header-subtitle">真仓总览 · 同步 · 简报</div>
+                <div class="header-subtitle">真仓账本 · 记清每一笔，再决定怎么调</div>
             </div>
             <div class="header-actions">
                 <el-button :type="isMasked ? 'danger' : 'info'" plain @click="toggleMask">

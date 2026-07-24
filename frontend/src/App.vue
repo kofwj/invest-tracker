@@ -37,6 +37,9 @@
             <CashTab />
           </el-tab-pane>
 
+          <el-tab-pane v-if="tabGroup === 'analysis'" label="今天该看" name="decision" lazy>
+            <DecisionTab />
+          </el-tab-pane>
           <el-tab-pane v-if="tabGroup === 'analysis'" label="收益分析" name="performance" lazy>
             <PerformanceTab />
           </el-tab-pane>
@@ -79,6 +82,7 @@ export default {
     HomeDashboard,
     AppDialogs,
     LoginOverlay,
+    DecisionTab: defineAsyncComponent(() => import('./views/DecisionTab.vue')),
     SnapshotsTab: defineAsyncComponent(() => import('./views/SnapshotsTab.vue')),
     AllocationTab: defineAsyncComponent(() => import('./views/AllocationTab.vue')),
     PerformanceTab: defineAsyncComponent(() => import('./views/PerformanceTab.vue')),
