@@ -1,10 +1,11 @@
-import { createApp, ref, onMounted, nextTick, watch, provide } from 'vue';
+import { createApp, ref, computed, onMounted, nextTick, watch, provide } from 'vue';
 import { ElLoading, ElMessage, ElMessageBox } from 'element-plus';
 import zhCn from 'element-plus/es/locale/lang/zh-cn';
 import 'element-plus/es/components/message/style/css';
 import 'element-plus/es/components/message-box/style/css';
 import 'element-plus/es/components/loading/style/css';
 import App from './App.vue';
+import router from './router/index.js';
 import { APP_CTX_KEY } from './composables/useAppCtx.js';
 import {
     normalizeText,
@@ -41,7 +42,7 @@ import { createDividendHelpers } from './modules/dividends.js';
 import { createAllocationModule } from './modules/allocation.js';
 import { createAppInit } from './modules/appInit.js';
 import { createBriefHelpers } from './modules/brief.js';
-import { TAB_GROUPS, tabGroupOf, resolveInitialTab } from './modules/tabNav.js';
+import { TAB_GROUPS, tabGroupOf, SCREENSHOT_TABS } from './modules/tabNav.js';
 import './styles/styles.css';
 
 const app = createApp({
@@ -66,16 +67,22 @@ const app = createApp({
             onUnlocked: () => bootstrapAfterAuth(),
         });
 
-        const activeTab = ref(resolveInitialTab());
-        const tabGroup = ref(tabGroupOf(activeTab.value));
-        watch(tabGroup, (gid) => {
-            const g = tabGroups.find(x => x.id === gid);
-            if (g && !g.tabs.includes(activeTab.value)) activeTab.value = g.tabs[0];
+        // 路由驱动当前页；activeTab 兼容旧模块跳转
+        const goTab = (tab) => {
+            if (!tab || !SCREENSHOT_TABS.includes(tab)) return;
+            if (router.currentRoute.value.name === tab) return;
+            router.push({ name: tab }).catch(() => {});
+        };
+        const activeTab = computed({
+            get() {
+                const name = router.currentRoute.value.name;
+                return typeof name === 'string' && SCREENSHOT_TABS.includes(name) ? name : 'overview';
+            },
+            set(tab) {
+                goTab(tab);
+            },
         });
-        watch(activeTab, (tab) => {
-            const gid = tabGroupOf(tab);
-            if (tabGroup.value !== gid) tabGroup.value = gid;
-        });
+        const tabGroup = computed(() => tabGroupOf(activeTab.value));
         const dashboard = ref({});
         const holdings = ref([]);
         const deposits = ref([]);
@@ -586,13 +593,13 @@ const app = createApp({
         });
 
         watch(activeTab, (val) => {
+            if (val === 'overview' || val === 'decision') {
+                refreshMarket();
+                if (val === 'decision') refreshDiscipline();
+            }
             if (val === 'transactions') queryTransactions();
             if (val === 'allocation') nextTick(renderAllocationCharts);
             if (val === 'performance') fetchPerformance();
-            if (val === 'decision') {
-                refreshMarket();
-                refreshDiscipline();
-            }
             if (val === 'market') refreshMarket();
             if (val === 'discipline') refreshDiscipline();
             if (val === 'snapshots') {
@@ -627,7 +634,7 @@ const app = createApp({
             zhCn,
             isMasked, toggleMask,
             showLoginOverlay, loginLoading, loginPassword, loginError, authEnabled, handleLogin, handleLogout,
-            activeTab, tabGroup, tabGroups, dashboard, holdings, deposits, depositRows, depositSummary, depositBankBreakdown, depositMaturityBuckets, syncing, trailingSyncing, syncNotice,
+            activeTab, tabGroup, tabGroups, goTab, dashboard, holdings, deposits, depositRows, depositSummary, depositBankBreakdown, depositMaturityBuckets, syncing, trailingSyncing, syncNotice,
             snapshots, snapshotRange, snapshotSummary, snapshotMetrics, snapshotChangeRows, snapshotInsights, snapshotLoading, maintenanceStatus, backups, maintenanceLoading, dividendLoading, dividendConfirming, dividendDialog, dividendTableRef, todayIso, todaySnapshotDone, latestPriceStatusText, latestBackupText,
             transForm, feeSettings, feeAccounts, activeFeeAccount, newFeeAccountName, feeCategories, feeSettingRows, feeAutoHint, depositDialog, cashForm, cashFlows, cashFlowForm, cashFlowQuery, cashFlowSummary, cashFlowEditDialog, transDialog, allocationAnalysis, macroAllocationAnalysis, allocationSummary, allocationHealth, portfolioExpectedReturn,
             allTransactions, filteredTransactions, pendingTransactions, pendingPurchaseTotal, transQuery, transPage, transEditDialog,
@@ -661,4 +668,5 @@ const app = createApp({
         return appCtx;
     }
 });
+app.use(router);
 app.mount('#app');

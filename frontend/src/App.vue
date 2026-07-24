@@ -13,50 +13,24 @@
             :class="{ active: tabGroup === g.id }"
             role="tab"
             :aria-selected="tabGroup === g.id"
-            @click="tabGroup = g.id"
+            @click="onGroupClick(g.id)"
           >{{ g.label }}</button>
         </div>
 
-        <el-tabs v-model="activeTab" class="main-tabs">
-          <el-tab-pane v-if="tabGroup === 'daily'" label="持仓明细" name="holdings" lazy>
-            <HoldingsTab />
-          </el-tab-pane>
-          <el-tab-pane v-if="tabGroup === 'daily'" label="交易录入/管理" name="transactions" lazy>
-            <TransactionsTab />
-          </el-tab-pane>
-          <el-tab-pane v-if="tabGroup === 'daily'" label="券商对账" name="broker" lazy>
-            <BrokerReconcileTab />
-          </el-tab-pane>
-          <el-tab-pane v-if="tabGroup === 'daily'" label="银行存款" name="deposits" lazy>
-            <DepositsTab />
-          </el-tab-pane>
-          <el-tab-pane v-if="tabGroup === 'daily'" label="现金设置" name="cash" lazy>
-            <CashTab />
-          </el-tab-pane>
+        <nav v-if="currentGroupTabs.length > 1" class="page-nav" aria-label="页面导航">
+          <button
+            v-for="t in currentGroupTabs"
+            :key="t"
+            type="button"
+            class="page-nav-btn"
+            :class="{ active: activeTab === t }"
+            @click="goTab(t)"
+          >{{ tabLabelOf(t) }}</button>
+        </nav>
 
-          <el-tab-pane v-if="tabGroup === 'analysis'" label="今天该看" name="decision" lazy>
-            <DecisionTab />
-          </el-tab-pane>
-          <el-tab-pane v-if="tabGroup === 'analysis'" label="收益分析" name="performance" lazy>
-            <PerformanceTab />
-          </el-tab-pane>
-          <el-tab-pane v-if="tabGroup === 'analysis'" label="资产配置" name="allocation" lazy>
-            <AllocationTab />
-          </el-tab-pane>
-          <el-tab-pane v-if="tabGroup === 'analysis'" label="资产快照" name="snapshots" lazy>
-            <SnapshotsTab />
-          </el-tab-pane>
-          <el-tab-pane v-if="tabGroup === 'analysis'" label="市场摘要" name="market" lazy>
-            <MarketTab />
-          </el-tab-pane>
-          <el-tab-pane v-if="tabGroup === 'analysis'" label="纪律与再平衡" name="discipline" lazy>
-            <DisciplineTab />
-          </el-tab-pane>
-
-          <el-tab-pane v-if="tabGroup === 'ops'" label="数据维护" name="maintenance" lazy>
-            <MaintenanceTab />
-          </el-tab-pane>
-        </el-tabs>
+        <div class="page-view">
+          <router-view />
+        </div>
       </div>
 
       <AppDialogs />
@@ -66,10 +40,10 @@
 </template>
 
 <script>
-import { defineAsyncComponent } from 'vue';
 import AppHeader from './components/AppHeader.vue';
 import AppDialogs from './components/AppDialogs.vue';
 import LoginOverlay from './components/LoginOverlay.vue';
+import { tabLabel } from './modules/tabNav.js';
 
 export default {
   name: 'App',
@@ -77,18 +51,23 @@ export default {
     AppHeader,
     AppDialogs,
     LoginOverlay,
-    DecisionTab: defineAsyncComponent(() => import('./views/DecisionTab.vue')),
-    SnapshotsTab: defineAsyncComponent(() => import('./views/SnapshotsTab.vue')),
-    AllocationTab: defineAsyncComponent(() => import('./views/AllocationTab.vue')),
-    PerformanceTab: defineAsyncComponent(() => import('./views/PerformanceTab.vue')),
-    MarketTab: defineAsyncComponent(() => import('./views/MarketTab.vue')),
-    DisciplineTab: defineAsyncComponent(() => import('./views/DisciplineTab.vue')),
-    HoldingsTab: defineAsyncComponent(() => import('./views/HoldingsTab.vue')),
-    DepositsTab: defineAsyncComponent(() => import('./views/DepositsTab.vue')),
-    TransactionsTab: defineAsyncComponent(() => import('./views/TransactionsTab.vue')),
-    BrokerReconcileTab: defineAsyncComponent(() => import('./views/BrokerReconcileTab.vue')),
-    CashTab: defineAsyncComponent(() => import('./views/CashTab.vue')),
-    MaintenanceTab: defineAsyncComponent(() => import('./views/MaintenanceTab.vue')),
+  },
+  methods: {
+    tabLabelOf(t) {
+      return tabLabel(t);
+    },
+    onGroupClick(gid) {
+      const hit = (this.tabGroups || []).find((x) => x.id === gid);
+      if (!hit || !hit.tabs?.length) return;
+      if (hit.tabs.includes(this.activeTab)) return;
+      this.goTab(hit.tabs[0]);
+    },
+  },
+  computed: {
+    currentGroupTabs() {
+      const hit = (this.tabGroups || []).find((x) => x.id === this.tabGroup);
+      return hit ? hit.tabs : [];
+    },
   },
 };
 </script>

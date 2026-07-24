@@ -143,8 +143,7 @@ import { computed, onMounted } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 
 const {
-  activeTab,
-  tabGroup,
+  goTab,
   marketSignals,
   marketHighlights,
   marketComparisons,
@@ -205,15 +204,6 @@ async function refreshDecision() {
     typeof refreshMarket === 'function' ? refreshMarket() : Promise.resolve(),
     typeof refreshDiscipline === 'function' ? refreshDiscipline() : Promise.resolve(),
   ]);
-}
-
-function goTab(name) {
-  if (name === 'deposits') {
-    tabGroup.value = 'daily';
-  } else {
-    tabGroup.value = 'analysis';
-  }
-  activeTab.value = name;
 }
 
 onMounted(() => {
