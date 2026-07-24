@@ -13,17 +13,17 @@
                     <div class="allocation-hero">
                         <el-card shadow="hover" class="allocation-card allocation-main-card">
                             <div class="allocation-label">权益资产占比</div>
-                            <div class="allocation-value" :style="{color: allocationSummary.equityRatio > 55 ? '#E6A23C' : '#303133'}">{{ allocationSummary.equityRatio.toFixed(1) }}%</div>
-                            <div class="allocation-sub">权益金额 {{ formatMoney(allocationSummary.equityAmount) }}</div>
+                            <div class="allocation-value" :style="{color: (allocationSummary?.equityRatio || 0) > 55 ? '#E6A23C' : '#303133'}">{{ (allocationSummary?.equityRatio || 0).toFixed(1) }}%</div>
+                            <div class="allocation-sub">权益金额 {{ formatMoney(allocationSummary?.equityAmount || 0) }}</div>
                         </el-card>
                         <el-card shadow="hover" class="allocation-card">
                             <div class="allocation-label">固收 + 存款占比</div>
-                            <div class="allocation-value" style="color:#409EFF;">{{ allocationSummary.defensiveRatio.toFixed(1) }}%</div>
-                            <div class="allocation-sub">防守资产 {{ formatMoney(allocationSummary.defensiveAmount) }}</div>
+                            <div class="allocation-value" style="color:#409EFF;">{{ (allocationSummary?.defensiveRatio || 0).toFixed(1) }}%</div>
+                            <div class="allocation-sub">防守资产 {{ formatMoney(allocationSummary?.defensiveAmount || 0) }}</div>
                         </el-card>
                         <el-card shadow="hover" class="allocation-card">
                             <div class="allocation-label">组合预计年化</div>
-                            <div class="allocation-value" style="color:#E6A23C;">{{ portfolioExpectedReturn?.toFixed(2) }}%</div>
+                            <div class="allocation-value" style="color:#E6A23C;">{{ Number(portfolioExpectedReturn || 0).toFixed(2) }}%</div>
                             <div class="allocation-sub">按各资产预计收益加权</div>
                         </el-card>
                         <el-card shadow="hover" class="allocation-card">
@@ -34,7 +34,7 @@
                     </div>
 
                     <el-alert
-                        :title="allocationSummary.comment"
+                        :title="allocationSummary?.comment || '加载配置分析中…'"
                         type="info"
                         show-icon
                         :closable="false"
@@ -58,7 +58,7 @@
                         <el-col :span="10">
                             <el-card shadow="never" header="配置健康检查">
                                 <div class="allocation-risk-list">
-                                    <div v-for="item in allocationHealth" :key="item.label" class="allocation-risk-item">
+                                    <div v-for="item in (allocationHealth || [])" :key="item.label" class="allocation-risk-item">
                                         <div class="allocation-risk-head">
                                             <span>{{ item.label }}</span>
                                             <el-tag :type="item.type" effect="light">{{ item.status }}</el-tag>
