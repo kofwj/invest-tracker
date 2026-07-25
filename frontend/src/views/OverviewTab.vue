@@ -107,29 +107,35 @@
       <el-table
         :data="holdingsPreview"
         stripe
-        class="holdings-table"
+        size="small"
+        class="holdings-table overview-holdings-table"
         style="width: 100%"
         empty-text="暂无持仓"
         @row-click="onRowClick"
       >
-        <el-table-column prop="name" label="名称" min-width="120" fixed="left" />
-        <el-table-column prop="code" label="代码" width="100" align="center" />
-        <el-table-column prop="category" label="分类" width="90" align="center" />
-        <el-table-column label="市值" min-width="110" align="right">
+        <el-table-column label="标的" min-width="168" fixed="left" align="left" header-align="left">
           <template #default="scope">
-            <span class="nowrap-cell">{{ formatMoney(Number(scope.row.quantity || 0) * Number(scope.row.last_price || 0)) }}</span>
+            <div class="asset-cell">
+              <div class="asset-cell-name">{{ scope.row.name }}</div>
+              <div class="asset-cell-code">{{ scope.row.code }} · {{ scope.row.category || '未分类' }}</div>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column label="持仓浮盈" min-width="110" align="right">
+        <el-table-column label="最新价" min-width="96" align="right" header-align="right">
           <template #default="scope">
-            <span class="nowrap-cell" :style="{ color: holdingFloatProfit(scope.row) >= 0 ? '#F56C6C' : '#67C23A' }">
+            <span class="num-cell">{{ formatMoney(scope.row.last_price, 4) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="市值" min-width="112" align="right" header-align="right">
+          <template #default="scope">
+            <span class="num-cell">{{ formatMoney(Number(scope.row.quantity || 0) * Number(scope.row.last_price || 0)) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="持仓浮盈" min-width="112" align="right" header-align="right">
+          <template #default="scope">
+            <span class="num-cell" :style="{ color: holdingFloatProfit(scope.row) >= 0 ? '#F56C6C' : '#67C23A' }">
               {{ formatMoney(holdingFloatProfit(scope.row), 2, true) }}
             </span>
-          </template>
-        </el-table-column>
-        <el-table-column label="最新价" min-width="90" align="right">
-          <template #default="scope">
-            <span class="nowrap-cell">{{ formatMoney(scope.row.last_price, 4) }}</span>
           </template>
         </el-table-column>
       </el-table>
@@ -217,6 +223,10 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+.overview-holdings-table :deep(.el-table__cell) {
+  padding-top: 7px;
+  padding-bottom: 7px;
 }
 @media (max-width: 1280px) {
   .overview-stats { grid-template-columns: repeat(3, 1fr); }
