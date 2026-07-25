@@ -88,24 +88,31 @@
                         <el-button @click="queryCashFlows">查询</el-button>
                         <el-button @click="resetCashFlowQuery">重置</el-button>
                     </div>
-                    <el-table :data="cashFlows" stripe style="width: 100%">
-                        <el-table-column prop="date" label="日期" width="110"></el-table-column>
-                        <el-table-column prop="account" label="账户" width="100"></el-table-column>
-                        <el-table-column prop="flow_type" label="类型" width="100">
+                    <el-table :data="cashFlows" stripe size="small" class="data-table" style="width: 100%">
+                        <el-table-column prop="date" label="日期" width="108" align="left" header-align="left"></el-table-column>
+                        <el-table-column prop="account" label="账户" width="100" align="left" header-align="left"></el-table-column>
+                        <el-table-column prop="flow_type" label="类型" width="100" align="left" header-align="left">
                             <template #default="scope">
-                                <el-tag :type="cashFlowTagType(scope.row.flow_type)">{{ scope.row.flow_type }}</el-tag>
+                                <el-tag size="small" :type="cashFlowTagType(scope.row.flow_type)">{{ scope.row.flow_type }}</el-tag>
                             </template>
                         </el-table-column>
-                        <el-table-column label="金额" width="130">
-                            <template #default="scope"><span :style="{ color: Number(scope.row.amount || 0) >= 0 ? '#F56C6C' : '#67C23A' }">{{ formatMoney(scope.row.amount, 2, true) }}</span></template>
+                        <el-table-column label="金额" width="120" align="right" header-align="right">
+                            <template #default="scope"><span class="num-cell" :style="{ color: Number(scope.row.amount || 0) >= 0 ? '#F56C6C' : '#67C23A' }">{{ formatMoney(scope.row.amount, 2, true) }}</span></template>
                         </el-table-column>
-                        <el-table-column label="调整前" width="130"><template #default="scope">{{ formatMoney(scope.row.balance_before) }}</template></el-table-column>
-                        <el-table-column label="调整后" width="130"><template #default="scope">{{ formatMoney(scope.row.balance_after) }}</template></el-table-column>
+                        <el-table-column label="调整前" width="120" align="right" header-align="right"><template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.balance_before) }}</span></template></el-table-column>
+                        <el-table-column label="调整后" width="120" align="right" header-align="right"><template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.balance_after) }}</span></template></el-table-column>
                         <el-table-column prop="remark" label="备注" show-overflow-tooltip></el-table-column>
-                        <el-table-column label="操作" width="150" fixed="right">
+                        <el-table-column label="操作" width="72" fixed="right" align="center" header-align="center">
                             <template #default="scope">
-                                <el-button type="primary" link @click="openCashFlowEditDialog(scope.row)">编辑</el-button>
-                                <el-button type="danger" link @click="deleteCashFlow(scope.row)">删除</el-button>
+                                <el-dropdown trigger="click">
+                                    <el-button type="primary" link size="small">更多</el-button>
+                                    <template #dropdown>
+                                        <el-dropdown-menu>
+                                            <el-dropdown-item @click="openCashFlowEditDialog(scope.row)">编辑</el-dropdown-item>
+                                            <el-dropdown-item divided @click="deleteCashFlow(scope.row)">删除</el-dropdown-item>
+                                        </el-dropdown-menu>
+                                    </template>
+                                </el-dropdown>
                             </template>
                         </el-table-column>
                     </el-table>

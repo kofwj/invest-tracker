@@ -207,39 +207,93 @@
                     </el-row>
                     
                     <!-- 交易记录表格 -->
-                    <el-table :data="filteredTransactions" stripe class="transaction-table" style="width: 100%" max-height="500">
-                        <el-table-column prop="date" label="日期" width="115" sortable></el-table-column>
-                        <el-table-column prop="code" label="代码" width="95"></el-table-column>
-                        <el-table-column prop="name" label="名称" min-width="130"></el-table-column>
-                        <el-table-column prop="category" label="分类" width="90"></el-table-column>
-                        <el-table-column prop="account" label="账户" width="95"></el-table-column>
-                        <el-table-column prop="direction" label="方向" width="80">
+                    <div class="desktop-only table-scroll">
+                    <el-table :data="filteredTransactions" stripe size="small" class="transaction-table data-table" style="width: 100%" max-height="500">
+                        <el-table-column prop="date" label="日期" width="108" sortable align="left" header-align="left"></el-table-column>
+                        <el-table-column label="标的" min-width="148" align="left" header-align="left">
                             <template #default="scope">
-                                <el-tag :type="scope.row.direction === '买入' ? 'danger' : (scope.row.direction === '卖出' ? 'success' : (scope.row.direction === '申购待确认' ? 'info' : (scope.row.direction === '分红再投资' ? 'primary' : 'warning')))">
+                                <div class="asset-cell">
+                                    <div class="asset-name">{{ scope.row.name }}</div>
+                                    <div class="asset-code">{{ scope.row.code }}</div>
+                                </div>
+                            </template>
+                        </el-table-column>
+                        <el-table-column prop="category" label="分类" width="88" align="left" header-align="left">
+                            <template #default="scope">
+                                <el-tag size="small" effect="plain" :type="categoryTagType(scope.row.category)">{{ scope.row.category || '—' }}</el-tag>
+                            </template>
+                        </el-table-column>
+                        <el-table-column prop="account" label="账户" width="92" align="left" header-align="left" show-overflow-tooltip></el-table-column>
+                        <el-table-column prop="direction" label="方向" width="96" align="center" header-align="center">
+                            <template #default="scope">
+                                <el-tag size="small" :type="scope.row.direction === '买入' ? 'danger' : (scope.row.direction === '卖出' ? 'success' : (scope.row.direction === '申购待确认' ? 'info' : (scope.row.direction === '分红再投资' ? 'primary' : 'warning')))">
                                     {{ scope.row.direction }}
                                 </el-tag>
                             </template>
                         </el-table-column>
-                        <el-table-column label="数量" min-width="130">
-                            <template #default="scope"><span class="nowrap-cell">{{ scope.row.quantity?.toLocaleString() }}</span></template>
+                        <el-table-column label="数量" min-width="100" align="right" header-align="right" sortable>
+                            <template #default="scope"><span class="num-cell">{{ scope.row.quantity?.toLocaleString() }}</span></template>
                         </el-table-column>
-                        <el-table-column label="单价" min-width="115">
-                            <template #default="scope"><span class="nowrap-cell">{{ formatMoney(scope.row.price, 4) }}</span></template>
+                        <el-table-column label="单价" min-width="96" align="right" header-align="right">
+                            <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.price, 4) }}</span></template>
                         </el-table-column>
-                        <el-table-column label="金额" min-width="140">
-                            <template #default="scope"><span class="nowrap-cell">{{ formatMoney(scope.row.amount) }}</span></template>
+                        <el-table-column label="金额" min-width="110" align="right" header-align="right" sortable>
+                            <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.amount) }}</span></template>
                         </el-table-column>
-                        <el-table-column label="手续费" min-width="100">
-                            <template #default="scope"><span class="nowrap-cell">{{ formatMoney(scope.row.fee) }}</span></template>
+                        <el-table-column label="手续费" min-width="88" align="right" header-align="right">
+                            <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.fee) }}</span></template>
                         </el-table-column>
-                        <el-table-column prop="remark" label="备注" min-width="120" show-overflow-tooltip></el-table-column>
-                        <el-table-column label="操作" width="170" fixed="right">
+                        <el-table-column prop="remark" label="备注" min-width="110" show-overflow-tooltip></el-table-column>
+                        <el-table-column label="操作" width="72" fixed="right" align="center" header-align="center">
                             <template #default="scope">
-                                <el-button type="primary" size="small" @click="openTransEditDialog(scope.row)">编辑</el-button>
-                                <el-button type="danger" size="small" @click="deleteTransaction(scope.row)">删除</el-button>
+                                <el-dropdown trigger="click">
+                                    <el-button type="primary" link size="small">更多</el-button>
+                                    <template #dropdown>
+                                        <el-dropdown-menu>
+                                            <el-dropdown-item @click="openTransEditDialog(scope.row)">编辑</el-dropdown-item>
+                                            <el-dropdown-item divided @click="deleteTransaction(scope.row)">删除</el-dropdown-item>
+                                        </el-dropdown-menu>
+                                    </template>
+                                </el-dropdown>
                             </template>
                         </el-table-column>
                     </el-table>
+                    </div>
+
+                    <div class="mobile-only tx-cards">
+                        <div v-for="row in filteredTransactions" :key="row.id || (row.date + row.code + row.amount)" class="holding-card">
+                            <div class="holding-card-head">
+                                <div>
+                                    <div class="asset-name">{{ row.name }}</div>
+                                    <div class="asset-code">{{ row.date }} · {{ row.code }} · {{ row.account || '—' }}</div>
+                                </div>
+                                <el-tag size="small" :type="row.direction === '买入' ? 'danger' : (row.direction === '卖出' ? 'success' : 'warning')">{{ row.direction }}</el-tag>
+                            </div>
+                            <div class="holding-card-grid">
+                                <div>
+                                    <div class="meta-label">数量</div>
+                                    <div class="num-cell">{{ row.quantity?.toLocaleString() }}</div>
+                                </div>
+                                <div>
+                                    <div class="meta-label">金额</div>
+                                    <div class="num-cell">{{ formatMoney(row.amount) }}</div>
+                                </div>
+                                <div>
+                                    <div class="meta-label">单价</div>
+                                    <div class="num-cell">{{ formatMoney(row.price, 4) }}</div>
+                                </div>
+                                <div>
+                                    <div class="meta-label">手续费</div>
+                                    <div class="num-cell">{{ formatMoney(row.fee) }}</div>
+                                </div>
+                            </div>
+                            <div class="holding-card-ops">
+                                <el-button size="small" link type="primary" @click="openTransEditDialog(row)">编辑</el-button>
+                                <el-button size="small" link type="danger" @click="deleteTransaction(row)">删除</el-button>
+                            </div>
+                        </div>
+                        <div v-if="!filteredTransactions.length" class="empty-cards">暂无交易</div>
+                    </div>
                     
                     <div style="margin-top: 12px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
                         <span style="color: #909399;">当前页 {{ filteredTransactions.length }} 条 / 共 {{ transPage.total }} 条记录</span>
@@ -259,5 +313,51 @@
 
 <script setup>
 import { useAppCtx } from '../composables/useAppCtx.js';
+import { categoryTagType } from '../composables/useTableColumns.js';
 const { transForm, feeAccounts, feeAutoHint, filteredTransactions, pendingTransactions, pendingPurchaseTotal, transQuery, transPage, submitTrans, resetForm, markFeeManual, downloadTransactionsTemplate, exportTransactions, importTransactions, queryAssetByCode, queryAssetByName, selectTransAsset, autoMatchTransAsset, applyTransFilter, resetTransQuery, handleTransPageChange, handleTransPageSizeChange, openTransEditDialog, deleteTransaction, formatMoney, dashboard, dividendLoading, openDividendDraftDialog } = useAppCtx();
 </script>
+
+<style scoped>
+.holding-card {
+  background: #fff;
+  border: 1px solid var(--app-border, #e8edf3);
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+  margin-bottom: 10px;
+}
+.holding-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.holding-card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
+  font-size: 13px;
+}
+.holding-card-ops {
+  margin-top: 10px;
+  display: flex;
+  gap: 4px;
+  border-top: 1px dashed #e5e7eb;
+  padding-top: 8px;
+}
+.meta-label {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-bottom: 2px;
+}
+.empty-cards {
+  text-align: center;
+  color: #909399;
+  padding: 24px;
+}
+.tx-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+</style>
