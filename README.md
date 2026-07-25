@@ -1,456 +1,231 @@
-# 投资资产管理系统 / Invest Tracker
+# Invest Tracker · 真仓账本
 
-> 更新时间：2026-07-19  
-> 本项目是本地运行的个人投资资产管理系统，用于记录持仓、交易、证券现金、银行存款、资产快照和组合收益表现。  
-> 变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+> 更新：2026-07-26  
+> 个人真仓投资账本：持仓、交易、现金/存款、日快照、收益与纪律。  
+> **不模拟、不自动下单**；草稿确认后才入账。  
+> 变更明细见 [CHANGELOG.md](CHANGELOG.md)。
 
 ---
 
-## 1. 功能概览
+## 它是什么
 
-当前系统覆盖：
+本地 / VPS 可跑的 **真仓账本**，用来：
 
-- 持仓管理：A股权益、A股 ETF、港股 ETF、REITs、黄金、债基、其他资产；
-- 交易录入/管理：买入、卖出、分红、分红再投资、申购待确认等；
-- 证券现金：现金基准、资金流水、交易现金流自动联动；
-- 银行存款：金额、利率、起存日、到期日；**预计年利息 / 到期前利息 / 整期利息**（单利 365 天）、到期分布（含已到期）、银行集中度；
-- 资产快照：记录/更新每日资产状态，支持区间分析；
-- 资产配置：权益/固收/存款结构、集中度、预计年化；
-- 收益分析：组合表现、时间序列、当前仓贡献 + 全周期盈亏、现金流；
-- 首页双口径：持仓浮盈（普通成本）与全周期盈亏（摊薄成本，接近券商累计）；
-- 价格/收益同步：支持最新价格、基金净值、近一年收益率同步；
-- 持仓校正：支持以券商实际持仓作为对账锚点；
-- 半自动分红：扫描 A 股个股 + 场内 ETF/港股ETF/REIT 分红草稿，自动识别已有流水后确认入账；
-- 多账户费率：支持按证券账户、资产类别、方向估算手续费；
-- 纪律与再平衡：真实仓位规则 + 草稿（确认才入账）；
-- 市场摘要与价格预警、券商对账单、晚间简报；
-- **多通道消息推送**（飞书 / 钉钉 / 企微 / Telegram，独立于 Hermes）：价格预警、晚间简报、存款到期、纪律破线；维护页可试推与看日志。
+- 记清楚：买了什么、现金多少、存款何时到期
+- 看清楚：今天赚亏粗估、对大盘强弱、仓位是否偏了
+- 管得住：纪律破线、再平衡草稿、价格预警、多通道短通知
 
-技术栈：
+**不是** 量化回测平台，也不是自动交易。
 
-- 后端：FastAPI + SQLite；
-- 前端：Vite + Vue 3 + Element Plus + ECharts；
-- 部署：Docker Compose，前端由 Nginx 托管，后端由 Uvicorn 提供 API。
+---
 
-### 银行存款利息怎么看
+## 页面结构（顶栏四大组）
 
-| 字段 | 含义 |
+| 组 | 页 | 做什么 |
+|----|----|--------|
+| **总览** | 今日总览 | 总资产 / 当日参考 / 浮盈 / 现金存款；**近一周资产曲线**；持仓预览与状态 |
+| **日常** | 持仓明细 | 当前仓、家底卡、近一年收益、UZI 本地分析入口 |
+| | 交易录入/管理 | 买卖/分红/草稿确认入账 |
+| | 银行存款 | 到期分布、年/到期前/整期利息 |
+| **分析** | 今天该看 | 左 12 项关键指标；右 **今日看点** + 指数 + 持仓贡献；自选与价格预警 |
+| | 收益分析 | 主结论 + 贡献（**债基 / REITs / 权益** 分桶）+ 时间线 |
+| | 结构与目标 | 左结构图与健康检查；右目标/纪律/再平衡草稿 |
+| **设置** | 消息推送 | 通道开关、事件路由、**页面可配密钥**（库优先于 `.env`）、试推与日志 |
+| | 证券账户 | 费率 + 现金校准 + 银证流水 |
+| | 数据备份 | 备份 / 恢复 / 上传 |
+
+旧路由仍可跳转：`/market` → 今天该看；`/discipline` → 结构与目标；`/maintenance` → 消息推送。  
+隐藏页（书签可进）：资产快照、券商对账。
+
+金额打码仅 `?mask=1`（或 `?screenshot=1`）。
+
+---
+
+## 近期更新（2026-07）
+
+| 方向 | 要点 |
 |------|------|
-| 预计年利息 | 本金 × 年利率，组合视角「再放满一年」 |
-| 到期前利息 | 本金 × 利率 × **剩余天数** / 365；已到期为 0 |
-| 整期利息 | 本金 × 利率 ×（起存日→到期日天数）/ 365；**缺起存日显示 —** |
+| 导航 | 顶栏四组 + 二级 pill；默认进 **今日总览**；去掉侧栏与口号 |
+| 总览 | 右上改为 **近一周资产曲线**；主题跟随系统/白天/夜间，不再硬锁黑底 |
+| 今天该看 | 决策+市场合并；看点置右上；关键指标补到 12 卡（对大盘、仓位、最强最弱等） |
+| 结构与目标 | 配置+纪律合并；扇形图防叠字；夜间字色跟主题 |
+| 收益 | 大类拆成 **债基 / REITs / 权益**；主结论加粗；夜间可读 |
+| 设置 | 「维护」改名；推送密钥可在页面填（不回填明文）；证券账户归设置组 |
+| 视觉 | 克制青绿主色；MetricCard 统一；日夜 token；表格只做对齐密度 |
 
-均为**单利、365 天**。老数据请编辑补上起存日。
-
----
-
-## 2. 项目结构
-
-```text
-invest-tracker/
-  backend/
-    main.py                    # FastAPI 应用入口、路由挂载、lifespan 初始化
-    database.py                # 数据库连接与通用设置读写
-    schema.py                  # 集中式表结构初始化与版本迁移
-    dashboard.py               # 总览数据计算
-    holdings.py                # 持仓兼容门面
-    holding_calculator.py      # 持仓计算逻辑
-    price_sync.py              # 最新价格/净值同步
-    return_sync.py             # 近一年收益率同步
-    cash.py                    # 证券现金计算
-    fee_settings.py            # 多账户费率设置
-    snapshots.py               # 资产快照逻辑
-    performance.py             # 组合表现分析
-    market.py                  # 市场摘要 + 价格预警（只读观察）
-    routers_*.py               # 按业务拆分的 API 路由
-    Dockerfile
-    requirements.txt
-
-  frontend/
-    index.html                 # HTML 挂载壳（#app）
-│   │   App.vue                   # 主界面壳（tabs/懒加载）
-│   │   components/               # Header/首页/弹窗/登录
-│   │   views/                    # 各 tab SFC（懒加载，含 MarketTab）
-    package.json               # Vite/npm 脚本
-    Dockerfile                 # 多阶段构建：Vite build + Nginx
-    nginx.conf                 # 前端静态托管与 /api 代理
-    src/
-      main.js                  # Vue 应用入口
-      api/index.js             # API 封装
-      charts/index.js          # ECharts 渲染逻辑
-      utils/index.js           # 前端工具函数
-      styles/styles.css        # 样式
-      modules/
-        transactions.js
-        deposits.js
-        cash.js
-        snapshots.js
-        performance.js
-        market.js
-
-  tests/                       # 后端回归测试
-  scripts/
-    check.sh                   # 项目完整检查
-    backup_db.py               # 数据库备份
-    restore_db.py              # 数据库恢复
-    safety_snapshot.py         # 安全快照
-    cron_sync_prices.sh        # VPS 定时同步最新价（可选写快照）
-    verify_vps_deploy.sh       # 部署后核对清单
-    legacy_update_db.py        # 旧导入脚本，默认禁用
-  data/                        # 本地 SQLite 数据，未纳入 Git
-  backups/                     # 数据库备份，未纳入 Git
-  docker-compose.yml
-  Makefile
-```
+完整按日记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ---
 
-## VPS 部署
+## 技术栈
 
-VPS/生产部署配置在 `deploy/vps` 分支维护，详见 [`docs/deploy-vps.md`](docs/deploy-vps.md)。
+- 后端：FastAPI + SQLite（`schema` 版本迁移）
+- 前端：Vite + Vue 3 + Element Plus + ECharts + vue-router
+- 部署：Docker Compose（前端 Nginx，后端 Uvicorn）
 
-## 3. 启动方式
+---
 
-### 推荐：Docker Compose
+## 快速启动
+
+### Docker（推荐）
 
 ```bash
 cd invest-tracker
+cp .env.example .env   # 按需改密码等
 docker compose up -d --build
 ```
 
-访问：
-
-- 前端：http://localhost:8080
-- 后端 API：http://localhost:8000
-- 健康检查：http://localhost:8000/api/health
-
-查看状态：
+- 前端：http://localhost:8080  
+- API：http://localhost:8000  
+- 健康：http://localhost:8000/api/health  
 
 ```bash
-docker compose ps
+make up / make down / make logs / make test / make check
 ```
 
-查看日志：
+### 本机开发
 
 ```bash
-docker compose logs --tail=100 backend frontend
+# 后端
+python3 -m venv venv && source venv/bin/activate
+pip install -r backend/requirements.txt
+PYTHONPATH=backend python backend/main.py
+
+# 前端（另开终端）
+cd frontend && npm install && npm run dev
 ```
 
-停止：
+后端测试：
 
 ```bash
-docker compose down
+PYTHONPATH=backend /usr/bin/python3 -m pytest tests/ -q
+# 当前约 76 passed
 ```
-
-### Makefile 快捷命令
-
-```bash
-make up       # 构建并启动
-make down     # 停止
-make restart  # 重启
-make logs     # 查看日志
-make ps       # 查看容器状态
-make test     # 运行后端测试
-make check    # 运行完整检查
-```
-
-### 本地直接运行 (非 Docker)
-
-如果你没有 Docker 环境，或者希望直接进行本地调试：
-
-1. **后端启动**：
-   ```bash
-   # 创建并激活虚拟环境，安装依赖
-   python3 -m venv venv
-   source venv/bin/activate
-   pip install -r backend/requirements.txt
-   
-   # 启动 API 服务
-   python backend/main.py
-   ```
-   后端服务将运行在 `http://localhost:8000`。
-   
-2. **前端启动**：
-   ```bash
-   cd frontend
-   npm install
-   npm run dev
-   ```
-   前端服务将运行在 `http://localhost:8080`，已配置本地 API 代理自动转发至后端的 8000 端口。
 
 ---
 
-## 4. 前端开发说明
+## VPS 生产
 
-前端已经迁移为 Vite 项目结构。
+生产配置在分支 **`deploy/vps`**，步骤见 [docs/deploy-vps.md](docs/deploy-vps.md)。
 
-安装依赖：
-
-```bash
-cd invest-tracker/frontend
-npm install
-```
-
-本地构建：
+更新常见流程：
 
 ```bash
-npm run build
+git pull origin deploy/vps
+docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-开发服务器：
-
-```bash
-npm run dev
-```
-
-说明：
-
-- 生产环境由 Dockerfile 执行 `npm run build` 生成 `dist/`，再复制到 Nginx；
-- `frontend/dist/`、`frontend/node_modules/` 已在 `.gitignore` 中排除；
-- 主界面模板在 `frontend/src/App.vue`（SFC）；`index.html` 仅挂载点 + 登录关键 CSS。
-- 业务逻辑在 `frontend/src/main.js` + `modules/` + `composables/`；Vue 使用 **runtime-only**。
-- Element Plus 通过 `unplugin-vue-components` 按需引入，不再全量 CSS。
+浏览器硬刷新。公网务必设 `INVEST_TRACKER_PASSWORD` 和/或 GitHub OAuth（见 `.env.example`）。
 
 ---
 
-## 5. 后端开发说明
+## 核心口径（对账用）
 
-后端入口是：
+| 口径 | 含义 |
+|------|------|
+| 持仓浮盈 | (现价 − 普通成本) × 数量 + 累计分红 → **当前仓** |
+| 全周期盈亏 | (现价 − 摊薄成本) × 数量 → 接近券商「累计盈亏」 |
+| 整户总账 | 总资产 − 组合外部净投入 → 收益分析页，依赖组合资金流水 |
+| 今日贡献粗估 | 涨跌% × 市值 → **不入账**，只作盘中参考 |
+
+三套数字本来就不会相等；对华泰等累计，优先看全周期。
+
+### 存款利息
+
+| 字段 | 含义 |
+|------|------|
+| 预计年利息 | 本金 × 年利率（再放满一年） |
+| 到期前利息 | 本金 × 利率 × 剩余天数 / 365；已到期为 0 |
+| 整期利息 | 起存日→到期日；缺起存日显示 — |
+
+单利、365 天。
+
+### 常用交易方向
+
+| 方向 | 持仓 | 证券现金 |
+|------|------|----------|
+| 买入 | +数量 | −金额−费 |
+| 卖出 | −数量 | +金额−费 |
+| 分红 | 不变 | +现金 |
+| 分红再投资 | +份额 | 不变（金额记累计分红） |
+| 申购待确认 | 不进正式持仓 | −现金 |
+
+**银证转账不会自动生成「组合投入」流水**；需要时在收益分析用建议草稿。
+
+---
+
+## 消息推送
+
+与 Hermes 长报告分开：本系统只发 **短通知**（飞书 / 钉钉 / 企微 / Telegram）。
+
+- **优先**在网页「设置 → 消息推送」填密钥（存库，不回填明文；留空=不改，勾清除=删库值）
+- `.env` 仍可作服务器兜底（见 `.env.example`）
+- 事件：价格预警、晚间简报、存款到期、纪律破线、运维、试推
+
+---
+
+## 项目结构（精简）
 
 ```text
-backend/main.py
+invest-tracker/
+  backend/           # FastAPI：schema / dashboard / market / performance / notify / routers_*
+  frontend/src/
+    views/           # Overview / Decision / Performance / Allocation / Holdings …
+    modules/         # tabNav / market / discipline / snapshots …
+    components/      # PageShell / MetricCard / AppHeader / AppDialogs
+    charts/          # ECharts（跟主题 token）
+  tests/             # pytest
+  scripts/           # check / backup / restore / cron 价同步
+  docs/deploy-vps.md
+  docker-compose.yml
+  docker-compose.prod.yml
+  data/              # SQLite，不入库
+  backups/           # 备份，不入库
 ```
 
-当前后端已经拆为多模块：
-
-- `schema.py`：统一负责数据库表结构初始化和版本迁移；
-- `database.py`：数据库连接和 settings 读写；
-- `holding_calculator.py`：持仓滚动计算；
-- `price_sync.py`：最新价格/基金净值同步；
-- `return_sync.py`：近一年收益同步；
-- `cash.py`：证券现金计算；
-- `fee_settings.py`：手续费率配置；
-- `routers_*.py`：按业务拆分 API。
-
-应用启动使用 FastAPI lifespan 初始化数据库，不再使用已过时的 `@app.on_event("startup")`。
-
 ---
 
-## 6. 交易方向说明
-
-常用交易方向：
-
-| 方向 | 影响持仓 | 影响证券现金 | 说明 |
-|---|---:|---:|---|
-| 买入 | 增加数量 | 扣减金额+手续费 | 普通买入/基金确认申购 |
-| 卖出 | 减少数量 | 增加卖出金额-手续费 | 普通卖出 |
-| 分红 | 不改变数量 | 增加现金 | 现金分红 |
-| 分红再投资 | 增加数量 | 不改变现金 | 分红转份额，金额计入累计分红 |
-| 申购待确认 / 待确认申购 | 不生成正式持仓 | 扣减现金 | 只知道申购金额，份额/净值未确认 |
-
-分红再投资建议录入：
-
-- 数量：新增份额；
-- 单价：分红再投资确认日净值/成交净值；
-- 金额：分红金额；
-- 手续费：通常为 0；
-- 方向：`分红再投资`。
-
----
-
-## 6.1 盈亏口径（对账用）
-
-| 口径 | 公式 | 用途 |
-|---|---|---|
-| 持仓浮盈 | (最新价 - 普通成本) x 数量 + 累计分红 | 看当前仓赚亏 |
-| 全周期盈亏 | (最新价 - 摊薄成本) x 数量 | 接近券商「累计盈亏」 |
-| 整户总账 | 总资产 - 组合外部净投入 | 收益分析页；依赖组合资金流水 |
-
-三套数字本就不会相等。对华泰等券商累计，优先看全周期。
-
-## 7. 数据与安全
-
-公开仓库前建议运行隐私检查：
+## 数据与安全
 
 ```bash
 bash scripts/privacy_check.sh
-```
-
-检查内容包括本机路径、数据库/备份文件、`.env`、常见密钥格式和疑似个人标识。截图文件仍需人工确认是否已经打码。
-
-重要数据文件：
-
-```text
-data/invest.db
-```
-
-注意：
-
-- 可用环境变量 `DB_PATH`、`BACKUP_DIR`、`APP_TIMEZONE`、`CORS_ALLOW_ORIGINS`、`MAX_BACKUP_UPLOAD_BYTES` 覆盖默认配置；
-- `data/`、`backups/`、数据库文件不会提交到 Git；
-- 高风险修改前建议先备份数据库；
-- Git 只管理代码和测试，不管理真实资产数据。
-
-备份数据库：
-
-```bash
 python3 scripts/backup_db.py
+python3 scripts/restore_db.py backups/你的备份.db
 ```
 
-恢复数据库：
+- `data/`、`backups/`、`.env` 不进 Git  
+- 可用 `DB_PATH`、`BACKUP_DIR`、`APP_TIMEZONE`、`CORS_ALLOW_ORIGINS` 覆盖  
+- 公网：设密码门锁和/或 OAuth；生产 CORS 写死域名  
 
-```bash
-python3 scripts/restore_db.py backups/你的备份文件.db
-```
-
-创建安全快照：
-
-```bash
-python3 scripts/safety_snapshot.py
-```
-
-### 访问安全控制 (密码门锁)
-
-如果在公网服务器部署系统，强烈建议开启密码门锁功能保护资产隐私。
-
-1. **启用验证**：
-   在服务器环境配置中设置环境变量 `INVEST_TRACKER_PASSWORD`。例如：
-   ```bash
-   export INVEST_TRACKER_PASSWORD="你的安全访问密码"
-   ```
-2. **安全保护**：
-   - 启用后，所有数据查询与操作 API 均会强制校验身份。
-   - 首次打开网页或退出登录后，系统会默认呈现高质感模糊锁屏，提示输入系统密码。输入正确即发放一个 30 天有效的会话 Token。
-   - 临时隐藏数据：主页顶部增加了 “👁️ 显示数据” 和 “🙈 隐藏数据” 按钮，可以随时一键模糊界面。
-3. **未设置密码**：
-   - 如果不设置 `INVEST_TRACKER_PASSWORD` 环境变量，系统则为无锁模式，默认直接公开，便于本地直接使用。
+隐藏界面金额：`?mask=1`。
 
 ---
 
-## 8. 检查与测试
+## 常见问题
 
-完整检查：
+**页面空白 / 弹窗无反应**  
+硬刷新；确认前端已 rebuild。弹窗依赖 `appCtx` 提供的 **dialog state**（不只 open 函数）。
 
-```bash
-cd invest-tracker
-bash scripts/check.sh
-```
+**总览一直黑**  
+顶栏主题切「白天 / 跟随系统」；新版本默认跟 token，仅夜间加深。
 
-检查内容包括：
+**数字对不上券商**  
+先看口径表；全周期 ≠ 持仓浮盈 ≠ 整户总账。
 
-- `/api/health` 健康检查路由；
-- Vite 前端结构和构建；
-- 前端 JavaScript 语法检查；
-- 后端模块存在性；
-- 后端可导入性；
-- Docker Compose 配置；
-- 后端 pytest 回归测试；
-- 前后端 HTTP 可访问性。
-
-单独运行后端测试：
-
-```bash
-docker compose exec -T backend pytest -q /app/tests
-```
-
-当前基准：
-
-```text
-31+ passed
-All checks passed
-```
-
----
-
-## 9. 页面截图
-
-截图统一保存在：
-
-```text
-docs/screenshots/
-```
-
-> 说明：以下截图通过 `http://localhost:8080/?tab=...&mask=1` 生成，页面已开启金额打码，便于在 README 中展示整体 UI 和功能入口。
-
-### 9.1 资产快照
-
-总资产趋势、资产结构、快照历史。
-
-![资产快照](docs/screenshots/asset-snapshots.png)
-
-### 9.2 资产配置
-
-权益/固收/存款配置、集中度和组合健康检查。
-
-![资产配置](docs/screenshots/allocation.png)
-
-### 9.3 市场摘要
-
-关键指数、持仓今日贡献粗估、价格阈值预警（手动检查，不改账本）。
-
-### 9.4 持仓明细
-
-当前持仓、市值、成本、盈亏和持仓占比。
-
-![持仓明细](docs/screenshots/holdings.png)
-
-### 9.5 银行存款
-
-存款总览、到期分布、预计利息和存款明细。
-
-![银行存款](docs/screenshots/deposits.png)
-
-### 9.6 交易录入/管理
-
-交易录入、查询、编辑、删除和交易现金联动。
-
-![交易录入/管理](docs/screenshots/transactions.png)
-
-### 9.7 现金设置
-
-证券现金、资金流水、现金校正和多账户费率设置。
-
-![现金设置](docs/screenshots/cash-settings.png)
-
-### 9.8 收益分析
-
-组合表现、收益时间线、贡献分析和现金流分析。
-
-![收益分析](docs/screenshots/performance.png)
-
----
-
-## 10. 常见问题
-
-### 页面空白
-
-优先尝试：
-
-1. 强制刷新浏览器：`Cmd + Shift + R`；
-2. 确认前端容器已重建：
-
-```bash
-docker compose up -d --build frontend
-```
-
-3. 打开浏览器 Console 查看红色错误。
-
-本项目 Vite 迁移后，`main.js` 必须使用带模板编译器的 Vue 构建：
-
-```js
-import { createApp } from 'vue';
-```
-
-### backend unhealthy
-
-检查 `/api/health`：
+**backend unhealthy**  
 
 ```bash
 curl http://localhost:8000/api/health
 ```
 
-Docker Compose 的 backend healthcheck 依赖该路径，不能删除。
+**本地 pytest** 请用系统 Python：
 
-### npm build 有 warning
+```bash
+PYTHONPATH=backend /usr/bin/python3 -m pytest tests/ -q
+```
 
-当前 Vite 构建可能出现依赖注释或 chunk 大小 warning，但不影响构建通过。后续如果需要，可继续做代码分包和依赖优化。
+---
+
+## 许可证与用途
+
+个人真仓记账工具。公开仓库前请跑隐私检查，并确认无真实持仓/密钥。
