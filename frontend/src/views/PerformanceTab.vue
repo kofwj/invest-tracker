@@ -411,7 +411,7 @@ const onContribRowClick = (row) => {
 .perf-flow-alert { margin-bottom: 14px; }
 .perf-metric-card.is-secondary { background: #fafbfc; }
 .perf-cat-list { display: flex; flex-direction: column; gap: 10px; }
-.perf-cat-row { display: grid; grid-template-columns: 88px 1fr 110px; gap: 10px; align-items: center; }
+.perf-cat-row { display: grid; grid-template-columns: 72px 1fr 110px; gap: 10px; align-items: center; }
 .perf-cat-name { font-size: 13px; color: #606266; }
 .perf-cat-track { height: 10px; background: #eef2f7; border-radius: 999px; overflow: hidden; }
 .perf-cat-fill { height: 100%; border-radius: 999px; }
@@ -432,6 +432,6 @@ const onContribRowClick = (row) => {
 .perf-help-collapse :deep(.el-collapse-item__content) { padding: 12px 2px 4px; }
 .perf-contrib-table { cursor: pointer; }
 @media (max-width: 640px) {
-  .perf-cat-row { grid-template-columns: 72px 1fr 90px; }
+  .perf-cat-row { grid-template-columns: 64px 1fr 90px; }
 }
 </style>

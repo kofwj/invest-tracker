@@ -50,3 +50,9 @@ def test_performance_story_has_headline_and_winners(client, app_module):
     assert any(w.get("code") == "600000" for w in winners)
     assert any(l.get("code") == "601288" for l in losers)
     assert "has_external_flows" in (story.get("metrics") or {})
+    cats = {c.get("name"): c for c in (story.get("category_contrib") or [])}
+    assert "权益" in cats
+    assert "固收相关" not in cats
+    assert "权益相关" not in cats
+    # 两只都是 A股权益：净贡献 = +200 + (-100) = +100
+    assert round(float(cats["权益"]["amount"]), 2) == 100.0

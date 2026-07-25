@@ -310,20 +310,26 @@ def build_performance_story(conn):
     if not winner_items and not loser_items:
         bullets.append("当前没有可拆的持仓贡献（可能空仓或尚未同步价格）。")
 
-    # 大类贡献（权益/固收等，按 category 粗分）
-    cat_map = {}
+    # 大类贡献：债基 / REITs / 权益 分开，避免 REIT 拖累被误读成「固收全亏」
+    bucket_order = ("债基", "REITs", "权益")
+    cat_map = {k: 0.0 for k in bucket_order}
+    present = set()
     for r in contrib:
         cat = (r.get("category") or "其他").strip() or "其他"
-        if any(k in cat for k in ("债", "固收", "货币", "现金", "REIT", "REITs")):
-            bucket = "固收相关"
-        elif any(k in cat for k in ("存款",)):
-            bucket = "存款"
+        upper = cat.upper()
+        if "REIT" in upper:
+            bucket = "REITs"
+        elif any(k in cat for k in ("债", "固收", "货币", "现金")):
+            bucket = "债基"
         else:
-            bucket = "权益相关"
-        cat_map[bucket] = cat_map.get(bucket, 0.0) + float(r.get("total_contribution") or 0)
+            # 股票 / ETF / 黄金等统一进权益（本页只拆这三块）
+            bucket = "权益"
+        present.add(bucket)
+        cat_map[bucket] += float(r.get("total_contribution") or 0)
     category_contrib = [
-        {"name": k, "amount": round(v, 2), "text": f"{k} {_money_cn(v)}"}
-        for k, v in sorted(cat_map.items(), key=lambda x: x[1], reverse=True)
+        {"name": name, "amount": round(cat_map[name], 2), "text": f"{name} {_money_cn(cat_map[name])}"}
+        for name in bucket_order
+        if name in present
     ]
     if category_contrib:
         bullets.append("大类贡献（当前仓）：" + "；".join(c["text"] for c in category_contrib) + "。")
