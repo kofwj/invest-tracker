@@ -1,5 +1,5 @@
 <template>
-  <div class="overview-page" @pointermove="onPointerMove">
+  <div class="overview-page">
     <div class="overview-header">
       <div>
         <div class="overview-kicker">
@@ -8,11 +8,7 @@
         </div>
         <h3 class="overview-title">家底一眼清</h3>
         <div class="overview-subtitle">
-          总资产、浮盈、现金存款与状态压成一屏；点持仓进明细。右侧是资产轨道示意。
-        </div>
-        <div class="overview-mix-tag">
-          <Orbit :size="12" :stroke-width="2" />
-          A 底 + B 曲线
+          总资产、浮盈、现金存款与状态压成一屏；点持仓进明细。
         </div>
       </div>
       <div class="overview-actions">
@@ -36,54 +32,73 @@
     </div>
 
     <section class="overview-hero">
-      <div class="overview-hero-main">
-        <div class="overview-metrics">
-          <div class="ov-metric main">
-            <div class="ov-metric-label"><Coins :size="13" :stroke-width="2" />总资产</div>
-            <div class="ov-metric-value">{{ formatMoney(dashboard.total_assets) }}</div>
-            <div class="ov-metric-sub">市值 + 现金 + 存款 + 在途 · {{ holdingsCount }} 只持仓</div>
+      <div class="overview-metrics">
+        <div class="ov-metric main">
+          <div class="ov-metric-label"><Coins :size="13" :stroke-width="2" />总资产</div>
+          <div class="ov-metric-value">{{ formatMoney(dashboard.total_assets) }}</div>
+          <div class="ov-metric-sub">市值 + 现金 + 存款 + 在途 · {{ holdingsCount }} 只持仓</div>
+        </div>
+        <div class="ov-metric">
+          <div class="ov-metric-label"><TrendingUp :size="13" :stroke-width="2" />持仓浮盈</div>
+          <div class="ov-metric-value" :class="Number(dashboard.total_profit || 0) >= 0 ? 'up' : 'down'">
+            {{ formatMoney(dashboard.total_profit, 2, true) }}
           </div>
-          <div class="ov-metric">
-            <div class="ov-metric-label"><TrendingUp :size="13" :stroke-width="2" />持仓浮盈</div>
-            <div class="ov-metric-value" :class="Number(dashboard.total_profit || 0) >= 0 ? 'up' : 'down'">
-              {{ formatMoney(dashboard.total_profit, 2, true) }}
-            </div>
-            <div class="ov-metric-sub">账本当前仓口径</div>
+          <div class="ov-metric-sub">账本当前仓口径</div>
+        </div>
+        <div class="ov-metric">
+          <div class="ov-metric-label"><Activity :size="13" :stroke-width="2" />当日参考</div>
+          <div class="ov-metric-value" :class="todayContrib >= 0 ? 'up' : 'down'">
+            {{ formatMoney(todayContrib, 2, true) }}
           </div>
-          <div class="ov-metric">
-            <div class="ov-metric-label"><Activity :size="13" :stroke-width="2" />当日参考</div>
-            <div class="ov-metric-value" :class="todayContrib >= 0 ? 'up' : 'down'">
-              {{ formatMoney(todayContrib, 2, true) }}
-            </div>
-            <div class="ov-metric-sub">盘中粗估，不入账</div>
-          </div>
-          <div class="ov-metric">
-            <div class="ov-metric-label"><Landmark :size="13" :stroke-width="2" />现金 + 存款</div>
-            <div class="ov-metric-value">{{ formatMoney(cashAndBank) }}</div>
-            <div class="ov-metric-sub">证券现金 {{ formatMoney(dashboard.securities_cash) }}</div>
-          </div>
+          <div class="ov-metric-sub">盘中粗估，不入账</div>
+        </div>
+        <div class="ov-metric">
+          <div class="ov-metric-label"><Landmark :size="13" :stroke-width="2" />现金 + 存款</div>
+          <div class="ov-metric-value">{{ formatMoney(cashAndBank) }}</div>
+          <div class="ov-metric-sub">证券现金 {{ formatMoney(dashboard.securities_cash) }}</div>
         </div>
       </div>
 
-      <aside class="orbit-card">
-        <div class="orbit-head">
-          <div class="orbit-title">资产轨道</div>
-          <div class="orbit-chip"><Orbit :size="12" :stroke-width="2" />示意动效</div>
+      <aside class="mix-card">
+        <div class="mix-head">
+          <div class="mix-title"><PieChart :size="14" :stroke-width="2" />资产构成</div>
+          <div class="mix-chip">静态示意</div>
         </div>
-        <div ref="orbitStageRef" class="orbit-stage">
-          <canvas ref="orbitCanvasRef" aria-hidden="true" />
-          <div class="orbit-core">
-            <div class="orbit-core-label">Total Assets</div>
-            <div class="orbit-core-value">{{ formatMoney(dashboard.total_assets) }}</div>
-            <div class="orbit-core-sub">节点权重按市值示意</div>
+        <div class="mix-total">{{ formatMoney(dashboard.total_assets) }}</div>
+        <div class="mix-bars" aria-label="资产构成">
+          <div class="mix-bar equity" :style="{ width: barWidth(summary.equityRatio) }" />
+          <div class="mix-bar fixed" :style="{ width: barWidth(fixedPct) }" />
+          <div class="mix-bar deposit" :style="{ width: barWidth(depositPct) }" />
+        </div>
+        <div class="mix-legend">
+          <div class="mix-item">
+            <span class="dot equity" />
+            <div>
+              <div class="l">权益</div>
+              <div class="v">{{ equityPctText }}</div>
+            </div>
+          </div>
+          <div class="mix-item">
+            <span class="dot fixed" />
+            <div>
+              <div class="l">固收</div>
+              <div class="v">{{ fixedPctText }}</div>
+            </div>
+          </div>
+          <div class="mix-item">
+            <span class="dot deposit" />
+            <div>
+              <div class="l">存款现金</div>
+              <div class="v">{{ depositPctText }}</div>
+            </div>
           </div>
         </div>
-        <div class="orbit-meta">
-          <div class="orbit-meta-box">
-            <div class="l">权益仓位</div>
-            <div class="v">{{ equityPctText }}</div>
+        <div class="mix-meta">
+          <div class="mix-meta-box">
+            <div class="l">防御资产</div>
+            <div class="v">{{ defensivePctText }}</div>
           </div>
-          <div class="orbit-meta-box">
+          <div class="mix-meta-box">
             <div class="l">目标年化</div>
             <div class="v">{{ expectedReturnText }}</div>
           </div>
@@ -171,7 +186,7 @@
           </el-table-column>
           <el-table-column label="持仓浮盈" min-width="112" align="right" header-align="right">
             <template #default="scope">
-              <span class="num-cell" :style="{ color: holdingFloatProfit(scope.row) >= 0 ? '#F56C6C' : '#67C23A' }">
+              <span class="num-cell" :style="{ color: holdingFloatProfit(scope.row) >= 0 ? 'var(--ov-up)' : 'var(--ov-down)' }">
                 {{ formatMoney(holdingFloatProfit(scope.row), 2, true) }}
               </span>
             </template>
@@ -219,7 +234,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, onMounted } from 'vue';
 import {
   Activity,
   ArrowUpRight,
@@ -233,8 +248,8 @@ import {
   Info,
   Landmark,
   Layers,
-  Orbit,
   PenLine,
+  PieChart,
   Radar,
   RefreshCw,
   TrendingUp,
@@ -261,12 +276,6 @@ const {
   allocationSummary,
   portfolioExpectedReturn,
 } = useAppCtx();
-
-const orbitStageRef = ref(null);
-const orbitCanvasRef = ref(null);
-let orbitRaf = 0;
-let orbitRo = null;
-let reducedMotion = false;
 
 const holdingsCount = computed(() => {
   const list = holdings?.value ?? holdings ?? [];
@@ -297,20 +306,25 @@ const cashAndBank = computed(() => {
 
 const summary = computed(() => allocationSummary?.value ?? allocationSummary ?? {});
 
-const equityPctText = computed(() => {
-  const n = Number(summary.value.equityRatio || 0);
-  return `${n.toFixed(1)}%`;
-});
+const equityPctText = computed(() => `${Number(summary.value.equityRatio || 0).toFixed(1)}%`);
+const defensivePctText = computed(() => `${Number(summary.value.defensiveRatio || 0).toFixed(1)}%`);
 
-const defensivePctText = computed(() => {
-  const n = Number(summary.value.defensiveRatio || 0);
-  return `${n.toFixed(1)}%`;
+const fixedPct = computed(() => {
+  const total = Number(summary.value.total || 0);
+  const amount = Number(summary.value.fixedAmount || 0);
+  return total > 0 ? (amount / total) * 100 : 0;
 });
+const depositPct = computed(() => {
+  const total = Number(summary.value.total || 0);
+  const amount = Number(summary.value.depositAmount || 0);
+  return total > 0 ? (amount / total) * 100 : 0;
+});
+const fixedPctText = computed(() => `${Number(fixedPct.value || 0).toFixed(1)}%`);
+const depositPctText = computed(() => `${Number(depositPct.value || 0).toFixed(1)}%`);
 
 const expectedReturnText = computed(() => {
   const raw = portfolioExpectedReturn?.value ?? portfolioExpectedReturn ?? 0;
-  const n = Number(raw || 0);
-  return `${n.toFixed(2)}%`;
+  return `${Number(raw || 0).toFixed(2)}%`;
 });
 
 const pendingCountText = computed(() => {
@@ -319,13 +333,10 @@ const pendingCountText = computed(() => {
   return `${n} 笔`;
 });
 
-const orbitWeights = computed(() => {
-  const rows = holdingsPreview.value.slice(0, 7);
-  if (!rows.length) return [1, 1, 1, 1, 1, 1, 1];
-  const vals = rows.map((r) => Math.max(1, Number(r._mv || 0)));
-  while (vals.length < 7) vals.push(Math.max(1, vals[vals.length - 1] || 1));
-  return vals.slice(0, 7);
-});
+function barWidth(pctVal) {
+  const n = Math.max(0, Number(pctVal || 0));
+  return `${Math.min(100, n)}%`;
+}
 
 async function refreshOverview() {
   if (typeof refreshMarket === 'function') await refreshMarket();
@@ -335,149 +346,33 @@ function onRowClick(row) {
   if (typeof showTransactions === 'function') showTransactions(row);
 }
 
-function onPointerMove(e) {
-  const page = e.currentTarget;
-  if (!page) return;
-  const rect = page.getBoundingClientRect();
-  const x = ((e.clientX - rect.left) / Math.max(rect.width, 1)) * 100;
-  const y = ((e.clientY - rect.top) / Math.max(rect.height, 1)) * 100;
-  page.style.setProperty('--mx', `${x}%`);
-  page.style.setProperty('--my', `${y}%`);
-}
-
-function resizeOrbit() {
-  const canvas = orbitCanvasRef.value;
-  const stage = orbitStageRef.value;
-  if (!canvas || !stage) return null;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return null;
-  const rect = stage.getBoundingClientRect();
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-  canvas.height = Math.max(1, Math.floor(rect.height * dpr));
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  return { ctx, cw: rect.width, ch: rect.height };
-}
-
-function drawOrbitFrame(ts = 0) {
-  const sized = resizeOrbit();
-  if (!sized) return;
-  const { ctx, cw, ch } = sized;
-  const weights = orbitWeights.value;
-  const maxW = Math.max(...weights, 1);
-  const nodes = weights.map((w, i) => ({
-    a: (Math.PI * 2 * i) / weights.length,
-    r: 58 + (i % 3) * 15 + (w / maxW) * 10,
-    s: 0.0032 + i * 0.00055,
-    size: 2.4 + (w / maxW) * 1.8,
-  }));
-
-  ctx.clearRect(0, 0, cw, ch);
-  const cx = cw / 2;
-  const cy = ch / 2 + 4;
-
-  for (let i = 0; i < 3; i++) {
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, 74 + i * 22, 48 + i * 15, -0.32, 0, Math.PI * 2);
-    ctx.strokeStyle = `rgba(247,248,248,${0.075 - i * 0.015})`;
-    ctx.lineWidth = 1;
-    ctx.stroke();
-  }
-
-  ctx.beginPath();
-  ctx.moveTo(16, ch * 0.72);
-  ctx.bezierCurveTo(cw * 0.25, ch * 0.62, cw * 0.45, ch * 0.78, cw * 0.7, ch * 0.42);
-  ctx.bezierCurveTo(cw * 0.82, ch * 0.28, cw * 0.9, ch * 0.34, cw - 14, ch * 0.3);
-  ctx.strokeStyle = 'rgba(139,138,255,0.35)';
-  ctx.lineWidth = 1.6;
-  ctx.stroke();
-
-  nodes.forEach((n, i) => {
-    const ang = n.a + (reducedMotion ? 0 : ts * n.s);
-    const x = cx + Math.cos(ang) * n.r;
-    const y = cy + Math.sin(ang) * (n.r * 0.62);
-    const color = i % 3 === 0 ? '113,112,255' : i % 3 === 1 ? '87,242,229' : '214,255,63';
-    const grad = ctx.createRadialGradient(x, y, 0, x, y, 16);
-    grad.addColorStop(0, `rgba(${color},0.9)`);
-    grad.addColorStop(1, `rgba(${color},0)`);
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(x, y, 14, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(x, y, n.size, 0, Math.PI * 2);
-    ctx.fillStyle = '#fff';
-    ctx.fill();
-  });
-}
-
-function orbitLoop(ts) {
-  drawOrbitFrame(ts);
-  if (!reducedMotion) orbitRaf = requestAnimationFrame(orbitLoop);
-}
-
-function startOrbit() {
-  stopOrbit();
-  reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  drawOrbitFrame(0);
-  if (!reducedMotion) orbitRaf = requestAnimationFrame(orbitLoop);
-  if (typeof ResizeObserver !== 'undefined' && orbitStageRef.value) {
-    orbitRo = new ResizeObserver(() => drawOrbitFrame(performance.now()));
-    orbitRo.observe(orbitStageRef.value);
-  }
-}
-
-function stopOrbit() {
-  if (orbitRaf) cancelAnimationFrame(orbitRaf);
-  orbitRaf = 0;
-  if (orbitRo) {
-    orbitRo.disconnect();
-    orbitRo = null;
-  }
-}
-
-watch(orbitWeights, () => {
-  drawOrbitFrame(performance.now());
-});
-
-onMounted(async () => {
+onMounted(() => {
   refreshOverview();
-  await nextTick();
-  startOrbit();
-});
-
-onUnmounted(() => {
-  stopOrbit();
 });
 </script>
 
 <style scoped>
 .overview-page {
-  --ov-bg: #08090a;
-  --ov-panel: rgba(15, 16, 17, 0.92);
-  --ov-border: rgba(255, 255, 255, 0.08);
-  --ov-border-strong: rgba(255, 255, 255, 0.14);
-  --ov-text: #f7f8f8;
-  --ov-text-2: #c7ccd4;
-  --ov-text-3: #8a8f98;
-  --ov-text-4: #5f646c;
-  --ov-accent: #7170ff;
-  --ov-accent-soft: rgba(113, 112, 255, 0.14);
+  --ov-bg: var(--app-overview-bg, #08090a);
+  --ov-panel: var(--app-overview-panel, rgba(15, 16, 17, 0.92));
+  --ov-border: var(--app-overview-border, rgba(255, 255, 255, 0.08));
+  --ov-border-strong: var(--app-overview-border-strong, rgba(255, 255, 255, 0.14));
+  --ov-text: var(--app-overview-text, #f7f8f8);
+  --ov-text-2: var(--app-overview-text-2, #c7ccd4);
+  --ov-text-3: var(--app-overview-text-3, #8a8f98);
+  --ov-text-4: var(--app-overview-text-4, #5f646c);
+  --ov-accent: var(--app-primary, #7170ff);
+  --ov-accent-soft: var(--app-primary-soft, rgba(113, 112, 255, 0.14));
   --ov-up: #f56c6c;
   --ov-down: #67c23a;
   --ov-warn: #f59e0b;
   --ov-ok: #10b981;
-  --mx: 18%;
-  --my: 8%;
   margin: -4px -6px 0;
   padding: 10px 8px 18px;
   border-radius: 16px;
   color: var(--ov-text);
-  background:
-    radial-gradient(900px 480px at var(--mx) var(--my), rgba(113, 112, 255, 0.14), transparent 52%),
-    radial-gradient(700px 420px at 88% 8%, rgba(87, 242, 229, 0.07), transparent 48%),
-    radial-gradient(760px 420px at 70% 100%, rgba(214, 255, 63, 0.05), transparent 50%),
-    linear-gradient(180deg, #0b0c0e 0%, var(--ov-bg) 100%);
+  background: var(--app-overview-surface,
+    linear-gradient(180deg, #0b0c0e 0%, #08090a 100%));
   font-feature-settings: "cv01", "ss03";
 }
 
@@ -520,20 +415,6 @@ onUnmounted(() => {
   line-height: 1.55;
   max-width: 520px;
 }
-.overview-mix-tag {
-  margin-top: 12px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(214, 255, 63, 0.22);
-  background: rgba(214, 255, 63, 0.08);
-  color: #e8ff9a;
-  font-size: 11px;
-  font-weight: 600;
-}
 .overview-actions {
   display: flex;
   gap: 8px;
@@ -565,7 +446,7 @@ onUnmounted(() => {
   background: var(--ov-accent);
   border-color: transparent;
   color: #fff;
-  box-shadow: 0 8px 24px rgba(113, 112, 255, 0.28);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--ov-accent) 28%, transparent);
 }
 .ov-btn.compact { height: 30px; padding: 0 10px; }
 .ov-btn .spin { animation: ov-spin 1s linear infinite; }
@@ -583,15 +464,15 @@ onUnmounted(() => {
 .ov-metric {
   padding: 16px;
   border-radius: 12px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015));
+  background: var(--app-overview-metric-bg, linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.015)));
   border: 1px solid var(--ov-border);
   min-height: 108px;
 }
 .ov-metric.main {
   grid-column: 1 / -1;
   background:
-    linear-gradient(135deg, rgba(113, 112, 255, 0.12), transparent 40%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.015));
+    linear-gradient(135deg, rgba(113,112,255,0.12), transparent 40%),
+    linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015));
 }
 .ov-metric-label {
   display: flex;
@@ -614,107 +495,102 @@ onUnmounted(() => {
 .up { color: var(--ov-up); }
 .down { color: var(--ov-down); }
 
-.orbit-card {
+.mix-card {
   border: 1px solid var(--ov-border);
   background: var(--ov-panel);
   border-radius: 16px;
-  padding: 14px;
-  min-height: 320px;
+  padding: 16px 18px;
+  min-height: 280px;
   display: flex;
   flex-direction: column;
-  position: relative;
-  overflow: hidden;
 }
-.orbit-card::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at 30% 40%, rgba(113, 112, 255, 0.16), transparent 34%),
-    radial-gradient(circle at 72% 28%, rgba(87, 242, 229, 0.1), transparent 28%),
-    radial-gradient(circle at 55% 78%, rgba(214, 255, 63, 0.08), transparent 30%);
-  pointer-events: none;
-}
-.orbit-head,
-.orbit-stage,
-.orbit-meta { position: relative; z-index: 1; }
-.orbit-head {
+.mix-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
 }
-.orbit-title { font-size: 13px; font-weight: 600; color: var(--ov-text-2); }
-.orbit-chip {
+.mix-title {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ov-text-2);
+}
+.mix-chip {
   height: 26px;
   padding: 0 10px;
   border-radius: 999px;
   border: 1px solid var(--ov-border);
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(127, 127, 127, 0.08);
   color: var(--ov-text-3);
   font-size: 11px;
   font-weight: 600;
+  display: inline-flex;
+  align-items: center;
 }
-.orbit-stage {
-  position: relative;
-  flex: 1;
-  min-height: 210px;
-  border-radius: 14px;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  background: rgba(0, 0, 0, 0.22);
-}
-.orbit-stage canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-.orbit-core {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  text-align: center;
-  pointer-events: none;
-}
-.orbit-core-label {
+.mix-total {
+  margin-top: 14px;
   font-family: "SF Mono", "Menlo", "Consolas", ui-monospace, monospace;
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: rgba(247, 248, 248, 0.48);
-}
-.orbit-core-value {
-  margin-top: 8px;
-  font-family: "SF Mono", "Menlo", "Consolas", ui-monospace, monospace;
-  font-size: clamp(24px, 2.6vw, 32px);
-  font-weight: 500;
+  font-size: clamp(24px, 2.8vw, 32px);
   letter-spacing: -0.04em;
   font-variant-numeric: tabular-nums;
 }
-.orbit-core-sub {
-  margin-top: 8px;
-  font-size: 12px;
-  color: rgba(247, 248, 248, 0.48);
+.mix-bars {
+  margin-top: 16px;
+  display: flex;
+  height: 12px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(127, 127, 127, 0.12);
 }
-.orbit-meta {
-  margin-top: 12px;
+.mix-bar { height: 100%; min-width: 0; }
+.mix-bar.equity { background: #7170ff; }
+.mix-bar.fixed { background: #57b0f2; }
+.mix-bar.deposit { background: #10b981; }
+.mix-legend {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.mix-item {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.mix-item .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 5px;
+  flex: 0 0 auto;
+}
+.mix-item .dot.equity { background: #7170ff; }
+.mix-item .dot.fixed { background: #57b0f2; }
+.mix-item .dot.deposit { background: #10b981; }
+.mix-item .l { font-size: 11px; color: var(--ov-text-4); }
+.mix-item .v {
+  margin-top: 2px;
+  font-family: "SF Mono", "Menlo", "Consolas", ui-monospace, monospace;
+  font-size: 14px;
+  letter-spacing: -0.02em;
+}
+.mix-meta {
+  margin-top: auto;
+  padding-top: 16px;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
-.orbit-meta-box {
+.mix-meta-box {
   padding: 12px;
   border-radius: 10px;
-  background: rgba(0, 0, 0, 0.28);
+  background: rgba(127, 127, 127, 0.08);
   border: 1px solid var(--ov-border);
 }
-.orbit-meta-box .l { font-size: 11px; color: var(--ov-text-4); }
-.orbit-meta-box .v {
+.mix-meta-box .l { font-size: 11px; color: var(--ov-text-4); }
+.mix-meta-box .v {
   margin-top: 4px;
   font-family: "SF Mono", "Menlo", "Consolas", ui-monospace, monospace;
   font-size: 16px;
@@ -734,7 +610,7 @@ onUnmounted(() => {
   padding: 14px 16px;
   border-radius: 12px;
   border: 1px solid var(--ov-border);
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(127, 127, 127, 0.05);
 }
 .ov-status-ico {
   width: 32px;
@@ -742,7 +618,7 @@ onUnmounted(() => {
   border-radius: 9px;
   display: grid;
   place-items: center;
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(127, 127, 127, 0.08);
   border: 1px solid var(--ov-border);
   color: var(--ov-text-2);
   flex: 0 0 auto;
@@ -757,16 +633,8 @@ onUnmounted(() => {
   border-color: rgba(245, 158, 11, 0.25);
   color: var(--ov-warn);
 }
-.ov-status h4 {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-}
-.ov-status p {
-  margin: 3px 0 0;
-  font-size: 12px;
-  color: var(--ov-text-4);
-}
+.ov-status h4 { margin: 0; font-size: 13px; font-weight: 600; }
+.ov-status p { margin: 3px 0 0; font-size: 12px; color: var(--ov-text-4); }
 .ov-status p.is-ok { color: var(--ov-ok); }
 .ov-status p.is-warn { color: var(--ov-warn); }
 
@@ -780,13 +648,13 @@ onUnmounted(() => {
   border-radius: 12px;
   border: 1px solid rgba(245, 158, 11, 0.28);
   background: rgba(245, 158, 11, 0.08);
-  color: #f6d9a6;
+  color: #c9872c;
   font-size: 13px;
 }
 .ov-link {
   border: 0;
   background: transparent;
-  color: #ffd089;
+  color: inherit;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -833,9 +701,9 @@ onUnmounted(() => {
 .overview-holdings-table {
   --el-table-bg-color: transparent;
   --el-table-tr-bg-color: transparent;
-  --el-table-header-bg-color: rgba(255, 255, 255, 0.02);
-  --el-table-row-hover-bg-color: rgba(255, 255, 255, 0.04);
-  --el-table-border-color: rgba(255, 255, 255, 0.06);
+  --el-table-header-bg-color: rgba(127, 127, 127, 0.04);
+  --el-table-row-hover-bg-color: rgba(127, 127, 127, 0.08);
+  --el-table-border-color: var(--ov-border);
   --el-table-text-color: var(--ov-text-2);
   --el-table-header-text-color: var(--ov-text-4);
   background: transparent !important;
@@ -867,14 +735,14 @@ onUnmounted(() => {
   margin-bottom: 8px;
   border-radius: 12px;
   border: 1px solid var(--ov-border);
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(127, 127, 127, 0.04);
   color: inherit;
   text-align: left;
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 .ov-action:hover {
-  background: rgba(255, 255, 255, 0.045);
+  background: rgba(127, 127, 127, 0.08);
   border-color: var(--ov-border-strong);
   transform: translateY(-1px);
 }
@@ -885,7 +753,7 @@ onUnmounted(() => {
   display: grid;
   place-items: center;
   background: var(--ov-accent-soft);
-  color: #a5a4ff;
+  color: var(--ov-accent);
   flex: 0 0 auto;
 }
 .ov-action strong {
@@ -906,7 +774,7 @@ onUnmounted(() => {
   gap: 8px;
   align-items: baseline;
   padding: 10px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid var(--ov-border);
   font-size: 12.5px;
   color: var(--ov-text-3);
 }
@@ -930,11 +798,46 @@ onUnmounted(() => {
   .ov-metric.main { grid-column: 1 / -1; }
 }
 @media (max-width: 640px) {
-  .overview-metrics { grid-template-columns: 1fr; }
+  .overview-metrics,
+  .mix-legend { grid-template-columns: 1fr; }
   .overview-page { margin: 0; padding: 4px 0 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .ov-btn .spin { animation: none; }
   .ov-action { transition: none; }
+}
+
+/* 白天模式：总览也跟浅色，不再硬锁黑底 */
+:global(html:not(.dark)) .overview-page {
+  --ov-bg: #f7f8fa;
+  --ov-panel: #ffffff;
+  --ov-border: #e8edf3;
+  --ov-border-strong: #d5dbe5;
+  --ov-text: #1f2937;
+  --ov-text-2: #374151;
+  --ov-text-3: #6b7280;
+  --ov-text-4: #9ca3af;
+  --ov-accent: #4f46e5;
+  --ov-accent-soft: #eef2ff;
+  background:
+    radial-gradient(900px 420px at 12% -10%, rgba(79, 70, 229, 0.08), transparent 55%),
+    linear-gradient(180deg, #fbfcfe 0%, #f3f5f9 100%);
+}
+:global(html:not(.dark)) .ov-btn {
+  background: #fff;
+  color: #374151;
+}
+:global(html:not(.dark)) .ov-btn.primary {
+  background: #4f46e5;
+  color: #fff;
+}
+:global(html:not(.dark)) .ov-metric {
+  background: #fff;
+}
+:global(html:not(.dark)) .ov-metric.main {
+  background: linear-gradient(135deg, #eef2ff 0%, #ffffff 55%, #f0fdf4 100%);
+}
+:global(html:not(.dark)) .overview-pending {
+  color: #b45309;
 }
 </style>

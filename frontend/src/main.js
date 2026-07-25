@@ -4,9 +4,11 @@ import zhCn from 'element-plus/es/locale/lang/zh-cn';
 import 'element-plus/es/components/message/style/css';
 import 'element-plus/es/components/message-box/style/css';
 import 'element-plus/es/components/loading/style/css';
+import 'element-plus/theme-chalk/dark/css-vars.css';
 import App from './App.vue';
 import router from './router/index.js';
 import { APP_CTX_KEY } from './composables/useAppCtx.js';
+import { createThemeController } from './composables/theme.js';
 import {
     normalizeText,
     daysUntil,
@@ -634,14 +636,26 @@ const app = createApp({
 
         bootstrapAfterAuth = doBootstrap;
 
-        onMounted(setupOnMounted);
-
-
         const { eveningBriefDialog, openEveningBrief } = createBriefHelpers();
+
+        const {
+            themeMode,
+            resolvedTheme,
+            themeLabel,
+            setThemeMode,
+            cycleThemeMode,
+            setupThemeListeners,
+        } = createThemeController();
+
+        onMounted(() => {
+            setupThemeListeners();
+            setupOnMounted();
+        });
 
         const appCtx = {
             zhCn,
             isMasked, toggleMask,
+            themeMode, resolvedTheme, themeLabel, setThemeMode, cycleThemeMode,
             showLoginOverlay, loginLoading, loginPassword, loginError, authEnabled, handleLogin, handleLogout,
             activeTab, tabGroup, tabGroups, goTab, dashboard, holdings, deposits, depositRows, depositSummary, depositBankBreakdown, depositMaturityBuckets, syncing, trailingSyncing, syncNotice,
             snapshots, snapshotRange, snapshotSummary, snapshotMetrics, snapshotChangeRows, snapshotInsights, snapshotLoading, maintenanceStatus, backups, maintenanceLoading, dividendLoading, dividendConfirming, dividendDialog, dividendTableRef, todayIso, todaySnapshotDone, latestPriceStatusText, latestBackupText,
