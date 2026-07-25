@@ -205,7 +205,7 @@
                     <el-input v-model="holdingCorrectionDialog.form.remark" placeholder="例如：按华泰持仓页强制校正"></el-input>
                 </el-form-item>
                 <el-form-item label="当前系统值">
-                    <span style="color:#909399;">
+                    <span style="color:var(--app-muted);">
                         数量 {{ holdingCorrectionDialog.current.quantity }}，普通成本 {{ formatMoney(holdingCorrectionDialog.current.avg_cost, 4) }}，摊薄成本 {{ formatMoney(holdingCorrectionDialog.current.diluted_cost, 4) }}，累计分红 {{ formatMoney(holdingCorrectionDialog.current.total_dividend || 0) }}
                     </span>
                 </el-form-item>
@@ -277,13 +277,13 @@
             ></el-alert>
             <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px;align-items:center;">
                 <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-                    <span style="color:#606266;">回看天数</span>
+                    <span style="color:var(--app-muted);">回看天数</span>
                     <el-input-number v-model="dividendDialog.lookbackDays" :min="30" :max="2000" :step="30"></el-input-number>
                     <el-button type="primary" :loading="dividendLoading" @click="scanDividendDrafts">扫描分红</el-button>
                     <el-button @click="selectSelectableDividendDrafts">全选可确认</el-button>
                     <el-button @click="clearDividendDraftSelection">清空选择</el-button>
                 </div>
-                <div style="color:#909399;font-size:13px;" v-if="dividendDialog.summary">
+                <div style="color:var(--app-muted);font-size:13px;" v-if="dividendDialog.summary">
                     新草稿 {{ dividendDialog.summary.new_count || 0 }} /
                     已有流水 {{ dividendDialog.summary.already_recorded_count || 0 }} /
                     零持仓 {{ dividendDialog.summary.zero_qty_count || 0 }} /
@@ -309,7 +309,7 @@
                 <el-table-column label="标的" min-width="150">
                     <template #default="scope">
                         <div>{{ scope.row.name }}</div>
-                        <div style="color:#909399;font-size:12px;">{{ scope.row.code }} · {{ scope.row.category || '未分类' }}</div>
+                        <div style="color:var(--app-muted);font-size:12px;">{{ scope.row.code }} · {{ scope.row.category || '未分类' }}</div>
                     </template>
                 </el-table-column>
                 <el-table-column prop="plan_profile" label="方案" min-width="150" show-overflow-tooltip></el-table-column>
@@ -334,13 +334,13 @@
                 </el-table-column>
                 <el-table-column label="匹配/说明" min-width="180" show-overflow-tooltip>
                     <template #default="scope">
-                        <span style="color:#909399;font-size:12px;">{{ scope.row.reason || scope.row.assign_progress || '' }}</span>
+                        <span style="color:var(--app-muted);font-size:12px;">{{ scope.row.reason || scope.row.assign_progress || '' }}</span>
                     </template>
                 </el-table-column>
             </el-table>
             <template #footer>
                 <div style="display:flex;justify-content:space-between;align-items:center;width:100%;gap:12px;flex-wrap:wrap;">
-                    <span style="color:#909399;font-size:13px;">已选 {{ dividendDialog.selected.length }} 条，确认后写入「分红」交易并重算持仓/现金</span>
+                    <span style="color:var(--app-muted);font-size:13px;">已选 {{ dividendDialog.selected.length }} 条，确认后写入「分红」交易并重算持仓/现金</span>
                     <div>
                         <el-button size="small" @click="downloadDividendTemplate">下载分红模板</el-button>
                         <el-upload action="#" :auto-upload="false" :show-file-list="false" accept=".csv" :on-change="importDividends" style="display:inline-block;margin-right:8px;">
@@ -355,7 +355,7 @@
 
         <!-- 晚间简报 -->
         <el-dialog v-model="eveningBriefDialog.visible" title="晚间简报" width="560px">
-            <pre style="white-space:pre-wrap;font-family:inherit;font-size:13px;line-height:1.6;margin:0;color:#303133;">{{ eveningBriefDialog.text || '（空）' }}</pre>
+            <pre style="white-space:pre-wrap;font-family:inherit;font-size:13px;line-height:1.6;margin:0;color:var(--app-text);">{{ eveningBriefDialog.text || '（空）' }}</pre>
             <template #footer>
                 <el-button @click="eveningBriefDialog.visible = false">关闭</el-button>
                 <el-button type="primary" plain :loading="eveningBriefDialog.loading" @click="openEveningBrief(true)">推送通知</el-button>

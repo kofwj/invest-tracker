@@ -155,7 +155,7 @@
           style="margin-bottom:12px;"
         />
 
-        <div style="margin-bottom:10px; color:#606266;">
+        <div style="margin-bottom:10px; color:var(--app-muted);">
           <strong>{{ uziDialog.row.name }}</strong> ({{ uziDialog.row.code }})
           <span style="margin-left:12px;">深度：</span>
           <el-radio-group v-model="uziDialog.depth" size="small" style="margin-left:6px;" @change="rebuildUziPrompt">
@@ -166,7 +166,7 @@
         </div>
 
         <div style="margin-bottom:10px;">
-          <div style="font-size:13px; color:#606266; margin-bottom:6px;">问题模板（点一下换侧重点）</div>
+          <div style="font-size:13px; color:var(--app-muted); margin-bottom:6px;">问题模板（点一下换侧重点）</div>
           <el-space wrap>
             <el-button
               v-for="t in uziTemplates"
@@ -187,7 +187,7 @@
         />
 
         <div style="margin-top:12px;">
-          <div style="font-size:13px; color:#606266; margin-bottom:6px;">
+          <div style="font-size:13px; color:var(--app-muted); margin-bottom:6px;">
             分析备忘（只存在本机浏览器，不进真仓）
           </div>
           <el-input
@@ -198,7 +198,7 @@
           />
           <div style="margin-top:6px;">
             <el-button size="small" type="primary" plain @click="saveNote">保存备忘</el-button>
-            <span style="margin-left:8px; font-size:12px; color:#909399;">换电脑/清缓存会丢，重要结论请另存</span>
+            <span style="margin-left:8px; font-size:12px; color:var(--app-muted);">换电脑/清缓存会丢，重要结论请另存</span>
           </div>
         </div>
       </div>

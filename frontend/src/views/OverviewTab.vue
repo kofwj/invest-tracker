@@ -314,28 +314,61 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* 默认跟全局主题；夜间再加深，不再硬锁黑底 */
 .overview-page {
-  --ov-bg: var(--app-overview-bg, #08090a);
-  --ov-panel: var(--app-overview-panel, rgba(15, 16, 17, 0.92));
-  --ov-border: var(--app-overview-border, rgba(255, 255, 255, 0.08));
-  --ov-border-strong: var(--app-overview-border-strong, rgba(255, 255, 255, 0.14));
-  --ov-text: var(--app-overview-text, #f7f8f8);
-  --ov-text-2: var(--app-overview-text-2, #c7ccd4);
-  --ov-text-3: var(--app-overview-text-3, #8a8f98);
-  --ov-text-4: var(--app-overview-text-4, #5f646c);
+  --ov-bg: var(--app-bg1);
+  --ov-panel: var(--app-surface);
+  --ov-border: var(--app-border);
+  --ov-border-strong: color-mix(in srgb, var(--app-border) 65%, var(--app-muted));
+  --ov-text: var(--app-text);
+  --ov-text-2: color-mix(in srgb, var(--app-text) 84%, var(--app-muted));
+  --ov-text-3: var(--app-muted);
+  --ov-text-4: var(--app-soft);
   --ov-accent: var(--app-primary);
   --ov-accent-soft: var(--app-primary-soft);
   --ov-up: var(--app-up);
   --ov-down: var(--app-down);
   --ov-warn: var(--app-warn);
   --ov-ok: var(--app-ok);
+  --ov-chip-bg: color-mix(in srgb, var(--app-surface) 88%, var(--app-bg0));
+  --ov-metric-bg: var(--app-surface);
+  --ov-metric-main-bg:
+    linear-gradient(135deg, color-mix(in srgb, var(--app-primary) 12%, transparent), transparent 42%),
+    linear-gradient(180deg, var(--app-surface), color-mix(in srgb, var(--app-surface) 92%, var(--app-bg0)));
+  --ov-btn-bg: var(--app-header-btn-bg);
+  --ov-btn-hover: var(--app-header-btn-hover);
+  --ov-btn-text: var(--app-header-btn-text);
   margin: -4px -6px 0;
   padding: 10px 8px 18px;
   border-radius: 16px;
   color: var(--ov-text);
-  background: var(--app-overview-surface,
-    linear-gradient(180deg, #0b0c0e 0%, #08090a 100%));
+  background:
+    radial-gradient(900px 420px at 12% -10%, color-mix(in srgb, var(--app-primary) 10%, transparent), transparent 55%),
+    linear-gradient(180deg, var(--app-bg1) 0%, var(--app-bg0) 100%);
   font-feature-settings: "cv01", "ss03";
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+:global(html.dark) .overview-page {
+  --ov-bg: #08090a;
+  --ov-panel: rgba(20, 25, 29, 0.96);
+  --ov-border: rgba(255, 255, 255, 0.08);
+  --ov-border-strong: rgba(255, 255, 255, 0.14);
+  --ov-text: #f7f8f8;
+  --ov-text-2: #c7ccd4;
+  --ov-text-3: #8a8f98;
+  --ov-text-4: #5f646c;
+  --ov-chip-bg: rgba(255, 255, 255, 0.04);
+  --ov-metric-bg: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.015));
+  --ov-metric-main-bg:
+    linear-gradient(135deg, color-mix(in srgb, var(--app-primary) 18%, transparent), transparent 40%),
+    linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015));
+  --ov-btn-bg: rgba(255, 255, 255, 0.03);
+  --ov-btn-hover: rgba(255, 255, 255, 0.06);
+  --ov-btn-text: #c7ccd4;
+  background:
+    radial-gradient(900px 420px at 12% -10%, color-mix(in srgb, var(--app-primary) 14%, transparent), transparent 55%),
+    linear-gradient(180deg, #0b0c0e 0%, #08090a 100%);
 }
 
 .ov-btn {
@@ -346,15 +379,15 @@ onMounted(() => {
   padding: 0 12px;
   border-radius: 8px;
   border: 1px solid var(--ov-border);
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--ov-text-2);
+  background: var(--ov-btn-bg);
+  color: var(--ov-btn-text);
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 .ov-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--ov-btn-hover);
   border-color: var(--ov-border-strong);
 }
 .ov-btn:active { transform: translateY(1px); }
@@ -381,15 +414,13 @@ onMounted(() => {
 .ov-metric {
   padding: 16px;
   border-radius: 12px;
-  background: var(--app-overview-metric-bg, linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.015)));
+  background: var(--ov-metric-bg);
   border: 1px solid var(--ov-border);
   min-height: 108px;
 }
 .ov-metric.main {
   grid-column: 1 / -1;
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--app-primary) 18%, transparent), transparent 40%),
-    linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015));
+  background: var(--ov-metric-main-bg);
 }
 .ov-metric-label {
   display: flex;
@@ -449,7 +480,7 @@ onMounted(() => {
   padding: 0 10px;
   border-radius: 999px;
   border: 1px solid var(--ov-border);
-  background: rgba(127, 127, 127, 0.08);
+  background: var(--ov-chip-bg);
   color: var(--ov-text-3);
   font-size: 11px;
   font-weight: 600;
@@ -513,7 +544,7 @@ onMounted(() => {
 .mix-meta-box {
   padding: 12px;
   border-radius: 10px;
-  background: rgba(127, 127, 127, 0.08);
+  background: var(--ov-chip-bg);
   border: 1px solid var(--ov-border);
 }
 .mix-meta-box .l { font-size: 11px; color: var(--ov-text-4); }
@@ -537,7 +568,7 @@ onMounted(() => {
   padding: 14px 16px;
   border-radius: 12px;
   border: 1px solid var(--ov-border);
-  background: rgba(127, 127, 127, 0.05);
+  background: var(--ov-chip-bg);
 }
 .ov-status-ico {
   width: 32px;
@@ -573,9 +604,9 @@ onMounted(() => {
   flex-wrap: wrap;
   padding: 12px 14px;
   border-radius: 12px;
-  border: 1px solid rgba(245, 158, 11, 0.28);
-  background: rgba(245, 158, 11, 0.08);
-  color: #c9872c;
+  border: 1px solid color-mix(in srgb, var(--ov-warn) 30%, var(--ov-border));
+  background: var(--app-warn-soft);
+  color: var(--ov-warn);
   font-size: 13px;
 }
 .ov-link {
@@ -662,14 +693,14 @@ onMounted(() => {
   margin-bottom: 8px;
   border-radius: 12px;
   border: 1px solid var(--ov-border);
-  background: rgba(127, 127, 127, 0.04);
+  background: var(--ov-chip-bg);
   color: inherit;
   text-align: left;
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 .ov-action:hover {
-  background: rgba(127, 127, 127, 0.08);
+  background: color-mix(in srgb, var(--ov-chip-bg) 70%, var(--ov-accent-soft));
   border-color: var(--ov-border-strong);
   transform: translateY(-1px);
 }
@@ -734,43 +765,9 @@ onMounted(() => {
   .ov-action { transition: none; }
 }
 
-/* 白天模式：总览也跟浅色，不再硬锁黑底 */
-:global(html:not(.dark)) .overview-page {
-  --ov-bg: var(--app-bg1);
-  --ov-panel: var(--app-surface);
-  --ov-border: var(--app-border);
-  --ov-border-strong: color-mix(in srgb, var(--app-border) 70%, #94a3b8);
-  --ov-text: var(--app-text);
-  --ov-text-2: color-mix(in srgb, var(--app-text) 82%, var(--app-muted));
-  --ov-text-3: var(--app-muted);
-  --ov-text-4: var(--app-soft);
-  --ov-accent: var(--app-primary);
-  --ov-accent-soft: var(--app-primary-soft);
-  background:
-    radial-gradient(900px 420px at 12% -10%, color-mix(in srgb, var(--app-primary) 10%, transparent), transparent 55%),
-    linear-gradient(180deg, var(--app-bg1) 0%, var(--app-bg0) 100%);
-}
-:global(html:not(.dark)) .ov-btn {
-  background: var(--app-surface);
-  color: var(--app-header-btn-text);
-}
-:global(html:not(.dark)) .ov-btn.primary {
-  background: var(--app-primary);
-  color: #fff;
-}
-:global(html:not(.dark)) .ov-metric {
-  background: #fff;
-}
-:global(html:not(.dark)) .ov-metric.main {
-  background: linear-gradient(135deg, #eef2ff 0%, #ffffff 55%, #f0fdf4 100%);
-}
-:global(html:not(.dark)) .overview-pending {
-  color: #b45309;
-}
-
-/* empty hint on dark overview */
+/* empty hint on overview */
 .overview-page :deep(.empty-hint) {
-  background: rgba(255,255,255,0.04);
+  background: var(--ov-chip-bg);
   border-color: var(--ov-border);
   color: var(--ov-text-3);
 }

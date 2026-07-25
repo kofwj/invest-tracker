@@ -91,7 +91,7 @@
                             <el-col :span="12">
                                 <el-form-item label="匹配标的">
                                     <span v-if="transForm.code || transForm.name">{{ transForm.name || '—' }} {{ transForm.code ? '(' + transForm.code + ')' : '' }}</span>
-                                    <span v-else style="color: #909399;">—</span>
+                                    <span v-else style="color: var(--app-muted);">—</span>
                                 </el-form-item>
                             </el-col>
                         </el-row>
@@ -251,7 +251,7 @@
                     </el-table>
                     
                     <div style="margin-top: 12px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
-                        <span style="color: #909399;">当前页 {{ filteredTransactions.length }} 条 / 共 {{ transPage.total }} 条记录</span>
+                        <span style="color: var(--app-muted);">当前页 {{ filteredTransactions.length }} 条 / 共 {{ transPage.total }} 条记录</span>
                         <el-pagination
                             background
                             layout="sizes, prev, pager, next, jumper"

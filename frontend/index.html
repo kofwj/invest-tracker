@@ -6,6 +6,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <title>Invest Tracker · 真仓账本</title>
+    <!-- 首屏前应用主题，避免总览先闪黑/闪白 -->
+    <style id="theme-boot"></style>
+    <script>
+      (function () {
+        try {
+          var mode = localStorage.getItem('invest_tracker_theme') || 'system';
+          var dark = mode === 'dark' || (mode === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          var root = document.documentElement;
+          root.classList.toggle('dark', dark);
+          root.dataset.theme = dark ? 'dark' : 'light';
+          root.style.colorScheme = dark ? 'dark' : 'light';
+          var boot = document.getElementById('theme-boot');
+          if (boot) {
+            boot.textContent = dark
+              ? 'html,body{background:#0d1114!important;color:#f3f5f7!important}'
+              : 'html,body{background:#f6f8f9!important;color:#1c2430!important}';
+          }
+        } catch (e) {}
+      })();
+    </script>
     <!-- 登录页中文字体：不依赖服务器本地字体，避免 Linux/VPS 浏览器显示为方框 -->
     <link rel="preconnect" href="https://fonts.loli.net" crossorigin>
     <link rel="preconnect" href="https://gstatic.loli.net" crossorigin>
