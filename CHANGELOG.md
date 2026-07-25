@@ -5,6 +5,17 @@
 
 ---
 
+## [2026-07-25] — 修复弹窗无反应（年化/校正/分红/存款）
+
+### 根因
+- `appCtx` 漏暴露 `expectedReturnDialog` / `holdingCorrectionDialog` / `holdingCorrectionHistoryDialog`
+- `AppDialogs` 解构失败后整组弹窗挂掉，表现为：持仓年化/校正/记录无反应、分红草稿不弹、存款编辑也打不开
+
+### 修复
+- `main.js` appCtx 补回上述 3 个 dialog 状态
+
+---
+
 ## [2026-07-25] — 表格样式克制重做
 
 ### 原则
