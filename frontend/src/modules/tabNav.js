@@ -13,7 +13,8 @@ export const SCREENSHOT_TABS = [
 export const TAB_GROUPS = [
     { id: 'home', label: '总览', tabs: ['overview'] },
     { id: 'daily', label: '日常', tabs: ['holdings', 'transactions', 'deposits'] },
-    { id: 'analysis', label: '分析', tabs: ['decision', 'performance', 'allocation', 'discipline'] },
+    // P2 真合并：决策+市场 → decision；配置+纪律 → allocation
+    { id: 'analysis', label: '分析', tabs: ['decision', 'performance', 'allocation'] },
     { id: 'ops', label: '维护', tabs: ['ops_notify', 'ops_backup'] },
 ];
 
@@ -27,7 +28,7 @@ export const ROUTE_META = {
     cash: { path: '/cash', label: '现金设置' },
     decision: { path: '/decision', label: '今天该看' },
     performance: { path: '/performance', label: '收益分析' },
-    allocation: { path: '/allocation', label: '资产配置' },
+    allocation: { path: '/allocation', label: '结构与目标' },
     snapshots: { path: '/snapshots', label: '资产快照' },
     market: { path: '/market', label: '市场摘要' },
     discipline: { path: '/discipline', label: '纪律与再平衡' },
@@ -38,6 +39,8 @@ export const ROUTE_META = {
 /** 旧 tab / path → 新路由名 */
 export const LEGACY_TAB_REDIRECT = {
     maintenance: 'ops_notify',
+    market: 'decision',
+    discipline: 'allocation',
 };
 
 export function tabGroupOf(tab) {

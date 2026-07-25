@@ -5,7 +5,7 @@
       <slot name="icon" />
       <span v-if="label">{{ label }}</span>
     </div>
-    <div class="ledger-metric-value" :class="valueClass" :style="valueStyle">
+    <div class="ledger-metric-value" :class="valueClass" :style="valueStyle" :title="title || (value != null ? String(value) : undefined)">
       <slot>{{ value }}</slot>
     </div>
     <div v-if="sub || $slots.sub" class="ledger-metric-sub" :title="typeof sub === 'string' ? sub : undefined">
@@ -31,6 +31,8 @@ const props = defineProps({
   tone: { type: String, default: '' },
   /** 直接上色（兼容旧 color 字段） */
   color: { type: String, default: '' },
+  /** hover 显示完整值（解决大数字被截断） */
+  title: { type: String, default: '' },
 });
 
 const rootClass = computed(() => ({

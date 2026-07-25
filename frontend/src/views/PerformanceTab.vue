@@ -62,6 +62,8 @@
         :value="m.value"
         :sub="m.sub"
         :color="m.color"
+        :main="!!m.main"
+        :title="m.value"
       />
     </div>
 
@@ -76,6 +78,7 @@
         :sub="m.sub"
         :color="m.color"
         secondary
+        :title="m.value"
       />
     </div>
 

@@ -602,15 +602,17 @@ const app = createApp({
         });
 
         watch(activeTab, (val) => {
+            // P2：decision 含市场；allocation 含纪律
             if (val === 'overview' || val === 'decision') {
                 refreshMarket();
                 if (val === 'decision') refreshDiscipline();
             }
             if (val === 'transactions') queryTransactions();
-            if (val === 'allocation') nextTick(renderAllocationCharts);
+            if (val === 'allocation') {
+                nextTick(renderAllocationCharts);
+                refreshDiscipline();
+            }
             if (val === 'performance') fetchPerformance();
-            if (val === 'market') refreshMarket();
-            if (val === 'discipline') refreshDiscipline();
             if (val === 'snapshots') {
                 fetchSnapshots().then(() => nextTick(renderSnapshotCharts));
             }

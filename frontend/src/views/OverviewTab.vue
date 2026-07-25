@@ -4,22 +4,22 @@
       <div class="overview-metrics">
         <div class="ov-metric main">
           <div class="ov-metric-label"><Coins :size="13" :stroke-width="2" />总资产</div>
-          <div class="ov-metric-value">{{ formatMoney(dashboard.total_assets) }}</div>
+          <div class="ov-metric-value" :title="formatMoney(dashboard.total_assets)">{{ formatMoney(dashboard.total_assets) }}</div>
           <div class="ov-metric-sub">市值 + 现金 + 存款 + 在途 · {{ holdingsCount }} 只持仓</div>
         </div>
         <div class="ov-metric">
           <div class="ov-metric-label"><Activity :size="13" :stroke-width="2" />当日参考</div>
-          <div class="ov-metric-value" :class="todayContrib >= 0 ? 'up' : 'down'">{{ formatMoney(todayContrib, 2, true) }}</div>
+          <div class="ov-metric-value" :class="todayContrib >= 0 ? 'up' : 'down'" :title="formatMoney(todayContrib, 2, true)">{{ formatMoney(todayContrib, 2, true) }}</div>
           <div class="ov-metric-sub">盘中粗估，不入账</div>
         </div>
         <div class="ov-metric">
           <div class="ov-metric-label"><TrendingUp :size="13" :stroke-width="2" />持仓浮盈</div>
-          <div class="ov-metric-value" :class="Number(dashboard.total_profit || 0) >= 0 ? 'up' : 'down'">{{ formatMoney(dashboard.total_profit, 2, true) }}</div>
+          <div class="ov-metric-value" :class="Number(dashboard.total_profit || 0) >= 0 ? 'up' : 'down'" :title="formatMoney(dashboard.total_profit, 2, true)">{{ formatMoney(dashboard.total_profit, 2, true) }}</div>
           <div class="ov-metric-sub">账本当前仓口径</div>
         </div>
         <div class="ov-metric">
           <div class="ov-metric-label"><Landmark :size="13" :stroke-width="2" />现金 + 存款</div>
-          <div class="ov-metric-value">{{ formatMoney(cashAndBank) }}</div>
+          <div class="ov-metric-value" :title="formatMoney(cashAndBank)">{{ formatMoney(cashAndBank) }}</div>
           <div class="ov-metric-sub">证券现金 {{ formatMoney(dashboard.securities_cash) }}</div>
         </div>
       </div>

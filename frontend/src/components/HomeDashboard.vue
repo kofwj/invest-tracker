@@ -7,6 +7,7 @@
         :value="formatMoney(dashboard.total_assets)"
         sub="市值 + 现金 + 存款 + 在途"
         main
+        :title="formatMoney(dashboard.total_assets)" 
       />
       <MetricCard
         label="持仓浮盈"

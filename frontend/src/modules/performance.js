@@ -105,6 +105,8 @@ const createPerformanceModule = ({
                     ? `相对净投入 ${Number(s.total_gain_pct || 0).toFixed(2)}%`
                     : '公式：总资产 − 净投入',
                 color: flowReady ? gainColor : '#E6A23C',
+                main: true,
+                main: true,
             },
             {
                 label: 'XIRR 年化',
@@ -114,6 +116,8 @@ const createPerformanceModule = ({
                     ? '资金加权年化'
                     : (s.xirr_message || '需有效投入/取出与当前资产'),
                 color: s.xirr != null ? ((s.xirr || 0) >= 0 ? '#F56C6C' : '#67C23A') : '#909399',
+                main: true,
+                main: true,
             },
             {
                 label: '全周期盈亏',

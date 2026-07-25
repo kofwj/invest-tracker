@@ -21,30 +21,38 @@
                         
       </el-space>
     </template>
-    <div class="ledger-metrics cols-5">
+
+    <!-- 存款总额单独突出（全宽 hero），彻底解决窄卡被 ellipsis 截断的问题；其他 4 个用 cols-4 -->
+    <div class="ledger-metrics deposit-total-row" style="margin-bottom: 4px;">
       <MetricCard
         label="存款总额"
         :value="formatMoney(depositSummary.total)"
         :sub="`占总资产 ${pct(depositSummary.total, dashboard.total_assets)}`"
         main
+        :title="formatMoney(depositSummary.total)"
       />
+    </div>
+    <div class="ledger-metrics cols-4">
       <MetricCard
         label="加权平均利率"
         :value="`${Number(depositSummary.weightedRate || 0).toFixed(2)}%`"
         sub="按金额加权"
         color="#409EFF"
+        :title="`${Number(depositSummary.weightedRate || 0).toFixed(2)}%`"
       />
       <MetricCard
         label="预计年利息"
         :value="formatMoney(depositSummary.annualInterest)"
         sub="若按当前利率放满一年"
         color="#E6A23C"
+        :title="formatMoney(depositSummary.annualInterest)"
       />
       <MetricCard
         label="到期前预计利息"
         :value="formatMoney(depositSummary.remainingInterest)"
         sub="按剩余天数合计（单利/365）"
         color="#67C23A"
+        :title="formatMoney(depositSummary.remainingInterest)"
       />
       <MetricCard
         label="下一笔到期"
@@ -52,6 +60,7 @@
         :sub="depositSummary.nextDue
           ? `${depositSummary.nextDue.bank_name} ${formatMoney(depositSummary.nextDue.amount)}，${depositSummary.nextDue.daysLeft}天`
           : '暂无到期日'"
+        :title="depositSummary.nextDue ? `${depositSummary.nextDue.bank_name} ${formatMoney(depositSummary.nextDue.amount)}` : ''"
       />
     </div>
 
