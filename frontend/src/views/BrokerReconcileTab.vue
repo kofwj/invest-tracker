@@ -1,15 +1,9 @@
 <template>
-  <div class="broker-page">
-    <div class="broker-header">
-      <div>
-        <h3 class="broker-title">券商对账单</h3>
-        <div class="broker-sub">
-          上传券商持仓 CSV/Excel，对照本系统差异；勾选后写入「持仓校正」（自动备份，并自动重扫）。
-        </div>
-      </div>
-    </div>
-
-    <el-alert
+  <PageShell
+    title="券商对账单"
+    subtitle="上传券商持仓 CSV/Excel，对照本系统差异；勾选后写入「持仓校正」（自动备份，并自动重扫）。"
+  >
+<el-alert
       title="怎么用"
       type="info"
       show-icon
@@ -159,10 +153,11 @@
         </div>
       </template>
     </el-card>
-  </div>
+  </PageShell>
 </template>
 
 <script setup>
+import PageShell from '../components/PageShell.vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 
 const {

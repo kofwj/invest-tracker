@@ -1,12 +1,11 @@
 <template>
-  <el-card shadow="never">
-    <template #header>
-      <div class="ops-card-header">
-        <div>
-          <div class="allocation-section-title">数据备份</div>
-          <div class="ops-card-sub">数据库备份、下载和恢复。恢复前会自动创建当前库备份。</div>
-        </div>
-        <el-space wrap>
+  <PageShell
+    title="数据备份"
+    subtitle="数据库备份、下载和恢复。恢复前会自动创建当前库备份。"
+  >
+    <template #actions>
+      <el-space wrap>
+
           <el-button @click="fetchMaintenance">刷新列表</el-button>
           <el-button type="primary" :loading="maintenanceLoading" @click="createDbBackup">创建备份</el-button>
           <el-upload
@@ -17,11 +16,10 @@
           >
             <el-button type="danger" plain :loading="maintenanceLoading">上传备份并恢复</el-button>
           </el-upload>
-        </el-space>
-      </div>
+        
+      </el-space>
     </template>
-
-    <el-descriptions :column="3" border style="margin-bottom:16px;">
+<el-descriptions :column="3" border style="margin-bottom:16px;">
       <el-descriptions-item label="数据库状态">{{ maintenanceStatus.db_exists ? '正常' : '未找到' }}</el-descriptions-item>
       <el-descriptions-item label="数据库大小">{{ ((maintenanceStatus.db_size || 0) / 1024 / 1024).toFixed(2) }} MB</el-descriptions-item>
       <el-descriptions-item label="最近备份">{{ maintenanceStatus.latest_backup || '暂无' }}</el-descriptions-item>
@@ -52,10 +50,11 @@
         </template>
       </el-table-column>
     </el-table>
-  </el-card>
+  </PageShell>
 </template>
 
 <script setup>
+import PageShell from '../components/PageShell.vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 
 const {

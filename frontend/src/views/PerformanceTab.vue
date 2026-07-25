@@ -1,13 +1,10 @@
 <template>
-  <div class="perf-page">
-    <div class="perf-page-header">
-      <div>
-        <h3 class="perf-page-title">收益分析</h3>
-        <div class="perf-page-subtitle">
-          先看整户赚没赚，再看谁贡献。数字和券商对不上时，多半是口径不同。
-        </div>
-      </div>
-      <div class="perf-page-actions">
+  <PageShell
+    title="收益分析"
+    subtitle="先看整户赚没赚，再看谁贡献。数字和券商对不上时，多半是口径不同。"
+  >
+    <template #actions>
+
         <el-radio-group v-model="localTimelineRange" size="small" @change="onRangeChange">
           <el-radio-button value="ytd">今年</el-radio-button>
           <el-radio-button value="1y">近一年</el-radio-button>
@@ -17,8 +14,8 @@
           {{ perfSummary?.xirr_status === 'ok' ? '年化已算' : (hasPerfFlows ? (perfSummary?.xirr_message || '年化暂不可用') : '外部流水未录入') }}
         </el-tag>
         <el-button size="small" @click="fetchPerformance" :loading="perfLoading">刷新</el-button>
-      </div>
-    </div>
+      
+    </template>
 
     <!-- 未录流水强提示 -->
     <el-alert
@@ -314,10 +311,11 @@
         </el-descriptions>
       </el-collapse-item>
     </el-collapse>
-  </div>
+  </PageShell>
 </template>
 
 <script setup>
+import PageShell from '../components/PageShell.vue';
 import { ref, watch } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 

@@ -1,18 +1,22 @@
 <template>
-  <div class="holdings-tab">
-    <HomeDashboard />
-    <div class="holdings-toolbar">
-      <el-alert
-        title="近一年标的收益率 = 标的自身过去一年价格/净值涨跌；不是你的账户实际持有收益。持仓浮盈只看当前仓；全周期盈亏含历史买卖，接近券商累计盈亏。"
-        type="info"
-        show-icon
-        :closable="false"
-        class="holdings-toolbar-alert"
-      />
+  <PageShell
+    title="持仓明细"
+    subtitle="当前仓盈亏与全周期盈亏分开看；近一年是标的自身涨跌，不是账户持有收益。"
+  >
+    <template #actions>
       <el-button type="warning" plain :loading="trailingSyncing" @click="syncTrailingReturns">
         同步近一年收益率
       </el-button>
-    </div>
+    </template>
+    <HomeDashboard />
+    <el-alert
+      title="近一年标的收益率 = 标的自身过去一年价格/净值涨跌；不是你的账户实际持有收益。持仓浮盈只看当前仓；全周期盈亏含历史买卖，接近券商累计盈亏。"
+      type="info"
+      show-icon
+      :closable="false"
+      class="holdings-toolbar-alert"
+      style="margin-bottom: 12px;"
+    />
     <el-table :data="holdings" stripe size="small" class="holdings-table" style="width: 100%" @row-click="showTransactions">
       <el-table-column label="标的" min-width="148" fixed="left" align="left" header-align="left">
         <template #default="scope">
@@ -199,10 +203,11 @@
         <el-button type="primary" @click="copyLocalUziPrompt">复制提示词</el-button>
       </template>
     </el-dialog>
-  </div>
+  </PageShell>
 </template>
 
 <script setup>
+import PageShell from '../components/PageShell.vue';
 import { reactive } from 'vue';
 import { ElMessage } from 'element-plus';
 import { useAppCtx } from '../composables/useAppCtx.js';

@@ -1,4 +1,8 @@
 <template>
+  <PageShell
+    title="交易录入 / 管理"
+    subtitle="真仓纪律：草稿确认后才入账。支持筛选、编辑、导入导出。"
+  >
                 <el-card header="新增交易记录">
                     <el-form :model="transForm" label-width="100px">
                         <el-row :gutter="20">
@@ -260,9 +264,11 @@
                         ></el-pagination>
                     </div>
                 </el-card>
+  </PageShell>
 </template>
 
 <script setup>
+import PageShell from '../components/PageShell.vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 const { transForm, feeAccounts, feeAutoHint, filteredTransactions, pendingTransactions, pendingPurchaseTotal, transQuery, transPage, submitTrans, resetForm, markFeeManual, downloadTransactionsTemplate, exportTransactions, importTransactions, queryAssetByCode, queryAssetByName, selectTransAsset, autoMatchTransAsset, applyTransFilter, resetTransQuery, handleTransPageChange, handleTransPageSizeChange, openTransEditDialog, deleteTransaction, formatMoney, dashboard, dividendLoading, openDividendDraftDialog } = useAppCtx();
 </script>

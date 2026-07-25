@@ -1,19 +1,14 @@
 <template>
-  <div class="decision-page">
-    <div class="decision-header">
-      <div>
-        <h3 class="decision-title">今天该看</h3>
-        <div class="decision-subtitle">
-          只读汇总：今日贡献、价格预警、纪律破线、存款到期。不改账本、不下单。
-        </div>
-      </div>
-      <div class="decision-actions">
-        <el-button size="small" :loading="marketLoading || disciplineLoading" @click="refreshDecision">刷新</el-button>
-        <el-button size="small" @click="goTab('market')">市场摘要</el-button>
-        <el-button size="small" @click="goTab('discipline')">纪律</el-button>
-        <el-button size="small" @click="goTab('deposits')">存款</el-button>
-      </div>
-    </div>
+  <PageShell
+    title="今天该看"
+    subtitle="只读汇总：今日贡献、价格预警、纪律破线、存款到期。不改账本、不下单。"
+  >
+    <template #actions>
+      <el-button size="small" :loading="marketLoading || disciplineLoading" @click="refreshDecision">刷新</el-button>
+      <el-button size="small" @click="goTab('market')">市场摘要</el-button>
+      <el-button size="small" @click="goTab('discipline')">纪律</el-button>
+      <el-button size="small" @click="goTab('deposits')">存款</el-button>
+    </template>
 
     <el-alert
       :title="headline"
@@ -135,10 +130,11 @@
         </el-card>
       </el-col>
     </el-row>
-  </div>
+  </PageShell>
 </template>
 
 <script setup>
+import PageShell from '../components/PageShell.vue';
 import { computed, onMounted } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 

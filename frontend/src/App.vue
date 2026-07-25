@@ -4,19 +4,6 @@
       <AppHeader />
 
       <div class="content-shell">
-        <div class="tab-group-bar" role="tablist" aria-label="功能分组">
-          <button
-            v-for="g in tabGroups"
-            :key="g.id"
-            type="button"
-            class="tab-group-btn"
-            :class="{ active: tabGroup === g.id }"
-            role="tab"
-            :aria-selected="tabGroup === g.id"
-            @click="onGroupClick(g.id)"
-          >{{ g.label }}</button>
-        </div>
-
         <nav v-if="currentGroupTabs.length > 1" class="page-nav" aria-label="页面导航">
           <button
             v-for="t in currentGroupTabs"
@@ -55,12 +42,6 @@ export default {
   methods: {
     tabLabelOf(t) {
       return tabLabel(t);
-    },
-    onGroupClick(gid) {
-      const hit = (this.tabGroups || []).find((x) => x.id === gid);
-      if (!hit || !hit.tabs?.length) return;
-      if (hit.tabs.includes(this.activeTab)) return;
-      this.goTab(hit.tabs[0]);
     },
   },
   computed: {

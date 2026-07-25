@@ -1,22 +1,18 @@
 <template>
-  <el-card shadow="never">
-    <template #header>
-      <div class="ops-card-header">
-        <div>
-          <div class="allocation-section-title">消息推送</div>
-          <div class="ops-card-sub">
-            VPS 自有通道，独立于 Hermes。密钥在服务器 .env；这里管开关、事件、试推和日志。
-          </div>
-        </div>
-        <el-space wrap>
+  <PageShell
+    title="消息推送"
+    subtitle="VPS 自有通道，独立于 Hermes。密钥在服务器 .env；这里管开关、事件、试推和日志。"
+  >
+    <template #actions>
+      <el-space wrap>
+
           <el-button @click="fetchNotifyPanel" :loading="notifyLoading">刷新</el-button>
           <el-button type="primary" :loading="notifyLoading" @click="saveNotifyPanel">保存设置</el-button>
           <el-button type="success" plain :loading="notifyLoading" @click="testNotifyPush">试推一条</el-button>
-        </el-space>
-      </div>
+        
+      </el-space>
     </template>
-
-    <el-row :gutter="16" style="margin-bottom:12px;">
+<el-row :gutter="16" style="margin-bottom:12px;">
       <el-col :xs="24" :sm="8">
         <div class="ops-field-label">总开关</div>
         <el-switch v-model="notifyStatus.enabled" active-text="开" inactive-text="关"></el-switch>
@@ -100,10 +96,11 @@
       </el-table-column>
       <el-table-column prop="reason" label="原因" min-width="140" show-overflow-tooltip></el-table-column>
     </el-table>
-  </el-card>
+  </PageShell>
 </template>
 
 <script setup>
+import PageShell from '../components/PageShell.vue';
 import { computed } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 

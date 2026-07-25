@@ -1,16 +1,12 @@
 <template>
-                <el-card shadow="never">
-                    <template #header>
-                        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
-                            <div>
-                                <div class="allocation-section-title">资产配置分析</div>
-                                <div style="font-size:12px;color:#909399;margin-top:4px;">按权益 / 固收 / 存款拆解风险暴露、收益贡献和预计年化</div>
-                            </div>
-                            <el-tag type="info" effect="plain">总资产 {{ formatMoney(dashboard.total_assets) }}</el-tag>
-                        </div>
-                    </template>
-
-                    <div class="allocation-hero">
+  <PageShell
+    title="资产配置"
+    subtitle="按权益 / 固收 / 存款拆解风险暴露、收益贡献和预计年化。"
+  >
+    <template #actions>
+      <el-tag type="info" effect="plain">总资产 {{ formatMoney(dashboard.total_assets) }}</el-tag>
+    </template>
+<div class="allocation-hero">
                         <el-card shadow="hover" class="allocation-card allocation-main-card">
                             <div class="allocation-label">权益资产占比</div>
                             <div class="allocation-value" :style="{color: (allocationSummary?.equityRatio || 0) > 55 ? '#E6A23C' : '#303133'}">{{ (allocationSummary?.equityRatio || 0).toFixed(1) }}%</div>
@@ -127,10 +123,11 @@
                             </el-table-column>
                         </el-table>
                     </el-card>
-                </el-card>
+                </PageShell>
 </template>
 
 <script setup>
+import PageShell from '../components/PageShell.vue';
 import { onMounted, watch, nextTick } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 

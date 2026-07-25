@@ -1,18 +1,13 @@
 <template>
-  <div class="discipline-page">
-    <div class="discipline-header">
-      <div>
-        <h3 class="discipline-title">纪律与再平衡</h3>
-        <div class="discipline-sub">
-          基于真实持仓做纪律检查 + 目标比例建议。默认不改账；草稿确认后才写入真实交易。
-        </div>
-      </div>
-      <div class="discipline-actions">
-        <el-button size="small" :loading="disciplineLoading" @click="refreshDiscipline">刷新</el-button>
-        <el-button size="small" @click="openPolicyDialog">调整参数</el-button>
-        <el-button size="small" type="primary" @click="createDraftsFromReport">建议→草稿</el-button>
-      </div>
-    </div>
+  <PageShell
+    title="纪律与再平衡"
+    subtitle="基于真实持仓做纪律检查 + 目标比例建议。默认不改账；草稿确认后才写入真实交易。"
+  >
+    <template #actions>
+      <el-button size="small" :loading="disciplineLoading" @click="refreshDiscipline">刷新</el-button>
+      <el-button size="small" @click="openPolicyDialog">调整参数</el-button>
+      <el-button size="small" type="primary" @click="createDraftsFromReport">建议→草稿</el-button>
+    </template>
 
     <el-alert
       :title="summaryText || '加载后显示纪律结论'"
@@ -275,10 +270,11 @@
         <el-button type="primary" @click="saveDraftEdit">保存</el-button>
       </template>
     </el-dialog>
-  </div>
+  </PageShell>
 </template>
 
 <script setup>
+import PageShell from '../components/PageShell.vue';
 import { computed } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 

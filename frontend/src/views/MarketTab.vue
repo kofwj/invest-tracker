@@ -1,23 +1,17 @@
 <template>
-  <div class="market-page">
-    <div class="market-page-header">
-      <div>
-        <h3 class="market-page-title">市场摘要</h3>
-        <div class="market-page-subtitle">
-          只读观察：关键指数 + 自选 + 持仓今日贡献 + 价格预警。不改真实账本。
-          交易日 cron 可自动检查；飞书推送需 FEISHU_ALERT_WEBHOOK；同规则默认冷却
-          {{ alertCooldownMinutes == null ? 240 : alertCooldownMinutes }} 分钟。
-        </div>
-      </div>
-      <div class="market-page-actions">
+  <PageShell
+    title="市场摘要"
+    subtitle="只读观察：关键指数 + 自选 + 持仓今日贡献 + 价格预警。不改真实账本。"
+  >
+    <template #actions>
+
         <el-tag v-if="marketUpdatedAt" size="small" type="info">更新 {{ marketUpdatedAt }}</el-tag>
         <el-tag v-if="quoteCacheSeconds != null" size="small" type="info">行情缓存 {{ quoteCacheSeconds }}s</el-tag>
         <el-button size="small" :loading="marketLoading" @click="refreshMarket">刷新摘要</el-button>
         <el-button size="small" type="warning" :loading="alertChecking" @click="() => checkAlerts(false)">立即检查预警</el-button>
-      </div>
-    </div>
-
-    <el-alert
+      
+    </template>
+<el-alert
       :title="marketSignals.portfolio_vs_market || '加载后显示持仓与大盘对比说明'"
       type="info"
       show-icon
@@ -327,10 +321,11 @@
         <el-button type="primary" @click="saveAlertRule">保存</el-button>
       </template>
     </el-dialog>
-  </div>
+  </PageShell>
 </template>
 
 <script setup>
+import PageShell from '../components/PageShell.vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 
 const {

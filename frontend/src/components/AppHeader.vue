@@ -9,6 +9,20 @@
         <div class="header-subtitle">真仓账本</div>
       </div>
     </div>
+
+    <nav class="header-nav" role="tablist" aria-label="功能分组">
+      <button
+        v-for="g in tabGroups"
+        :key="g.id"
+        type="button"
+        class="header-nav-btn"
+        :class="{ active: tabGroup === g.id }"
+        role="tab"
+        :aria-selected="tabGroup === g.id"
+        @click="onGroupClick(g.id)"
+      >{{ g.label }}</button>
+    </nav>
+
     <div class="header-actions">
       <button
         type="button"
@@ -28,7 +42,7 @@
       </button>
       <button type="button" class="header-btn primary" :disabled="syncing" @click="syncPrices">
         <Radar :size="14" :stroke-width="2" :class="{ spin: syncing }" />
-        同步最新价
+        同步价
       </button>
       <button v-if="authEnabled" type="button" class="header-btn ghost" @click="handleLogout">
         <LogOut :size="14" :stroke-width="2" />
@@ -53,5 +67,17 @@ const {
   themeMode,
   themeLabel,
   cycleThemeMode,
+  tabGroups,
+  tabGroup,
+  activeTab,
+  goTab,
 } = useAppCtx();
+
+function onGroupClick(gid) {
+  const hit = (tabGroups || []).find((x) => x.id === gid);
+  if (!hit || !hit.tabs?.length) return;
+  const current = activeTab?.value ?? activeTab;
+  if (hit.tabs.includes(current)) return;
+  goTab(hit.tabs[0]);
+}
 </script>

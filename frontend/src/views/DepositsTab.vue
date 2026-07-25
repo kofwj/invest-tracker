@@ -1,11 +1,11 @@
 <template>
-                <el-card shadow="never">
-                    <div class="deposit-toolbar">
-                        <div>
-                            <div class="deposit-title">银行存款分析</div>
-                            <div class="deposit-subtitle">展示存款总额、加权利率、预计利息、到期分布和银行集中度</div>
-                        </div>
-                        <el-space wrap>
+  <PageShell
+    title="银行存款"
+    subtitle="展示存款总额、加权利率、预计利息、到期分布和银行集中度。"
+  >
+    <template #actions>
+      <el-space wrap>
+
                             <el-button @click="downloadDepositsTemplate">下载存款模板</el-button>
                             <el-button @click="exportDeposits">导出存款</el-button>
                             <el-upload
@@ -18,10 +18,10 @@
                                 <el-button type="warning">导入存款</el-button>
                             </el-upload>
                             <el-button type="primary" @click="openDepositDialog(null)">新增存款</el-button>
-                        </el-space>
-                    </div>
-
-                    <div class="deposit-stats">
+                        
+      </el-space>
+    </template>
+<div class="deposit-stats">
                         <el-card shadow="hover" class="deposit-stat-card">
                             <div class="deposit-stat-label">存款总额</div>
                             <div class="deposit-stat-value">{{ formatMoney(depositSummary.total) }}</div>
@@ -146,10 +146,11 @@
                             </template>
                         </el-table-column>
                     </el-table>
-                </el-card>
+                </PageShell>
 </template>
 
 <script setup>
+import PageShell from '../components/PageShell.vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 const { dashboard, depositRows, depositSummary, depositBankBreakdown, depositMaturityBuckets, downloadDepositsTemplate, exportDeposits, importDeposits, openDepositDialog, deleteDeposit, formatMoney, pct } = useAppCtx();
 </script>

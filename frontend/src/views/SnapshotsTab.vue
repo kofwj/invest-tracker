@@ -1,11 +1,10 @@
 <template>
-                <el-card shadow="never">
-                    <div class="snapshot-toolbar">
-                        <div>
-                            <div class="snapshot-title">资产快照分析</div>
-                            <div class="snapshot-subtitle">看总资产、投资仓位、现金缓冲和区间变化，不只是一张快照流水表</div>
-                        </div>
-                        <div class="snapshot-controls">
+  <PageShell
+    title="资产快照"
+    subtitle="看总资产、投资仓位、现金缓冲和区间变化，不只是一张快照流水表。"
+  >
+    <template #actions>
+
                             <el-date-picker
                                 v-model="snapshotRange"
                                 type="daterange"
@@ -19,10 +18,9 @@
                             <el-button type="primary" @click="createSnapshot" :loading="snapshotLoading">记录/更新今日快照</el-button>
                             <el-button @click="exportSnapshots">导出快照</el-button>
                             <el-button type="warning" plain @click="compactSnapshots">压缩历史快照</el-button>
-                        </div>
-                    </div>
-
-                    <el-alert
+                        
+    </template>
+<el-alert
                         v-if="snapshotSummary?.day_over_day_anomaly?.text"
                         :title="snapshotSummary.day_over_day_anomaly.text"
                         type="warning"
@@ -154,10 +152,11 @@
                             <el-table-column prop="holdings_count" label="持仓" width="68" align="right" header-align="right"></el-table-column>
                         </el-table>
                     </el-card>
-                </el-card>
+                </PageShell>
 </template>
 
 <script setup>
+import PageShell from '../components/PageShell.vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 const { snapshots, snapshotRange, snapshotMetrics, snapshotChangeRows, snapshotInsights, snapshotSummary, snapshotLoading, createSnapshot, fetchSnapshots, exportSnapshots, compactSnapshots, formatMoney, pct } = useAppCtx();
 </script>

@@ -1,4 +1,8 @@
 <template>
+  <PageShell
+    title="现金设置"
+    subtitle="证券现金自动联动；银证转账或券商余额校准时在这里手动更新。"
+  >
                 <el-card header="证券账户现金余额">
                     <el-alert
                         title="证券现金已改为自动联动：买入/申购待确认自动扣减，卖出/分红自动增加，分红再投资通常现金净影响为0；银证转账或券商余额校准时，在这里手动更新当前余额即可。"
@@ -146,9 +150,11 @@
                         <span style="color:#909399;font-size:12px;">每个账户独立保存；默认：A股佣金万2.5、卖出印花税万5、过户费万0.1；ETF/REITs/黄金默认只收佣金；债基默认0。</span>
                     </div>
                 </el-card>
+  </PageShell>
 </template>
 
 <script setup>
+import PageShell from '../components/PageShell.vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 const { dashboard, feeSettings, feeAccounts, activeFeeAccount, newFeeAccountName, feeCategories, cashForm, cashFlows, cashFlowForm, cashFlowQuery, cashFlowSummary, saveFeeSettings, resetFeeSettings, addFeeAccount, removeFeeAccount, onActiveFeeAccountChange, updateCash, queryCashFlows, resetCashFlowQuery, addCashFlow, openCashFlowEditDialog, deleteCashFlow, cashFlowTagType, formatMoney } = useAppCtx();
 </script>
