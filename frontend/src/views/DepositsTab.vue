@@ -73,115 +73,76 @@
                         </el-col>
                         <el-col :span="12">
                             <el-card shadow="never" header="到期分布">
-                                <el-table :data="depositMaturityBuckets" size="small" class="data-table" style="width:100%;">
-                                    <el-table-column prop="bucket" label="期限" align="left" header-align="left"></el-table-column>
+                                <el-table :data="depositMaturityBuckets" size="small" style="width:100%;">
+                                    <el-table-column prop="bucket" label="期限"></el-table-column>
                                     <el-table-column label="金额" align="right" header-align="right">
-                                        <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.amount) }}</span></template>
+                                        <template #default="scope">{{ formatMoney(scope.row.amount) }}</template>
                                     </el-table-column>
                                     <el-table-column label="占比" width="90" align="right" header-align="right">
-                                        <template #default="scope"><span class="num-cell">{{ scope.row.percentage.toFixed(1) }}%</span></template>
+                                        <template #default="scope">{{ scope.row.percentage.toFixed(1) }}%</template>
                                     </el-table-column>
                                 </el-table>
                             </el-card>
                         </el-col>
                     </el-row>
 
-                    <div class="desktop-only table-scroll">
-                    <el-table :data="depositRows" stripe size="small" class="deposit-table data-table" style="width: 100%">
-                        <el-table-column prop="bank_name" label="银行" min-width="100" align="left" header-align="left"></el-table-column>
-                        <el-table-column label="金额" min-width="110" align="right" header-align="right" sortable>
-                            <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.amount) }}</span></template>
+                    <el-table :data="depositRows" stripe class="deposit-table" style="width: 100%">
+                        <el-table-column prop="bank_name" label="银行名称" width="110" align="center" header-align="center"></el-table-column>
+                        <el-table-column label="金额" min-width="120" align="right" header-align="right">
+                            <template #default="scope">{{ formatMoney(scope.row.amount) }}</template>
                         </el-table-column>
-                        <el-table-column label="占比" width="72" align="right" header-align="right">
-                            <template #default="scope"><span class="num-cell">{{ scope.row.percentage.toFixed(1) }}%</span></template>
+                        <el-table-column label="组合占比" width="90" align="center" header-align="center">
+                            <template #default="scope">{{ scope.row.percentage.toFixed(1) }}%</template>
                         </el-table-column>
-                        <el-table-column label="年利率" width="80" align="right" header-align="right">
-                            <template #default="scope"><span class="num-cell">{{ Number(scope.row.interest_rate || 0).toFixed(2) }}%</span></template>
+                        <el-table-column label="年利率" width="90" align="center" header-align="center">
+                            <template #default="scope">{{ Number(scope.row.interest_rate || 0).toFixed(2) }}%</template>
                         </el-table-column>
-                        <el-table-column label="年利息" min-width="100" align="right" header-align="right">
-                            <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.annual_interest) }}</span></template>
+                        <el-table-column label="预计年利息" min-width="110" align="right" header-align="right">
+                            <template #default="scope">{{ formatMoney(scope.row.annual_interest) }}</template>
                         </el-table-column>
-                        <el-table-column label="到期前利息" min-width="100" align="right" header-align="right">
-                            <template #default="scope"><span class="num-cell">{{ scope.row.remaining_interest == null ? '—' : formatMoney(scope.row.remaining_interest) }}</span></template>
+                        <el-table-column label="到期前利息" min-width="110" align="right" header-align="right">
+                            <template #default="scope">{{ scope.row.remaining_interest == null ? '—' : formatMoney(scope.row.remaining_interest) }}</template>
                         </el-table-column>
-                        <el-table-column label="整期利息" min-width="100" align="right" header-align="right">
-                            <template #default="scope"><span class="num-cell">{{ scope.row.term_interest == null ? '—' : formatMoney(scope.row.term_interest) }}</span></template>
+                        <el-table-column label="整期利息" min-width="110" align="right" header-align="right">
+                            <template #default="scope">{{ scope.row.term_interest == null ? '—' : formatMoney(scope.row.term_interest) }}</template>
                         </el-table-column>
-                        <el-table-column label="起存日" width="104" align="left" header-align="left">
+                        <el-table-column label="起存日" width="110" align="center" header-align="center">
                             <template #default="scope">
                                 <span :style="scope.row.missing_start_date ? 'color:#E6A23C' : ''">{{ scope.row.start_date || '待填' }}</span>
                             </template>
                         </el-table-column>
-                        <el-table-column label="到期" width="104" align="left" header-align="left">
+                        <el-table-column label="到期时间" width="110" align="center" header-align="center">
                             <template #default="scope">{{ scope.row.due_date || '—' }}</template>
                         </el-table-column>
-                        <el-table-column label="剩余" width="92" align="center" header-align="center">
+                        <el-table-column label="剩余天数" width="100" align="center" header-align="center">
                             <template #default="scope">
                                 <el-tag
                                     v-if="scope.row.daysLeft === null"
                                     type="info"
                                     effect="light"
-                                    size="small"
                                 >—</el-tag>
                                 <el-tag
                                     v-else-if="scope.row.daysLeft < 0"
                                     type="danger"
                                     effect="dark"
-                                    size="small"
                                 >已到期</el-tag>
                                 <el-tag
                                     v-else
                                     :type="scope.row.daysLeft <= 30 ? 'danger' : (scope.row.daysLeft <= 90 ? 'warning' : 'info')"
                                     effect="light"
-                                    size="small"
                                 >{{ scope.row.daysLeft }}天</el-tag>
                             </template>
                         </el-table-column>
-                        <el-table-column prop="remark" label="备注" min-width="100" show-overflow-tooltip>
+                        <el-table-column prop="remark" label="备注" min-width="120">
                             <template #default="scope">{{ scope.row.remark || '—' }}</template>
                         </el-table-column>
-                        <el-table-column label="操作" width="72" align="center" header-align="center" fixed="right">
+                        <el-table-column label="操作" width="130" align="center" header-align="center">
                             <template #default="scope">
-                                <el-dropdown trigger="click">
-                                    <el-button type="primary" link size="small">更多</el-button>
-                                    <template #dropdown>
-                                        <el-dropdown-menu>
-                                            <el-dropdown-item @click="openDepositDialog(scope.row, scope.$index)">编辑</el-dropdown-item>
-                                            <el-dropdown-item divided @click="deleteDeposit(scope.row, scope.$index)">删除</el-dropdown-item>
-                                        </el-dropdown-menu>
-                                    </template>
-                                </el-dropdown>
+                                <el-button type="primary" link @click="openDepositDialog(scope.row, scope.$index)">编辑</el-button>
+                                <el-button type="danger" link @click="deleteDeposit(scope.row, scope.$index)">删除</el-button>
                             </template>
                         </el-table-column>
                     </el-table>
-                    </div>
-
-                    <div class="mobile-only deposit-cards">
-                        <div v-for="(row, idx) in depositRows" :key="(row.bank_name || '') + (row.due_date || '') + idx" class="holding-card">
-                            <div class="holding-card-head">
-                                <div>
-                                    <div class="asset-name">{{ row.bank_name }}</div>
-                                    <div class="asset-code">到期 {{ row.due_date || '—' }} · 利率 {{ Number(row.interest_rate || 0).toFixed(2) }}%</div>
-                                </div>
-                                <div class="num-cell" style="font-weight:700;">{{ formatMoney(row.amount) }}</div>
-                            </div>
-                            <div class="holding-card-grid">
-                                <div>
-                                    <div class="meta-label">年利息</div>
-                                    <div class="num-cell">{{ formatMoney(row.annual_interest) }}</div>
-                                </div>
-                                <div>
-                                    <div class="meta-label">剩余天数</div>
-                                    <div>{{ row.daysLeft == null ? '—' : (row.daysLeft < 0 ? '已到期' : row.daysLeft + '天') }}</div>
-                                </div>
-                            </div>
-                            <div class="holding-card-ops">
-                                <el-button size="small" link type="primary" @click="openDepositDialog(row, idx)">编辑</el-button>
-                                <el-button size="small" link type="danger" @click="deleteDeposit(row, idx)">删除</el-button>
-                            </div>
-                        </div>
-                        <div v-if="!depositRows.length" class="empty-cards">暂无存款</div>
-                    </div>
                 </el-card>
 </template>
 
@@ -189,47 +150,3 @@
 import { useAppCtx } from '../composables/useAppCtx.js';
 const { dashboard, depositRows, depositSummary, depositBankBreakdown, depositMaturityBuckets, downloadDepositsTemplate, exportDeposits, importDeposits, openDepositDialog, deleteDeposit, formatMoney, pct } = useAppCtx();
 </script>
-
-<style scoped>
-.holding-card {
-  background: #fff;
-  border: 1px solid var(--app-border, #e8edf3);
-  border-radius: 12px;
-  padding: 12px 14px;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
-  margin-bottom: 10px;
-}
-.holding-card-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-.holding-card-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px 12px;
-  font-size: 13px;
-}
-.holding-card-ops {
-  margin-top: 10px;
-  display: flex;
-  gap: 4px;
-  border-top: 1px dashed #e5e7eb;
-  padding-top: 8px;
-}
-.meta-label {
-  font-size: 11px;
-  color: #9ca3af;
-  margin-bottom: 2px;
-}
-.empty-cards {
-  text-align: center;
-  color: #909399;
-  padding: 24px;
-}
-.deposit-cards {
-  display: flex;
-  flex-direction: column;
-}
-</style>

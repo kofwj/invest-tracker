@@ -157,7 +157,7 @@
         :data="displayedPerfContribution"
         stripe
         size="small"
-        class="perf-contrib-table data-table"
+        class="perf-contrib-table"
         style="width: 100%"
         @row-click="onContribRowClick"
       >
