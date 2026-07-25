@@ -18,42 +18,35 @@
       style="margin-bottom: 14px;"
     />
 
-    <el-row :gutter="12" style="margin-bottom: 16px;">
-      <el-col :xs="12" :sm="8" :md="6">
-        <el-card shadow="hover" class="decision-metric">
-          <div class="decision-metric-label">今日贡献粗估</div>
-          <div class="decision-metric-value" :style="{ color: (signals.today_contrib_estimate || 0) >= 0 ? '#F56C6C' : '#67C23A' }">
-            {{ formatMoney(signals.today_contrib_estimate || 0, 2, true) }}
-          </div>
-          <div class="decision-metric-sub">现价涨跌% × 市值，非记账</div>
-        </el-card>
-      </el-col>
-      <el-col :xs="12" :sm="8" :md="6">
-        <el-card shadow="hover" class="decision-metric">
-          <div class="decision-metric-label">组合涨跌粗估</div>
-          <div class="decision-metric-value">
-            {{ signals.portfolio_change_pct_estimate == null
-              ? '—'
-              : ((signals.portfolio_change_pct_estimate >= 0 ? '+' : '') + Number(signals.portfolio_change_pct_estimate).toFixed(2) + '%') }}
-          </div>
-          <div class="decision-metric-sub">投资市值 {{ formatMoney(signals.total_market_value || 0) }}</div>
-        </el-card>
-      </el-col>
-      <el-col :xs="12" :sm="8" :md="6">
-        <el-card shadow="hover" class="decision-metric">
-          <div class="decision-metric-label">纪律破线</div>
-          <div class="decision-metric-value" :class="breachCount ? 'is-warn' : 'is-ok'">{{ breachCount }}</div>
-          <div class="decision-metric-sub">{{ summaryText || '暂无纪律摘要' }}</div>
-        </el-card>
-      </el-col>
-      <el-col :xs="12" :sm="8" :md="6">
-        <el-card shadow="hover" class="decision-metric">
-          <div class="decision-metric-label">存款 30 天内到期</div>
-          <div class="decision-metric-value" :class="dueSoonCount ? 'is-warn' : ''">{{ dueSoonCount }} 笔</div>
-          <div class="decision-metric-sub">金额 {{ formatMoney(dueSoonAmount) }}</div>
-        </el-card>
-      </el-col>
-    </el-row>
+    <div class="ledger-metrics cols-4">
+      <MetricCard
+        label="今日贡献粗估"
+        :value="formatMoney(signals.today_contrib_estimate || 0, 2, true)"
+        sub="现价涨跌% × 市值，非记账"
+        :tone="Number(signals.today_contrib_estimate || 0) >= 0 ? 'up' : 'down'"
+        main
+      />
+      <MetricCard
+        label="组合涨跌粗估"
+        :value="signals.portfolio_change_pct_estimate == null
+          ? '—'
+          : ((signals.portfolio_change_pct_estimate >= 0 ? '+' : '') + Number(signals.portfolio_change_pct_estimate).toFixed(2) + '%')"
+        :sub="`投资市值 ${formatMoney(signals.total_market_value || 0)}`"
+        :tone="Number(signals.portfolio_change_pct_estimate || 0) >= 0 ? 'up' : 'down'"
+      />
+      <MetricCard
+        label="纪律破线"
+        :value="String(breachCount)"
+        :sub="summaryText || '暂无纪律摘要'"
+        :tone="breachCount ? 'warn' : 'ok'"
+      />
+      <MetricCard
+        label="存款 30 天内到期"
+        :value="`${dueSoonCount} 笔`"
+        :sub="`金额 ${formatMoney(dueSoonAmount)}`"
+        :tone="dueSoonCount ? 'warn' : ''"
+      />
+    </div>
 
     <el-row :gutter="12">
       <el-col :xs="24" :md="12" style="margin-bottom: 12px;">
@@ -135,6 +128,7 @@
 
 <script setup>
 import PageShell from '../components/PageShell.vue';
+import MetricCard from '../components/MetricCard.vue';
 import { computed, onMounted } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 
@@ -208,26 +202,8 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.decision-page { padding: 4px 2px 16px; }
-.decision-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 12px;
-}
-.decision-title { margin: 0 0 4px; font-size: 18px; font-weight: 700; color: #1f2937; }
-.decision-subtitle { font-size: 13px; color: #6b7280; line-height: 1.45; max-width: 640px; }
-.decision-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.decision-metric { min-height: 108px; }
-.decision-metric-label { font-size: 12px; color: #909399; }
-.decision-metric-value { font-size: 22px; font-weight: 700; margin-top: 6px; color: #303133; word-break: break-all; }
-.decision-metric-value.is-warn { color: #d97706; }
-.decision-metric-value.is-ok { color: #16a34a; }
-.decision-metric-sub { font-size: 12px; color: #909399; margin-top: 6px; line-height: 1.35; }
-.decision-card-title { font-weight: 600; color: #303133; }
-.decision-list { margin: 0; padding-left: 18px; color: #303133; line-height: 1.55; }
-.decision-empty { color: #909399; font-size: 13px; }
-.decision-muted { margin-top: 8px; font-size: 12px; color: #606266; line-height: 1.45; }
+.decision-card-title { font-weight: 600; color: var(--app-text); }
+.decision-list { margin: 0; padding-left: 18px; color: var(--app-text); line-height: 1.55; }
+.decision-empty { color: var(--app-muted); font-size: 13px; }
+.decision-muted { margin-top: 8px; font-size: 12px; color: var(--app-muted); line-height: 1.45; }
 </style>

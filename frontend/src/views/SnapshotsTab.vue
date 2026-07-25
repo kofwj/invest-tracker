@@ -36,12 +36,16 @@
                         style="margin-bottom: 16px;"
                     ></el-alert>
 
-                    <div class="snapshot-hero">
-                        <el-card shadow="hover" v-for="(m, idx) in snapshotMetrics" :key="m.key" class="snapshot-metric-card" :class="{ 'is-highlight': idx === 0 }">
-                            <div class="snapshot-metric-value" :style="{color: m.color || '#303133'}">{{ m.value }}</div>
-                            <div class="snapshot-metric-label">{{ m.label }}</div>
-                            <div class="snapshot-sub">{{ m.sub }}</div>
-                        </el-card>
+                    <div class="ledger-metrics cols-4">
+                        <MetricCard
+                            v-for="(m, idx) in snapshotMetrics"
+                            :key="m.key"
+                            :label="m.label"
+                            :value="m.value"
+                            :sub="m.sub"
+                            :color="m.color"
+                            :main="idx === 0"
+                        />
                     </div>
 
                     <div class="snapshot-insights" v-if="snapshotInsights.length">
@@ -157,6 +161,7 @@
 
 <script setup>
 import PageShell from '../components/PageShell.vue';
+import MetricCard from '../components/MetricCard.vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 const { snapshots, snapshotRange, snapshotMetrics, snapshotChangeRows, snapshotInsights, snapshotSummary, snapshotLoading, createSnapshot, fetchSnapshots, exportSnapshots, compactSnapshots, formatMoney, pct } = useAppCtx();
 </script>

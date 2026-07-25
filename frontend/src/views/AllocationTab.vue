@@ -6,28 +6,32 @@
     <template #actions>
       <el-tag type="info" effect="plain">总资产 {{ formatMoney(dashboard.total_assets) }}</el-tag>
     </template>
-<div class="allocation-hero">
-                        <el-card shadow="hover" class="allocation-card allocation-main-card">
-                            <div class="allocation-label">权益资产占比</div>
-                            <div class="allocation-value" :style="{color: (allocationSummary?.equityRatio || 0) > 55 ? '#E6A23C' : '#303133'}">{{ (allocationSummary?.equityRatio || 0).toFixed(1) }}%</div>
-                            <div class="allocation-sub">权益金额 {{ formatMoney(allocationSummary?.equityAmount || 0) }}</div>
-                        </el-card>
-                        <el-card shadow="hover" class="allocation-card">
-                            <div class="allocation-label">固收 + 存款占比</div>
-                            <div class="allocation-value" style="color:#409EFF;">{{ (allocationSummary?.defensiveRatio || 0).toFixed(1) }}%</div>
-                            <div class="allocation-sub">防守资产 {{ formatMoney(allocationSummary?.defensiveAmount || 0) }}</div>
-                        </el-card>
-                        <el-card shadow="hover" class="allocation-card">
-                            <div class="allocation-label">组合预计年化</div>
-                            <div class="allocation-value" style="color:#E6A23C;">{{ Number(portfolioExpectedReturn || 0).toFixed(2) }}%</div>
-                            <div class="allocation-sub">按各资产预计收益加权</div>
-                        </el-card>
-                        <el-card shadow="hover" class="allocation-card">
-                            <div class="allocation-label">当前申购在途</div>
-                            <div class="allocation-value">{{ formatMoney(dashboard.pending_purchase || 0) }}</div>
-                            <div class="allocation-sub">计入固收，不计入持仓盈亏</div>
-                        </el-card>
-                    </div>
+    <div class="ledger-metrics cols-4">
+      <MetricCard
+        label="权益资产占比"
+        :value="`${Number(allocationSummary?.equityRatio || 0).toFixed(1)}%`"
+        :sub="`权益金额 ${formatMoney(allocationSummary?.equityAmount || 0)}`"
+        :color="Number(allocationSummary?.equityRatio || 0) > 55 ? '#E6A23C' : ''"
+        main
+      />
+      <MetricCard
+        label="固收 + 存款占比"
+        :value="`${Number(allocationSummary?.defensiveRatio || 0).toFixed(1)}%`"
+        :sub="`防守资产 ${formatMoney(allocationSummary?.defensiveAmount || 0)}`"
+        color="#409EFF"
+      />
+      <MetricCard
+        label="组合预计年化"
+        :value="`${Number(portfolioExpectedReturn || 0).toFixed(2)}%`"
+        sub="按各资产预计收益加权"
+        color="#E6A23C"
+      />
+      <MetricCard
+        label="当前申购在途"
+        :value="formatMoney(dashboard.pending_purchase || 0)"
+        sub="计入固收，不计入持仓盈亏"
+      />
+    </div>
 
                     <el-alert
                         :title="allocationSummary?.comment || '加载配置分析中…'"
@@ -128,6 +132,7 @@
 
 <script setup>
 import PageShell from '../components/PageShell.vue';
+import MetricCard from '../components/MetricCard.vue';
 import { onMounted, watch, nextTick } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 

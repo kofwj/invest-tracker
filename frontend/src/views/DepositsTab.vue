@@ -21,33 +21,39 @@
                         
       </el-space>
     </template>
-<div class="deposit-stats">
-                        <el-card shadow="hover" class="deposit-stat-card">
-                            <div class="deposit-stat-label">存款总额</div>
-                            <div class="deposit-stat-value">{{ formatMoney(depositSummary.total) }}</div>
-                            <div class="deposit-stat-sub">占总资产 {{ pct(depositSummary.total, dashboard.total_assets) }}</div>
-                        </el-card>
-                        <el-card shadow="hover" class="deposit-stat-card">
-                            <div class="deposit-stat-label">加权平均利率</div>
-                            <div class="deposit-stat-value" style="color:#409EFF;">{{ depositSummary.weightedRate.toFixed(2) }}%</div>
-                            <div class="deposit-stat-sub">按金额加权</div>
-                        </el-card>
-                        <el-card shadow="hover" class="deposit-stat-card">
-                            <div class="deposit-stat-label">预计年利息</div>
-                            <div class="deposit-stat-value" style="color:#E6A23C;">{{ formatMoney(depositSummary.annualInterest) }}</div>
-                            <div class="deposit-stat-sub">若按当前利率放满一年</div>
-                        </el-card>
-                        <el-card shadow="hover" class="deposit-stat-card">
-                            <div class="deposit-stat-label">到期前预计利息</div>
-                            <div class="deposit-stat-value" style="color:#67C23A;">{{ formatMoney(depositSummary.remainingInterest) }}</div>
-                            <div class="deposit-stat-sub">按剩余天数合计（单利/365）</div>
-                        </el-card>
-                        <el-card shadow="hover" class="deposit-stat-card">
-                            <div class="deposit-stat-label">下一笔到期</div>
-                            <div class="deposit-stat-value" style="font-size:18px;">{{ depositSummary.nextDue ? depositSummary.nextDue.due_date : '—' }}</div>
-                            <div class="deposit-stat-sub">{{ depositSummary.nextDue ? `${depositSummary.nextDue.bank_name} ${formatMoney(depositSummary.nextDue.amount)}，${depositSummary.nextDue.daysLeft}天` : '暂无到期日' }}</div>
-                        </el-card>
-                    </div>
+    <div class="ledger-metrics cols-5">
+      <MetricCard
+        label="存款总额"
+        :value="formatMoney(depositSummary.total)"
+        :sub="`占总资产 ${pct(depositSummary.total, dashboard.total_assets)}`"
+        main
+      />
+      <MetricCard
+        label="加权平均利率"
+        :value="`${Number(depositSummary.weightedRate || 0).toFixed(2)}%`"
+        sub="按金额加权"
+        color="#409EFF"
+      />
+      <MetricCard
+        label="预计年利息"
+        :value="formatMoney(depositSummary.annualInterest)"
+        sub="若按当前利率放满一年"
+        color="#E6A23C"
+      />
+      <MetricCard
+        label="到期前预计利息"
+        :value="formatMoney(depositSummary.remainingInterest)"
+        sub="按剩余天数合计（单利/365）"
+        color="#67C23A"
+      />
+      <MetricCard
+        label="下一笔到期"
+        :value="depositSummary.nextDue ? depositSummary.nextDue.due_date : '—'"
+        :sub="depositSummary.nextDue
+          ? `${depositSummary.nextDue.bank_name} ${formatMoney(depositSummary.nextDue.amount)}，${depositSummary.nextDue.daysLeft}天`
+          : '暂无到期日'"
+      />
+    </div>
 
                     <el-alert
                         v-if="depositSummary.missingStartCount > 0"
@@ -151,6 +157,7 @@
 
 <script setup>
 import PageShell from '../components/PageShell.vue';
+import MetricCard from '../components/MetricCard.vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 const { dashboard, depositRows, depositSummary, depositBankBreakdown, depositMaturityBuckets, downloadDepositsTemplate, exportDeposits, importDeposits, openDepositDialog, deleteDeposit, formatMoney, pct } = useAppCtx();
 </script>

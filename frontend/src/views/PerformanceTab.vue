@@ -53,28 +53,31 @@
     </el-card>
 
     <!-- 主卡 4 -->
-    <el-row :gutter="12" class="perf-cards-row" style="margin-bottom: 12px;">
-      <el-col :xs="12" :sm="12" :md="6" v-for="m in perfPrimaryCards" :key="m.label">
-        <el-card shadow="hover" class="perf-metric-card">
-          <div class="perf-metric-plain">{{ m.plain }}</div>
-          <div class="perf-metric-label">{{ m.label }}</div>
-          <div class="perf-metric-value" :style="{ color: m.color || '#303133' }">{{ m.value }}</div>
-          <div class="perf-metric-sub" :title="m.sub">{{ m.sub }}</div>
-        </el-card>
-      </el-col>
-    </el-row>
+    <div class="ledger-metrics cols-4">
+      <MetricCard
+        v-for="m in perfPrimaryCards"
+        :key="m.label"
+        :plain="m.plain"
+        :label="m.label"
+        :value="m.value"
+        :sub="m.sub"
+        :color="m.color"
+      />
+    </div>
 
     <!-- 次卡 3 -->
-    <el-row :gutter="12" class="perf-cards-row" style="margin-bottom: 14px;">
-      <el-col :xs="12" :sm="8" :md="8" v-for="m in perfSecondaryCards" :key="m.label">
-        <el-card shadow="never" class="perf-metric-card is-secondary">
-          <div class="perf-metric-plain">{{ m.plain }}</div>
-          <div class="perf-metric-label">{{ m.label }}</div>
-          <div class="perf-metric-value" :style="{ color: m.color || '#303133' }">{{ m.value }}</div>
-          <div class="perf-metric-sub" :title="m.sub">{{ m.sub }}</div>
-        </el-card>
-      </el-col>
-    </el-row>
+    <div class="ledger-metrics cols-3">
+      <MetricCard
+        v-for="m in perfSecondaryCards"
+        :key="m.label"
+        :plain="m.plain"
+        :label="m.label"
+        :value="m.value"
+        :sub="m.sub"
+        :color="m.color"
+        secondary
+      />
+    </div>
 
     <!-- 大类贡献 -->
     <el-card v-if="perfCategoryBars.length" shadow="never" style="margin-bottom: 14px;">
@@ -316,6 +319,7 @@
 
 <script setup>
 import PageShell from '../components/PageShell.vue';
+import MetricCard from '../components/MetricCard.vue';
 import { ref, watch } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 

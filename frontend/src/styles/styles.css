@@ -379,6 +379,148 @@ html.dark .stat-label::after { background: rgba(255,255,255,0.08); }
 .page-section-card + .page-section-card,
 .page-shell-body .el-card + .el-card { margin-top: 14px; }
 
+/* 总览语言指标卡（分析/持仓等页共用，跟随主题，不全页暗底） */
+.ledger-metrics {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.ledger-metrics.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.ledger-metrics.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.ledger-metrics.cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.ledger-metrics.cols-6 { grid-template-columns: 1.35fr repeat(5, minmax(0, 1fr)); }
+.ledger-metric {
+  min-width: 0;
+  min-height: 108px;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--app-border);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--app-surface) 92%, transparent), var(--app-surface));
+  box-shadow: var(--app-shadow-sm);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+.ledger-metric.is-main {
+  background:
+    linear-gradient(135deg, var(--app-primary-soft), transparent 42%),
+    linear-gradient(180deg, color-mix(in srgb, var(--app-surface) 88%, transparent), var(--app-surface));
+  border-color: color-mix(in srgb, var(--app-primary) 22%, var(--app-border));
+}
+.ledger-metric.is-secondary {
+  min-height: 96px;
+  background: color-mix(in srgb, var(--app-surface) 96%, var(--app-bg));
+  box-shadow: none;
+}
+.ledger-metric-plain {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--app-text);
+  margin-bottom: 2px;
+}
+.ledger-metric-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--app-muted);
+}
+.ledger-metric-value {
+  margin-top: 10px;
+  font-family: "SF Mono", "Menlo", "Consolas", "Roboto Mono", ui-monospace, monospace;
+  font-size: clamp(18px, 2vw, 24px);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+  color: var(--app-text);
+}
+.ledger-metric.is-main .ledger-metric-value {
+  font-size: clamp(24px, 2.8vw, 32px);
+  color: var(--app-primary);
+}
+.ledger-metric.is-main .ledger-metric-value.up { color: #F56C6C; }
+.ledger-metric.is-main .ledger-metric-value.down { color: #67C23A; }
+.ledger-metric.is-main .ledger-metric-value.warn { color: #d97706; }
+.ledger-metric.is-main .ledger-metric-value.ok { color: #16a34a; }
+.ledger-metric-sub {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--app-soft);
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ledger-metric-value.up { color: #F56C6C; }
+.ledger-metric-value.down { color: #67C23A; }
+.ledger-metric-value.warn,
+.ledger-metric.is-warn .ledger-metric-value { color: #d97706; }
+.ledger-metric-value.ok,
+.ledger-metric.is-ok .ledger-metric-value { color: #16a34a; }
+.ledger-panel {
+  border: 1px solid var(--app-border);
+  border-radius: 14px;
+  background: var(--app-surface);
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+.ledger-panel-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--app-text);
+  margin-bottom: 10px;
+}
+.ledger-status-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 12px 0 4px;
+}
+.ledger-status-card {
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  background: var(--app-surface);
+  padding: 12px 14px;
+  min-width: 0;
+}
+.ledger-status-label { font-size: 12px; color: var(--app-muted); font-weight: 600; }
+.ledger-status-main {
+  margin-top: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--app-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ledger-status-main.is-warn { color: #d97706; }
+.ledger-status-main.is-ok { color: #16a34a; }
+.ledger-status-sub { margin-top: 4px; font-size: 12px; color: var(--app-soft); }
+@media (max-width: 1100px) {
+  .ledger-metrics.cols-5,
+  .ledger-metrics.cols-6 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ledger-metrics.cols-6 .ledger-metric.is-main { grid-column: 1 / -1; }
+}
+@media (max-width: 900px) {
+  .ledger-metrics.cols-3,
+  .ledger-metrics.cols-4,
+  .ledger-metrics.cols-5,
+  .ledger-metrics.cols-6 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ledger-status-strip { grid-template-columns: 1fr; }
+}
+@media (max-width: 560px) {
+  .ledger-metrics.cols-3,
+  .ledger-metrics.cols-4,
+  .ledger-metrics.cols-5,
+  .ledger-metrics.cols-6 { grid-template-columns: 1fr; }
+}
+
 /* 兼容旧页头类名 → 统一观感 */
 .perf-page-title,
 .market-page-title,
@@ -622,6 +764,10 @@ html.dark .stat-label::after { background: rgba(255,255,255,0.08); }
 .screenshot-mask .stat-value,
 .screenshot-mask .stat-extra,
 .screenshot-mask .sync-notice,
+.screenshot-mask .ledger-metric-value,
+.screenshot-mask .ledger-metric-sub,
+.screenshot-mask .ledger-status-main,
+.screenshot-mask .ledger-status-sub,
 .screenshot-mask .snapshot-metric-value,
 .screenshot-mask .snapshot-metric-sub,
 .screenshot-mask .allocation-value,
