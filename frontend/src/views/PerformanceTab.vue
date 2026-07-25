@@ -224,7 +224,7 @@
     <el-card id="perf-flow-section" shadow="never" style="margin-bottom: 14px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px;flex-wrap:wrap;">
         <div>
-          <div style="font-weight:700;font-size:16px;color:#303133;">组合资金流水（外部投入/取出）</div>
+          <div class="perf-section-title">组合资金流水（外部投入/取出）</div>
           <div class="perf-contrib-sub">只记塞进组合或从组合提走的钱。买卖、银证互转不要记这里。</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
@@ -414,27 +414,42 @@ const onContribRowClick = (row) => {
 
 <style scoped>
 .perf-flow-alert { margin-bottom: 14px; }
-.perf-metric-card.is-secondary { background: #fafbfc; }
+.perf-section-title {
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--app-text);
+}
+.perf-metric-card.is-secondary {
+  background: color-mix(in srgb, var(--app-surface) 92%, var(--app-bg0));
+}
 .perf-cat-list { display: flex; flex-direction: column; gap: 10px; }
 .perf-cat-row { display: grid; grid-template-columns: 72px 1fr 110px; gap: 10px; align-items: center; }
-.perf-cat-name { font-size: 13px; color: #606266; }
-.perf-cat-track { height: 10px; background: #eef2f7; border-radius: 999px; overflow: hidden; }
+.perf-cat-name { font-size: 13px; color: var(--app-muted); }
+.perf-cat-track {
+  height: 10px;
+  background: color-mix(in srgb, var(--app-border) 80%, var(--app-surface));
+  border-radius: 999px;
+  overflow: hidden;
+}
 .perf-cat-fill { height: 100%; border-radius: 999px; }
-.perf-cat-fill.is-pos { background: linear-gradient(90deg, color-mix(in srgb, var(--app-up) 55%, #fff), var(--app-up)); }
-.perf-cat-fill.is-neg { background: linear-gradient(90deg, color-mix(in srgb, var(--app-down) 55%, #fff), var(--app-down)); }
+.perf-cat-fill.is-pos { background: linear-gradient(90deg, color-mix(in srgb, var(--app-up) 55%, transparent), var(--app-up)); }
+.perf-cat-fill.is-neg { background: linear-gradient(90deg, color-mix(in srgb, var(--app-down) 55%, transparent), var(--app-down)); }
 .perf-cat-amt { text-align: right; font-weight: 650; font-variant-numeric: tabular-nums; font-size: 13px; }
 .perf-help-collapse { border: none; }
 .perf-help-collapse :deep(.el-collapse-item__header) {
   font-weight: 600;
-  color: #606266;
+  color: var(--app-muted);
   border-radius: 10px;
-  background: #f8fafc;
+  background: color-mix(in srgb, var(--app-surface) 90%, var(--app-bg0));
   padding: 0 12px;
   height: 44px;
-  border: 1px solid #ebeef5;
+  border: 1px solid var(--app-border);
 }
 .perf-help-collapse :deep(.el-collapse-item__wrap) { border: none; background: transparent; }
-.perf-help-collapse :deep(.el-collapse-item__content) { padding: 12px 2px 4px; }
+.perf-help-collapse :deep(.el-collapse-item__content) {
+  padding: 12px 2px 4px;
+  color: var(--app-text);
+}
 .perf-contrib-table { cursor: pointer; }
 @media (max-width: 640px) {
   .perf-cat-row { grid-template-columns: 64px 1fr 90px; }
