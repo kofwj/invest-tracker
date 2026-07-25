@@ -229,6 +229,71 @@ body {
 .nowrap-cell { white-space: nowrap; }
 .holdings-table .cell { white-space: nowrap; }
 .transaction-table .cell { white-space: nowrap; }
+
+/* 表格观感：只改样式，不改交互 */
+.holdings-table.el-table,
+.transaction-table.el-table,
+.deposit-table.el-table,
+.snapshot-table.el-table,
+.cash-table.el-table,
+.perf-contrib-table.el-table {
+  --el-table-header-bg-color: #f8fafc;
+  --el-table-row-hover-bg-color: #f3f6fb;
+  --el-table-border-color: #eef2f7;
+  font-variant-numeric: tabular-nums;
+}
+.holdings-table.el-table th.el-table__cell,
+.transaction-table.el-table th.el-table__cell,
+.deposit-table.el-table th.el-table__cell,
+.snapshot-table.el-table th.el-table__cell,
+.cash-table.el-table th.el-table__cell,
+.perf-contrib-table.el-table th.el-table__cell {
+  color: #64748b;
+  font-weight: 600;
+  font-size: 12px;
+  background: #f8fafc !important;
+}
+.holdings-table.el-table .el-table__cell,
+.transaction-table.el-table .el-table__cell,
+.deposit-table.el-table .el-table__cell,
+.snapshot-table.el-table .el-table__cell,
+.cash-table.el-table .el-table__cell,
+.perf-contrib-table.el-table .el-table__cell {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.holdings-table.el-table .cell,
+.transaction-table.el-table .cell,
+.deposit-table.el-table .cell,
+.snapshot-table.el-table .cell,
+.cash-table.el-table .cell,
+.perf-contrib-table.el-table .cell {
+  line-height: 1.35;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+.num-cell {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  white-space: nowrap;
+  font-family: "SF Mono", "Menlo", "Consolas", "Roboto Mono", ui-monospace, monospace;
+  font-size: 12.5px;
+  letter-spacing: -0.01em;
+}
+.asset-cell { min-width: 0; line-height: 1.25; }
+.asset-cell-name {
+  font-weight: 650;
+  color: #111827;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.asset-cell-code {
+  margin-top: 2px;
+  font-size: 11px;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+}
 .wide-number-input { width: 100%; }
 .wide-number-input .el-input__wrapper { padding-left: 12px; padding-right: 12px; }
 .wide-number-input .el-input__inner { text-align: left; }

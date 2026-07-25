@@ -86,60 +86,63 @@
                         </el-col>
                     </el-row>
 
-                    <el-table :data="depositRows" stripe class="deposit-table" style="width: 100%">
-                        <el-table-column prop="bank_name" label="银行名称" width="110" align="center" header-align="center"></el-table-column>
-                        <el-table-column label="金额" min-width="120" align="right" header-align="right">
-                            <template #default="scope">{{ formatMoney(scope.row.amount) }}</template>
+                    <el-table :data="depositRows" stripe size="small" class="deposit-table" style="width: 100%">
+                        <el-table-column prop="bank_name" label="银行" min-width="100" align="left" header-align="left"></el-table-column>
+                        <el-table-column label="金额" min-width="110" align="right" header-align="right">
+                            <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.amount) }}</span></template>
                         </el-table-column>
-                        <el-table-column label="组合占比" width="90" align="center" header-align="center">
-                            <template #default="scope">{{ scope.row.percentage.toFixed(1) }}%</template>
+                        <el-table-column label="占比" width="72" align="right" header-align="right">
+                            <template #default="scope"><span class="num-cell">{{ scope.row.percentage.toFixed(1) }}%</span></template>
                         </el-table-column>
-                        <el-table-column label="年利率" width="90" align="center" header-align="center">
-                            <template #default="scope">{{ Number(scope.row.interest_rate || 0).toFixed(2) }}%</template>
+                        <el-table-column label="年利率" width="80" align="right" header-align="right">
+                            <template #default="scope"><span class="num-cell">{{ Number(scope.row.interest_rate || 0).toFixed(2) }}%</span></template>
                         </el-table-column>
-                        <el-table-column label="预计年利息" min-width="110" align="right" header-align="right">
-                            <template #default="scope">{{ formatMoney(scope.row.annual_interest) }}</template>
+                        <el-table-column label="年利息" min-width="100" align="right" header-align="right">
+                            <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.annual_interest) }}</span></template>
                         </el-table-column>
-                        <el-table-column label="到期前利息" min-width="110" align="right" header-align="right">
-                            <template #default="scope">{{ scope.row.remaining_interest == null ? '—' : formatMoney(scope.row.remaining_interest) }}</template>
+                        <el-table-column label="到期前利息" min-width="100" align="right" header-align="right">
+                            <template #default="scope"><span class="num-cell">{{ scope.row.remaining_interest == null ? '—' : formatMoney(scope.row.remaining_interest) }}</span></template>
                         </el-table-column>
-                        <el-table-column label="整期利息" min-width="110" align="right" header-align="right">
-                            <template #default="scope">{{ scope.row.term_interest == null ? '—' : formatMoney(scope.row.term_interest) }}</template>
+                        <el-table-column label="整期利息" min-width="100" align="right" header-align="right">
+                            <template #default="scope"><span class="num-cell">{{ scope.row.term_interest == null ? '—' : formatMoney(scope.row.term_interest) }}</span></template>
                         </el-table-column>
-                        <el-table-column label="起存日" width="110" align="center" header-align="center">
+                        <el-table-column label="起存日" width="104" align="left" header-align="left">
                             <template #default="scope">
                                 <span :style="scope.row.missing_start_date ? 'color:#E6A23C' : ''">{{ scope.row.start_date || '待填' }}</span>
                             </template>
                         </el-table-column>
-                        <el-table-column label="到期时间" width="110" align="center" header-align="center">
+                        <el-table-column label="到期" width="104" align="left" header-align="left">
                             <template #default="scope">{{ scope.row.due_date || '—' }}</template>
                         </el-table-column>
-                        <el-table-column label="剩余天数" width="100" align="center" header-align="center">
+                        <el-table-column label="剩余" width="92" align="center" header-align="center">
                             <template #default="scope">
                                 <el-tag
                                     v-if="scope.row.daysLeft === null"
                                     type="info"
                                     effect="light"
+                                    size="small"
                                 >—</el-tag>
                                 <el-tag
                                     v-else-if="scope.row.daysLeft < 0"
                                     type="danger"
                                     effect="dark"
+                                    size="small"
                                 >已到期</el-tag>
                                 <el-tag
                                     v-else
                                     :type="scope.row.daysLeft <= 30 ? 'danger' : (scope.row.daysLeft <= 90 ? 'warning' : 'info')"
                                     effect="light"
+                                    size="small"
                                 >{{ scope.row.daysLeft }}天</el-tag>
                             </template>
                         </el-table-column>
-                        <el-table-column prop="remark" label="备注" min-width="120">
+                        <el-table-column prop="remark" label="备注" min-width="100" show-overflow-tooltip>
                             <template #default="scope">{{ scope.row.remark || '—' }}</template>
                         </el-table-column>
-                        <el-table-column label="操作" width="130" align="center" header-align="center">
+                        <el-table-column label="操作" width="120" align="center" header-align="center">
                             <template #default="scope">
-                                <el-button type="primary" link @click="openDepositDialog(scope.row, scope.$index)">编辑</el-button>
-                                <el-button type="danger" link @click="deleteDeposit(scope.row, scope.$index)">删除</el-button>
+                                <el-button type="primary" link size="small" @click="openDepositDialog(scope.row, scope.$index)">编辑</el-button>
+                                <el-button type="danger" link size="small" @click="deleteDeposit(scope.row, scope.$index)">删除</el-button>
                             </template>
                         </el-table-column>
                     </el-table>

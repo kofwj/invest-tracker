@@ -13,111 +13,116 @@
         同步近一年收益率
       </el-button>
     </div>
-    <el-table :data="holdings" stripe class="holdings-table" style="width: 100%" @row-click="showTransactions">
-      <el-table-column prop="name" label="名称" width="150" fixed="left" align="center" header-align="center" />
-      <el-table-column prop="category" label="分类" width="100" fixed="left" align="center" header-align="center" />
-      <el-table-column prop="code" label="代码" width="100" align="center" header-align="center" />
-      <el-table-column label="持仓数量" min-width="110" align="center" header-align="center">
-        <template #default="scope"><span class="nowrap-cell">{{ scope.row.quantity }}</span></template>
+    <el-table :data="holdings" stripe size="small" class="holdings-table" style="width: 100%" @row-click="showTransactions">
+      <el-table-column label="标的" min-width="148" fixed="left" align="left" header-align="left">
+        <template #default="scope">
+          <div class="asset-cell">
+            <div class="asset-cell-name">{{ scope.row.name }}</div>
+            <div class="asset-cell-code">{{ scope.row.code }} · {{ scope.row.category || '未分类' }}</div>
+          </div>
+        </template>
       </el-table-column>
-      <el-table-column label="普通成本" min-width="100" align="center" header-align="center">
+      <el-table-column label="数量" min-width="96" align="right" header-align="right">
+        <template #default="scope"><span class="num-cell">{{ Number(scope.row.quantity || 0).toLocaleString('zh-CN') }}</span></template>
+      </el-table-column>
+      <el-table-column label="普通成本" min-width="96" align="right" header-align="right">
         <template #header>
           <el-tooltip content="普通成本：剩余持仓按平均成本结转后的买入成本，不扣历史卖出回款。" placement="top">
             <span>普通成本</span>
           </el-tooltip>
         </template>
-        <template #default="scope"><span class="nowrap-cell">{{ formatMoney(scope.row.avg_cost, 4) }}</span></template>
+        <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.avg_cost, 4) }}</span></template>
       </el-table-column>
-      <el-table-column label="摊薄成本" min-width="110" align="center" header-align="center">
+      <el-table-column label="摊薄成本" min-width="96" align="right" header-align="right">
         <template #header>
           <el-tooltip content="券商口径：累计买入成本 - 卖出回款 - 累计分红，再除以剩余持仓；可能为负。" placement="top">
             <span>摊薄成本</span>
           </el-tooltip>
         </template>
         <template #default="scope">
-          <span class="nowrap-cell" :style="{ color: Number(scope.row.diluted_cost || 0) < 0 ? '#67C23A' : '#303133' }">{{ formatMoney(scope.row.diluted_cost, 4) }}</span>
+          <span class="num-cell" :style="{ color: Number(scope.row.diluted_cost || 0) < 0 ? '#67C23A' : '#303133' }">{{ formatMoney(scope.row.diluted_cost, 4) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="最新价" min-width="100" align="center" header-align="center">
-        <template #default="scope"><span class="nowrap-cell">{{ formatMoney(scope.row.last_price, 4) }}</span></template>
+      <el-table-column label="最新价" min-width="88" align="right" header-align="right">
+        <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.last_price, 4) }}</span></template>
       </el-table-column>
-      <el-table-column label="市值" min-width="120" align="center" header-align="center">
-        <template #default="scope"><span class="nowrap-cell">{{ formatMoney(scope.row.quantity * scope.row.last_price) }}</span></template>
+      <el-table-column label="市值" min-width="110" align="right" header-align="right">
+        <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.quantity * scope.row.last_price) }}</span></template>
       </el-table-column>
-      <el-table-column label="持仓浮盈" min-width="120" align="center" header-align="center">
+      <el-table-column label="持仓浮盈" min-width="108" align="right" header-align="right">
         <template #header>
           <el-tooltip content="持仓浮盈 = (最新价 − 普通成本) × 数量 + 累计分红；只看当前剩余持仓，不含历史卖出已实现盈亏。" placement="top">
             <span>持仓浮盈</span>
           </el-tooltip>
         </template>
         <template #default="scope">
-          <span class="nowrap-cell" :style="{ color: holdingFloatProfit(scope.row) >= 0 ? '#F56C6C' : '#67C23A' }">
+          <span class="num-cell" :style="{ color: holdingFloatProfit(scope.row) >= 0 ? '#F56C6C' : '#67C23A' }">
             {{ formatMoney(holdingFloatProfit(scope.row), 2, true) }}
           </span>
         </template>
       </el-table-column>
-      <el-table-column label="全周期盈亏" min-width="120" align="center" header-align="center">
+      <el-table-column label="全周期盈亏" min-width="108" align="right" header-align="right">
         <template #header>
           <el-tooltip content="全周期盈亏 ≈ (最新价 − 摊薄成本) × 数量；含历史买卖已实现与分红摊薄，接近券商「累计盈亏」。" placement="top">
             <span>全周期盈亏</span>
           </el-tooltip>
         </template>
         <template #default="scope">
-          <span class="nowrap-cell" :style="{ color: holdingLifetimeProfit(scope.row) >= 0 ? '#F56C6C' : '#67C23A' }">
+          <span class="num-cell" :style="{ color: holdingLifetimeProfit(scope.row) >= 0 ? '#F56C6C' : '#67C23A' }">
             {{ formatMoney(holdingLifetimeProfit(scope.row), 2, true) }}
           </span>
         </template>
       </el-table-column>
-      <el-table-column label="浮盈率" min-width="90" align="center" header-align="center">
+      <el-table-column label="浮盈率" min-width="84" align="right" header-align="right">
         <template #header>
           <el-tooltip content="持仓浮盈 / (普通成本 × 数量)" placement="top">
             <span>浮盈率</span>
           </el-tooltip>
         </template>
         <template #default="scope">
-          <span class="nowrap-cell" :style="{ color: (holdingFloatProfitRate(scope.row) ?? 0) >= 0 ? '#F56C6C' : '#67C23A' }">
+          <span class="num-cell" :style="{ color: (holdingFloatProfitRate(scope.row) ?? 0) >= 0 ? '#F56C6C' : '#67C23A' }">
             {{ holdingFloatProfitRate(scope.row) === null ? '—' : formatPercent(holdingFloatProfitRate(scope.row)) }}
           </span>
         </template>
       </el-table-column>
-      <el-table-column label="全周期收益率" min-width="110" align="center" header-align="center">
+      <el-table-column label="全周期收益率" min-width="100" align="right" header-align="right">
         <template #header>
           <el-tooltip content="全周期盈亏 / (摊薄成本 × 数量)；净投入≤0 时不展示。" placement="top">
             <span>全周期收益率</span>
           </el-tooltip>
         </template>
         <template #default="scope">
-          <span class="nowrap-cell" :style="{ color: (holdingLifetimeProfitRate(scope.row) ?? 0) >= 0 ? '#F56C6C' : '#67C23A' }">
+          <span class="num-cell" :style="{ color: (holdingLifetimeProfitRate(scope.row) ?? 0) >= 0 ? '#F56C6C' : '#67C23A' }">
             {{ holdingLifetimeProfitRate(scope.row) === null ? '—' : formatPercent(holdingLifetimeProfitRate(scope.row)) }}
           </span>
         </template>
       </el-table-column>
-      <el-table-column label="预计年化收益" width="120" align="center" header-align="center">
+      <el-table-column label="预计年化" width="88" align="right" header-align="right">
         <template #default="scope">
-          <span>{{ scope.row.expected_return?.toFixed(1) }}%</span>
+          <span class="num-cell">{{ scope.row.expected_return == null ? '—' : Number(scope.row.expected_return).toFixed(1) + '%' }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="近一年标的收益率" width="135" align="center" header-align="center">
+      <el-table-column label="近一年" width="88" align="right" header-align="right">
         <template #header>
           <el-tooltip content="标的自身过去一年价格/净值回溯收益，不等于你的账户实际持有收益。" placement="top">
-            <span>近一年收益</span>
+            <span>近一年</span>
           </el-tooltip>
         </template>
         <template #default="scope">
           <el-tooltip :content="scope.row.trailing_return_1y_source || '暂无数据，请同步近一年收益率'" placement="top">
-            <span class="nowrap-cell" :style="{ color: Number(scope.row.trailing_return_1y || 0) >= 0 ? '#F56C6C' : '#67C23A' }">
+            <span class="num-cell" :style="{ color: Number(scope.row.trailing_return_1y || 0) >= 0 ? '#F56C6C' : '#67C23A' }">
               {{ formatPercent(scope.row.trailing_return_1y) }}
             </span>
           </el-tooltip>
         </template>
       </el-table-column>
-      <el-table-column label="操作" min-width="240" width="260" align="center" header-align="center" fixed="right">
+      <el-table-column label="操作" width="220" align="center" header-align="center" fixed="right">
         <template #default="scope">
           <div class="holdings-ops" @click.stop>
             <el-button type="primary" link @click="openExpectedReturnDialog(scope.row)">年化</el-button>
             <el-button type="warning" link @click="openHoldingCorrectionDialog(scope.row)">校正</el-button>
             <el-button type="info" link @click="openHoldingCorrectionHistory(scope.row)">记录</el-button>
-            <el-button type="success" link @click="openLocalUzi(scope.row)">UZI 分析</el-button>
+            <el-button type="success" link @click="openLocalUzi(scope.row)">UZI</el-button>
           </div>
         </template>
       </el-table-column>
