@@ -26,46 +26,23 @@
 
       <aside class="mix-card">
         <div class="mix-head">
-          <div class="mix-title"><PieChart :size="14" :stroke-width="2" />资产构成</div>
-          <div class="mix-chip">静态示意</div>
+          <div class="mix-title"><Activity :size="14" :stroke-width="2" />近一周资产</div>
+          <div class="mix-chip">{{ weekChipText }}</div>
         </div>
-        <div class="mix-total">{{ formatMoney(dashboard.total_assets) }}</div>
-        <div class="mix-bars" aria-label="资产构成">
-          <div class="mix-bar equity" :style="{ width: barWidth(summary.equityRatio) }" />
-          <div class="mix-bar fixed" :style="{ width: barWidth(fixedPct) }" />
-          <div class="mix-bar deposit" :style="{ width: barWidth(depositPct) }" />
+        <div class="mix-total" :title="formatMoney(dashboard.total_assets)">{{ formatMoney(dashboard.total_assets) }}</div>
+        <div class="mix-delta" :class="weekDeltaClass">
+          <span class="mix-delta-main">{{ weekDeltaText }}</span>
+          <span class="mix-delta-sub">{{ weekDeltaSubText }}</span>
         </div>
-        <div class="mix-legend">
-          <div class="mix-item">
-            <span class="dot equity" />
-            <div>
-              <div class="l">权益</div>
-              <div class="v">{{ equityPctText }}</div>
-            </div>
-          </div>
-          <div class="mix-item">
-            <span class="dot fixed" />
-            <div>
-              <div class="l">固收</div>
-              <div class="v">{{ fixedPctText }}</div>
-            </div>
-          </div>
-          <div class="mix-item">
-            <span class="dot deposit" />
-            <div>
-              <div class="l">存款现金</div>
-              <div class="v">{{ depositPctText }}</div>
-            </div>
-          </div>
-        </div>
+        <div id="overviewWeekChart" class="mix-chart" aria-label="近一周总资产曲线"></div>
         <div class="mix-meta">
           <div class="mix-meta-box">
-            <div class="l">防御资产</div>
-            <div class="v">{{ defensivePctText }}</div>
+            <div class="l">期初</div>
+            <div class="v" :title="formatMoney(weekStartAssets)">{{ formatMoney(weekStartAssets) }}</div>
           </div>
           <div class="mix-meta-box">
-            <div class="l">目标年化</div>
-            <div class="v">{{ expectedReturnText }}</div>
+            <div class="l">最新</div>
+            <div class="v" :title="formatMoney(weekEndAssets)">{{ formatMoney(weekEndAssets) }}</div>
           </div>
         </div>
       </aside>
@@ -198,11 +175,10 @@
 </template>
 
 <script setup>
-import { computed, onMounted } from 'vue';
+import { computed, nextTick, onMounted, watch } from 'vue';
 import {
   Activity,
   ArrowUpRight,
-  Banknote,
   Camera,
   CheckCircle2,
   Coins,
@@ -213,16 +189,17 @@ import {
   Landmark,
   Layers,
   PenLine,
-  PieChart,
   Radar,
   TrendingUp,
   Zap,
 } from 'lucide-vue-next';
 import { useAppCtx } from '../composables/useAppCtx.js';
+import { todayLocalIso } from '../utils/index.js';
 
 const {
   dashboard,
   holdings,
+  snapshots,
   maintenanceStatus,
   todaySnapshotDone,
   latestPriceStatusText,
@@ -231,13 +208,79 @@ const {
   goPendingTransactions,
   marketSignals,
   refreshMarket,
+  fetchSnapshots,
   showTransactions,
   formatMoney,
   holdingFloatProfit,
   goTab,
   allocationSummary,
   portfolioExpectedReturn,
+  resolvedTheme,
 } = useAppCtx();
+
+const WEEK_LOOKBACK_DAYS = 7;
+const WEEK_MAX_POINTS = 8;
+
+function isoDaysAgo(days) {
+  const d = new Date(`${todayLocalIso()}T00:00:00`);
+  d.setDate(d.getDate() - Number(days || 0));
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function normalizeSnapshotRows(list) {
+  const rows = Array.isArray(list) ? list : [];
+  const byDate = new Map();
+  rows.forEach((r) => {
+    const date = String(r?.date || '');
+    if (!date) return;
+    const prev = byDate.get(date);
+    if (!prev || Number(r.id || 0) >= Number(prev.id || 0)) {
+      byDate.set(date, {
+        date,
+        total_assets: Number(r.total_assets || 0),
+        id: Number(r.id || 0),
+        live: false,
+      });
+    }
+  });
+  return [...byDate.values()].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+}
+
+/** 近一周快照；窗口内不足时回退最近若干条，避免总览空白 */
+const weekSeriesMeta = computed(() => {
+  const all = normalizeSnapshotRows(snapshots?.value ?? snapshots ?? []);
+  const start = isoDaysAgo(WEEK_LOOKBACK_DAYS - 1);
+  let rows = all.filter((r) => r.date >= start);
+  let mode = 'week';
+
+  // 近 7 天不足 2 点：用最近快照（最多 7 条）兜底，本地/断档时仍能看趋势
+  if (rows.length < 2) {
+    rows = all.slice(-WEEK_LOOKBACK_DAYS);
+    mode = rows.length ? 'recent' : 'empty';
+  }
+
+  const today = todayLocalIso();
+  const liveAssets = Number((dashboard?.value ?? dashboard)?.total_assets || 0);
+  if (liveAssets > 0) {
+    const existing = rows.find((r) => r.date === today);
+    if (!existing) {
+      rows = [...rows, { date: today, total_assets: liveAssets, id: 0, live: true }];
+      if (mode === 'empty') mode = 'live';
+    }
+  }
+
+  // 防止点过多挤在一起
+  if (rows.length > WEEK_MAX_POINTS) {
+    rows = rows.slice(-WEEK_MAX_POINTS);
+  }
+
+  return { rows, mode };
+});
+
+const weekSeries = computed(() => weekSeriesMeta.value.rows);
 
 const holdingsCount = computed(() => {
   const list = holdings?.value ?? holdings ?? [];
@@ -267,22 +310,8 @@ const cashAndBank = computed(() => {
 });
 
 const summary = computed(() => allocationSummary?.value ?? allocationSummary ?? {});
-
 const equityPctText = computed(() => `${Number(summary.value.equityRatio || 0).toFixed(1)}%`);
 const defensivePctText = computed(() => `${Number(summary.value.defensiveRatio || 0).toFixed(1)}%`);
-
-const fixedPct = computed(() => {
-  const total = Number(summary.value.total || 0);
-  const amount = Number(summary.value.fixedAmount || 0);
-  return total > 0 ? (amount / total) * 100 : 0;
-});
-const depositPct = computed(() => {
-  const total = Number(summary.value.total || 0);
-  const amount = Number(summary.value.depositAmount || 0);
-  return total > 0 ? (amount / total) * 100 : 0;
-});
-const fixedPctText = computed(() => `${Number(fixedPct.value || 0).toFixed(1)}%`);
-const depositPctText = computed(() => `${Number(depositPct.value || 0).toFixed(1)}%`);
 
 const expectedReturnText = computed(() => {
   const raw = portfolioExpectedReturn?.value ?? portfolioExpectedReturn ?? 0;
@@ -295,18 +324,85 @@ const pendingCountText = computed(() => {
   return `${n} 笔`;
 });
 
-function barWidth(pctVal) {
-  const n = Math.max(0, Number(pctVal || 0));
-  return `${Math.min(100, n)}%`;
+const weekStartAssets = computed(() => {
+  const rows = weekSeries.value;
+  if (!rows.length) return Number((dashboard?.value ?? dashboard)?.total_assets || 0);
+  return Number(rows[0].total_assets || 0);
+});
+
+const weekEndAssets = computed(() => {
+  const rows = weekSeries.value;
+  if (!rows.length) return Number((dashboard?.value ?? dashboard)?.total_assets || 0);
+  return Number(rows[rows.length - 1].total_assets || 0);
+});
+
+const weekDelta = computed(() => weekEndAssets.value - weekStartAssets.value);
+
+const weekDeltaPct = computed(() => {
+  const base = weekStartAssets.value;
+  if (!base) return null;
+  return (weekDelta.value / base) * 100;
+});
+
+const weekDeltaClass = computed(() => {
+  if (!weekSeries.value.length) return '';
+  return weekDelta.value >= 0 ? 'up' : 'down';
+});
+
+const weekDeltaText = computed(() => {
+  if (!weekSeries.value.length) return '暂无快照';
+  return formatMoney(weekDelta.value, 2, true);
+});
+
+const weekDeltaSubText = computed(() => {
+  if (!weekSeries.value.length) return '先记一条日快照';
+  const pct = weekDeltaPct.value;
+  const pctText = pct === null ? '' : ` · ${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
+  const live = weekSeries.value.some((r) => r.live) ? ' · 含实时' : '';
+  const mode = weekSeriesMeta.value.mode;
+  const modeText = mode === 'recent' ? ' · 最近快照' : '';
+  return `较 ${weekSeries.value[0]?.date || '期初'}${pctText}${live}${modeText}`;
+});
+
+const weekChipText = computed(() => {
+  const n = weekSeries.value.length;
+  if (!n) return '无数据';
+  const mode = weekSeriesMeta.value.mode;
+  if (mode === 'recent') return `最近 ${n} 点`;
+  return `近一周 ${n} 点`;
+});
+
+async function paintWeekChart() {
+  const { renderOverviewWeekChartView, waitForChartDom } = await import('../charts/index.js');
+  const ready = await waitForChartDom(['overviewWeekChart'], { timeoutMs: 1800 });
+  if (!ready) return;
+  await nextTick();
+  await new Promise((r) => requestAnimationFrame(() => r()));
+  renderOverviewWeekChartView(weekSeries.value);
 }
 
 async function refreshOverview() {
-  if (typeof refreshMarket === 'function') await refreshMarket();
+  const jobs = [];
+  if (typeof refreshMarket === 'function') jobs.push(refreshMarket());
+  // 启动时 appInit 已拉快照；这里补一次，避免总览先进、快照还空
+  if (typeof fetchSnapshots === 'function' && !(snapshots?.value?.length || snapshots?.length)) {
+    jobs.push(fetchSnapshots());
+  }
+  if (jobs.length) await Promise.all(jobs);
+  await paintWeekChart();
 }
 
 function onRowClick(row) {
   if (typeof showTransactions === 'function') showTransactions(row);
 }
+
+watch(weekSeries, () => {
+  paintWeekChart();
+}, { deep: true });
+
+watch(() => resolvedTheme?.value ?? resolvedTheme, () => {
+  paintWeekChart();
+});
 
 onMounted(() => {
   refreshOverview();
@@ -488,71 +584,65 @@ onMounted(() => {
   align-items: center;
 }
 .mix-total {
-  margin-top: 14px;
+  margin-top: 12px;
   font-family: "SF Mono", "Menlo", "Consolas", ui-monospace, monospace;
-  font-size: clamp(24px, 2.8vw, 32px);
+  font-size: clamp(22px, 2.6vw, 30px);
   letter-spacing: -0.04em;
   font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  word-break: break-all;
 }
-.mix-bars {
-  margin-top: 16px;
+.mix-delta {
+  margin-top: 6px;
   display: flex;
-  height: 12px;
-  border-radius: 999px;
-  overflow: hidden;
-  background: rgba(127, 127, 127, 0.12);
-}
-.mix-bar { height: 100%; min-width: 0; }
-.mix-bar.equity { background: var(--app-primary); }
-.mix-bar.fixed { background: #57b0f2; }
-.mix-bar.deposit { background: #10b981; }
-.mix-legend {
-  margin-top: 16px;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-}
-.mix-item {
-  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
   gap: 8px;
-  align-items: flex-start;
+  min-height: 22px;
 }
-.mix-item .dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  margin-top: 5px;
-  flex: 0 0 auto;
-}
-.mix-item .dot.equity { background: var(--app-primary); }
-.mix-item .dot.fixed { background: #57b0f2; }
-.mix-item .dot.deposit { background: #10b981; }
-.mix-item .l { font-size: 11px; color: var(--ov-text-4); }
-.mix-item .v {
-  margin-top: 2px;
+.mix-delta-main {
   font-family: "SF Mono", "Menlo", "Consolas", ui-monospace, monospace;
-  font-size: 14px;
+  font-size: 15px;
+  font-weight: 600;
   letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.mix-delta-sub {
+  font-size: 11.5px;
+  color: var(--ov-text-4);
+}
+.mix-delta.up .mix-delta-main { color: var(--ov-up); }
+.mix-delta.down .mix-delta-main { color: var(--ov-down); }
+.mix-chart {
+  margin-top: 8px;
+  flex: 1 1 auto;
+  min-height: 148px;
+  width: 100%;
 }
 .mix-meta {
-  margin-top: auto;
-  padding-top: 16px;
+  margin-top: 8px;
+  padding-top: 12px;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
 .mix-meta-box {
-  padding: 12px;
+  padding: 10px 12px;
   border-radius: 10px;
   background: var(--ov-chip-bg);
   border: 1px solid var(--ov-border);
+  min-width: 0;
 }
 .mix-meta-box .l { font-size: 11px; color: var(--ov-text-4); }
 .mix-meta-box .v {
   margin-top: 4px;
   font-family: "SF Mono", "Menlo", "Consolas", ui-monospace, monospace;
-  font-size: 16px;
+  font-size: 14px;
   letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .overview-status {
@@ -756,9 +846,9 @@ onMounted(() => {
   .ov-metric.main { grid-column: 1 / -1; }
 }
 @media (max-width: 640px) {
-  .overview-metrics,
-  .mix-legend { grid-template-columns: 1fr; }
+  .overview-metrics { grid-template-columns: 1fr; }
   .overview-page { margin: 0; padding: 4px 0 12px; }
+  .mix-chart { min-height: 132px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .ov-btn .spin { animation: none; }

@@ -24,6 +24,7 @@ let categoryChart = null;
 let snapshotTrendChart = null;
 let snapshotStructureChart = null;
 let perfTimelineChart = null;
+let overviewWeekChart = null;
 
 /** 从 CSS token 读色；ECharts 不吃 var()，必须解析成实际色值 */
 const cssVar = (name, fallback) => {
@@ -322,6 +323,129 @@ const renderPerfTimelineChartView = (perfTimeline = []) => {
     return true;
 };
 
+/** 总览右上：近一周总资产曲线（单线 + 面积，Y 轴贴合波动） */
+const renderOverviewWeekChartView = (rows = []) => {
+    const el = document.getElementById('overviewWeekChart');
+    if (!el) return false;
+    overviewWeekChart = ensureChart(overviewWeekChart, 'overviewWeekChart');
+    if (!overviewWeekChart) return false;
+
+    const t = readTheme();
+    const seriesRows = [...(rows || [])]
+        .filter((r) => r && r.date != null)
+        .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+
+    if (!seriesRows.length) {
+        overviewWeekChart.clear();
+        overviewWeekChart.setOption({
+            title: {
+                text: '暂无近一周快照',
+                left: 'center',
+                top: 'middle',
+                textStyle: { color: t.muted, fontSize: 12, fontWeight: 500 },
+            },
+        }, true);
+        try { overviewWeekChart.resize(); } catch (_) { /* ignore */ }
+        return true;
+    }
+
+    const values = seriesRows.map((r) => Number(r.total_assets || 0));
+    const first = values[0] || 0;
+    const last = values[values.length - 1] || 0;
+    const lineColor = last >= first ? t.up : t.down;
+    const minV = Math.min(...values);
+    const maxV = Math.max(...values);
+    const span = Math.max(maxV - minV, Math.abs(maxV) * 0.002, 1);
+    const pad = span * 0.18;
+
+    const shortDate = (d) => {
+        const s = String(d || '');
+        return s.length >= 10 ? s.slice(5) : s;
+    };
+
+    overviewWeekChart.setOption({
+        color: [lineColor],
+        animationDuration: 280,
+        grid: { left: 8, right: 8, top: 18, bottom: 22, containLabel: true },
+        tooltip: baseTooltip(t, {
+            trigger: 'axis',
+            formatter: (params) => {
+                const p = Array.isArray(params) ? params[0] : params;
+                if (!p) return '';
+                const idx = p.dataIndex;
+                const row = seriesRows[idx] || {};
+                const cur = Number(row.total_assets || p.value || 0);
+                const base = first;
+                const delta = cur - base;
+                const pct = base ? (delta / base) * 100 : null;
+                const pctText = pct === null ? '' : `（${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%）`;
+                const liveTag = row.live ? ' · 实时' : '';
+                return `${row.date || p.name}${liveTag}<br/>总资产 ${formatMoney(cur)}<br/>较期初 ${formatMoney(delta, 2, true)}${pctText}`;
+            },
+        }),
+        xAxis: {
+            type: 'category',
+            boundaryGap: false,
+            data: seriesRows.map((r) => r.date),
+            axisLabel: {
+                color: t.muted,
+                fontSize: 10,
+                formatter: shortDate,
+                hideOverlap: true,
+            },
+            axisTick: { show: false },
+            axisLine: { lineStyle: { color: t.border } },
+        },
+        yAxis: {
+            type: 'value',
+            min: minV - pad,
+            max: maxV + pad,
+            splitNumber: 3,
+            axisLabel: {
+                color: t.muted,
+                fontSize: 10,
+                formatter: (v) => {
+                    const n = Number(v) / 10000;
+                    if (Math.abs(n) >= 100) return `${n.toFixed(0)}万`;
+                    if (Math.abs(n) >= 10) return `${n.toFixed(1)}万`;
+                    return `${n.toFixed(2)}万`;
+                },
+            },
+            splitLine: { lineStyle: { color: t.border, type: 'dashed', opacity: 0.7 } },
+            axisLine: { show: false },
+            axisTick: { show: false },
+        },
+        series: [
+            {
+                name: '总资产',
+                type: 'line',
+                smooth: 0.35,
+                symbol: seriesRows.length <= 8 ? 'circle' : 'none',
+                symbolSize: 6,
+                showSymbol: seriesRows.length <= 8,
+                data: values,
+                lineStyle: { width: 2.2, color: lineColor },
+                itemStyle: { color: lineColor },
+                areaStyle: {
+                    color: {
+                        type: 'linear',
+                        x: 0,
+                        y: 0,
+                        x2: 0,
+                        y2: 1,
+                        colorStops: [
+                            { offset: 0, color: lineColor + '33' },
+                            { offset: 1, color: lineColor + '05' },
+                        ],
+                    },
+                },
+            },
+        ],
+    }, true);
+    try { overviewWeekChart.resize(); } catch (_) { /* ignore */ }
+    return true;
+};
+
 /**
  * 等待图表容器出现（应对 el-tab-pane lazy + defineAsyncComponent 的挂载延迟）
  * @returns {Promise<boolean>} 是否在超时前找到节点
@@ -353,6 +477,7 @@ const resizeAllCharts = () => {
         snapshotTrendChart,
         snapshotStructureChart,
         perfTimelineChart,
+        overviewWeekChart,
     ].forEach((c) => {
         try {
             if (c && typeof c.resize === 'function') c.resize();
@@ -374,6 +499,7 @@ export {
     renderSnapshotChartsView,
     renderAllocationChartsView,
     renderPerfTimelineChartView,
+    renderOverviewWeekChartView,
     waitForChartDom,
     resizeAllCharts,
     readTheme,
@@ -383,6 +509,7 @@ export default {
     renderSnapshotChartsView,
     renderAllocationChartsView,
     renderPerfTimelineChartView,
+    renderOverviewWeekChartView,
     waitForChartDom,
     resizeAllCharts,
 };
