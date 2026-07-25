@@ -2,9 +2,9 @@
         <!-- 登录锁屏遮罩 -->
         <div v-if="showLoginOverlay" class="login-overlay" role="dialog" aria-modal="true" aria-label="系统登录">
             <div class="login-box">
-                <div class="login-logo" aria-hidden="true">投</div>
-                <h3>投资资产管理系统</h3>
-                <p class="login-subtitle">请输入访问密码以继续</p>
+                <div class="login-logo" aria-hidden="true">账</div>
+                <h3>Invest Tracker</h3>
+                <p class="login-subtitle">真仓账本 · 请输入访问密码</p>
                 <form @submit.prevent="handleLogin" style="margin-top: 24px;" autocomplete="on">
                     <div class="login-field">
                         <label class="login-field-label" for="login-password-input">访问密码</label>

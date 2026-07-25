@@ -15,7 +15,7 @@
         label="权益资产占比"
         :value="`${Number(allocationSummary?.equityRatio || 0).toFixed(1)}%`"
         :sub="`权益金额 ${formatMoney(allocationSummary?.equityAmount || 0)} · 目标 ${fmtPct(targets.equity_pct)}`"
-        :color="Number(allocationSummary?.equityRatio || 0) > 55 ? '#E6A23C' : ''"
+        :color="Number(allocationSummary?.equityRatio || 0) > 55 ? 'var(--app-warn)' : ''"
         main
         :title="`${Number(allocationSummary?.equityRatio || 0).toFixed(1)}%`"
       />
@@ -23,14 +23,14 @@
         label="固收 + 存款占比"
         :value="`${Number(allocationSummary?.defensiveRatio || 0).toFixed(1)}%`"
         :sub="`防守资产 ${formatMoney(allocationSummary?.defensiveAmount || 0)}`"
-        color="#409EFF"
+        color="var(--app-primary)"
         :title="`${Number(allocationSummary?.defensiveRatio || 0).toFixed(1)}%`"
       />
       <MetricCard
         label="组合预计年化"
         :value="`${Number(portfolioExpectedReturn || 0).toFixed(2)}%`"
         sub="按各资产预计收益加权"
-        color="#E6A23C"
+        color="var(--app-warn)"
       />
       <MetricCard
         label="纪律破线"
@@ -89,14 +89,14 @@
             </el-table-column>
             <el-table-column label="持仓浮盈" min-width="100" align="right" header-align="right">
               <template #default="scope">
-                <span class="num-cell" :style="{ color: scope.row.profit >= 0 ? '#F56C6C' : '#67C23A' }">
+                <span class="num-cell" :class="(scope.row.profit >= 0 ) ? 'num-up' : 'num-down'">
                   {{ formatMoney(scope.row.profit, 2, true) }}
                 </span>
               </template>
             </el-table-column>
             <el-table-column label="预计年化" width="88" align="center" header-align="center">
               <template #default="scope">
-                <span style="color:#409EFF;font-weight:bold;">{{ scope.row.expected_return?.toFixed(2) }}%</span>
+                <span class="num-info" style="font-weight:700;">{{ scope.row.expected_return?.toFixed(2) }}%</span>
               </template>
             </el-table-column>
           </el-table>
@@ -200,21 +200,21 @@
         </el-table-column>
         <el-table-column label="持仓浮盈" min-width="110" align="right" header-align="right">
           <template #default="scope">
-            <span class="num-cell" :style="{ color: scope.row.profit >= 0 ? '#F56C6C' : '#67C23A' }">
+            <span class="num-cell" :class="(scope.row.profit >= 0 ) ? 'num-up' : 'num-down'">
               {{ formatMoney(scope.row.profit, 2, true) }}
             </span>
           </template>
         </el-table-column>
         <el-table-column label="全周期盈亏" min-width="110" align="right" header-align="right">
           <template #default="scope">
-            <span class="num-cell" :style="{ color: (scope.row.lifetime_profit || 0) >= 0 ? '#F56C6C' : '#67C23A' }">
+            <span class="num-cell" :class="((scope.row.lifetime_profit || 0) >= 0 ) ? 'num-up' : 'num-down'">
               {{ formatMoney(scope.row.lifetime_profit || 0, 2, true) }}
             </span>
           </template>
         </el-table-column>
         <el-table-column label="浮盈率" width="90" align="center" header-align="center">
           <template #default="scope">
-            <span :style="{ color: scope.row.profit_rate >= 0 ? '#F56C6C' : '#67C23A' }">
+            <span :class="(scope.row.profit_rate >= 0 ) ? 'num-up' : 'num-down'">
               {{ scope.row.profit_rate >= 0 ? '+' : '' }}{{ scope.row.profit_rate?.toFixed(2) }}%
             </span>
           </template>
@@ -222,7 +222,7 @@
         <el-table-column prop="count" label="标的数" width="72" align="center" header-align="center" />
         <el-table-column label="预计年化" width="90" align="center" header-align="center">
           <template #default="scope">
-            <span style="color:#409EFF;font-weight:bold;">{{ scope.row.expected_annual_return?.toFixed(1) }}%</span>
+            <span class="num-info" style="font-weight:700;">{{ scope.row.expected_annual_return?.toFixed(1) }}%</span>
           </template>
         </el-table-column>
       </el-table>

@@ -122,11 +122,17 @@
             全部明细
           </button>
         </div>
+        <div v-if="!holdingsPreview.length" class="empty-hint" style="margin-bottom: 8px;">
+          <strong>还没有持仓速览</strong>
+          <span>录交易或同步价后这里会出现前几只。也可直接去明细页。</span>
+          <el-button size="small" type="primary" plain @click="goTab('holdings')">去持仓明细</el-button>
+        </div>
         <el-table
+          v-else
           :data="holdingsPreview"
           stripe
           size="small"
-          class="holdings-table overview-holdings-table"
+          class="holdings-table overview-holdings-table table-clickable"
           style="width: 100%"
           empty-text="暂无持仓"
           @row-click="onRowClick"
@@ -151,7 +157,7 @@
           </el-table-column>
           <el-table-column label="持仓浮盈" min-width="112" align="right" header-align="right">
             <template #default="scope">
-              <span class="num-cell" :style="{ color: holdingFloatProfit(scope.row) >= 0 ? 'var(--ov-up)' : 'var(--ov-down)' }">
+              <span class="num-cell" :class="holdingFloatProfit(scope.row) >= 0 ? 'num-up' : 'num-down'">
                 {{ formatMoney(holdingFloatProfit(scope.row), 2, true) }}
               </span>
             </template>
@@ -317,12 +323,12 @@ onMounted(() => {
   --ov-text-2: var(--app-overview-text-2, #c7ccd4);
   --ov-text-3: var(--app-overview-text-3, #8a8f98);
   --ov-text-4: var(--app-overview-text-4, #5f646c);
-  --ov-accent: var(--app-primary, #7170ff);
-  --ov-accent-soft: var(--app-primary-soft, rgba(113, 112, 255, 0.14));
-  --ov-up: #f56c6c;
-  --ov-down: #67c23a;
-  --ov-warn: #f59e0b;
-  --ov-ok: #10b981;
+  --ov-accent: var(--app-primary);
+  --ov-accent-soft: var(--app-primary-soft);
+  --ov-up: var(--app-up);
+  --ov-down: var(--app-down);
+  --ov-warn: var(--app-warn);
+  --ov-ok: var(--app-ok);
   margin: -4px -6px 0;
   padding: 10px 8px 18px;
   border-radius: 16px;
@@ -382,7 +388,7 @@ onMounted(() => {
 .ov-metric.main {
   grid-column: 1 / -1;
   background:
-    linear-gradient(135deg, rgba(113,112,255,0.12), transparent 40%),
+    linear-gradient(135deg, color-mix(in srgb, var(--app-primary) 18%, transparent), transparent 40%),
     linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015));
 }
 .ov-metric-label {
@@ -406,8 +412,11 @@ onMounted(() => {
   line-height: 1.2;
 }
 .ov-metric.main .ov-metric-value {
-  font-size: clamp(28px, 3.6vw, 40px);
-  white-space: nowrap;
+  font-size: clamp(26px, 3.2vw, 36px);
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  word-break: break-all;
 }
 .ov-metric-sub { margin-top: 6px; font-size: 12px; color: var(--ov-text-4); }
 .up { color: var(--ov-up); }
@@ -463,7 +472,7 @@ onMounted(() => {
   background: rgba(127, 127, 127, 0.12);
 }
 .mix-bar { height: 100%; min-width: 0; }
-.mix-bar.equity { background: #7170ff; }
+.mix-bar.equity { background: var(--app-primary); }
 .mix-bar.fixed { background: #57b0f2; }
 .mix-bar.deposit { background: #10b981; }
 .mix-legend {
@@ -484,7 +493,7 @@ onMounted(() => {
   margin-top: 5px;
   flex: 0 0 auto;
 }
-.mix-item .dot.equity { background: #7170ff; }
+.mix-item .dot.equity { background: var(--app-primary); }
 .mix-item .dot.fixed { background: #57b0f2; }
 .mix-item .dot.deposit { background: #10b981; }
 .mix-item .l { font-size: 11px; color: var(--ov-text-4); }
@@ -727,26 +736,26 @@ onMounted(() => {
 
 /* 白天模式：总览也跟浅色，不再硬锁黑底 */
 :global(html:not(.dark)) .overview-page {
-  --ov-bg: #f7f8fa;
-  --ov-panel: #ffffff;
-  --ov-border: #e8edf3;
-  --ov-border-strong: #d5dbe5;
-  --ov-text: #1f2937;
-  --ov-text-2: #374151;
-  --ov-text-3: #6b7280;
-  --ov-text-4: #9ca3af;
-  --ov-accent: #4f46e5;
-  --ov-accent-soft: #eef2ff;
+  --ov-bg: var(--app-bg1);
+  --ov-panel: var(--app-surface);
+  --ov-border: var(--app-border);
+  --ov-border-strong: color-mix(in srgb, var(--app-border) 70%, #94a3b8);
+  --ov-text: var(--app-text);
+  --ov-text-2: color-mix(in srgb, var(--app-text) 82%, var(--app-muted));
+  --ov-text-3: var(--app-muted);
+  --ov-text-4: var(--app-soft);
+  --ov-accent: var(--app-primary);
+  --ov-accent-soft: var(--app-primary-soft);
   background:
-    radial-gradient(900px 420px at 12% -10%, rgba(79, 70, 229, 0.08), transparent 55%),
-    linear-gradient(180deg, #fbfcfe 0%, #f3f5f9 100%);
+    radial-gradient(900px 420px at 12% -10%, color-mix(in srgb, var(--app-primary) 10%, transparent), transparent 55%),
+    linear-gradient(180deg, var(--app-bg1) 0%, var(--app-bg0) 100%);
 }
 :global(html:not(.dark)) .ov-btn {
-  background: #fff;
-  color: #374151;
+  background: var(--app-surface);
+  color: var(--app-header-btn-text);
 }
 :global(html:not(.dark)) .ov-btn.primary {
-  background: #4f46e5;
+  background: var(--app-primary);
   color: #fff;
 }
 :global(html:not(.dark)) .ov-metric {
@@ -758,4 +767,12 @@ onMounted(() => {
 :global(html:not(.dark)) .overview-pending {
   color: #b45309;
 }
+
+/* empty hint on dark overview */
+.overview-page :deep(.empty-hint) {
+  background: rgba(255,255,255,0.04);
+  border-color: var(--ov-border);
+  color: var(--ov-text-3);
+}
+.overview-page :deep(.empty-hint strong) { color: var(--ov-text); }
 </style>

@@ -101,7 +101,7 @@
                             </template>
                         </el-table-column>
                         <el-table-column label="金额" width="120" align="right" header-align="right">
-                            <template #default="scope"><span class="num-cell" :style="{ color: Number(scope.row.amount || 0) >= 0 ? '#F56C6C' : '#67C23A' }">{{ formatMoney(scope.row.amount, 2, true) }}</span></template>
+                            <template #default="scope"><span class="num-cell" :class="(Number(scope.row.amount || 0) >= 0 ) ? 'num-up' : 'num-down'">{{ formatMoney(scope.row.amount, 2, true) }}</span></template>
                         </el-table-column>
                         <el-table-column label="调整前" width="120" align="right" header-align="right"><template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.balance_before) }}</span></template></el-table-column>
                         <el-table-column label="调整后" width="120" align="right" header-align="right"><template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.balance_after) }}</span></template></el-table-column>

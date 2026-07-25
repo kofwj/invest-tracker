@@ -110,7 +110,7 @@
           </el-table-column>
           <el-table-column label="数量差" width="90" align="right">
             <template #default="s">
-              <span :style="{ color: Number(s.row.quantity_diff || 0) === 0 ? '#909399' : '#E6A23C' }">
+              <span :class="Number(s.row.quantity_diff || 0) === 0 ? 'num-muted' : 'num-warn'">
                 {{ s.row.quantity_diff }}
               </span>
             </template>

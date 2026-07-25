@@ -37,21 +37,21 @@
         label="加权平均利率"
         :value="`${Number(depositSummary.weightedRate || 0).toFixed(2)}%`"
         sub="按金额加权"
-        color="#409EFF"
+        color="var(--app-primary)"
         :title="`${Number(depositSummary.weightedRate || 0).toFixed(2)}%`"
       />
       <MetricCard
         label="预计年利息"
         :value="formatMoney(depositSummary.annualInterest)"
         sub="若按当前利率放满一年"
-        color="#E6A23C"
+        color="var(--app-warn)"
         :title="formatMoney(depositSummary.annualInterest)"
       />
       <MetricCard
         label="到期前预计利息"
         :value="formatMoney(depositSummary.remainingInterest)"
         sub="按剩余天数合计（单利/365）"
-        color="#67C23A"
+        color="var(--app-down)"
         :title="formatMoney(depositSummary.remainingInterest)"
       />
       <MetricCard
@@ -123,7 +123,7 @@
                         </el-table-column>
                         <el-table-column label="起存日" width="104" align="left" header-align="left">
                             <template #default="scope">
-                                <span :style="scope.row.missing_start_date ? 'color:#E6A23C' : ''">{{ scope.row.start_date || '待填' }}</span>
+                                <span :class="scope.row.missing_start_date ? 'num-warn' : ''">{{ scope.row.start_date || '待填' }}</span>
                             </template>
                         </el-table-column>
                         <el-table-column label="到期" width="104" align="left" header-align="left">

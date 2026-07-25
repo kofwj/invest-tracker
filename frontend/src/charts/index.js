@@ -127,9 +127,9 @@ const renderPerfTimelineChartView = (perfTimeline = []) => {
         xAxis: { type: 'category', data: data.map(d => d.date) },
         yAxis: { type: 'value', axisLabel: { formatter: v => (v / 10000).toFixed(0) + '万' } },
         series: [
-            { name: '总资产', type: 'line', data: data.map(d => d.total_assets), smooth: true, lineStyle: { width: 2 }, itemStyle: { color: '#409EFF' } },
-            { name: '净投入', type: 'line', data: data.map(d => d.net_contribution), smooth: true, lineStyle: { width: 2, type: 'dashed' }, itemStyle: { color: '#909399' } },
-            { name: '总收益', type: 'line', data: data.map(d => d.total_gain), smooth: true, lineStyle: { width: 1.5 }, itemStyle: { color: '#E6A23C' } },
+            { name: '总资产', type: 'line', data: data.map(d => d.total_assets), smooth: true, lineStyle: { width: 2 }, itemStyle: { color: 'var(--app-primary)' } },
+            { name: '净投入', type: 'line', data: data.map(d => d.net_contribution), smooth: true, lineStyle: { width: 2, type: 'dashed' }, itemStyle: { color: 'var(--app-muted)' } },
+            { name: '总收益', type: 'line', data: data.map(d => d.total_gain), smooth: true, lineStyle: { width: 1.5 }, itemStyle: { color: 'var(--app-warn)' } },
         ],
     });
     try { perfTimelineChart.resize(); } catch (_) { /* ignore */ }

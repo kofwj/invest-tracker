@@ -92,12 +92,12 @@
                                     </el-table-column>
                                     <el-table-column label="变化额" min-width="120" align="right" header-align="right">
                                         <template #default="scope">
-                                            <span class="num-cell" :style="{color: scope.row.change >= 0 ? '#F56C6C' : '#67C23A'}">{{ formatMoney(scope.row.change, 2, true) }}</span>
+                                            <span class="num-cell" :class="(scope.row.change >= 0 ) ? 'num-up' : 'num-down'">{{ formatMoney(scope.row.change, 2, true) }}</span>
                                         </template>
                                     </el-table-column>
                                     <el-table-column label="变化率" width="100" align="right" header-align="right">
                                         <template #default="scope">
-                                            <span class="num-cell" :style="{color: scope.row.change >= 0 ? '#F56C6C' : '#67C23A'}">{{ scope.row.change_pct === null ? '—' : (scope.row.change_pct >= 0 ? '+' : '') + scope.row.change_pct.toFixed(2) + '%' }}</span>
+                                            <span class="num-cell" :class="(scope.row.change >= 0 ) ? 'num-up' : 'num-down'">{{ scope.row.change_pct === null ? '—' : (scope.row.change_pct >= 0 ? '+' : '') + scope.row.change_pct.toFixed(2) + '%' }}</span>
                                         </template>
                                     </el-table-column>
                                 </el-table>
@@ -130,7 +130,7 @@
                                     </el-tooltip>
                                 </template>
                                 <template #default="scope">
-                                    <span class="num-cell" :style="{color: scope.row.total_profit >= 0 ? '#F56C6C' : '#67C23A'}">
+                                    <span class="num-cell" :class="(scope.row.total_profit >= 0 ) ? 'num-up' : 'num-down'">
                                         {{ formatMoney(scope.row.total_profit, 2, true) }}
                                     </span>
                                 </template>
@@ -142,7 +142,7 @@
                                     </el-tooltip>
                                 </template>
                                 <template #default="scope">
-                                    <span class="num-cell" :style="{color: (scope.row.lifetime_profit || 0) >= 0 ? '#F56C6C' : '#67C23A'}">
+                                    <span class="num-cell" :class="((scope.row.lifetime_profit || 0) >= 0 ) ? 'num-up' : 'num-down'">
                                         {{ formatMoney(scope.row.lifetime_profit || 0, 2, true) }}
                                     </span>
                                 </template>

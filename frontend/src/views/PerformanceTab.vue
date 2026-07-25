@@ -17,6 +17,11 @@
       
     </template>
 
+    <!-- 加载骨架 -->
+    <div v-if="perfLoading && !perfSummary" class="sk-metrics" aria-hidden="true">
+      <div v-for="i in 4" :key="'sk'+i" class="sk-block sk-metric"></div>
+    </div>
+
     <!-- 未录流水强提示 -->
     <el-alert
       v-if="!hasPerfFlows"
@@ -95,7 +100,7 @@
               :style="{ width: c.widthPct + '%' }"
             ></div>
           </div>
-          <div class="perf-cat-amt" :style="{ color: c.positive ? '#F56C6C' : '#67C23A' }">
+          <div class="perf-cat-amt" :class="(c.positive ) ? 'num-up' : 'num-down'">
             {{ formatMoney(c.amount, 2, true) }}
           </div>
         </div>
@@ -160,7 +165,7 @@
         :data="displayedPerfContribution"
         stripe
         size="small"
-        class="perf-contrib-table"
+        class="perf-contrib-table table-clickable"
         style="width: 100%"
         @row-click="onContribRowClick"
       >
@@ -188,7 +193,7 @@
             </el-tooltip>
           </template>
           <template #default="s">
-            <div class="perf-contrib-value" :style="{ color: s.row.total_contribution >= 0 ? '#F56C6C' : '#67C23A' }">
+            <div class="perf-contrib-value" :class="(s.row.total_contribution >= 0 ) ? 'num-up' : 'num-down'">
               {{ formatMoney(s.row.total_contribution, 2, true) }}
             </div>
           </template>
@@ -200,7 +205,7 @@
             </el-tooltip>
           </template>
           <template #default="s">
-            <span :style="{ color: (s.row.lifetime_profit || 0) >= 0 ? '#F56C6C' : '#67C23A' }">
+            <span :class="((s.row.lifetime_profit || 0) >= 0 ) ? 'num-up' : 'num-down'">
               {{ formatMoney(s.row.lifetime_profit || 0, 2, true) }}
             </span>
           </template>
@@ -415,8 +420,8 @@ const onContribRowClick = (row) => {
 .perf-cat-name { font-size: 13px; color: #606266; }
 .perf-cat-track { height: 10px; background: #eef2f7; border-radius: 999px; overflow: hidden; }
 .perf-cat-fill { height: 100%; border-radius: 999px; }
-.perf-cat-fill.is-pos { background: linear-gradient(90deg, #f89898, #F56C6C); }
-.perf-cat-fill.is-neg { background: linear-gradient(90deg, #95d475, #67C23A); }
+.perf-cat-fill.is-pos { background: linear-gradient(90deg, color-mix(in srgb, var(--app-up) 55%, #fff), var(--app-up)); }
+.perf-cat-fill.is-neg { background: linear-gradient(90deg, color-mix(in srgb, var(--app-down) 55%, #fff), var(--app-down)); }
 .perf-cat-amt { text-align: right; font-weight: 650; font-variant-numeric: tabular-nums; font-size: 13px; }
 .perf-help-collapse { border: none; }
 .perf-help-collapse :deep(.el-collapse-item__header) {

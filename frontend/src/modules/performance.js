@@ -86,7 +86,7 @@ const createPerformanceModule = ({
         const s = perfSummary.value;
         if (!s) return [];
         const flowReady = Number(s.flow_count || 0) > 0;
-        const gainColor = s.total_gain >= 0 ? '#F56C6C' : '#67C23A';
+        const gainColor = s.total_gain >= 0 ? 'var(--app-up)' : 'var(--app-down)';
         return [
             {
                 label: '累计净投入',
@@ -95,7 +95,7 @@ const createPerformanceModule = ({
                 sub: flowReady
                     ? `投入 ${formatMoney(s.total_in)} − 取出 ${formatMoney(s.total_out)}`
                     : '请在下方录「投入/取出」',
-                color: flowReady ? '#303133' : '#E6A23C',
+                color: flowReady ? 'var(--app-text)' : 'var(--app-warn)',
             },
             {
                 label: '累计总收益',
@@ -104,8 +104,7 @@ const createPerformanceModule = ({
                 sub: flowReady
                     ? `相对净投入 ${Number(s.total_gain_pct || 0).toFixed(2)}%`
                     : '公式：总资产 − 净投入',
-                color: flowReady ? gainColor : '#E6A23C',
-                main: true,
+                color: flowReady ? gainColor : 'var(--app-warn)',
                 main: true,
             },
             {
@@ -115,8 +114,7 @@ const createPerformanceModule = ({
                 sub: s.xirr_status === 'ok'
                     ? '资金加权年化'
                     : (s.xirr_message || '需有效投入/取出与当前资产'),
-                color: s.xirr != null ? ((s.xirr || 0) >= 0 ? '#F56C6C' : '#67C23A') : '#909399',
-                main: true,
+                color: s.xirr != null ? ((s.xirr || 0) >= 0 ? 'var(--app-up)' : 'var(--app-down)') : 'var(--app-muted)',
                 main: true,
             },
             {
@@ -124,7 +122,7 @@ const createPerformanceModule = ({
                 plain: '接近券商累计盈亏',
                 value: formatMoney(s.lifetime_profit),
                 sub: 'Σ(现价 − 摊薄成本)×数量',
-                color: Number(s.lifetime_profit || 0) >= 0 ? '#F56C6C' : '#67C23A',
+                color: Number(s.lifetime_profit || 0) >= 0 ? 'var(--app-up)' : 'var(--app-down)',
             },
         ];
     });
@@ -140,21 +138,21 @@ const createPerformanceModule = ({
                 plain: '你现在一共有多少钱',
                 value: formatMoney(s.total_assets),
                 sub: '市值 + 现金 + 存款 + 在途',
-                color: '#303133',
+                color: 'var(--app-text)',
             },
             {
                 label: '当前仓浮盈+分红',
                 plain: '现在还拿着的仓赚多少',
                 value: formatMoney(floatSum),
                 sub: `浮盈 ${formatMoney(s.current_unrealized_profit)} / 分红 ${formatMoney(s.total_dividend_income)}`,
-                color: floatSum >= 0 ? '#F56C6C' : '#67C23A',
+                color: floatSum >= 0 ? 'var(--app-up)' : 'var(--app-down)',
             },
             {
                 label: 'YTD 收益',
                 plain: '今年初至今',
                 value: formatMoney(s.ytd_gain),
                 sub: `相对年初快照 ${Number(s.ytd_gain_pct || 0).toFixed(2)}%`,
-                color: s.ytd_gain >= 0 ? '#F56C6C' : '#67C23A',
+                color: s.ytd_gain >= 0 ? 'var(--app-up)' : 'var(--app-down)',
             },
         ];
     });
@@ -221,8 +219,8 @@ const createPerformanceModule = ({
         return {
             width: `${Math.min(ratio * 100, 100)}%`,
             background: Number(value || 0) >= 0
-                ? 'linear-gradient(90deg, #f89898 0%, #F56C6C 100%)'
-                : 'linear-gradient(90deg, #95d475 0%, #67C23A 100%)',
+                ? 'linear-gradient(90deg, color-mix(in srgb, var(--app-up) 55%, #fff) 0%, var(--app-up) 100%)'
+                : 'linear-gradient(90deg, color-mix(in srgb, var(--app-down) 55%, #fff) 0%, var(--app-down) 100%)',
         };
     };
 

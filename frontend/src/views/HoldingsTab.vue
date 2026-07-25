@@ -17,7 +17,12 @@
       class="holdings-toolbar-alert"
       style="margin-bottom: 12px;"
     />
-    <el-table :data="holdings" stripe size="small" class="holdings-table" style="width: 100%" @row-click="showTransactions">
+    <div v-if="!holdings || !holdings.length" class="empty-hint" style="margin-bottom: 12px;">
+      <strong>当前没有持仓</strong>
+      <span>去交易页录入买入，或先同步价格核对。空仓时这里保持干净。</span>
+      <el-button size="small" type="primary" plain @click="goTab('transactions')">去交易</el-button>
+    </div>
+    <el-table v-else :data="holdings" stripe size="small" class="holdings-table table-clickable" style="width: 100%" @row-click="showTransactions">
       <el-table-column label="标的" min-width="148" fixed="left" align="left" header-align="left">
         <template #default="scope">
           <div class="asset-cell">
@@ -44,7 +49,7 @@
           </el-tooltip>
         </template>
         <template #default="scope">
-          <span class="num-cell" :style="{ color: Number(scope.row.diluted_cost || 0) < 0 ? '#67C23A' : '#303133' }">{{ formatMoney(scope.row.diluted_cost, 4) }}</span>
+          <span class="num-cell" :class="Number(scope.row.diluted_cost || 0) < 0 ? 'num-down' : ''">{{ formatMoney(scope.row.diluted_cost, 4) }}</span>
         </template>
       </el-table-column>
       <el-table-column label="最新价" min-width="88" align="right" header-align="right">
@@ -60,7 +65,7 @@
           </el-tooltip>
         </template>
         <template #default="scope">
-          <span class="num-cell" :style="{ color: holdingFloatProfit(scope.row) >= 0 ? '#F56C6C' : '#67C23A' }">
+          <span class="num-cell" :class="(holdingFloatProfit(scope.row) >= 0 ) ? 'num-up' : 'num-down'">
             {{ formatMoney(holdingFloatProfit(scope.row), 2, true) }}
           </span>
         </template>
@@ -72,7 +77,7 @@
           </el-tooltip>
         </template>
         <template #default="scope">
-          <span class="num-cell" :style="{ color: holdingLifetimeProfit(scope.row) >= 0 ? '#F56C6C' : '#67C23A' }">
+          <span class="num-cell" :class="(holdingLifetimeProfit(scope.row) >= 0 ) ? 'num-up' : 'num-down'">
             {{ formatMoney(holdingLifetimeProfit(scope.row), 2, true) }}
           </span>
         </template>
@@ -84,7 +89,7 @@
           </el-tooltip>
         </template>
         <template #default="scope">
-          <span class="num-cell" :style="{ color: (holdingFloatProfitRate(scope.row) ?? 0) >= 0 ? '#F56C6C' : '#67C23A' }">
+          <span class="num-cell" :class="(holdingFloatProfitRate(scope.row) ?? 0) >= 0 ? 'num-up' : 'num-down'">
             {{ holdingFloatProfitRate(scope.row) === null ? '—' : formatPercent(holdingFloatProfitRate(scope.row)) }}
           </span>
         </template>
@@ -96,7 +101,7 @@
           </el-tooltip>
         </template>
         <template #default="scope">
-          <span class="num-cell" :style="{ color: (holdingLifetimeProfitRate(scope.row) ?? 0) >= 0 ? '#F56C6C' : '#67C23A' }">
+          <span class="num-cell" :class="(holdingLifetimeProfitRate(scope.row) ?? 0) >= 0 ? 'num-up' : 'num-down'">
             {{ holdingLifetimeProfitRate(scope.row) === null ? '—' : formatPercent(holdingLifetimeProfitRate(scope.row)) }}
           </span>
         </template>
@@ -114,7 +119,7 @@
         </template>
         <template #default="scope">
           <el-tooltip :content="scope.row.trailing_return_1y_source || '暂无数据，请同步近一年收益率'" placement="top">
-            <span class="num-cell" :style="{ color: Number(scope.row.trailing_return_1y || 0) >= 0 ? '#F56C6C' : '#67C23A' }">
+            <span class="num-cell" :class="(Number(scope.row.trailing_return_1y || 0) >= 0 ) ? 'num-up' : 'num-down'">
               {{ formatPercent(scope.row.trailing_return_1y) }}
             </span>
           </el-tooltip>
@@ -229,6 +234,7 @@ const {
   holdingLifetimeProfitRate,
   trailingSyncing,
   syncTrailingReturns,
+  goTab,
 } = useAppCtx();
 
 const { buildUziPrompt, loadUziNote, saveUziNote } = createUziAnalysisHelper({ dashboard, formatMoney });

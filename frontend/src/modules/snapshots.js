@@ -47,8 +47,8 @@ const createSnapshotsModule = ({
         const liquidRatio = Number(last.total_assets || 0) ? (Number(last.bank_balance || 0) + Number(last.securities_cash || 0) + Number(last.pending_purchase || 0)) / Number(last.total_assets) * 100 : 0;
         snapshotMetrics.value = [
             { key: 'latest', label: '最新总资产', value: formatMoney(last.total_assets), sub: `${last.date}，${last.holdings_count || 0} 个持仓` },
-            { key: 'change', label: '区间总资产变化', value: formatMoney(totalChange, 2, true), sub: changePct('total_assets') === null ? '无期初基数' : `${changePct('total_assets') >= 0 ? '+' : ''}${changePct('total_assets').toFixed(2)}%`, color: totalChange >= 0 ? '#F56C6C' : '#67C23A' },
-            { key: 'profit', label: '投资盈亏变化', value: formatMoney(profitChange, 2, true), sub: `当前累计 ${formatMoney(last.total_profit)}`, color: profitChange >= 0 ? '#F56C6C' : '#67C23A' },
+            { key: 'change', label: '区间总资产变化', value: formatMoney(totalChange, 2, true), sub: changePct('total_assets') === null ? '无期初基数' : `${changePct('total_assets') >= 0 ? '+' : ''}${changePct('total_assets').toFixed(2)}%`, color: totalChange >= 0 ? 'var(--app-up)' : 'var(--app-down)' },
+            { key: 'profit', label: '投资盈亏变化', value: formatMoney(profitChange, 2, true), sub: `当前累计 ${formatMoney(last.total_profit)}`, color: profitChange >= 0 ? 'var(--app-up)' : 'var(--app-down)' },
             { key: 'ratio', label: '当前投资 / 流动占比', value: `${investRatio.toFixed(1)}%`, sub: `现金+存款+在途 ${liquidRatio.toFixed(1)}%` },
         ];
         const labels = {

@@ -10,6 +10,10 @@
       <el-button size="small" type="warning" :loading="alertChecking" @click="() => checkAlerts(false)">立即检查预警</el-button>
     </template>
 
+    <div v-if="(marketLoading || disciplineLoading) && !marketUpdatedAt" class="sk-metrics" aria-hidden="true">
+      <div v-for="i in 4" :key="'dsk'+i" class="sk-block sk-metric"></div>
+    </div>
+
     <div class="merge-grid decision-merge">
       <!-- 左：结论 -->
       <section class="merge-pane merge-pane-left">
@@ -411,10 +415,10 @@ const formatChangePct = (v) => {
 };
 
 const changeColor = (v) => {
-  if (v === null || v === undefined || v === '') return '#909399';
+  if (v === null || v === undefined || v === '') return 'var(--app-muted)';
   const n = Number(v);
-  if (Number.isNaN(n) || n === 0) return '#909399';
-  return n > 0 ? '#F56C6C' : '#67C23A';
+  if (Number.isNaN(n) || n === 0) return 'var(--app-muted)';
+  return n > 0 ? 'var(--app-up)' : 'var(--app-down)';
 };
 
 const quoteForWatch = (code) => {
