@@ -411,6 +411,7 @@ html.dark .stat-label::after { background: rgba(255,255,255,0.08); }
   gap: 12px;
   margin-bottom: 14px;
 }
+.ledger-metrics.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .ledger-metrics.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .ledger-metrics.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .ledger-metrics.cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
@@ -538,6 +539,7 @@ html.dark .stat-label::after { background: rgba(255,255,255,0.08); }
   .ledger-metrics.cols-6 .ledger-metric.is-main { grid-column: 1 / -1; }
 }
 @media (max-width: 900px) {
+  .ledger-metrics.cols-2,
   .ledger-metrics.cols-3,
   .ledger-metrics.cols-4,
   .ledger-metrics.cols-5,
@@ -545,6 +547,7 @@ html.dark .stat-label::after { background: rgba(255,255,255,0.08); }
   .ledger-status-strip { grid-template-columns: 1fr; }
 }
 @media (max-width: 560px) {
+  .ledger-metrics.cols-2,
   .ledger-metrics.cols-3,
   .ledger-metrics.cols-4,
   .ledger-metrics.cols-5,

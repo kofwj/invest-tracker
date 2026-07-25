@@ -1,7 +1,7 @@
 <template>
   <PageShell
     title="今天该看"
-    subtitle="左栏结论，右栏市场详情。只读观察，不改真账。"
+    subtitle="左栏关键数字，右栏先看结论再下钻。只读观察，不改真账。"
   >
     <template #actions>
       <el-tag v-if="marketUpdatedAt" size="small" type="info">更新 {{ marketUpdatedAt }}</el-tag>
@@ -11,13 +11,13 @@
     </template>
 
     <div v-if="(marketLoading || disciplineLoading) && !marketUpdatedAt" class="sk-metrics" aria-hidden="true">
-      <div v-for="i in 4" :key="'dsk'+i" class="sk-block sk-metric"></div>
+      <div v-for="i in 6" :key="'dsk'+i" class="sk-block sk-metric"></div>
     </div>
 
     <div class="merge-grid decision-merge">
-      <!-- 左：结论 -->
+      <!-- 左：关键指标 -->
       <section class="merge-pane merge-pane-left">
-        <div class="merge-pane-title">结论</div>
+        <div class="merge-pane-title">关键指标</div>
         <div class="ledger-metrics cols-2 decision-metrics">
           <MetricCard
             label="今日贡献粗估"
@@ -29,11 +29,33 @@
           />
           <MetricCard
             label="组合涨跌粗估"
-            :value="signals.portfolio_change_pct_estimate == null
-              ? '—'
-              : ((signals.portfolio_change_pct_estimate >= 0 ? '+' : '') + Number(signals.portfolio_change_pct_estimate).toFixed(2) + '%')"
+            :value="pctText(signals.portfolio_change_pct_estimate)"
             :sub="`投资市值 ${formatMoney(signals.total_market_value || 0)}`"
-            :tone="Number(signals.portfolio_change_pct_estimate || 0) >= 0 ? 'up' : 'down'"
+            :tone="toneFromNum(signals.portfolio_change_pct_estimate)"
+          />
+          <MetricCard
+            label="vs 沪深300"
+            :value="vsHs300Text"
+            :sub="vsHs300Sub"
+            :tone="toneFromNum(vsHs300Diff)"
+          />
+          <MetricCard
+            label="vs 中证A500"
+            :value="vsA500Text"
+            :sub="vsA500Sub"
+            :tone="toneFromNum(vsA500Diff)"
+          />
+          <MetricCard
+            label="总资产"
+            :value="formatMoney(totalAssetsNow)"
+            :sub="`浮盈 ${formatMoney(signals.total_profit || 0, 2, true)}`"
+            :title="formatMoney(totalAssetsNow)"
+          />
+          <MetricCard
+            label="权益仓位"
+            :value="equityPctText"
+            :sub="`目标 ${targetEquityText} · 防御 ${defensivePctText}`"
+            :tone="equityTone"
           />
           <MetricCard
             label="纪律破线"
@@ -47,6 +69,32 @@
             :sub="`金额 ${formatMoney(dueSoonAmount)}`"
             :tone="dueSoonCount ? 'warn' : ''"
           />
+          <MetricCard
+            label="今日最强"
+            :value="topMoverName"
+            :sub="topMoverSub"
+            :tone="toneFromNum(topMover?.day_contrib ?? topMover?.change_pct)"
+            :title="topMoverTitle"
+          />
+          <MetricCard
+            label="今日最弱"
+            :value="bottomMoverName"
+            :sub="bottomMoverSub"
+            :tone="toneFromNum(bottomMover?.day_contrib ?? bottomMover?.change_pct)"
+            :title="bottomMoverTitle"
+          />
+          <MetricCard
+            label="启用预警"
+            :value="`${enabledAlertCount} 条`"
+            :sub="`规则共 ${alertRuleCount} · 自选 ${watchlistCount}`"
+            :tone="enabledAlertCount ? 'ok' : 'muted'"
+          />
+          <MetricCard
+            label="指数情绪"
+            :value="indexBreadthText"
+            :sub="indexBreadthSub"
+            :tone="indexBreadthTone"
+          />
         </div>
 
         <el-alert
@@ -54,29 +102,51 @@
           type="info"
           show-icon
           :closable="false"
-          style="margin-bottom: 12px;"
+          class="decision-headline"
         />
 
-        <el-card v-if="marketHighlights && marketHighlights.length" shadow="never" class="merge-card">
-          <template #header><span class="section-title">今天看点</span></template>
-          <ul class="market-highlights">
-            <li v-for="(line, idx) in marketHighlights" :key="idx">{{ line }}</li>
+        <el-card v-if="breachPreview.length" shadow="never" class="merge-card tight">
+          <template #header>
+            <div class="card-head">
+              <span class="section-title">破线摘要</span>
+              <el-button size="small" link type="primary" @click="goTab('allocation')">去结构与目标</el-button>
+            </div>
+          </template>
+          <ul class="breach-list">
+            <li v-for="(b, idx) in breachPreview" :key="idx">
+              <span class="breach-level" :class="b.level === 'warning' ? 'warn' : 'info'">{{ b.level === 'warning' ? '警告' : '提示' }}</span>
+              {{ b.line || b.title || '纪律提醒' }}
+            </li>
           </ul>
-          <div v-if="marketComparisons && marketComparisons.length" class="market-compare">
-            <div v-for="(c, i) in marketComparisons" :key="i">{{ c.text }}</div>
-          </div>
         </el-card>
 
         <div class="decision-jumps">
           <el-button size="small" @click="goTab('allocation')">去结构与目标</el-button>
           <el-button size="small" @click="goTab('deposits')">去存款详情</el-button>
           <el-button size="small" @click="goTab('performance')">去收益分析</el-button>
+          <el-button size="small" @click="goTab('holdings')">去持仓</el-button>
         </div>
       </section>
 
-      <!-- 右：市场详情 -->
+      <!-- 右：今日看点 + 市场详情 -->
       <section class="merge-pane merge-pane-right">
-        <div class="merge-pane-title">市场详情</div>
+        <div class="merge-pane-title">市场与结论</div>
+
+        <el-card shadow="never" class="merge-card highlight-card">
+          <template #header>
+            <div class="card-head">
+              <span class="section-title">今日看点</span>
+              <span class="hint">人话结论，不是买卖指令</span>
+            </div>
+          </template>
+          <ul v-if="marketHighlights && marketHighlights.length" class="market-highlights">
+            <li v-for="(line, idx) in marketHighlights" :key="idx">{{ line }}</li>
+          </ul>
+          <div v-else class="empty-line">暂无看点，点右上角刷新拉行情。</div>
+          <div v-if="marketComparisons && marketComparisons.length" class="market-compare">
+            <div v-for="(c, i) in marketComparisons" :key="i">{{ c.text }}</div>
+          </div>
+        </el-card>
 
         <el-card shadow="never" class="merge-card">
           <template #header>
@@ -107,7 +177,7 @@
           <template #header>
             <div class="card-head">
               <span class="section-title">持仓今日贡献（粗估）</span>
-              <span class="hint">最多 20 条</span>
+              <span class="hint">最多 20 条 · 按绝对贡献排序</span>
             </div>
           </template>
           <el-table :data="holdingsDayRows" stripe size="small" empty-text="暂无持仓或无法估算" v-loading="marketLoading">
@@ -337,11 +407,14 @@ import { useAppCtx } from '../composables/useAppCtx.js';
 
 const {
   goTab,
+  dashboard,
   marketSignals,
   marketLoading,
   refreshMarket,
   breaches,
   summaryText,
+  snapshot,
+  targets,
   disciplineLoading,
   refreshDiscipline,
   depositRows,
@@ -380,10 +453,28 @@ const {
   saveWatchlist,
 } = useAppCtx();
 
-const breachCount = computed(() => {
+const signals = computed(() => marketSignals?.value ?? marketSignals ?? {});
+const disciplineSnap = computed(() => snapshot?.value ?? snapshot ?? {});
+const disciplineTargets = computed(() => targets?.value ?? targets ?? {});
+
+const breachList = computed(() => {
   const list = breaches?.value ?? breaches ?? [];
-  return Array.isArray(list) ? list.length : 0;
+  return Array.isArray(list) ? list : [];
 });
+/** 真正需要看的：去掉 level=ok 的状态项 */
+const attentionBreaches = computed(() =>
+  breachList.value.filter((b) => {
+    const level = String(b?.level || '').toLowerCase();
+    return level && level !== 'ok';
+  }),
+);
+const breachCount = computed(() => attentionBreaches.value.length);
+const breachPreview = computed(() =>
+  attentionBreaches.value.slice(0, 5).map((b) => ({
+    ...b,
+    line: [b.title, b.text || b.message || b.rule].filter(Boolean).join('：'),
+  })),
+);
 
 const dueSoonRows = computed(() => {
   const rows = depositRows?.value ?? depositRows ?? [];
@@ -393,10 +484,137 @@ const dueSoonRows = computed(() => {
     .sort((a, b) => Number(a.daysLeft) - Number(b.daysLeft))
     .slice(0, 12);
 });
-
 const dueSoonCount = computed(() => dueSoonRows.value.length);
 const dueSoonAmount = computed(() => dueSoonRows.value.reduce((s, r) => s + Number(r.amount || 0), 0));
-const signals = computed(() => marketSignals?.value ?? marketSignals ?? {});
+
+const totalAssetsNow = computed(() => {
+  const fromDash = Number((dashboard?.value ?? dashboard)?.total_assets || 0);
+  if (fromDash > 0) return fromDash;
+  return Number(disciplineSnap.value.total_assets || 0);
+});
+
+const equityPct = computed(() => Number(disciplineSnap.value.equity_pct ?? NaN));
+const defensivePct = computed(() => Number(disciplineSnap.value.defensive_pct ?? NaN));
+const equityPctText = computed(() => (Number.isFinite(equityPct.value) ? `${equityPct.value.toFixed(1)}%` : '—'));
+const defensivePctText = computed(() => (Number.isFinite(defensivePct.value) ? `${defensivePct.value.toFixed(1)}%` : '—'));
+const targetEquity = computed(() => Number(disciplineTargets.value.equity_pct ?? NaN));
+const targetEquityText = computed(() => (Number.isFinite(targetEquity.value) ? `${targetEquity.value.toFixed(0)}%` : '—'));
+const equityTone = computed(() => {
+  if (!Number.isFinite(equityPct.value) || !Number.isFinite(targetEquity.value)) return '';
+  const band = Number(disciplineTargets.value.band_pct ?? 5);
+  const gap = Math.abs(equityPct.value - targetEquity.value);
+  if (gap > band) return 'warn';
+  return 'ok';
+});
+
+const comparisonMap = computed(() => {
+  const list = marketComparisons?.value ?? marketComparisons ?? [];
+  const map = {};
+  (Array.isArray(list) ? list : []).forEach((c) => {
+    if (c?.benchmark) map[c.benchmark] = c;
+  });
+  return map;
+});
+
+const vsHs300 = computed(() => comparisonMap.value['沪深300'] || null);
+const vsA500 = computed(() => comparisonMap.value['中证A500'] || null);
+const vsHs300Diff = computed(() => (vsHs300.value ? Number(vsHs300.value.diff_pct) : null));
+const vsA500Diff = computed(() => (vsA500.value ? Number(vsA500.value.diff_pct) : null));
+const vsHs300Text = computed(() => {
+  if (vsHs300Diff.value === null || Number.isNaN(vsHs300Diff.value)) return '—';
+  const n = vsHs300Diff.value;
+  return `${n >= 0 ? '+' : ''}${n.toFixed(2)}pt`;
+});
+const vsA500Text = computed(() => {
+  if (vsA500Diff.value === null || Number.isNaN(vsA500Diff.value)) return '—';
+  const n = vsA500Diff.value;
+  return `${n >= 0 ? '+' : ''}${n.toFixed(2)}pt`;
+});
+const vsHs300Sub = computed(() => {
+  if (!vsHs300.value) return '缺组合或指数涨跌';
+  return `组合 ${pctText(vsHs300.value.portfolio_pct)} · 指数 ${pctText(vsHs300.value.benchmark_pct)}`;
+});
+const vsA500Sub = computed(() => {
+  if (!vsA500.value) return '缺组合或指数涨跌';
+  return `组合 ${pctText(vsA500.value.portfolio_pct)} · 指数 ${pctText(vsA500.value.benchmark_pct)}`;
+});
+
+const dayRows = computed(() => {
+  const rows = holdingsDayRows?.value ?? holdingsDayRows ?? [];
+  return Array.isArray(rows) ? rows : [];
+});
+const withContrib = computed(() => dayRows.value.filter((r) => r && r.day_contrib != null));
+const topMover = computed(() => {
+  if (!withContrib.value.length) return null;
+  return withContrib.value.reduce((best, r) => (Number(r.day_contrib) > Number(best.day_contrib) ? r : best));
+});
+const bottomMover = computed(() => {
+  if (!withContrib.value.length) return null;
+  return withContrib.value.reduce((worst, r) => (Number(r.day_contrib) < Number(worst.day_contrib) ? r : worst));
+});
+const topMoverName = computed(() => topMover.value?.name || topMover.value?.code || '—');
+const bottomMoverName = computed(() => bottomMover.value?.name || bottomMover.value?.code || '—');
+const topMoverSub = computed(() => {
+  const r = topMover.value;
+  if (!r) return '暂无持仓贡献';
+  return `${formatMoney(r.day_contrib, 2, true)} · ${pctText(r.change_pct)}`;
+});
+const bottomMoverSub = computed(() => {
+  const r = bottomMover.value;
+  if (!r) return '暂无持仓贡献';
+  return `${formatMoney(r.day_contrib, 2, true)} · ${pctText(r.change_pct)}`;
+});
+const topMoverTitle = computed(() => (topMover.value ? `${topMoverName.value} ${topMoverSub.value}` : ''));
+const bottomMoverTitle = computed(() => (bottomMover.value ? `${bottomMoverName.value} ${bottomMoverSub.value}` : ''));
+
+const alertRuleList = computed(() => {
+  const list = alertRules?.value ?? alertRules ?? [];
+  return Array.isArray(list) ? list : [];
+});
+const alertRuleCount = computed(() => alertRuleList.value.length);
+const enabledAlertCount = computed(() => alertRuleList.value.filter((r) => Number(r.enabled) === 1 || r.enabled === true).length);
+const watchlistCount = computed(() => {
+  const rows = watchlistDraft?.value ?? watchlistDraft ?? [];
+  return Array.isArray(rows) ? rows.filter((x) => String(x.code || '').trim()).length : 0;
+});
+
+const indexList = computed(() => {
+  const rows = indexRows?.value ?? indexRows ?? [];
+  return Array.isArray(rows) ? rows : [];
+});
+const indexBreadth = computed(() => {
+  const withChg = indexList.value.filter((r) => r && r.change_pct != null && !Number.isNaN(Number(r.change_pct)));
+  const up = withChg.filter((r) => Number(r.change_pct) > 0).length;
+  const down = withChg.filter((r) => Number(r.change_pct) < 0).length;
+  const flat = withChg.length - up - down;
+  return { up, down, flat, total: withChg.length };
+});
+const indexBreadthText = computed(() => {
+  const b = indexBreadth.value;
+  if (!b.total) return '—';
+  return `${b.up} 涨 / ${b.down} 跌`;
+});
+const indexBreadthSub = computed(() => {
+  const b = indexBreadth.value;
+  if (!b.total) return '暂无指数';
+  const best = indexList.value
+    .filter((r) => r.change_pct != null)
+    .slice()
+    .sort((a, c) => Number(c.change_pct) - Number(a.change_pct))[0];
+  const worst = indexList.value
+    .filter((r) => r.change_pct != null)
+    .slice()
+    .sort((a, c) => Number(a.change_pct) - Number(c.change_pct))[0];
+  if (!best || !worst) return `共 ${b.total} 个指数`;
+  return `强 ${best.name || best.code} ${pctText(best.change_pct)} · 弱 ${worst.name || worst.code} ${pctText(worst.change_pct)}`;
+});
+const indexBreadthTone = computed(() => {
+  const b = indexBreadth.value;
+  if (!b.total) return '';
+  if (b.up > b.down) return 'up';
+  if (b.down > b.up) return 'down';
+  return 'muted';
+});
 
 const headline = computed(() => {
   const parts = [];
@@ -404,15 +622,30 @@ const headline = computed(() => {
   if (sig.portfolio_vs_market) parts.push(sig.portfolio_vs_market);
   if (breachCount.value) parts.push(`纪律破线 ${breachCount.value} 条`);
   if (dueSoonCount.value) parts.push(`存款近 30 天到期 ${dueSoonCount.value} 笔`);
-  return parts.length ? parts.join(' · ') : '先刷新：看贡献、纪律、存款到期，再决定要不要动手。';
+  if (Number.isFinite(equityPct.value) && Number.isFinite(targetEquity.value)) {
+    const gap = equityPct.value - targetEquity.value;
+    if (Math.abs(gap) >= Number(disciplineTargets.value.band_pct ?? 5)) {
+      parts.push(`权益仓位 ${equityPct.value.toFixed(1)}%（目标 ${targetEquity.value.toFixed(0)}%）`);
+    }
+  }
+  return parts.length ? parts.join(' · ') : '先刷新：看贡献、对大盘、仓位、纪律、存款到期，再决定要不要动手。';
 });
 
-const formatChangePct = (v) => {
+function pctText(v) {
   if (v === null || v === undefined || v === '') return '—';
   const n = Number(v);
   if (Number.isNaN(n)) return '—';
   return `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
-};
+}
+
+function toneFromNum(v) {
+  if (v === null || v === undefined || v === '') return '';
+  const n = Number(v);
+  if (Number.isNaN(n) || n === 0) return 'muted';
+  return n > 0 ? 'up' : 'down';
+}
+
+const formatChangePct = (v) => pctText(v);
 
 const changeColor = (v) => {
   if (v === null || v === undefined || v === '') return 'var(--app-muted)';
@@ -444,7 +677,7 @@ onMounted(() => {
 <style scoped>
 .merge-grid {
   display: grid;
-  grid-template-columns: minmax(280px, 0.95fr) minmax(0, 1.15fr);
+  grid-template-columns: minmax(300px, 1fr) minmax(0, 1.05fr);
   gap: 14px;
   margin-bottom: 14px;
   align-items: start;
@@ -464,7 +697,15 @@ onMounted(() => {
   letter-spacing: 0.02em;
 }
 .decision-metrics { margin-bottom: 10px; }
+.decision-headline { margin-bottom: 12px; }
 .merge-card { margin-bottom: 14px; }
+.merge-card.tight { margin-bottom: 12px; }
+.merge-pane .merge-card:last-child { margin-bottom: 0; }
+.highlight-card {
+  border-color: color-mix(in srgb, var(--app-primary) 28%, var(--app-border));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--app-primary) 6%, var(--app-surface)), var(--app-surface));
+}
 .section-title { font-size: 15px; font-weight: 700; color: var(--app-text); }
 .hint { font-size: 12px; color: var(--app-soft); margin-top: 2px; }
 .card-head {
@@ -490,17 +731,58 @@ onMounted(() => {
   margin: 0;
   padding-left: 18px;
   color: var(--app-text);
-  line-height: 1.7;
-  font-size: 13px;
+  line-height: 1.75;
+  font-size: 13.5px;
 }
 .market-compare {
-  margin-top: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--app-border);
   font-size: 12px;
   color: var(--app-muted);
-  line-height: 1.5;
+  line-height: 1.55;
+}
+.breach-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+.breach-list li {
+  font-size: 12.5px;
+  color: var(--app-text);
+  line-height: 1.45;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.breach-level {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--app-border);
+  color: var(--app-muted);
+}
+.breach-level.warn {
+  color: var(--app-warn);
+  background: var(--app-warn-soft);
+  border-color: color-mix(in srgb, var(--app-warn) 30%, var(--app-border));
+}
+.breach-level.info {
+  color: var(--app-info);
+  background: var(--app-info-soft);
+  border-color: color-mix(in srgb, var(--app-info) 30%, var(--app-border));
+}
+.empty-line {
+  font-size: 13px;
+  color: var(--app-muted);
+  padding: 4px 0;
 }
 .muted { color: var(--app-soft); }
-@media (max-width: 960px) {
+@media (max-width: 1100px) {
   .merge-grid { grid-template-columns: 1fr; }
 }
 </style>
