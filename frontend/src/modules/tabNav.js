@@ -12,8 +12,8 @@ export const SCREENSHOT_TABS = [
 /** @type {{ id: string, label: string, tabs: string[] }[]} */
 export const TAB_GROUPS = [
     { id: 'home', label: '总览', tabs: ['overview'] },
-    { id: 'daily', label: '日常', tabs: ['holdings', 'transactions', 'broker', 'deposits', 'cash'] },
-    { id: 'analysis', label: '分析', tabs: ['decision', 'performance', 'allocation', 'snapshots', 'market', 'discipline'] },
+    { id: 'daily', label: '日常', tabs: ['holdings', 'transactions', 'deposits'] },
+    { id: 'analysis', label: '分析', tabs: ['decision', 'performance', 'allocation', 'discipline'] },
     { id: 'ops', label: '维护', tabs: ['ops_notify', 'ops_backup'] },
 ];
 

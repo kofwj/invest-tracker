@@ -1,39 +1,29 @@
 <template>
   <!-- 仅在「持仓明细」页展示，不全站常驻 -->
   <div class="holdings-overview">
-    <div class="ledger-metrics cols-6">
+    <div class="ledger-metrics cols-4">
       <MetricCard
         label="总资产"
         :value="formatMoney(dashboard.total_assets)"
-        sub="市值 + 现金 + 存款 + 申购在途"
+        sub="市值 + 现金 + 存款 + 在途"
         main
       />
       <MetricCard
-        label="投资账户市值"
-        :value="formatMoney(dashboard.total_market_value)"
-        sub="已确认持仓"
-      />
-      <MetricCard
-        label="证券现金"
-        :value="formatMoney(dashboard.securities_cash)"
-        sub="交易自动联动"
-      />
-      <MetricCard
-        label="银行存款"
-        :value="formatMoney(dashboard.bank_balance)"
-        sub="表内存款合计"
-      />
-      <MetricCard
-        label="投资账户持仓浮盈"
+        label="持仓浮盈"
         :value="formatMoney(dashboard.total_profit)"
-        sub="普通成本当前仓；不含已卖出已实现"
+        sub="当前仓口径"
         :tone="Number(dashboard.total_profit || 0) >= 0 ? 'up' : 'down'"
       />
       <MetricCard
-        label="投资账户全周期盈亏"
+        label="全周期盈亏"
         :value="formatMoney(dashboard.lifetime_profit)"
-        sub="摊薄成本口径；接近券商累计盈亏"
+        sub="接近券商累计"
         :tone="Number(dashboard.lifetime_profit || 0) >= 0 ? 'up' : 'down'"
+      />
+      <MetricCard
+        label="现金 + 存款"
+        :value="formatMoney(Number(dashboard.securities_cash || 0) + Number(dashboard.bank_balance || 0))"
+        sub="证券现金 + 银行存款"
       />
     </div>
 

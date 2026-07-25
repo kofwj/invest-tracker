@@ -1,22 +1,11 @@
 <template>
   <PageShell
     title="今天该看"
-    subtitle="只读汇总：今日贡献、价格预警、纪律破线、存款到期。不改账本、不下单。"
+    subtitle="只读汇总：今日贡献、纪律、存款到期。详细看市场/纪律/存款页。"
   >
     <template #actions>
       <el-button size="small" :loading="marketLoading || disciplineLoading" @click="refreshDecision">刷新</el-button>
-      <el-button size="small" @click="goTab('market')">市场摘要</el-button>
-      <el-button size="small" @click="goTab('discipline')">纪律</el-button>
-      <el-button size="small" @click="goTab('deposits')">存款</el-button>
     </template>
-
-    <el-alert
-      :title="headline"
-      type="info"
-      show-icon
-      :closable="false"
-      style="margin-bottom: 14px;"
-    />
 
     <div class="ledger-metrics cols-4">
       <MetricCard
@@ -48,81 +37,20 @@
       />
     </div>
 
-    <el-row :gutter="12">
-      <el-col :xs="24" :md="12" style="margin-bottom: 12px;">
-        <el-card shadow="never">
-          <template #header>
-            <div class="decision-card-title">今天看点</div>
-          </template>
-          <ul v-if="highlights && highlights.length" class="decision-list">
-            <li v-for="(line, idx) in highlights" :key="'h' + idx">{{ line }}</li>
-          </ul>
-          <div v-else class="decision-empty">暂无看点，可先刷新市场摘要。</div>
-          <div v-if="comparisons && comparisons.length" class="decision-muted">
-            <div v-for="(c, i) in comparisons" :key="'c' + i">{{ c.text || c }}</div>
-          </div>
-        </el-card>
-      </el-col>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+      <el-button size="small" @click="goTab('market')">去市场（指数 + 预警 + 自选）</el-button>
+      <el-button size="small" @click="goTab('discipline')">去纪律详情</el-button>
+      <el-button size="small" @click="goTab('deposits')">去存款详情</el-button>
+      <el-button size="small" @click="goTab('performance')">去收益分析</el-button>
+    </div>
 
-      <el-col :xs="24" :md="12" style="margin-bottom: 12px;">
-        <el-card shadow="never">
-          <template #header>
-            <div class="decision-card-title">价格预警（最近触发）</div>
-          </template>
-          <el-table v-if="alerts && alerts.length" :data="alerts.slice(0, 8)" size="small" stripe>
-            <el-table-column prop="name" label="名称" min-width="100" />
-            <el-table-column prop="code" label="代码" width="90" />
-            <el-table-column label="说明" min-width="140">
-              <template #default="scope">{{ scope.row.message || scope.row.condition || '—' }}</template>
-            </el-table-column>
-          </el-table>
-          <div v-else class="decision-empty">暂无触发预警。</div>
-          <div style="margin-top:8px;">
-            <el-button size="small" type="warning" :loading="alertChecking" @click="() => checkAlerts(false)">立即检查预警</el-button>
-          </div>
-        </el-card>
-      </el-col>
-
-      <el-col :xs="24" :md="12" style="margin-bottom: 12px;">
-        <el-card shadow="never">
-          <template #header>
-            <div class="decision-card-title">纪律破线</div>
-          </template>
-          <el-table v-if="breachList && breachList.length" :data="breachList.slice(0, 8)" size="small" stripe>
-            <el-table-column label="规则" min-width="120">
-              <template #default="scope">{{ scope.row.rule || scope.row.title || scope.row.code || '—' }}</template>
-            </el-table-column>
-            <el-table-column label="说明" min-width="180">
-              <template #default="scope">{{ scope.row.message || scope.row.detail || scope.row.reason || '—' }}</template>
-            </el-table-column>
-          </el-table>
-          <div v-else class="decision-empty">当前未见破线（或尚未刷新纪律报告）。</div>
-        </el-card>
-      </el-col>
-
-      <el-col :xs="24" :md="12" style="margin-bottom: 12px;">
-        <el-card shadow="never">
-          <template #header>
-            <div class="decision-card-title">存款到期（30 天内 / 已到期）</div>
-          </template>
-          <el-table v-if="dueSoonRows.length" :data="dueSoonRows" size="small" stripe>
-            <el-table-column prop="bank_name" label="银行" min-width="100" />
-            <el-table-column label="金额" min-width="100">
-              <template #default="scope">{{ formatMoney(scope.row.amount) }}</template>
-            </el-table-column>
-            <el-table-column prop="due_date" label="到期日" width="110" />
-            <el-table-column label="剩余" width="90">
-              <template #default="scope">
-                <span :style="{ color: Number(scope.row.daysLeft) < 0 ? '#E6A23C' : '#606266' }">
-                  {{ scope.row.daysLeft == null ? '—' : (scope.row.daysLeft < 0 ? '已到期' : scope.row.daysLeft + '天') }}
-                </span>
-              </template>
-            </el-table-column>
-          </el-table>
-          <div v-else class="decision-empty">30 天内无到期存款。</div>
-        </el-card>
-      </el-col>
-    </el-row>
+    <el-alert
+      :title="headline"
+      type="info"
+      show-icon
+      :closable="false"
+      style="margin-bottom: 8px;"
+    />
   </PageShell>
 </template>
 
@@ -135,12 +63,7 @@ import { useAppCtx } from '../composables/useAppCtx.js';
 const {
   goTab,
   marketSignals,
-  marketHighlights,
-  marketComparisons,
   marketLoading,
-  triggeredAlerts,
-  alertChecking,
-  checkAlerts,
   refreshMarket,
   breaches,
   summaryText,
@@ -168,16 +91,6 @@ const dueSoonCount = computed(() => dueSoonRows.value.length);
 const dueSoonAmount = computed(() => dueSoonRows.value.reduce((s, r) => s + Number(r.amount || 0), 0));
 
 const signals = computed(() => marketSignals?.value ?? marketSignals ?? {});
-const highlights = computed(() => marketHighlights?.value ?? marketHighlights ?? []);
-const comparisons = computed(() => marketComparisons?.value ?? marketComparisons ?? []);
-const alerts = computed(() => {
-  const list = triggeredAlerts?.value ?? triggeredAlerts ?? [];
-  return Array.isArray(list) ? list : [];
-});
-const breachList = computed(() => {
-  const list = breaches?.value ?? breaches ?? [];
-  return Array.isArray(list) ? list : [];
-});
 
 const headline = computed(() => {
   const parts = [];
@@ -185,8 +98,7 @@ const headline = computed(() => {
   if (sig.portfolio_vs_market) parts.push(sig.portfolio_vs_market);
   if (breachCount.value) parts.push(`纪律破线 ${breachCount.value} 条`);
   if (dueSoonCount.value) parts.push(`存款近 30 天到期 ${dueSoonCount.value} 笔`);
-  if (alerts.value.length) parts.push(`预警触发 ${alerts.value.length} 条`);
-  return parts.length ? parts.join(' · ') : '先刷新：看贡献、预警、纪律、存款到期，再决定要不要动手。';
+  return parts.length ? parts.join(' · ') : '先刷新：看贡献、纪律、存款到期，再决定要不要动手。';
 });
 
 async function refreshDecision() {

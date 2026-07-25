@@ -31,44 +31,7 @@
       </div>
     </el-card>
 
-    <el-row :gutter="12" style="margin-bottom: 16px;">
-      <el-col :xs="12" :sm="8" :md="6">
-        <el-card shadow="hover" class="market-metric-card">
-          <div class="market-metric-label">今日贡献粗估</div>
-          <div class="market-metric-value" :style="{ color: (marketSignals.today_contrib_estimate || 0) >= 0 ? '#F56C6C' : '#67C23A' }">
-            {{ formatMoney(marketSignals.today_contrib_estimate || 0, 2, true) }}
-          </div>
-          <div class="market-metric-sub">用现价涨跌% × 市值估算，非账本记账</div>
-        </el-card>
-      </el-col>
-      <el-col :xs="12" :sm="8" :md="6">
-        <el-card shadow="hover" class="market-metric-card">
-          <div class="market-metric-label">组合涨跌粗估</div>
-          <div class="market-metric-value">
-            {{ marketSignals.portfolio_change_pct_estimate == null ? '—' : ((marketSignals.portfolio_change_pct_estimate >= 0 ? '+' : '') + Number(marketSignals.portfolio_change_pct_estimate).toFixed(2) + '%') }}
-          </div>
-          <div class="market-metric-sub">投资市值 {{ formatMoney(marketSignals.total_market_value || 0) }}</div>
-        </el-card>
-      </el-col>
-      <el-col :xs="12" :sm="8" :md="6">
-        <el-card shadow="hover" class="market-metric-card">
-          <div class="market-metric-label">持仓浮盈（账本）</div>
-          <div class="market-metric-value" :style="{ color: (marketSignals.total_profit || 0) >= 0 ? '#F56C6C' : '#67C23A' }">
-            {{ formatMoney(marketSignals.total_profit || 0, 2, true) }}
-          </div>
-          <div class="market-metric-sub">与首页同一口径</div>
-        </el-card>
-      </el-col>
-      <el-col :xs="12" :sm="8" :md="6">
-        <el-card shadow="hover" class="market-metric-card">
-          <div class="market-metric-label">全周期盈亏（账本）</div>
-          <div class="market-metric-value" :style="{ color: (marketSignals.lifetime_profit || 0) >= 0 ? '#F56C6C' : '#67C23A' }">
-            {{ formatMoney(marketSignals.lifetime_profit || 0, 2, true) }}
-          </div>
-          <div class="market-metric-sub">摊薄成本路径</div>
-        </el-card>
-      </el-col>
-    </el-row>
+    <el-row :gutter="12" style="margin-bottom: 16px;"></el-row>
 
     <el-card shadow="never" style="margin-bottom: 16px;">
       <template #header>

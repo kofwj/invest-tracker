@@ -172,15 +172,8 @@
           <button type="button" class="ov-action" @click="goTab('transactions')">
             <span class="ov-action-ico"><PenLine :size="16" :stroke-width="2" /></span>
             <span>
-              <strong>记交易</strong>
+              <strong>交易 / 分红草稿</strong>
               <small>真仓纪律，草稿确认入账</small>
-            </span>
-          </button>
-          <button type="button" class="ov-action" @click="goTab('transactions')">
-            <span class="ov-action-ico"><Banknote :size="16" :stroke-width="2" /></span>
-            <span>
-              <strong>分红草稿</strong>
-              <small>半自动入账，先核对</small>
             </span>
           </button>
         </div>
