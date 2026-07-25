@@ -418,6 +418,7 @@ const {
   snapshot,
   targets,
   summaryText,
+  resolvedTheme,
 } = useAppCtx();
 
 if (disciplinePolicy.value && !disciplinePolicy.value.targets) {
@@ -506,6 +507,14 @@ watch(
   },
   { deep: true },
 );
+
+// 切日/夜主题后重画，否则 ECharts 标题图例仍是旧色
+watch(
+  () => resolvedTheme?.value ?? resolvedTheme,
+  () => {
+    paintCharts();
+  },
+);
 </script>
 
 <style scoped>
@@ -522,6 +531,7 @@ watch(
   border-radius: 14px;
   background: var(--app-surface);
   padding: 14px;
+  color: var(--app-text);
 }
 .merge-pane-title {
   font-size: 13px;
@@ -545,7 +555,8 @@ watch(
   padding: 10px 12px;
   border: 1px solid var(--app-border);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--app-surface) 92%, var(--app-bg0));
+  background: color-mix(in srgb, var(--app-surface) 88%, var(--app-bg0));
+  color: var(--app-text);
 }
 .allocation-risk-head {
   display: flex;
@@ -553,6 +564,7 @@ watch(
   align-items: center;
   font-weight: 600;
   margin-bottom: 4px;
+  color: var(--app-text);
 }
 .risk-text { font-size: 12px; color: var(--app-muted); line-height: 1.5; }
 .target-strip {
@@ -565,7 +577,8 @@ watch(
   border: 1px solid var(--app-border);
   border-radius: 10px;
   padding: 10px 12px;
-  background: color-mix(in srgb, var(--app-surface) 94%, var(--app-bg0));
+  background: color-mix(in srgb, var(--app-surface) 88%, var(--app-bg0));
+  color: var(--app-text);
 }
 .d-label { font-size: 12px; color: var(--app-muted); }
 .d-value { font-size: 20px; font-weight: 700; margin: 4px 0 2px; color: var(--app-text); }
@@ -575,19 +588,28 @@ watch(
   padding: 12px;
   border-radius: 10px;
   border: 1px solid var(--app-border);
-  background: color-mix(in srgb, var(--app-surface) 94%, var(--app-bg0));
+  background: color-mix(in srgb, var(--app-surface) 88%, var(--app-bg0));
+  color: var(--app-text);
 }
-.breach-item.lv-warning { border-color: #f5dab1; background: #fdf6ec; }
-.breach-item.lv-ok { border-color: #e1f3d8; background: #f0f9eb; }
+.breach-item.lv-warning {
+  border-color: color-mix(in srgb, var(--app-warn) 35%, var(--app-border));
+  background: var(--app-warn-soft);
+}
+.breach-item.lv-ok {
+  border-color: color-mix(in srgb, var(--app-ok) 30%, var(--app-border));
+  background: var(--app-ok-soft);
+}
 .breach-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
   font-weight: 600;
   margin-bottom: 6px;
+  color: var(--app-text);
 }
 .breach-text { font-size: 12px; color: var(--app-muted); line-height: 1.5; }
-.chart-container { height: 220px; min-height: 180px; }
+/* 给底部图例留位，避免挤在扇区上 */
+.chart-container { height: 260px; min-height: 220px; width: 100%; }
 @media (max-width: 960px) {
   .merge-grid { grid-template-columns: 1fr; }
   .target-strip { grid-template-columns: 1fr; }
