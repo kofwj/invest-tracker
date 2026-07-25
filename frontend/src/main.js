@@ -42,7 +42,7 @@ import { createDividendHelpers } from './modules/dividends.js';
 import { createAllocationModule } from './modules/allocation.js';
 import { createAppInit } from './modules/appInit.js';
 import { createBriefHelpers } from './modules/brief.js';
-import { TAB_GROUPS, tabGroupOf, SCREENSHOT_TABS } from './modules/tabNav.js';
+import { TAB_GROUPS, tabGroupOf, SCREENSHOT_TABS, ROUTE_META, LEGACY_TAB_REDIRECT } from './modules/tabNav.js';
 import './styles/styles.css';
 
 const app = createApp({
@@ -70,8 +70,10 @@ const app = createApp({
         // 路由驱动当前页；activeTab 兼容旧模块跳转
         const goTab = (tab) => {
             if (!tab || !SCREENSHOT_TABS.includes(tab)) return;
-            if (router.currentRoute.value.name === tab) return;
-            router.push({ name: tab }).catch(() => {});
+            const name = LEGACY_TAB_REDIRECT[tab] || tab;
+            if (!ROUTE_META[name]) return;
+            if (router.currentRoute.value.name === name) return;
+            router.push({ name }).catch(() => {});
         };
         const activeTab = computed({
             get() {
@@ -610,9 +612,11 @@ const app = createApp({
             if (val === 'snapshots') {
                 fetchSnapshots().then(() => nextTick(renderSnapshotCharts));
             }
-            if (val === 'maintenance') {
-                fetchMaintenance();
+            if (val === 'ops_notify' || val === 'maintenance') {
                 fetchNotifyPanel();
+            }
+            if (val === 'ops_backup') {
+                fetchMaintenance();
             }
         });
 

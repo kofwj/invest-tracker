@@ -3,7 +3,10 @@
 export const SCREENSHOT_TABS = [
     'overview',
     'decision', 'snapshots', 'allocation', 'performance', 'market', 'discipline',
-    'holdings', 'deposits', 'transactions', 'broker', 'cash', 'maintenance',
+    'holdings', 'deposits', 'transactions', 'broker', 'cash',
+    'ops_notify', 'ops_backup',
+    // 旧名兼容（截图/书签）
+    'maintenance',
 ];
 
 /** @type {{ id: string, label: string, tabs: string[] }[]} */
@@ -11,7 +14,7 @@ export const TAB_GROUPS = [
     { id: 'home', label: '总览', tabs: ['overview'] },
     { id: 'daily', label: '日常', tabs: ['holdings', 'transactions', 'broker', 'deposits', 'cash'] },
     { id: 'analysis', label: '分析', tabs: ['decision', 'performance', 'allocation', 'snapshots', 'market', 'discipline'] },
-    { id: 'ops', label: '维护', tabs: ['maintenance'] },
+    { id: 'ops', label: '维护', tabs: ['ops_notify', 'ops_backup'] },
 ];
 
 /** 路由元信息：path 与中文标签 */
@@ -28,26 +31,37 @@ export const ROUTE_META = {
     snapshots: { path: '/snapshots', label: '资产快照' },
     market: { path: '/market', label: '市场摘要' },
     discipline: { path: '/discipline', label: '纪律与再平衡' },
-    maintenance: { path: '/maintenance', label: '数据维护' },
+    ops_notify: { path: '/ops/notify', label: '消息推送' },
+    ops_backup: { path: '/ops/backup', label: '数据备份' },
+};
+
+/** 旧 tab / path → 新路由名 */
+export const LEGACY_TAB_REDIRECT = {
+    maintenance: 'ops_notify',
 };
 
 export function tabGroupOf(tab) {
-    const hit = TAB_GROUPS.find((g) => g.tabs.includes(tab));
+    const normalized = LEGACY_TAB_REDIRECT[tab] || tab;
+    const hit = TAB_GROUPS.find((g) => g.tabs.includes(normalized));
     return hit ? hit.id : 'home';
 }
 
 export function tabLabel(tab) {
-    return ROUTE_META[tab]?.label || tab;
+    const normalized = LEGACY_TAB_REDIRECT[tab] || tab;
+    return ROUTE_META[normalized]?.label || tab;
 }
 
 /** 兼容旧 ?tab=xxx；默认今日总览 */
 export function resolveInitialTab(searchParams = null) {
     const params = searchParams || new URLSearchParams(window.location.search);
     const requested = params.get('tab');
-    if (requested && SCREENSHOT_TABS.includes(requested)) return requested;
+    if (requested && SCREENSHOT_TABS.includes(requested)) {
+        return LEGACY_TAB_REDIRECT[requested] || requested;
+    }
     return 'overview';
 }
 
 export function pathForTab(tab) {
-    return ROUTE_META[tab]?.path || '/';
+    const normalized = LEGACY_TAB_REDIRECT[tab] || tab;
+    return ROUTE_META[normalized]?.path || '/';
 }
