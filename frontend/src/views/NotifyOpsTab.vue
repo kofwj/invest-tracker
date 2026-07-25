@@ -1,7 +1,7 @@
 <template>
   <PageShell
     title="消息推送"
-    subtitle="VPS 自有通道，独立于 Hermes。密钥在服务器 .env；这里管开关、事件、试推和日志。"
+    subtitle="飞书 / 钉钉 / 企微 / Telegram 可在本页填写；.env 仍可作兜底。独立于 Hermes 长报告。"
   >
     <template #actions>
       <el-space wrap>
@@ -22,7 +22,7 @@
       <MetricCard
         label="已配置通道"
         :value="`${configuredCount} / ${channelRows.length}`"
-        :sub="configuredNames || '密钥在 .env'"
+        :sub="configuredNames || '还没配通道'"
         :tone="configuredCount ? 'ok' : 'warn'"
       />
       <MetricCard
@@ -75,8 +75,8 @@
       <template #header>
         <div class="ops-card-head">
           <div>
-            <div class="ops-section-title">通道就绪</div>
-            <div class="ops-hint">只显示是否配好；密钥不进网页</div>
+            <div class="ops-section-title">通道密钥</div>
+            <div class="ops-hint">本页填写优先；留空不改，勾选「清除」删掉库里的值（仍可用 .env 兜底）</div>
           </div>
         </div>
       </template>
@@ -89,11 +89,110 @@
         >
           <div class="channel-name">{{ row.name }}</div>
           <el-tag :type="row.configured ? 'success' : 'info'" size="small" effect="light">
-            {{ row.configured ? '已配置' : '未配置' }}
+            {{ row.configured ? (row.sourceLabel || '已配置') : '未配置' }}
           </el-tag>
-          <div class="channel-hint" :title="row.hint">{{ row.hint }}</div>
+          <div class="channel-hint" :title="row.hint">{{ row.hint || '—' }}</div>
         </div>
       </div>
+
+      <el-form label-position="top" class="cred-form">
+        <el-row :gutter="16">
+          <el-col :xs="24" :md="12">
+            <el-form-item :label="fieldLabel('feishu_webhook')">
+              <el-input
+                v-model="notifyChannelDraft.feishu_webhook"
+                type="password"
+                show-password
+                clearable
+                placeholder="飞书机器人 Webhook"
+                :disabled="notifyChannelClear.feishu_webhook"
+              />
+              <div class="cred-meta">
+                <el-checkbox v-model="notifyChannelClear.feishu_webhook">清除已存</el-checkbox>
+                <span v-if="flagOf('feishu_webhook')" class="cred-flag">库里已有</span>
+              </div>
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :md="12">
+            <el-form-item :label="fieldLabel('wecom_webhook')">
+              <el-input
+                v-model="notifyChannelDraft.wecom_webhook"
+                type="password"
+                show-password
+                clearable
+                placeholder="企业微信群机器人 Webhook"
+                :disabled="notifyChannelClear.wecom_webhook"
+              />
+              <div class="cred-meta">
+                <el-checkbox v-model="notifyChannelClear.wecom_webhook">清除已存</el-checkbox>
+                <span v-if="flagOf('wecom_webhook')" class="cred-flag">库里已有</span>
+              </div>
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :md="12">
+            <el-form-item :label="fieldLabel('dingtalk_webhook')">
+              <el-input
+                v-model="notifyChannelDraft.dingtalk_webhook"
+                type="password"
+                show-password
+                clearable
+                placeholder="钉钉机器人 Webhook"
+                :disabled="notifyChannelClear.dingtalk_webhook"
+              />
+              <div class="cred-meta">
+                <el-checkbox v-model="notifyChannelClear.dingtalk_webhook">清除已存</el-checkbox>
+                <span v-if="flagOf('dingtalk_webhook')" class="cred-flag">库里已有</span>
+              </div>
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :md="12">
+            <el-form-item :label="fieldLabel('dingtalk_secret')">
+              <el-input
+                v-model="notifyChannelDraft.dingtalk_secret"
+                type="password"
+                show-password
+                clearable
+                placeholder="钉钉加签密钥（可选）"
+                :disabled="notifyChannelClear.dingtalk_secret"
+              />
+              <div class="cred-meta">
+                <el-checkbox v-model="notifyChannelClear.dingtalk_secret">清除已存</el-checkbox>
+                <span v-if="flagOf('dingtalk_secret')" class="cred-flag">库里已有</span>
+              </div>
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :md="12">
+            <el-form-item :label="fieldLabel('telegram_bot_token')">
+              <el-input
+                v-model="notifyChannelDraft.telegram_bot_token"
+                type="password"
+                show-password
+                clearable
+                placeholder="Telegram Bot Token"
+                :disabled="notifyChannelClear.telegram_bot_token"
+              />
+              <div class="cred-meta">
+                <el-checkbox v-model="notifyChannelClear.telegram_bot_token">清除已存</el-checkbox>
+                <span v-if="flagOf('telegram_bot_token')" class="cred-flag">库里已有</span>
+              </div>
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :md="12">
+            <el-form-item :label="fieldLabel('telegram_chat_id')">
+              <el-input
+                v-model="notifyChannelDraft.telegram_chat_id"
+                clearable
+                placeholder="Telegram Chat ID"
+                :disabled="notifyChannelClear.telegram_chat_id"
+              />
+              <div class="cred-meta">
+                <el-checkbox v-model="notifyChannelClear.telegram_chat_id">清除已存</el-checkbox>
+                <span v-if="flagOf('telegram_chat_id')" class="cred-flag">库里已有</span>
+              </div>
+            </el-form-item>
+          </el-col>
+        </el-row>
+      </el-form>
     </el-card>
 
     <el-card shadow="never" class="ops-card">
@@ -183,6 +282,7 @@ import { useAppCtx } from '../composables/useAppCtx.js';
 
 const {
   notifyStatus, notifyLogs, notifyLoading, notifyEventDraft,
+  notifyChannelDraft, notifyChannelClear,
   fetchNotifyPanel, saveNotifyPanel, testNotifyPush, pushDepositDueNow, pushDisciplineNow,
   eveningBriefDialog, openEveningBrief,
 } = useAppCtx();
@@ -203,13 +303,28 @@ const EVENT_LABEL = {
   test: '试推',
 };
 
+const FIELD_LABEL = {
+  feishu_webhook: '飞书 Webhook',
+  dingtalk_webhook: '钉钉 Webhook',
+  dingtalk_secret: '钉钉加签 Secret',
+  wecom_webhook: '企业微信 Webhook',
+  telegram_bot_token: 'Telegram Bot Token',
+  telegram_chat_id: 'Telegram Chat ID',
+};
+
+const SOURCE_LABEL = {
+  db: '页面已存',
+  env: '来自 .env',
+};
+
 const channelRows = computed(() => {
   const ch = notifyStatus.value?.channels || {};
   return Object.keys(CHANNEL_LABEL).map((k) => ({
     key: k,
     name: CHANNEL_LABEL[k],
     configured: !!(ch[k] && ch[k].configured),
-    hint: (ch[k] && ch[k].hint) || '—',
+    hint: (ch[k] && ch[k].hint) || '',
+    sourceLabel: SOURCE_LABEL[(ch[k] && ch[k].source) || ''] || '',
   }));
 });
 
@@ -233,6 +348,13 @@ const templateLabel = computed(() => {
   const t = notifyStatus.value?.template || 'medium';
   return t === 'short' ? '短' : '中';
 });
+
+function fieldLabel(key) {
+  return FIELD_LABEL[key] || key;
+}
+function flagOf(key) {
+  return !!(notifyStatus.value?.credential_flags && notifyStatus.value.credential_flags[key]);
+}
 </script>
 
 <style scoped>
@@ -264,6 +386,7 @@ const templateLabel = computed(() => {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
+  margin-bottom: 16px;
 }
 .channel-chip {
   min-width: 0;
@@ -290,6 +413,19 @@ const templateLabel = computed(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.cred-form { margin-top: 4px; }
+.cred-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--app-soft);
+}
+.cred-flag {
+  color: var(--app-ok, #3d9a5f);
+  font-weight: 600;
 }
 .ops-action-grid {
   display: grid;

@@ -141,3 +141,72 @@ def test_legacy_feishu_env_still_configures_channel(monkeypatch):
     monkeypatch.setenv("FEISHU_ALERT_WEBHOOK", "https://open.feishu.cn/open-apis/bot/v2/hook/legacy")
     cfg = channel_config()
     assert cfg["feishu"]["configured"] is True
+
+
+def test_channel_credentials_ui_override_env(client, app_module, monkeypatch):
+    """页面保存的通道密钥优先于 .env；不回填明文。"""
+    from unittest.mock import patch
+
+    monkeypatch.delenv("NOTIFY_FEISHU_WEBHOOK", raising=False)
+    monkeypatch.delenv("FEISHU_ALERT_WEBHOOK", raising=False)
+    monkeypatch.setenv("NOTIFY_ENABLED", "1")
+
+    # 初始未配置
+    st0 = client.get("/notify/status").json()
+    assert st0["channels"]["feishu"]["configured"] is False
+    assert st0["credential_flags"]["feishu_webhook"] is False
+
+    save = client.put(
+        "/notify/settings",
+        json={
+            "channel_credentials": {
+                "feishu_webhook": "https://open.feishu.cn/open-apis/bot/v2/hook/from-ui",
+            }
+        },
+    )
+    assert save.status_code == 200
+    body = save.json()
+    assert body["channels"]["feishu"]["configured"] is True
+    assert body["channels"]["feishu"]["source"] == "db"
+    assert body["credential_flags"]["feishu_webhook"] is True
+    # 状态接口不得回填明文 webhook
+    assert "from-ui" not in str(body)
+    assert "…" in (body["channels"]["feishu"].get("hint") or "") or body["channels"]["feishu"].get("hint") == "***"
+
+    class FakeResp:
+        status_code = 200
+        text = "ok"
+
+        def json(self):
+            return {"StatusCode": 0}
+
+    with patch("requests.post", return_value=FakeResp()) as mock_post:
+        res = client.post(
+            "/notify/test",
+            json={"text": "hi", "channels": ["feishu"], "force": True},
+        )
+        assert res.status_code == 200
+        assert res.json()["sent"] is True
+        assert mock_post.called
+        assert "from-ui" in mock_post.call_args[0][0]
+
+    # 清除库值后回到未配置（无 env 时）
+    clear = client.put(
+        "/notify/settings",
+        json={"channel_credentials": {"feishu_webhook": ""}},
+    )
+    assert clear.status_code == 200
+    assert clear.json()["channels"]["feishu"]["configured"] is False
+    assert clear.json()["credential_flags"]["feishu_webhook"] is False
+
+
+def test_channel_credentials_db_beats_env(app_module, monkeypatch):
+    from notify import channel_config, save_channel_credentials
+
+    monkeypatch.setenv("NOTIFY_FEISHU_WEBHOOK", "https://example.com/from-env")
+    with app_module.get_db_connection(app_module.DB_PATH) as conn:
+        save_channel_credentials(conn, {"feishu_webhook": "https://example.com/from-db"})
+        conn.commit()
+        cfg = channel_config(conn)
+        assert cfg["feishu"]["webhook"] == "https://example.com/from-db"
+        assert cfg["feishu"]["source"] == "db"

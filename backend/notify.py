@@ -39,6 +39,16 @@ NOTIFY_EVENT_MAP_KEY = "notify_event_channels"
 NOTIFY_ENABLED_KEY = "notify_enabled"
 NOTIFY_COOLDOWN_KEY = "notify_cooldown_minutes"
 NOTIFY_TEMPLATE_KEY = "notify_template"  # short | medium
+# 页面可写通道密钥（优先于 .env；.env 仍作兜底）
+NOTIFY_CHANNEL_CREDS_KEY = "notify_channel_credentials"
+CHANNEL_CRED_FIELDS = (
+    "feishu_webhook",
+    "dingtalk_webhook",
+    "dingtalk_secret",
+    "wecom_webhook",
+    "telegram_bot_token",
+    "telegram_chat_id",
+)
 
 DEFAULT_EVENT_CHANNELS = {
     "price_alert": "feishu,telegram",
@@ -88,47 +98,103 @@ def _env_bool(name: str, default: bool = False) -> bool:
     return raw.lower() in ("1", "true", "yes", "on")
 
 
-def channel_config() -> Dict[str, Dict[str, Any]]:
-    """Return channel readiness (secrets masked for status APIs)."""
-    feishu = _env("NOTIFY_FEISHU_WEBHOOK") or _env("FEISHU_ALERT_WEBHOOK")
-    dingtalk = _env("NOTIFY_DINGTALK_WEBHOOK")
-    dingtalk_secret = _env("NOTIFY_DINGTALK_SECRET")
-    wecom = _env("NOTIFY_WECOM_WEBHOOK")
-    tg_token = _env("NOTIFY_TELEGRAM_BOT_TOKEN")
-    tg_chat = _env("NOTIFY_TELEGRAM_CHAT_ID")
+def _mask_secret(value: str) -> str:
+    value = str(value or "").strip()
+    if not value:
+        return ""
+    if len(value) <= 16:
+        return "***"
+    return value[:12] + "…" + value[-6:]
 
-    def mask(url: str) -> str:
-        if not url:
-            return ""
-        if len(url) <= 16:
-            return "***"
-        return url[:12] + "…" + url[-6:]
+
+def _load_channel_creds(conn=None) -> Dict[str, str]:
+    """DB-stored channel secrets (may be empty)."""
+    out = {k: "" for k in CHANNEL_CRED_FIELDS}
+    if conn is None:
+        return out
+    raw = _get_setting(conn, NOTIFY_CHANNEL_CREDS_KEY)
+    if not raw:
+        return out
+    try:
+        data = json.loads(raw)
+    except Exception:
+        return out
+    if not isinstance(data, dict):
+        return out
+    for key in CHANNEL_CRED_FIELDS:
+        val = data.get(key)
+        if val is None:
+            continue
+        out[key] = str(val).strip()
+    return out
+
+
+def channel_config(conn=None) -> Dict[str, Dict[str, Any]]:
+    """Return channel readiness. DB settings override .env; secrets stay internal."""
+    db = _load_channel_creds(conn)
+    feishu = db.get("feishu_webhook") or _env("NOTIFY_FEISHU_WEBHOOK") or _env("FEISHU_ALERT_WEBHOOK")
+    dingtalk = db.get("dingtalk_webhook") or _env("NOTIFY_DINGTALK_WEBHOOK")
+    dingtalk_secret = db.get("dingtalk_secret") or _env("NOTIFY_DINGTALK_SECRET")
+    wecom = db.get("wecom_webhook") or _env("NOTIFY_WECOM_WEBHOOK")
+    tg_token = db.get("telegram_bot_token") or _env("NOTIFY_TELEGRAM_BOT_TOKEN")
+    tg_chat = db.get("telegram_chat_id") or _env("NOTIFY_TELEGRAM_CHAT_ID")
 
     return {
         "feishu": {
             "configured": bool(feishu),
-            "hint": mask(feishu),
+            "hint": _mask_secret(feishu),
             "webhook": feishu,
+            "source": "db" if db.get("feishu_webhook") else ("env" if feishu else ""),
         },
         "dingtalk": {
             "configured": bool(dingtalk),
-            "hint": mask(dingtalk),
+            "hint": _mask_secret(dingtalk),
             "webhook": dingtalk,
             "secret": dingtalk_secret,
             "has_secret": bool(dingtalk_secret),
+            "source": "db" if db.get("dingtalk_webhook") else ("env" if dingtalk else ""),
         },
         "wecom": {
             "configured": bool(wecom),
-            "hint": mask(wecom),
+            "hint": _mask_secret(wecom),
             "webhook": wecom,
+            "source": "db" if db.get("wecom_webhook") else ("env" if wecom else ""),
         },
         "telegram": {
             "configured": bool(tg_token and tg_chat),
             "hint": f"chat={tg_chat}" if tg_chat else "",
             "bot_token": tg_token,
             "chat_id": tg_chat,
+            "source": "db" if (db.get("telegram_bot_token") or db.get("telegram_chat_id")) else (
+                "env" if (tg_token or tg_chat) else ""
+            ),
         },
     }
+
+
+def save_channel_credentials(conn, payload: Optional[Dict[str, Any]]) -> Dict[str, str]:
+    """Merge UI channel secrets into settings.
+
+    Rules per field:
+    - missing / None: keep previous
+    - \"\": clear
+    - non-empty string: set
+    """
+    if payload is None:
+        return _load_channel_creds(conn)
+    if not isinstance(payload, dict):
+        raise ValueError("channel_credentials 必须是对象")
+    current = _load_channel_creds(conn)
+    next_vals = dict(current)
+    for key in CHANNEL_CRED_FIELDS:
+        if key not in payload:
+            continue
+        raw = payload.get(key)
+        if raw is None:
+            continue
+        next_vals[key] = str(raw).strip()
+    _set_setting(conn, NOTIFY_CHANNEL_CREDS_KEY, json.dumps(next_vals, ensure_ascii=False))
+    return next_vals
 
 
 def _get_setting(conn, key: str) -> Optional[str]:
@@ -224,6 +290,7 @@ def save_notify_settings(
     cooldown_minutes: Optional[int] = None,
     template: Optional[str] = None,
     event_channels: Optional[Dict[str, Any]] = None,
+    channel_credentials: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     ensure_notify_tables(conn)
     if enabled is not None:
@@ -242,6 +309,8 @@ def save_notify_settings(
             else:
                 cleaned[k] = ",".join(_parse_channel_list(str(v)))
         _set_setting(conn, NOTIFY_EVENT_MAP_KEY, json.dumps(cleaned, ensure_ascii=False))
+    if channel_credentials is not None:
+        save_channel_credentials(conn, channel_credentials)
     return notify_status(conn)
 
 
@@ -308,8 +377,8 @@ def _post_json(url: str, payload: dict, timeout: int = 10) -> Tuple[bool, Option
         return False, None, str(exc)
 
 
-def send_to_channel(channel: str, text: str, cfg: Optional[Dict] = None) -> Dict[str, Any]:
-    cfg = cfg or channel_config()
+def send_to_channel(channel: str, text: str, cfg: Optional[Dict] = None, conn=None) -> Dict[str, Any]:
+    cfg = cfg or channel_config(conn)
     ch = cfg.get(channel) or {}
     if channel == "feishu":
         webhook = ch.get("webhook") or ""
@@ -433,7 +502,7 @@ def dispatch(
 
     if not channels:
         # fallback: any configured channel
-        cfg = channel_config()
+        cfg = channel_config(conn)
         channels = [c for c in CHANNEL_KEYS if cfg[c]["configured"]]
 
     if not channels:
@@ -448,7 +517,7 @@ def dispatch(
     body_raw = text or ""
     message = format_message(title=title, body=body_raw, event=event, template=tmpl)
     cooldown = 0 if (force or not respect_cooldown or event == "test") else get_cooldown_minutes(conn)
-    cfg = channel_config()
+    cfg = channel_config(conn)
 
     results = []
     any_ok = False
@@ -521,15 +590,19 @@ def list_notify_logs(conn, limit: int = 20) -> List[Dict[str, Any]]:
 
 
 def notify_status(conn=None) -> Dict[str, Any]:
-    cfg = channel_config()
+    cfg = channel_config(conn)
+    db_creds = _load_channel_creds(conn)
     public_channels = {
         k: {
             "configured": v.get("configured"),
             "hint": v.get("hint"),
+            "source": v.get("source") or "",
             **({"has_secret": v.get("has_secret")} if k == "dingtalk" else {}),
         }
         for k, v in cfg.items()
     }
+    # 表单不回填明文；只告诉前端哪些字段已有值（可留空不改 / 填空清除）
+    credential_flags = {k: bool(db_creds.get(k)) for k in CHANNEL_CRED_FIELDS}
     return {
         "enabled": is_notify_enabled(conn),
         "template": get_template_mode(conn),
@@ -538,6 +611,8 @@ def notify_status(conn=None) -> Dict[str, Any]:
         "event_channels": event_channel_map(conn),
         "events": list(EVENT_KEYS),
         "channel_keys": list(CHANNEL_KEYS),
+        "credential_fields": list(CHANNEL_CRED_FIELDS),
+        "credential_flags": credential_flags,
         "compat": {
             "FEISHU_ALERT_WEBHOOK": bool(_env("FEISHU_ALERT_WEBHOOK")),
             "NOTIFY_FEISHU_WEBHOOK": bool(_env("NOTIFY_FEISHU_WEBHOOK")),

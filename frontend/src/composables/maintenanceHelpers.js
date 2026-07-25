@@ -20,10 +20,47 @@ export function createMaintenanceHelpers({
         event_channels: {},
         events: [],
         channel_keys: [],
+        credential_flags: {},
+        credential_fields: [],
     });
     const notifyLogs = ref([]);
     const notifyLoading = ref(false);
     const notifyEventDraft = ref({});
+    // 通道密钥草稿：空=不改；有值=覆盖；clearFlags 为 true 时传空串清除
+    const notifyChannelDraft = ref({
+        feishu_webhook: '',
+        dingtalk_webhook: '',
+        dingtalk_secret: '',
+        wecom_webhook: '',
+        telegram_bot_token: '',
+        telegram_chat_id: '',
+    });
+    const notifyChannelClear = ref({
+        feishu_webhook: false,
+        dingtalk_webhook: false,
+        dingtalk_secret: false,
+        wecom_webhook: false,
+        telegram_bot_token: false,
+        telegram_chat_id: false,
+    });
+
+    const emptyChannelDraft = () => ({
+        feishu_webhook: '',
+        dingtalk_webhook: '',
+        dingtalk_secret: '',
+        wecom_webhook: '',
+        telegram_bot_token: '',
+        telegram_chat_id: '',
+    });
+
+    const emptyChannelClear = () => ({
+        feishu_webhook: false,
+        dingtalk_webhook: false,
+        dingtalk_secret: false,
+        wecom_webhook: false,
+        telegram_bot_token: false,
+        telegram_chat_id: false,
+    });
 
     const fetchMaintenance = async () => {
         try {
@@ -43,23 +80,54 @@ export function createMaintenanceHelpers({
             ]);
             notifyStatus.value = st.data || {};
             notifyEventDraft.value = { ...(st.data?.event_channels || {}) };
+            // 不回填明文密钥；刷新后清空草稿
+            notifyChannelDraft.value = emptyChannelDraft();
+            notifyChannelClear.value = emptyChannelClear();
             notifyLogs.value = logs.data?.items || [];
         } catch (e) {
             console.error('获取通知配置失败', e);
         }
     };
 
+    const buildChannelCredentialsPayload = () => {
+        const payload = {};
+        const draft = notifyChannelDraft.value || {};
+        const clear = notifyChannelClear.value || {};
+        const fields = [
+            'feishu_webhook',
+            'dingtalk_webhook',
+            'dingtalk_secret',
+            'wecom_webhook',
+            'telegram_bot_token',
+            'telegram_chat_id',
+        ];
+        fields.forEach((key) => {
+            if (clear[key]) {
+                payload[key] = '';
+                return;
+            }
+            const val = String(draft[key] || '').trim();
+            if (val) payload[key] = val;
+        });
+        return Object.keys(payload).length ? payload : null;
+    };
+
     const saveNotifyPanel = async () => {
         notifyLoading.value = true;
         try {
-            const res = await api.saveNotifySettings({
+            const channel_credentials = buildChannelCredentialsPayload();
+            const body = {
                 enabled: !!notifyStatus.value.enabled,
                 cooldown_minutes: Number(notifyStatus.value.cooldown_minutes || 240),
                 template: notifyStatus.value.template || 'medium',
                 event_channels: notifyEventDraft.value,
-            });
+            };
+            if (channel_credentials) body.channel_credentials = channel_credentials;
+            const res = await api.saveNotifySettings(body);
             notifyStatus.value = res.data || notifyStatus.value;
             notifyEventDraft.value = { ...(res.data?.event_channels || {}) };
+            notifyChannelDraft.value = emptyChannelDraft();
+            notifyChannelClear.value = emptyChannelClear();
             ElMessage.success('通知设置已保存');
             await fetchNotifyPanel();
         } catch (e) {
@@ -74,7 +142,7 @@ export function createMaintenanceHelpers({
         try {
             const res = await api.testNotify({
                 title: '测试推送',
-                text: '这是 invest-tracker 维护页发出的试推消息。',
+                text: '这是 invest-tracker 设置页发出的试推消息。',
                 event: 'test',
                 force: true,
             });
@@ -217,6 +285,8 @@ export function createMaintenanceHelpers({
         notifyLogs,
         notifyLoading,
         notifyEventDraft,
+        notifyChannelDraft,
+        notifyChannelClear,
         fetchNotifyPanel,
         saveNotifyPanel,
         testNotifyPush,

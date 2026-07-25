@@ -50,6 +50,8 @@ class NotifySettingsBody(BaseModel):
     cooldown_minutes: Optional[int] = Field(default=None, ge=0, le=10080)
     template: Optional[str] = None  # short | medium
     event_channels: Optional[Dict[str, Any]] = None
+    # 页面配置通道密钥：缺省字段不改；空字符串清除；有值则覆盖
+    channel_credentials: Optional[Dict[str, Any]] = None
 
 
 class NotifyRunBody(BaseModel):
@@ -69,13 +71,17 @@ def put_notify_settings(body: NotifySettingsBody):
     if body.template is not None and body.template not in ("short", "medium"):
         raise HTTPException(status_code=400, detail="template 只能是 short 或 medium")
     with db_session() as conn:
-        data = save_notify_settings(
-            conn,
-            enabled=body.enabled,
-            cooldown_minutes=body.cooldown_minutes,
-            template=body.template,
-            event_channels=body.event_channels,
-        )
+        try:
+            data = save_notify_settings(
+                conn,
+                enabled=body.enabled,
+                cooldown_minutes=body.cooldown_minutes,
+                template=body.template,
+                event_channels=body.event_channels,
+                channel_credentials=body.channel_credentials,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
         conn.commit()
     return data
 
