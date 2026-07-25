@@ -1,36 +1,5 @@
 <template>
   <div class="overview-page">
-    <div class="overview-header">
-      <div>
-        <div class="overview-kicker">
-          <span class="overview-dot" />
-          盘中粗估 · 不入账
-        </div>
-        <h3 class="overview-title">家底一眼清</h3>
-        <div class="overview-subtitle">
-          总资产、浮盈、现金存款与状态压成一屏；点持仓进明细。
-        </div>
-      </div>
-      <div class="overview-actions">
-        <button type="button" class="ov-btn" :disabled="marketLoading" @click="refreshOverview">
-          <RefreshCw :size="14" :stroke-width="2" :class="{ spin: marketLoading }" />
-          刷新
-        </button>
-        <button type="button" class="ov-btn" @click="goTab('holdings')">
-          <Layers :size="14" :stroke-width="2" />
-          持仓明细
-        </button>
-        <button type="button" class="ov-btn" @click="goTab('decision')">
-          <Compass :size="14" :stroke-width="2" />
-          今天该看
-        </button>
-        <button type="button" class="ov-btn primary" @click="goTab('transactions')">
-          <PenLine :size="14" :stroke-width="2" />
-          记交易
-        </button>
-      </div>
-    </div>
-
     <section class="overview-hero">
       <div class="overview-metrics">
         <div class="ov-metric main">
@@ -251,7 +220,6 @@ import {
   PenLine,
   PieChart,
   Radar,
-  RefreshCw,
   TrendingUp,
   Zap,
 } from 'lucide-vue-next';
@@ -267,7 +235,6 @@ const {
   pendingTransactions,
   goPendingTransactions,
   marketSignals,
-  marketLoading,
   refreshMarket,
   showTransactions,
   formatMoney,
@@ -376,51 +343,6 @@ onMounted(() => {
   font-feature-settings: "cv01", "ss03";
 }
 
-.overview-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 14px;
-  flex-wrap: wrap;
-  margin-bottom: 18px;
-}
-.overview-kicker {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--ov-text-3);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-.overview-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--ov-ok);
-  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.15);
-}
-.overview-title {
-  margin: 10px 0 0;
-  font-size: clamp(28px, 4vw, 40px);
-  font-weight: 600;
-  letter-spacing: -0.04em;
-  line-height: 1.05;
-  color: var(--ov-text);
-}
-.overview-subtitle {
-  margin-top: 8px;
-  font-size: 13px;
-  color: var(--ov-text-3);
-  line-height: 1.55;
-  max-width: 520px;
-}
-.overview-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  align-items: center;
-}
 .ov-btn {
   display: inline-flex;
   align-items: center;
