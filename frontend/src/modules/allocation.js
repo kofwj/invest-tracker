@@ -1,9 +1,10 @@
 import { formatMoney } from '../utils/index.js';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
+import api from '../api/index.js';
 
 /**
  * Allocation analysis + summary + health + chart rendering.
- * Consolidated from domainHelpers createAllocationAnalysis + inline render in main.js.
+ * Health thresholds come from GET /allocation/story (discipline_policy), not hardcoded.
  */
 const createAllocationModule = ({
     holdings,
@@ -13,6 +14,8 @@ const createAllocationModule = ({
     allocationAnalysis,
     macroAllocationAnalysis,
     portfolioExpectedReturn,
+    allocationStory,
+    allocationStoryLoading,
 }) => {
     const defaultExpectedReturns = {
         'A股权益': 6.0,
@@ -143,7 +146,7 @@ const createAllocationModule = ({
             return {
                 category: cat,
                 market_value: data.market_value,
-                percentage: (data.market_value / totalValue) * 100,
+                percentage: totalValue > 0 ? (data.market_value / totalValue) * 100 : 0,
                 profit: data.profit,
                 lifetime_profit: data.lifetime_profit || 0,
                 profit_rate: data.cost > 0 ? (data.profit / data.cost) * 100 : 0,
@@ -175,53 +178,101 @@ const createAllocationModule = ({
         portfolioExpectedReturn.value = totalWeight > 0 ? weightedSum / totalWeight : 0;
     };
 
+    const emptyStory = () => ({
+        headline: '',
+        severity: 'ok',
+        bullets: [],
+        policy: null,
+        snapshot: null,
+        gaps: null,
+        health: [],
+        issues: [],
+        concentration: null,
+        homogeneity: { groups: [], note: '' },
+        profit_dependency: null,
+        liquidity: null,
+        scenarios: [],
+        discipline_summary: '',
+        open_draft_count: 0,
+    });
+
+    if (allocationStory && allocationStory.value == null) {
+        allocationStory.value = emptyStory();
+    }
+
+    const fetchAllocationStory = async () => {
+        if (allocationStoryLoading) allocationStoryLoading.value = true;
+        try {
+            const res = await api.allocationStory();
+            allocationStory.value = res.data || emptyStory();
+        } catch (e) {
+            console.warn('allocation story failed', e);
+            // keep last good story if any
+            if (!allocationStory.value) allocationStory.value = emptyStory();
+        } finally {
+            if (allocationStoryLoading) allocationStoryLoading.value = false;
+        }
+    };
+
+    const storySnap = computed(() => allocationStory?.value?.snapshot || null);
+    const storyPolicy = computed(() => allocationStory?.value?.policy || null);
+
     const allocationSummary = computed(() => {
-        const total = Number(dashboard.value.total_assets || 0);
-        const getGroup = (name) => macroAllocationAnalysis.value.find(x => x.group === name) || { amount: 0, percentage: 0, expected_return: 0 };
+        const snap = storySnap.value;
+        const total = Number(snap?.total_assets ?? dashboard.value.total_assets ?? 0);
+        if (snap) {
+            const equityAmount = Number(snap.equity_mv || 0);
+            const fixedAmount = Number(snap.fixed_mv || 0);
+            const depositAmount = Number(snap.deposit_mv || 0);
+            const defensiveAmount = fixedAmount + depositAmount;
+            // defensive_pct from backend may include defensive_extra
+            const equityRatio = Number(snap.equity_pct || 0);
+            const defensiveRatio = Number(snap.defensive_pct || 0);
+            const comment = allocationStory.value?.headline
+                || allocationStory.value?.discipline_summary
+                || '当前配置结论加载中…';
+            return {
+                total,
+                equityAmount,
+                equityRatio,
+                defensiveAmount,
+                defensiveRatio,
+                fixedAmount,
+                depositAmount,
+                comment,
+            };
+        }
+        // Fallback before story loads: pie-side macro only (no threshold commentary).
+        const getGroup = (name) => macroAllocationAnalysis.value.find(x => x.group === name) || { amount: 0, percentage: 0 };
         const equity = getGroup('权益');
         const fixed = getGroup('固收');
         const deposit = getGroup('存款');
         const defensiveAmount = Number(fixed.amount || 0) + Number(deposit.amount || 0);
-        const equityRatio = Number(equity.percentage || 0);
-        const defensiveRatio = total > 0 ? defensiveAmount / total * 100 : 0;
-        let comment = '当前配置以稳健防守为主，权益、固收和存款比例可在这里快速核对。';
-        if (equityRatio > 55) comment = '权益资产占比偏高，若市场回撤，组合波动会明显放大。';
-        else if (equityRatio < 35) comment = '权益资产占比较低，组合更稳，但长期收益弹性可能不足。';
-        else comment = '权益占比处于相对均衡区间，固收和存款仍能提供较强缓冲。';
-        return { total, equityAmount: Number(equity.amount || 0), equityRatio, defensiveAmount, defensiveRatio, fixedAmount: Number(fixed.amount || 0), depositAmount: Number(deposit.amount || 0), comment };
+        return {
+            total,
+            equityAmount: Number(equity.amount || 0),
+            equityRatio: Number(equity.percentage || 0),
+            defensiveAmount,
+            defensiveRatio: total > 0 ? defensiveAmount / total * 100 : 0,
+            fixedAmount: Number(fixed.amount || 0),
+            depositAmount: Number(deposit.amount || 0),
+            comment: '正在加载配置诊断…',
+        };
     });
 
     const allocationHealth = computed(() => {
-        const eq = allocationSummary.value.equityRatio;
-        const defensive = allocationSummary.value.defensiveRatio;
-        const maxCat = allocationAnalysis.value.length ? allocationAnalysis.value[0] : null;
-        const pending = Number(dashboard.value.pending_purchase || 0);
-        return [
-            {
-                label: '权益波动暴露',
-                status: eq > 55 ? '偏高' : (eq < 35 ? '偏低' : '适中'),
-                type: eq > 55 ? 'warning' : 'success',
-                text: `权益占总资产 ${eq.toFixed(1)}%，用于判断组合对股市波动的敏感度。`
-            },
-            {
-                label: '防守缓冲',
-                status: defensive >= 40 ? '充足' : '偏少',
-                type: defensive >= 40 ? 'success' : 'warning',
-                text: `固收、证券现金、银行存款和申购在途合计 ${defensive.toFixed(1)}%，是组合回撤缓冲。`
-            },
-            {
-                label: '单类集中度',
-                status: maxCat && maxCat.percentage > 35 ? '集中' : '分散',
-                type: maxCat && maxCat.percentage > 35 ? 'warning' : 'success',
-                text: maxCat ? `${maxCat.category} 占 ${maxCat.percentage.toFixed(1)}%，金额 ${formatMoney(maxCat.market_value)}。` : '暂无资产分类数据。'
-            },
-            {
-                label: '申购在途',
-                status: pending > 0 ? '待确认' : '无',
-                type: pending > 0 ? 'info' : 'success',
-                text: pending > 0 ? `当前申购在途 ${formatMoney(pending)}，已计入固收/总资产，但不计入持仓盈亏。` : '当前没有申购待确认资产。'
-            }
-        ];
+        const list = allocationStory?.value?.health;
+        if (Array.isArray(list) && list.length) {
+            return list.map((item) => ({
+                label: item.label,
+                status: item.status,
+                type: item.type || (item.level === 'warning' ? 'warning' : item.level === 'info' ? 'info' : 'success'),
+                text: item.text,
+                level: item.level,
+                code: item.code,
+            }));
+        }
+        return [];
     });
 
     const renderAllocationCharts = async () => {
@@ -239,6 +290,8 @@ const createAllocationModule = ({
         allocationSummary,
         allocationHealth,
         renderAllocationCharts,
+        fetchAllocationStory,
+        storyPolicy,
     };
 };
 

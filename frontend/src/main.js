@@ -207,7 +207,15 @@ const app = createApp({
             transForm,
         });
 
-        const { calculateAllocationAnalysis, allocationSummary, allocationHealth, renderAllocationCharts } = createAllocationModule({
+        const allocationStory = ref(null);
+        const allocationStoryLoading = ref(false);
+        const {
+            calculateAllocationAnalysis,
+            allocationSummary,
+            allocationHealth,
+            renderAllocationCharts,
+            fetchAllocationStory,
+        } = createAllocationModule({
             holdings,
             deposits,
             dashboard,
@@ -215,6 +223,8 @@ const app = createApp({
             allocationAnalysis,
             macroAllocationAnalysis,
             portfolioExpectedReturn,
+            allocationStory,
+            allocationStoryLoading,
         });
 
         // Core data + sync (extracted to module)
@@ -601,6 +611,7 @@ const app = createApp({
             disciplineSelectedDraftIds,
             fetchData,
             queryTransactions,
+            afterDisciplineChange: fetchAllocationStory,
         });
 
         watch(activeTab, (val) => {
@@ -613,6 +624,7 @@ const app = createApp({
             if (val === 'allocation') {
                 nextTick(renderAllocationCharts);
                 refreshDiscipline();
+                fetchAllocationStory();
             }
             if (val === 'performance') fetchPerformance();
             if (val === 'snapshots') {
@@ -666,7 +678,7 @@ const app = createApp({
             showLoginOverlay, loginLoading, loginPassword, loginError, authEnabled, handleLogin, handleLogout,
             activeTab, tabGroup, tabGroups, goTab, dashboard, holdings, deposits, depositRows, depositSummary, depositBankBreakdown, depositMaturityBuckets, syncing, trailingSyncing, syncNotice,
             snapshots, snapshotRange, snapshotSummary, snapshotMetrics, snapshotChangeRows, snapshotInsights, snapshotLoading, maintenanceStatus, backups, maintenanceLoading, dividendLoading, dividendConfirming, dividendDialog, dividendTableRef, todayIso, todaySnapshotDone, latestPriceStatusText, latestBackupText,
-            transForm, feeSettings, feeAccounts, activeFeeAccount, newFeeAccountName, feeCategories, feeSettingRows, feeAutoHint, depositDialog, cashForm, cashFlows, cashFlowForm, cashFlowQuery, cashFlowSummary, cashFlowEditDialog, transDialog, allocationAnalysis, macroAllocationAnalysis, allocationSummary, allocationHealth, portfolioExpectedReturn,
+            transForm, feeSettings, feeAccounts, activeFeeAccount, newFeeAccountName, feeCategories, feeSettingRows, feeAutoHint, depositDialog, cashForm, cashFlows, cashFlowForm, cashFlowQuery, cashFlowSummary, cashFlowEditDialog, transDialog, allocationAnalysis, macroAllocationAnalysis, allocationSummary, allocationHealth, portfolioExpectedReturn, allocationStory, allocationStoryLoading, fetchAllocationStory,
             allTransactions, filteredTransactions, pendingTransactions, pendingPurchaseTotal, transQuery, transPage, transEditDialog,
             syncPrices, syncTrailingReturns, openDividendDraftDialog, openEveningBrief, eveningBriefDialog, scanDividendDrafts, confirmSelectedDividends, selectSelectableDividendDrafts, clearDividendDraftSelection, onDividendSelectionChange, isDividendDraftSelectable, dividendStatusLabel, dividendStatusType, submitTrans, resetForm, fetchData, markFeeManual, saveFeeSettings, resetFeeSettings, addFeeAccount, removeFeeAccount, onActiveFeeAccountChange,
             downloadTransactionsTemplate, exportTransactions, importTransactions, downloadDepositsTemplate, exportDeposits, importDeposits, downloadDividendTemplate, importDividends,

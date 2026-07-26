@@ -31,6 +31,7 @@ try:
     from .routers_maintenance import router as maintenance_router
     from .routers_market import router as market_router
     from .routers_discipline import router as discipline_router
+    from .routers_allocation import router as allocation_router
     from .routers_broker_reconcile import router as broker_reconcile_router
     from .routers_notify import router as notify_router
     from .routers_snapshots import router as snapshots_router
@@ -57,6 +58,7 @@ except ImportError:  # Allows tests to load this file directly via importlib.
     from routers_maintenance import router as maintenance_router
     from routers_market import router as market_router
     from routers_discipline import router as discipline_router
+    from routers_allocation import router as allocation_router
     from routers_broker_reconcile import router as broker_reconcile_router
     from routers_notify import router as notify_router
     from routers_snapshots import router as snapshots_router
@@ -107,6 +109,7 @@ app.include_router(performance_router, dependencies=[Depends(require_auth)])
 app.include_router(maintenance_router, dependencies=[Depends(require_auth)])
 app.include_router(market_router, dependencies=[Depends(require_auth)])
 app.include_router(discipline_router, dependencies=[Depends(require_auth)])
+app.include_router(allocation_router, dependencies=[Depends(require_auth)])
 app.include_router(broker_reconcile_router, dependencies=[Depends(require_auth)])
 app.include_router(notify_router, dependencies=[Depends(require_auth)])
 

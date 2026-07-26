@@ -19,7 +19,18 @@ const createDisciplineModule = ({
     disciplineSelectedDraftIds,
     fetchData,
     queryTransactions,
+    afterDisciplineChange,
 }) => {
+    const runAfterDisciplineChange = async () => {
+        if (typeof afterDisciplineChange === 'function') {
+            try {
+                await afterDisciplineChange();
+            } catch (_) {
+                /* best effort */
+            }
+        }
+    };
+
     const refreshAfterLedgerChange = async () => {
         await refreshDiscipline();
         const tasks = [];
@@ -32,6 +43,7 @@ const createDisciplineModule = ({
                 /* best effort */
             }
         }
+        await runAfterDisciplineChange();
     };
 
     const fetchDisciplineReport = async () => {
@@ -154,6 +166,7 @@ const createDisciplineModule = ({
             ElMessage.success('纪律参数已保存');
             disciplinePolicyDialog.value = false;
             await refreshDiscipline();
+            await runAfterDisciplineChange();
         } catch (e) {
             const detail = e?.response?.data?.detail;
             ElMessage.error(typeof detail === 'string' ? detail : (detail?.[0]?.msg || '保存失败'));

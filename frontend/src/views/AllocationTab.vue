@@ -1,11 +1,11 @@
 <template>
   <PageShell
     title="结构与目标"
-    subtitle="左栏看当前结构，右栏看纪律目标与建议。改参数只提醒，不自动买卖。"
+    subtitle="左栏看当前结构与诊断，右栏看纪律目标与建议。改参数只提醒，不自动买卖。"
   >
     <template #actions>
       <el-tag type="info" effect="plain">总资产 {{ formatMoney(dashboard.total_assets) }}</el-tag>
-      <el-button size="small" :loading="disciplineLoading" @click="refreshDiscipline">刷新纪律</el-button>
+      <el-button size="small" :loading="allocationStoryLoading || disciplineLoading" @click="refreshAll">刷新诊断</el-button>
       <el-button size="small" @click="openPolicyDialog">调整参数</el-button>
       <el-button size="small" type="primary" @click="createDraftsFromReport">建议→草稿</el-button>
     </template>
@@ -13,18 +13,18 @@
     <div class="ledger-metrics cols-4">
       <MetricCard
         label="权益资产占比"
-        :value="`${Number(allocationSummary?.equityRatio || 0).toFixed(1)}%`"
-        :sub="`权益金额 ${formatMoney(allocationSummary?.equityAmount || 0)} · 目标 ${fmtPct(targets.equity_pct)}`"
-        :color="Number(allocationSummary?.equityRatio || 0) > 55 ? 'var(--app-warn)' : ''"
+        :value="`${Number(displayEquityPct).toFixed(1)}%`"
+        :sub="`权益金额 ${formatMoney(displayEquityAmount)} · 目标 ${fmtPct(targets.equity_pct)}`"
+        :tone="equityTone"
         main
-        :title="`${Number(allocationSummary?.equityRatio || 0).toFixed(1)}%`"
+        :title="`${Number(displayEquityPct).toFixed(1)}%`"
       />
       <MetricCard
-        label="固收 + 存款占比"
-        :value="`${Number(allocationSummary?.defensiveRatio || 0).toFixed(1)}%`"
-        :sub="`防守资产 ${formatMoney(allocationSummary?.defensiveAmount || 0)}`"
+        label="防守占比"
+        :value="`${Number(displayDefensivePct).toFixed(1)}%`"
+        :sub="`固收+存款等 ${formatMoney(displayDefensiveAmount)}`"
         color="var(--app-primary)"
-        :title="`${Number(allocationSummary?.defensiveRatio || 0).toFixed(1)}%`"
+        :title="`${Number(displayDefensivePct).toFixed(1)}%`"
       />
       <MetricCard
         label="组合预计年化"
@@ -33,20 +33,25 @@
         color="var(--app-warn)"
       />
       <MetricCard
-        label="纪律破线"
-        :value="String(breachCount)"
-        :sub="summaryText || '暂无纪律摘要'"
-        :tone="breachCount ? 'warn' : 'ok'"
+        label="需关注问题"
+        :value="String(issueWarnCount)"
+        :sub="story?.discipline_summary || summaryText || '暂无纪律摘要'"
+        :tone="issueWarnCount ? 'warn' : 'ok'"
       />
     </div>
 
-    <el-alert
-      :title="topBanner"
-      type="info"
-      show-icon
-      :closable="false"
-      style="margin-bottom: 14px;"
-    />
+    <el-card shadow="never" class="story-hero merge-card" v-loading="allocationStoryLoading">
+      <div class="story-hero-head">
+        <div>
+          <div class="story-kicker">配置结论</div>
+          <div class="story-headline">{{ storyHeadline }}</div>
+        </div>
+        <el-tag :type="severityTagType" effect="light">{{ severityLabel }}</el-tag>
+      </div>
+      <ul v-if="storyBullets.length" class="story-bullets">
+        <li v-for="(b, i) in storyBullets" :key="i">{{ b }}</li>
+      </ul>
+    </el-card>
 
     <div class="merge-grid structure-merge">
       <!-- 左：结构 -->
@@ -66,6 +71,28 @@
           </el-col>
         </el-row>
 
+        <el-card shadow="never" class="merge-card" header="目标偏离">
+          <div class="gap-list">
+            <div v-for="row in gapRows" :key="row.key" class="gap-row">
+              <div class="gap-row-head">
+                <span>{{ row.label }}</span>
+                <span class="gap-nums">
+                  实际 {{ fmtPct(row.actual) }} · 目标 {{ fmtPct(row.target) }}
+                  <template v-if="row.gapAmt !== 0">
+                    · 差额约 {{ formatMoney(Math.abs(row.gapAmt), 0) }}{{ row.gapAmt > 0 ? '（偏少）' : '（偏多）' }}
+                  </template>
+                </span>
+              </div>
+              <el-progress
+                :percentage="Math.min(Math.max(Number(row.actual || 0), 0), 100)"
+                :stroke-width="10"
+                :color="row.barColor"
+              />
+              <div class="hint">带宽示意目标 {{ fmtPct(row.target) }} ± {{ fmtPct(bandPct) }}</div>
+            </div>
+          </div>
+        </el-card>
+
         <el-card shadow="never" class="merge-card" header="配置健康检查">
           <div class="allocation-risk-list">
             <div v-for="item in (allocationHealth || [])" :key="item.label" class="allocation-risk-item">
@@ -75,7 +102,74 @@
               </div>
               <div class="risk-text">{{ item.text }}</div>
             </div>
+            <el-empty v-if="!(allocationHealth || []).length" description="诊断加载中或暂无数据" :image-size="48" />
           </div>
+        </el-card>
+
+        <el-card shadow="never" class="merge-card" header="问题清单">
+          <div class="issue-list">
+            <div v-for="(iss, i) in storyIssues" :key="iss.id + '-' + i" class="issue-item" :class="'lv-' + (iss.level || 'info')">
+              <div class="issue-head">
+                <span>{{ iss.title }}</span>
+                <el-tag size="small" :type="tagType(iss.level)">{{ levelLabel(iss.level) }}</el-tag>
+              </div>
+              <div class="issue-text">{{ iss.text }}</div>
+              <div v-if="iss.action_hint" class="hint">{{ iss.action_hint }}</div>
+            </div>
+            <el-empty v-if="!storyIssues.length" description="暂无需要处理的问题" :image-size="48" />
+          </div>
+        </el-card>
+
+        <el-card shadow="never" class="merge-card" header="同质化粗分" v-if="homoGroups.length">
+          <div class="hint" style="margin-bottom:8px;">{{ story?.homogeneity?.note || '名称/品类关键词粗分，不是官方行业' }}</div>
+          <div class="homo-list">
+            <div v-for="g in homoGroups" :key="g.tag" class="homo-item">
+              <div class="homo-head">
+                <span>{{ g.tag }}</span>
+                <el-tag size="small" :type="tagType(g.level)" effect="plain">
+                  占总 {{ Number(g.pct_of_total || 0).toFixed(1) }}% · 占权益 {{ Number(g.pct_of_equity || 0).toFixed(1) }}%
+                </el-tag>
+              </div>
+              <div class="hint">{{ (g.names || []).join('、') }}</div>
+            </div>
+          </div>
+        </el-card>
+
+        <el-card shadow="never" class="merge-card" header="收益依赖">
+          <div class="risk-text">{{ story?.profit_dependency?.text || '加载中…' }}</div>
+        </el-card>
+
+        <el-card shadow="never" class="merge-card" header="流动性（30 天）">
+          <div class="risk-text">{{ story?.liquidity?.text || '加载中…' }}</div>
+          <div class="liq-metrics" v-if="story?.liquidity">
+            <span>证券现金 {{ formatMoney(story.liquidity.securities_cash) }}</span>
+            <span>近端存款 {{ formatMoney(story.liquidity.deposit_due_30d_amount) }}</span>
+            <span>可挪约 {{ formatMoney(story.liquidity.deployable_30d) }}</span>
+          </div>
+        </el-card>
+
+        <el-card shadow="never" class="merge-card">
+          <template #header>
+            <div>
+              <div class="section-title">权益情景粗估</div>
+              <div class="hint">假设粗估，不是预测：只动权益市值，固收/存款/现金不变</div>
+            </div>
+          </template>
+          <el-table :data="storyScenarios" size="small" stripe empty-text="暂无">
+            <el-table-column prop="label" label="情景" min-width="120" />
+            <el-table-column label="粗估盈亏" min-width="110" align="right" header-align="right">
+              <template #default="s">
+                <span class="num-cell" :class="Number(s.row.estimated_pnl) >= 0 ? 'num-up' : 'num-down'">
+                  {{ formatMoney(s.row.estimated_pnl, 0, true) }}
+                </span>
+              </template>
+            </el-table-column>
+            <el-table-column label="粗估总资产" min-width="120" align="right" header-align="right">
+              <template #default="s">
+                <span class="num-cell">{{ formatMoney(s.row.estimated_total_assets) }}</span>
+              </template>
+            </el-table-column>
+          </el-table>
         </el-card>
 
         <el-card shadow="never" class="merge-card" header="资产大类汇总">
@@ -84,12 +178,12 @@
             <el-table-column label="金额" min-width="110" align="right" header-align="right">
               <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.amount) }}</span></template>
             </el-table-column>
-            <el-table-column label="占比" width="72" align="center" header-align="center">
-              <template #default="scope">{{ scope.row.percentage?.toFixed(1) }}%</template>
+            <el-table-column label="占比" width="88" align="center" header-align="center">
+              <template #default="scope">{{ Number(scope.row.percentage || 0).toFixed(1) }}%</template>
             </el-table-column>
             <el-table-column label="持仓浮盈" min-width="100" align="right" header-align="right">
               <template #default="scope">
-                <span class="num-cell" :class="(scope.row.profit >= 0 ) ? 'num-up' : 'num-down'">
+                <span class="num-cell" :class="(scope.row.profit >= 0) ? 'num-up' : 'num-down'">
                   {{ formatMoney(scope.row.profit, 2, true) }}
                 </span>
               </template>
@@ -128,14 +222,14 @@
         <el-card shadow="never" class="merge-card" v-loading="disciplineLoading">
           <template #header><span class="section-title">纪律检查</span></template>
           <div class="breach-list">
-            <div v-for="(b, i) in breaches" :key="i" class="breach-item" :class="'lv-' + (b.level || 'info')">
+            <div v-for="(b, i) in visibleBreaches" :key="i" class="breach-item" :class="'lv-' + (b.level || 'info')">
               <div class="breach-head">
                 <span>{{ b.title }}</span>
                 <el-tag size="small" :type="tagType(b.level)">{{ levelLabel(b.level) }}</el-tag>
               </div>
               <div class="breach-text">{{ b.text }}</div>
             </div>
-            <el-empty v-if="!breaches.length" description="暂无结果" :image-size="56" />
+            <el-empty v-if="!visibleBreaches.length" description="暂无非正常提醒" :image-size="56" />
           </div>
         </el-card>
 
@@ -273,7 +367,7 @@
       </el-table>
     </el-card>
 
-    <el-dialog v-model="disciplinePolicyDialog" title="纪律 / 目标参数" width="560px" destroy-on-close>
+<el-dialog v-model="disciplinePolicyDialog" title="纪律 / 目标参数" width="560px" destroy-on-close>
       <el-alert
         title="改参数只影响提醒和建议，不会自动买卖。权益/固收/存款三项目标合计应约 100%。"
         type="info"
@@ -393,6 +487,9 @@ const {
   allocationSummary,
   allocationHealth,
   portfolioExpectedReturn,
+  allocationStory,
+  allocationStoryLoading,
+  fetchAllocationStory,
   formatMoney,
   disciplineDrafts,
   disciplinePolicy,
@@ -455,17 +552,107 @@ const greeLimitPct = computed({
   },
 });
 
-const breachCount = computed(() => {
-  const list = breaches?.value ?? breaches ?? [];
-  return Array.isArray(list) ? list.length : 0;
+const story = computed(() => allocationStory?.value ?? allocationStory ?? null);
+
+const storyHeadline = computed(() => {
+  const h = story.value?.headline;
+  if (h) return h;
+  return allocationSummary?.value?.comment || summaryText?.value || '加载结构与纪律…';
 });
 
-const topBanner = computed(() => {
-  const a = allocationSummary?.value?.comment || allocationSummary?.comment || '';
-  const d = summaryText?.value || summaryText || '';
-  if (a && d) return `${a} · ${d}`;
-  return a || d || '加载结构与纪律…';
+const storyBullets = computed(() => {
+  const b = story.value?.bullets;
+  return Array.isArray(b) ? b : [];
 });
+
+const storyIssues = computed(() => {
+  const list = story.value?.issues;
+  return Array.isArray(list) ? list : [];
+});
+
+const issueWarnCount = computed(() => storyIssues.value.filter((x) => x.level === 'warning').length);
+
+const severityLabel = computed(() => {
+  const s = story.value?.severity || 'ok';
+  if (s === 'warning') return '需关注';
+  if (s === 'info') return '有提示';
+  return '大致合适';
+});
+
+const severityTagType = computed(() => {
+  const s = story.value?.severity || 'ok';
+  if (s === 'warning') return 'warning';
+  if (s === 'info') return 'info';
+  return 'success';
+});
+
+const equityTone = computed(() => {
+  const list = allocationHealth?.value ?? allocationHealth ?? [];
+  const arr = Array.isArray(list) ? list : [];
+  const item = arr.find((x) => x.code === 'equity_band' || x.label === '权益波动暴露');
+  if (item?.level === 'warning' || item?.status === '偏高') return 'warn';
+  if (item?.status === '偏低') return 'info';
+  return '';
+});
+
+const displayEquityPct = computed(() => {
+  const s = story.value?.snapshot;
+  if (s && s.equity_pct != null) return Number(s.equity_pct);
+  return Number(allocationSummary?.value?.equityRatio || 0);
+});
+const displayEquityAmount = computed(() => {
+  const s = story.value?.snapshot;
+  if (s && s.equity_mv != null) return Number(s.equity_mv);
+  return Number(allocationSummary?.value?.equityAmount || 0);
+});
+const displayDefensivePct = computed(() => {
+  const s = story.value?.snapshot;
+  if (s && s.defensive_pct != null) return Number(s.defensive_pct);
+  return Number(allocationSummary?.value?.defensiveRatio || 0);
+});
+const displayDefensiveAmount = computed(() => {
+  const s = story.value?.snapshot;
+  if (s) return Number(s.fixed_mv || 0) + Number(s.deposit_mv || 0);
+  return Number(allocationSummary?.value?.defensiveAmount || 0);
+});
+
+const bandPct = computed(() => Number(targets?.value?.band_pct ?? story.value?.policy?.rebalance_band_pct ?? 3));
+
+const gapRows = computed(() => {
+  const snap = snapshot?.value ?? snapshot ?? {};
+  const t = targets?.value ?? targets ?? {};
+  const gaps = story.value?.gaps || {};
+  const rows = [
+    { key: 'equity', label: '权益', actual: snap.equity_pct, target: t.equity_pct, gapAmt: gaps.equity_amount || 0 },
+    { key: 'fi', label: '固收', actual: snap.fixed_income_pct, target: t.fixed_income_pct, gapAmt: gaps.fixed_income_amount || 0 },
+    { key: 'dep', label: '存款', actual: snap.deposit_pct, target: t.deposit_pct, gapAmt: gaps.deposit_amount || 0 },
+  ];
+  return rows.map((r) => {
+    const actual = Number(r.actual || 0);
+    const target = Number(r.target || 0);
+    const diff = Math.abs(actual - target);
+    let barColor = 'var(--app-primary)';
+    if (diff > bandPct.value) barColor = 'var(--app-warn)';
+    return { ...r, actual, target, barColor };
+  });
+});
+
+const visibleBreaches = computed(() => {
+  const list = breaches?.value ?? breaches ?? [];
+  if (!Array.isArray(list)) return [];
+  return list.filter((b) => b.level !== 'ok');
+});
+
+const homoGroups = computed(() => story.value?.homogeneity?.groups || []);
+const storyScenarios = computed(() => story.value?.scenarios || []);
+
+const refreshAll = async () => {
+  const tasks = [];
+  if (typeof refreshDiscipline === 'function') tasks.push(refreshDiscipline());
+  if (typeof fetchAllocationStory === 'function') tasks.push(fetchAllocationStory());
+  if (typeof fetchDisciplineDrafts === 'function') tasks.push(fetchDisciplineDrafts());
+  await Promise.all(tasks);
+};
 
 const fmtPct = (v) => {
   if (v === null || v === undefined || v === '') return '—';
@@ -496,8 +683,7 @@ const paintCharts = async () => {
 
 onMounted(() => {
   paintCharts();
-  if (typeof refreshDiscipline === 'function') refreshDiscipline();
-  if (typeof fetchDisciplineDrafts === 'function') fetchDisciplineDrafts();
+  refreshAll();
 });
 
 watch(
@@ -508,7 +694,6 @@ watch(
   { deep: true },
 );
 
-// 切日/夜主题后重画，否则 ECharts 标题图例仍是旧色
 watch(
   () => resolvedTheme?.value ?? resolvedTheme,
   () => {
@@ -547,26 +732,79 @@ watch(
   justify-content: space-between;
   align-items: flex-start;
   gap: 8px;
-  flex-wrap: wrap;
 }
-.card-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.allocation-risk-list { display: grid; gap: 10px; }
-.allocation-risk-item {
-  padding: 10px 12px;
+.card-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.story-hero {
+  margin-bottom: 14px;
   border: 1px solid var(--app-border);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--app-surface) 88%, var(--app-bg0));
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--app-primary) 12%, transparent), transparent 55%),
+    var(--app-surface);
+}
+.story-hero-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.story-kicker {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--app-muted);
+  margin-bottom: 4px;
+}
+.story-headline {
+  font-size: 18px;
+  font-weight: 750;
+  line-height: 1.45;
   color: var(--app-text);
 }
-.allocation-risk-head {
+.story-bullets {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--app-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.gap-list { display: grid; gap: 12px; }
+.gap-row-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--app-text);
+  margin-bottom: 6px;
+}
+.gap-nums { font-weight: 500; color: var(--app-muted); font-size: 12px; }
+.issue-list, .homo-list { display: grid; gap: 10px; }
+.issue-item, .homo-item {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--app-border);
+  background: color-mix(in srgb, var(--app-surface) 88%, var(--app-bg0));
+}
+.issue-item.lv-warning { border-color: color-mix(in srgb, var(--app-warn) 45%, var(--app-border)); }
+.issue-head, .homo-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
   font-weight: 600;
-  margin-bottom: 4px;
   color: var(--app-text);
+  margin-bottom: 4px;
 }
-.risk-text { font-size: 12px; color: var(--app-muted); line-height: 1.5; }
+.issue-text, .risk-text { font-size: 13px; color: var(--app-muted); line-height: 1.5; }
+.liq-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--app-soft);
+}
 .target-strip {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -577,38 +815,29 @@ watch(
   border: 1px solid var(--app-border);
   border-radius: 10px;
   padding: 10px 12px;
-  background: color-mix(in srgb, var(--app-surface) 88%, var(--app-bg0));
-  color: var(--app-text);
+  background: color-mix(in srgb, var(--app-surface) 92%, var(--app-bg0));
 }
 .d-label { font-size: 12px; color: var(--app-muted); }
-.d-value { font-size: 20px; font-weight: 700; margin: 4px 0 2px; color: var(--app-text); }
-.d-sub { font-size: 12px; color: var(--app-soft); }
+.d-value { margin-top: 4px; font-size: 18px; font-weight: 750; color: var(--app-text); }
+.d-sub { margin-top: 2px; font-size: 12px; color: var(--app-soft); }
 .breach-list { display: grid; gap: 10px; }
 .breach-item {
-  padding: 12px;
+  padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid var(--app-border);
   background: color-mix(in srgb, var(--app-surface) 88%, var(--app-bg0));
-  color: var(--app-text);
 }
-.breach-item.lv-warning {
-  border-color: color-mix(in srgb, var(--app-warn) 35%, var(--app-border));
-  background: var(--app-warn-soft);
-}
-.breach-item.lv-ok {
-  border-color: color-mix(in srgb, var(--app-ok) 30%, var(--app-border));
-  background: var(--app-ok-soft);
-}
+.breach-item.lv-warning { border-color: color-mix(in srgb, var(--app-warn) 40%, var(--app-border)); }
 .breach-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px;
   font-weight: 600;
-  margin-bottom: 6px;
   color: var(--app-text);
+  margin-bottom: 4px;
 }
 .breach-text { font-size: 12px; color: var(--app-muted); line-height: 1.5; }
-/* 给底部图例留位，避免挤在扇区上 */
 .chart-container { height: 260px; min-height: 220px; width: 100%; }
 @media (max-width: 960px) {
   .merge-grid { grid-template-columns: 1fr; }

@@ -61,6 +61,8 @@ def clear_backend_module_cache():
         'routers_market',
         'discipline',
         'routers_discipline',
+        'allocation_analysis',
+        'routers_allocation',
         'trading_calendar',
         'broker_reconcile',
         'routers_broker_reconcile',
