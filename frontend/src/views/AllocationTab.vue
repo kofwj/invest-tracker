@@ -1,7 +1,7 @@
 <template>
   <PageShell
     title="结构与目标"
-    subtitle="左栏看当前结构与诊断，右栏看纪律目标与建议。改参数只提醒，不自动买卖。"
+    subtitle="左栏结构诊断，右栏改目标尺子与纪律。改参数只提醒，不自动买卖。"
   >
     <template #actions>
       <el-tag type="info" effect="plain">总资产 {{ formatMoney(dashboard.total_assets) }}</el-tag>
@@ -51,42 +51,6 @@
       <ul v-if="storyBullets.length" class="story-bullets">
         <li v-for="(b, i) in storyBullets" :key="i">{{ b }}</li>
       </ul>
-    </el-card>
-
-    <el-card shadow="never" class="preset-panel merge-card" v-loading="disciplinePresetLoading">
-      <div class="preset-panel-head">
-        <div>
-          <div class="section-title">一键目标尺子</div>
-          <div class="hint">只改目标与安全带；优先加仓、禁开名单、格力上限不动。当前：{{ activePresetLabel }}</div>
-        </div>
-      </div>
-      <div class="preset-grid">
-        <button
-          v-for="p in (disciplinePresets || [])"
-          :key="p.id"
-          type="button"
-          class="preset-card"
-          :class="{ active: p.id === disciplinePresetActiveId || p.active }"
-          :disabled="disciplinePresetLoading"
-          @click="applyDisciplinePreset(p.id)"
-        >
-          <div class="preset-card-top">
-            <span class="preset-label">{{ p.label }}</span>
-            <el-tag
-              v-if="p.id === disciplinePresetActiveId || p.active"
-              size="small"
-              type="success"
-              effect="plain"
-            >当前</el-tag>
-          </div>
-          <div class="preset-targets">
-            权益 {{ Number(p.targets?.equity_pct || 0).toFixed(0) }}%
-            · 固收 {{ Number(p.targets?.fixed_income_pct || 0).toFixed(0) }}%
-            · 存款 {{ Number(p.targets?.deposit_pct || 0).toFixed(0) }}%
-          </div>
-          <div class="preset-summary">{{ p.summary }}</div>
-        </button>
-      </div>
     </el-card>
 
     <div class="merge-grid structure-merge">
@@ -216,43 +180,48 @@
       <section class="merge-pane">
         <div class="merge-pane-title">目标与纪律</div>
 
-        <div class="target-strip">
-          <div class="target-card">
-            <div class="d-label">权益</div>
-            <div class="d-value">{{ fmtPct(snapshot.equity_pct) }}</div>
-            <div class="d-sub">目标 {{ fmtPct(targets.equity_pct) }}</div>
+        <el-card shadow="never" class="merge-card target-panel" v-loading="disciplinePresetLoading">
+          <div class="preset-row">
+            <div class="preset-row-label">目标尺子</div>
+            <div class="preset-seg" role="group" aria-label="目标尺子">
+              <button
+                v-for="p in (disciplinePresets || [])"
+                :key="p.id"
+                type="button"
+                class="preset-seg-btn"
+                :class="{ active: p.id === disciplinePresetActiveId || p.active }"
+                :disabled="disciplinePresetLoading || p.id === disciplinePresetActiveId || p.active"
+                :title="presetTitle(p)"
+                @click="applyDisciplinePreset(p.id)"
+              >{{ p.label }}</button>
+            </div>
           </div>
-          <div class="target-card">
-            <div class="d-label">固收</div>
-            <div class="d-value">{{ fmtPct(snapshot.fixed_income_pct) }}</div>
-            <div class="d-sub">目标 {{ fmtPct(targets.fixed_income_pct) }}</div>
+          <div class="preset-meta">
+            <span class="preset-meta-main">当前 · {{ activePresetLabel }}</span>
+            <span class="preset-meta-sub">{{ activePresetHint }}</span>
           </div>
-          <div class="target-card">
-            <div class="d-label">存款</div>
-            <div class="d-value">{{ fmtPct(snapshot.deposit_pct) }}</div>
-            <div class="d-sub">目标 {{ fmtPct(targets.deposit_pct) }}</div>
-          </div>
-        </div>
+          <div class="hint preset-guard">只改目标与安全带；优先加仓 / 禁开 / 格力上限不动</div>
 
-        <el-card shadow="never" class="merge-card" header="目标偏离">
-          <div class="gap-list">
+          <div class="gap-list" style="margin-top: 12px;">
             <div v-for="row in gapRows" :key="row.key" class="gap-row">
               <div class="gap-row-head">
-                <span>{{ row.label }}</span>
+                <span class="gap-label">{{ row.label }}</span>
                 <span class="gap-nums">
-                  实际 {{ fmtPct(row.actual) }} · 目标 {{ fmtPct(row.target) }}
-                  <template v-if="row.gapAmt !== 0">
-                    · 差额约 {{ formatMoney(Math.abs(row.gapAmt), 0) }}{{ row.gapAmt > 0 ? '（偏少）' : '（偏多）' }}
+                  <b class="gap-actual">{{ fmtPct(row.actual) }}</b>
+                  <span class="gap-arrow">→</span>
+                  目标 {{ fmtPct(row.target) }}
+                  <template v-if="row.gapAmt">
+                    · {{ formatMoney(Math.abs(row.gapAmt), 0) }}{{ row.gapAmt > 0 ? '偏少' : '偏多' }}
                   </template>
                 </span>
               </div>
               <el-progress
                 :percentage="Math.min(Math.max(Number(row.actual || 0), 0), 100)"
-                :stroke-width="10"
+                :stroke-width="8"
                 :color="row.barColor"
               />
             </div>
-            <div class="hint">带宽 ±{{ fmtPct(bandPct) }}；超出才给再平衡建议</div>
+            <div class="hint">带宽 ±{{ fmtPct(bandPct) }}；超出才出再平衡建议</div>
           </div>
         </el-card>
 
@@ -696,6 +665,29 @@ const activePresetLabel = computed(() => {
   return id ? String(id) : '自定义';
 });
 
+const activePresetHint = computed(() => {
+  const list = disciplinePresets?.value ?? disciplinePresets ?? [];
+  const arr = Array.isArray(list) ? list : [];
+  const id = disciplinePresetActiveId?.value ?? disciplinePresetActiveId;
+  const hit = arr.find((p) => p.id === id || p.active);
+  if (hit) {
+    const t = hit.targets || {};
+    return `权益 ${Number(t.equity_pct || 0).toFixed(0)} · 固收 ${Number(t.fixed_income_pct || 0).toFixed(0)} · 存款 ${Number(t.deposit_pct || 0).toFixed(0)}`;
+  }
+  const t = targets?.value ?? targets ?? {};
+  if (t.equity_pct != null) {
+    return `权益 ${Number(t.equity_pct || 0).toFixed(0)} · 固收 ${Number(t.fixed_income_pct || 0).toFixed(0)} · 存款 ${Number(t.deposit_pct || 0).toFixed(0)}（手调）`;
+  }
+  return '手调参数，未匹配三套预设';
+});
+
+const presetTitle = (p) => {
+  if (!p) return '';
+  const t = p.targets || {};
+  const ratio = `权益 ${Number(t.equity_pct || 0).toFixed(0)}% / 固收 ${Number(t.fixed_income_pct || 0).toFixed(0)}% / 存款 ${Number(t.deposit_pct || 0).toFixed(0)}%`;
+  return [p.summary, ratio, p.detail].filter(Boolean).join(' · ');
+};
+
 const refreshAll = async () => {
   const tasks = [];
   if (typeof refreshDiscipline === 'function') tasks.push(refreshDiscipline());
@@ -817,55 +809,93 @@ watch(
   font-size: 13px;
   line-height: 1.6;
 }
-.preset-panel {
-  margin-bottom: 14px;
+.target-panel {
   border: 1px solid var(--app-border);
 }
-.preset-panel-head { margin-bottom: 10px; }
-.preset-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-.preset-card {
-  text-align: left;
-  border: 1px solid var(--app-border);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--app-surface) 92%, var(--app-bg0));
-  color: var(--app-text);
-  padding: 12px;
-  cursor: pointer;
-  transition: border-color .15s ease, box-shadow .15s ease;
-}
-.preset-card:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--app-primary) 55%, var(--app-border));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--app-primary) 25%, transparent);
-}
-.preset-card.active {
-  border-color: var(--app-primary);
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--app-primary) 10%, transparent), transparent 60%),
-    var(--app-surface);
-}
-.preset-card:disabled { opacity: .65; cursor: not-allowed; }
-.preset-card-top {
+.preset-row {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
 }
-.preset-label { font-size: 15px; font-weight: 750; }
-.preset-targets {
+.preset-row-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--app-text);
+  flex: 0 0 auto;
+}
+.preset-seg {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--app-bg0) 70%, var(--app-surface));
+  border: 1px solid var(--app-border);
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+.preset-seg-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--app-muted);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 7px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+.preset-seg-btn:hover:not(:disabled) {
+  color: var(--app-text);
+  background: color-mix(in srgb, var(--app-surface) 80%, transparent);
+}
+.preset-seg-btn.active {
+  color: var(--app-text);
+  background: var(--app-surface);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--app-primary) 35%, var(--app-border));
+  font-weight: 750;
+}
+.preset-seg-btn:disabled:not(.active) {
+  opacity: .55;
+  cursor: not-allowed;
+}
+.preset-seg-btn.active:disabled {
+  cursor: default;
+  opacity: 1;
+}
+.preset-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 12px;
+  margin-top: 10px;
+}
+.preset-meta-main {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--app-text);
+}
+.preset-meta-sub {
   font-size: 12px;
   color: var(--app-muted);
-  margin-bottom: 6px;
   font-variant-numeric: tabular-nums;
 }
-.preset-summary {
-  font-size: 12px;
+.preset-guard { margin-top: 6px; }
+.gap-label { min-width: 2.5em; }
+.gap-actual {
+  font-variant-numeric: tabular-nums;
+  color: var(--app-text);
+  font-weight: 700;
+}
+.gap-arrow {
+  margin: 0 4px;
   color: var(--app-soft);
-  line-height: 1.45;
+  font-weight: 500;
 }
 .diag-grid {
   display: grid;
@@ -912,21 +942,6 @@ watch(
   font-size: 12px;
   color: var(--app-soft);
 }
-.target-strip {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  margin-bottom: 12px;
-}
-.target-card {
-  border: 1px solid var(--app-border);
-  border-radius: 10px;
-  padding: 10px 12px;
-  background: color-mix(in srgb, var(--app-surface) 92%, var(--app-bg0));
-}
-.d-label { font-size: 12px; color: var(--app-muted); }
-.d-value { margin-top: 4px; font-size: 18px; font-weight: 750; color: var(--app-text); }
-.d-sub { margin-top: 2px; font-size: 12px; color: var(--app-soft); }
 .breach-list { display: grid; gap: 10px; }
 .breach-item {
   padding: 10px 12px;
@@ -948,8 +963,8 @@ watch(
 .chart-container { height: 260px; min-height: 220px; width: 100%; }
 @media (max-width: 960px) {
   .merge-grid { grid-template-columns: 1fr; }
-  .target-strip { grid-template-columns: 1fr; }
-  .preset-grid { grid-template-columns: 1fr; }
+  .preset-row { flex-direction: column; align-items: stretch; }
+  .preset-seg { width: 100%; }
   .diag-grid { grid-template-columns: 1fr; }
 }
 </style>

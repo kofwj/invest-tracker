@@ -81,8 +81,8 @@ POLICY_PRESETS: Dict[str, Dict[str, Any]] = {
     "defensive": {
         "id": "defensive",
         "label": "防守",
-        "summary": "权益少一点、现金和固收多一点，波动更小",
-        "detail": "适合观望、存款占比高、不想追涨的时候。单票更严。",
+        "summary": "权益少、现金固收多",
+        "detail": "观望期用；单票更严。",
         "policy": {
             "equity_min_pct": 25.0,
             "equity_max_pct": 42.0,
@@ -99,8 +99,8 @@ POLICY_PRESETS: Dict[str, Dict[str, Any]] = {
     "balanced": {
         "id": "balanced",
         "label": "均衡",
-        "summary": "默认尺子：权益约一半弱，防守够用",
-        "detail": "跟系统默认纪律一致，日常体检最省心。",
+        "summary": "默认尺子",
+        "detail": "日常体检最省心。",
         "policy": {
             "equity_min_pct": 35.0,
             "equity_max_pct": 55.0,
@@ -117,8 +117,8 @@ POLICY_PRESETS: Dict[str, Dict[str, Any]] = {
     "building": {
         "id": "building",
         "label": "加仓中",
-        "summary": "权益目标抬高，方便存款分批转股",
-        "detail": "对应慢慢加 A500 这类节奏；不是梭哈，防守仍要留底。",
+        "summary": "权益目标抬高",
+        "detail": "存款分批转股，不是梭哈。",
         "policy": {
             "equity_min_pct": 40.0,
             "equity_max_pct": 60.0,
