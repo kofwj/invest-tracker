@@ -220,3 +220,33 @@ def test_discipline_report_includes_plans_and_help(client, app_module):
         "A500" in (p.get("title") or "") or str(p.get("code") or "").startswith("a500")
         for p in data["plans"]
     )
+
+
+def test_discipline_presets_list_and_apply(client, app_module):
+    listed = client.get("/discipline/presets")
+    assert listed.status_code == 200, listed.text
+    body = listed.json()
+    assert len(body["presets"]) == 3
+    ids = {p["id"] for p in body["presets"]}
+    assert ids == {"defensive", "balanced", "building"}
+    # 默认未改参数时应对齐均衡
+    assert body["active_id"] in (None, "balanced")
+
+    applied = client.post("/discipline/presets/apply", json={"preset_id": "defensive"})
+    assert applied.status_code == 200, applied.text
+    data = applied.json()
+    assert data["preset_id"] == "defensive"
+    assert data["policy"]["targets"]["equity_pct"] == 35
+    assert data["policy"]["defensive_min_pct"] == 50
+    # 个人字段应保留默认优先加仓
+    assert data["policy"]["preferred_buy_code"] == "159352"
+
+    again = client.get("/discipline/presets")
+    assert again.json()["active_id"] == "defensive"
+
+    building = client.post("/discipline/presets/apply", json={"preset_id": "building"})
+    assert building.status_code == 200
+    assert building.json()["policy"]["targets"]["equity_pct"] == 50
+
+    bad = client.post("/discipline/presets/apply", json={"preset_id": "aggressive"})
+    assert bad.status_code == 400

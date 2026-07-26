@@ -53,6 +53,42 @@
       </ul>
     </el-card>
 
+    <el-card shadow="never" class="preset-panel merge-card" v-loading="disciplinePresetLoading">
+      <div class="preset-panel-head">
+        <div>
+          <div class="section-title">一键目标尺子</div>
+          <div class="hint">只改目标与安全带；优先加仓、禁开名单、格力上限不动。当前：{{ activePresetLabel }}</div>
+        </div>
+      </div>
+      <div class="preset-grid">
+        <button
+          v-for="p in (disciplinePresets || [])"
+          :key="p.id"
+          type="button"
+          class="preset-card"
+          :class="{ active: p.id === disciplinePresetActiveId || p.active }"
+          :disabled="disciplinePresetLoading"
+          @click="applyDisciplinePreset(p.id)"
+        >
+          <div class="preset-card-top">
+            <span class="preset-label">{{ p.label }}</span>
+            <el-tag
+              v-if="p.id === disciplinePresetActiveId || p.active"
+              size="small"
+              type="success"
+              effect="plain"
+            >当前</el-tag>
+          </div>
+          <div class="preset-targets">
+            权益 {{ Number(p.targets?.equity_pct || 0).toFixed(0) }}%
+            · 固收 {{ Number(p.targets?.fixed_income_pct || 0).toFixed(0) }}%
+            · 存款 {{ Number(p.targets?.deposit_pct || 0).toFixed(0) }}%
+          </div>
+          <div class="preset-summary">{{ p.summary }}</div>
+        </button>
+      </div>
+    </el-card>
+
     <div class="merge-grid structure-merge">
       <!-- 左：结构 -->
       <section class="merge-pane">
@@ -71,28 +107,6 @@
           </el-col>
         </el-row>
 
-        <el-card shadow="never" class="merge-card" header="目标偏离">
-          <div class="gap-list">
-            <div v-for="row in gapRows" :key="row.key" class="gap-row">
-              <div class="gap-row-head">
-                <span>{{ row.label }}</span>
-                <span class="gap-nums">
-                  实际 {{ fmtPct(row.actual) }} · 目标 {{ fmtPct(row.target) }}
-                  <template v-if="row.gapAmt !== 0">
-                    · 差额约 {{ formatMoney(Math.abs(row.gapAmt), 0) }}{{ row.gapAmt > 0 ? '（偏少）' : '（偏多）' }}
-                  </template>
-                </span>
-              </div>
-              <el-progress
-                :percentage="Math.min(Math.max(Number(row.actual || 0), 0), 100)"
-                :stroke-width="10"
-                :color="row.barColor"
-              />
-              <div class="hint">带宽示意目标 {{ fmtPct(row.target) }} ± {{ fmtPct(bandPct) }}</div>
-            </div>
-          </div>
-        </el-card>
-
         <el-card shadow="never" class="merge-card" header="配置健康检查">
           <div class="allocation-risk-list">
             <div v-for="item in (allocationHealth || [])" :key="item.label" class="allocation-risk-item">
@@ -106,7 +120,7 @@
           </div>
         </el-card>
 
-        <el-card shadow="never" class="merge-card" header="问题清单">
+        <el-card shadow="never" class="merge-card" header="问题清单" v-if="storyIssues.length">
           <div class="issue-list">
             <div v-for="(iss, i) in storyIssues" :key="iss.id + '-' + i" class="issue-item" :class="'lv-' + (iss.level || 'info')">
               <div class="issue-head">
@@ -116,37 +130,38 @@
               <div class="issue-text">{{ iss.text }}</div>
               <div v-if="iss.action_hint" class="hint">{{ iss.action_hint }}</div>
             </div>
-            <el-empty v-if="!storyIssues.length" description="暂无需要处理的问题" :image-size="48" />
           </div>
         </el-card>
 
-        <el-card shadow="never" class="merge-card" header="同质化粗分" v-if="homoGroups.length">
-          <div class="hint" style="margin-bottom:8px;">{{ story?.homogeneity?.note || '名称/品类关键词粗分，不是官方行业' }}</div>
-          <div class="homo-list">
-            <div v-for="g in homoGroups" :key="g.tag" class="homo-item">
-              <div class="homo-head">
-                <span>{{ g.tag }}</span>
-                <el-tag size="small" :type="tagType(g.level)" effect="plain">
-                  占总 {{ Number(g.pct_of_total || 0).toFixed(1) }}% · 占权益 {{ Number(g.pct_of_equity || 0).toFixed(1) }}%
-                </el-tag>
+        <div class="diag-grid" v-if="homoGroups.length || story?.profit_dependency || story?.liquidity">
+          <el-card shadow="never" class="merge-card diag-card" header="同质化粗分" v-if="homoGroups.length">
+            <div class="hint" style="margin-bottom:8px;">{{ story?.homogeneity?.note || '名称/品类关键词粗分，不是官方行业' }}</div>
+            <div class="homo-list">
+              <div v-for="g in homoGroups" :key="g.tag" class="homo-item">
+                <div class="homo-head">
+                  <span>{{ g.tag }}</span>
+                  <el-tag size="small" :type="tagType(g.level)" effect="plain">
+                    占总 {{ Number(g.pct_of_total || 0).toFixed(1) }}%
+                  </el-tag>
+                </div>
+                <div class="hint">{{ (g.names || []).join('、') }}</div>
               </div>
-              <div class="hint">{{ (g.names || []).join('、') }}</div>
             </div>
-          </div>
-        </el-card>
+          </el-card>
 
-        <el-card shadow="never" class="merge-card" header="收益依赖">
-          <div class="risk-text">{{ story?.profit_dependency?.text || '加载中…' }}</div>
-        </el-card>
+          <el-card shadow="never" class="merge-card diag-card" header="收益依赖">
+            <div class="risk-text">{{ story?.profit_dependency?.text || '加载中…' }}</div>
+          </el-card>
 
-        <el-card shadow="never" class="merge-card" header="流动性（30 天）">
-          <div class="risk-text">{{ story?.liquidity?.text || '加载中…' }}</div>
-          <div class="liq-metrics" v-if="story?.liquidity">
-            <span>证券现金 {{ formatMoney(story.liquidity.securities_cash) }}</span>
-            <span>近端存款 {{ formatMoney(story.liquidity.deposit_due_30d_amount) }}</span>
-            <span>可挪约 {{ formatMoney(story.liquidity.deployable_30d) }}</span>
-          </div>
-        </el-card>
+          <el-card shadow="never" class="merge-card diag-card" header="流动性（30 天）">
+            <div class="risk-text">{{ story?.liquidity?.text || '加载中…' }}</div>
+            <div class="liq-metrics" v-if="story?.liquidity">
+              <span>证券现金 {{ formatMoney(story.liquidity.securities_cash) }}</span>
+              <span>近端存款 {{ formatMoney(story.liquidity.deposit_due_30d_amount) }}</span>
+              <span>可挪约 {{ formatMoney(story.liquidity.deployable_30d) }}</span>
+            </div>
+          </el-card>
+        </div>
 
         <el-card shadow="never" class="merge-card">
           <template #header>
@@ -218,6 +233,28 @@
             <div class="d-sub">目标 {{ fmtPct(targets.deposit_pct) }}</div>
           </div>
         </div>
+
+        <el-card shadow="never" class="merge-card" header="目标偏离">
+          <div class="gap-list">
+            <div v-for="row in gapRows" :key="row.key" class="gap-row">
+              <div class="gap-row-head">
+                <span>{{ row.label }}</span>
+                <span class="gap-nums">
+                  实际 {{ fmtPct(row.actual) }} · 目标 {{ fmtPct(row.target) }}
+                  <template v-if="row.gapAmt !== 0">
+                    · 差额约 {{ formatMoney(Math.abs(row.gapAmt), 0) }}{{ row.gapAmt > 0 ? '（偏少）' : '（偏多）' }}
+                  </template>
+                </span>
+              </div>
+              <el-progress
+                :percentage="Math.min(Math.max(Number(row.actual || 0), 0), 100)"
+                :stroke-width="10"
+                :color="row.barColor"
+              />
+            </div>
+            <div class="hint">带宽 ±{{ fmtPct(bandPct) }}；超出才给再平衡建议</div>
+          </div>
+        </el-card>
 
         <el-card shadow="never" class="merge-card" v-loading="disciplineLoading">
           <template #header><span class="section-title">纪律检查</span></template>
@@ -509,6 +546,10 @@ const {
   confirmSelectedDrafts,
   onDraftSelectionChange,
   fetchDisciplineDrafts,
+  disciplinePresets,
+  disciplinePresetActiveId,
+  disciplinePresetLoading,
+  applyDisciplinePreset,
   breaches,
   actions,
   planItems,
@@ -646,6 +687,15 @@ const visibleBreaches = computed(() => {
 const homoGroups = computed(() => story.value?.homogeneity?.groups || []);
 const storyScenarios = computed(() => story.value?.scenarios || []);
 
+const activePresetLabel = computed(() => {
+  const id = disciplinePresetActiveId?.value ?? disciplinePresetActiveId;
+  const list = disciplinePresets?.value ?? disciplinePresets ?? [];
+  const arr = Array.isArray(list) ? list : [];
+  const hit = arr.find((p) => p.id === id || p.active);
+  if (hit) return hit.label;
+  return id ? String(id) : '自定义';
+});
+
 const refreshAll = async () => {
   const tasks = [];
   if (typeof refreshDiscipline === 'function') tasks.push(refreshDiscipline());
@@ -767,6 +817,63 @@ watch(
   font-size: 13px;
   line-height: 1.6;
 }
+.preset-panel {
+  margin-bottom: 14px;
+  border: 1px solid var(--app-border);
+}
+.preset-panel-head { margin-bottom: 10px; }
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.preset-card {
+  text-align: left;
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--app-surface) 92%, var(--app-bg0));
+  color: var(--app-text);
+  padding: 12px;
+  cursor: pointer;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.preset-card:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--app-primary) 55%, var(--app-border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--app-primary) 25%, transparent);
+}
+.preset-card.active {
+  border-color: var(--app-primary);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--app-primary) 10%, transparent), transparent 60%),
+    var(--app-surface);
+}
+.preset-card:disabled { opacity: .65; cursor: not-allowed; }
+.preset-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.preset-label { font-size: 15px; font-weight: 750; }
+.preset-targets {
+  font-size: 12px;
+  color: var(--app-muted);
+  margin-bottom: 6px;
+  font-variant-numeric: tabular-nums;
+}
+.preset-summary {
+  font-size: 12px;
+  color: var(--app-soft);
+  line-height: 1.45;
+}
+.diag-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.diag-grid .diag-card { margin-bottom: 0; }
 .gap-list { display: grid; gap: 12px; }
 .gap-row-head {
   display: flex;
@@ -842,5 +949,7 @@ watch(
 @media (max-width: 960px) {
   .merge-grid { grid-template-columns: 1fr; }
   .target-strip { grid-template-columns: 1fr; }
+  .preset-grid { grid-template-columns: 1fr; }
+  .diag-grid { grid-template-columns: 1fr; }
 }
 </style>

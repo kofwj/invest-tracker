@@ -578,10 +578,15 @@ const app = createApp({
         const disciplineDraftEditDialog = ref(false);
         const disciplineDraftEditForm = ref({});
         const disciplineSelectedDraftIds = ref([]);
+        const disciplinePresets = ref([]);
+        const disciplinePresetActiveId = ref(null);
+        const disciplinePresetLoading = ref(false);
 
         const {
             fetchDisciplineReport,
             fetchDisciplineDrafts,
+            fetchDisciplinePresets,
+            applyDisciplinePreset,
             refreshDiscipline,
             openPolicyDialog,
             savePolicy,
@@ -612,6 +617,9 @@ const app = createApp({
             fetchData,
             queryTransactions,
             afterDisciplineChange: fetchAllocationStory,
+            disciplinePresets,
+            disciplinePresetActiveId,
+            disciplinePresetLoading,
         });
 
         watch(activeTab, (val) => {
@@ -703,7 +711,8 @@ const app = createApp({
             indexRows, watchlistRows, holdingsDayRows, marketSignals, marketHighlights, marketComparisons, marketUpdatedAt, quoteCacheSeconds, alertCooldownMinutes,
             disciplineReport, disciplineDrafts, disciplinePolicy, disciplineLoading, disciplineDraftLoading, disciplinePolicyDialog,
             disciplineDraftEditDialog, disciplineDraftEditForm, disciplineSelectedDraftIds,
-            fetchDisciplineReport, fetchDisciplineDrafts, refreshDiscipline, openPolicyDialog, savePolicy, createDraftsFromReport,
+            disciplinePresets, disciplinePresetActiveId, disciplinePresetLoading,
+            fetchDisciplineReport, fetchDisciplineDrafts, fetchDisciplinePresets, applyDisciplinePreset, refreshDiscipline, openPolicyDialog, savePolicy, createDraftsFromReport,
             openDraftEdit, saveDraftEdit, deleteDraft, confirmDraft, onDraftSelectionChange, confirmSelectedDrafts,
             breaches, actions, planItems, helpNotes, snapshot, targets, summaryText,
         };

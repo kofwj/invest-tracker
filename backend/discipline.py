@@ -62,6 +62,8 @@ DEFAULT_POLICY: Dict[str, Any] = {
     "fixed_income_categories": ["债基", "证券现金", "基金申购在途"],
     # 额外算进「防守」的权益品类（不改大类饼图，只抬高防守占比）
     "defensive_extra_categories": [],
+    # 一键套用预设 id：defensive | balanced | building | custom/None
+    "preset_id": "balanced",
     # 个人计划（与再平衡建议并列，偏人话提醒）
     "plans": {
         "a500_batch_target_amount": 200000.0,  # 计划分批买入 A500 总额
@@ -72,6 +74,130 @@ DEFAULT_POLICY: Dict[str, Any] = {
         "gree_soft_max_pct": 15.0,  # 超此占比提示减仓
     },
 }
+
+# 一键套用：只改结构尺子，不改优先加仓代码/个人禁开/格力名单等私货。
+# targets 三项合计必须 = 100。
+POLICY_PRESETS: Dict[str, Dict[str, Any]] = {
+    "defensive": {
+        "id": "defensive",
+        "label": "防守",
+        "summary": "权益少一点、现金和固收多一点，波动更小",
+        "detail": "适合观望、存款占比高、不想追涨的时候。单票更严。",
+        "policy": {
+            "equity_min_pct": 25.0,
+            "equity_max_pct": 42.0,
+            "defensive_min_pct": 50.0,
+            "single_holding_max_pct": 15.0,
+            "rebalance_band_pct": 3.0,
+            "targets": {
+                "equity_pct": 35.0,
+                "fixed_income_pct": 35.0,
+                "deposit_pct": 30.0,
+            },
+        },
+    },
+    "balanced": {
+        "id": "balanced",
+        "label": "均衡",
+        "summary": "默认尺子：权益约一半弱，防守够用",
+        "detail": "跟系统默认纪律一致，日常体检最省心。",
+        "policy": {
+            "equity_min_pct": 35.0,
+            "equity_max_pct": 55.0,
+            "defensive_min_pct": 40.0,
+            "single_holding_max_pct": 20.0,
+            "rebalance_band_pct": 3.0,
+            "targets": {
+                "equity_pct": 45.0,
+                "fixed_income_pct": 30.0,
+                "deposit_pct": 25.0,
+            },
+        },
+    },
+    "building": {
+        "id": "building",
+        "label": "加仓中",
+        "summary": "权益目标抬高，方便存款分批转股",
+        "detail": "对应慢慢加 A500 这类节奏；不是梭哈，防守仍要留底。",
+        "policy": {
+            "equity_min_pct": 40.0,
+            "equity_max_pct": 60.0,
+            "defensive_min_pct": 35.0,
+            "single_holding_max_pct": 20.0,
+            "rebalance_band_pct": 3.0,
+            "targets": {
+                "equity_pct": 50.0,
+                "fixed_income_pct": 25.0,
+                "deposit_pct": 25.0,
+            },
+        },
+    },
+}
+
+
+def list_policy_presets(conn=None) -> Dict[str, Any]:
+    """Return preset catalog + which one matches current policy (if any)."""
+    current = get_policy(conn) if conn is not None else json.loads(json.dumps(DEFAULT_POLICY))
+    active = _match_preset_id(current)
+    items = []
+    for key in ("defensive", "balanced", "building"):
+        p = POLICY_PRESETS[key]
+        pol = p["policy"]
+        t = pol["targets"]
+        items.append(
+            {
+                "id": p["id"],
+                "label": p["label"],
+                "summary": p["summary"],
+                "detail": p["detail"],
+                "active": active == key,
+                "targets": {
+                    "equity_pct": t["equity_pct"],
+                    "fixed_income_pct": t["fixed_income_pct"],
+                    "deposit_pct": t["deposit_pct"],
+                },
+                "equity_band": [pol["equity_min_pct"], pol["equity_max_pct"]],
+                "defensive_min_pct": pol["defensive_min_pct"],
+                "single_holding_max_pct": pol["single_holding_max_pct"],
+                "rebalance_band_pct": pol["rebalance_band_pct"],
+            }
+        )
+    return {"presets": items, "active_id": active, "current_preset_id": current.get("preset_id")}
+
+
+def _match_preset_id(policy: Dict[str, Any]) -> Optional[str]:
+    """Exact match on structure knobs; else honor stored preset_id if still equal."""
+    stored = str(policy.get("preset_id") or "").strip() or None
+    for key, preset in POLICY_PRESETS.items():
+        pol = preset["policy"]
+        t = pol["targets"]
+        ct = policy.get("targets") or {}
+        if (
+            abs(float(policy.get("equity_min_pct") or 0) - float(pol["equity_min_pct"])) < 0.05
+            and abs(float(policy.get("equity_max_pct") or 0) - float(pol["equity_max_pct"])) < 0.05
+            and abs(float(policy.get("defensive_min_pct") or 0) - float(pol["defensive_min_pct"])) < 0.05
+            and abs(float(policy.get("single_holding_max_pct") or 0) - float(pol["single_holding_max_pct"])) < 0.05
+            and abs(float(policy.get("rebalance_band_pct") or 0) - float(pol["rebalance_band_pct"])) < 0.05
+            and abs(float(ct.get("equity_pct") or 0) - float(t["equity_pct"])) < 0.05
+            and abs(float(ct.get("fixed_income_pct") or 0) - float(t["fixed_income_pct"])) < 0.05
+            and abs(float(ct.get("deposit_pct") or 0) - float(t["deposit_pct"])) < 0.05
+        ):
+            return key
+    if stored in POLICY_PRESETS:
+        return None  # labeled but knobs drifted → treat as custom
+    return None
+
+
+def apply_policy_preset(conn, preset_id: str) -> Dict[str, Any]:
+    """Apply structure knobs from a preset; keep personal codes/limits/plans codes."""
+    key = str(preset_id or "").strip()
+    if key not in POLICY_PRESETS:
+        raise ValueError(f"未知预设：{preset_id}（可选 defensive / balanced / building）")
+    preset = POLICY_PRESETS[key]
+    payload = dict(preset["policy"])
+    payload["preset_id"] = key
+    policy = set_policy(conn, payload)
+    return {"preset_id": key, "label": preset["label"], "policy": policy}
 
 
 def ensure_discipline_tables(conn) -> None:
@@ -219,6 +345,16 @@ def set_policy(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
         if k in plans and plans[k] is not None:
             plans[k] = str(plans[k]).strip()
     merged["plans"] = plans
+
+    # 结构尺子若与三套预设不一致，标记为 custom（一键套用会写 preset_id）
+    matched = _match_preset_id(merged)
+    if matched:
+        merged["preset_id"] = matched
+    else:
+        # 保留显式 custom；空则标 custom
+        pid = str(merged.get("preset_id") or "").strip()
+        if pid not in POLICY_PRESETS:
+            merged["preset_id"] = "custom"
 
     _set_setting(conn, POLICY_KEY, json.dumps(merged, ensure_ascii=False))
     return merged

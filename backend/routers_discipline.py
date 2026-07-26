@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 try:
     from .database import db_session
     from .discipline import (
+        apply_policy_preset,
         build_discipline_report,
         confirm_draft,
         confirm_drafts,
@@ -14,12 +15,14 @@ try:
         delete_draft,
         get_policy,
         list_drafts,
+        list_policy_presets,
         set_policy,
         update_draft,
     )
 except ImportError:
     from database import db_session
     from discipline import (
+        apply_policy_preset,
         build_discipline_report,
         confirm_draft,
         confirm_drafts,
@@ -27,6 +30,7 @@ except ImportError:
         delete_draft,
         get_policy,
         list_drafts,
+        list_policy_presets,
         set_policy,
         update_draft,
     )
@@ -94,6 +98,27 @@ def discipline_put_policy(body: PolicyBody):
             policy = set_policy(conn, payload)
             conn.commit()
         return {"status": "success", "policy": policy}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+class ApplyPresetBody(BaseModel):
+    preset_id: str
+
+
+@router.get("/discipline/presets")
+def discipline_list_presets():
+    with db_session(row_factory=sqlite3.Row) as conn:
+        return list_policy_presets(conn)
+
+
+@router.post("/discipline/presets/apply")
+def discipline_apply_preset(body: ApplyPresetBody):
+    try:
+        with db_session(row_factory=sqlite3.Row) as conn:
+            result = apply_policy_preset(conn, body.preset_id)
+            conn.commit()
+        return {"status": "success", **result}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 

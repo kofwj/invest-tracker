@@ -1,6 +1,6 @@
 import api from '../api/index.js';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 
 const numOr = (v, fallback) => {
     const n = Number(v);
@@ -20,7 +20,13 @@ const createDisciplineModule = ({
     fetchData,
     queryTransactions,
     afterDisciplineChange,
+    disciplinePresets,
+    disciplinePresetActiveId,
+    disciplinePresetLoading,
 }) => {
+    const localPresets = disciplinePresets || ref([]);
+    const localActiveId = disciplinePresetActiveId || ref(null);
+    const localPresetLoading = disciplinePresetLoading || ref(false);
     const runAfterDisciplineChange = async () => {
         if (typeof afterDisciplineChange === 'function') {
             try {
@@ -85,8 +91,55 @@ const createDisciplineModule = ({
         }
     };
 
+    const fetchDisciplinePresets = async () => {
+        localPresetLoading.value = true;
+        try {
+            const res = await api.listDisciplinePresets();
+            const data = res.data || {};
+            localPresets.value = Array.isArray(data.presets) ? data.presets : [];
+            localActiveId.value = data.active_id || null;
+        } catch (e) {
+            console.warn('discipline presets failed', e);
+        } finally {
+            localPresetLoading.value = false;
+        }
+    };
+
+    const applyDisciplinePreset = async (presetId) => {
+        const id = String(presetId || '').trim();
+        if (!id) return;
+        const meta = (localPresets.value || []).find((p) => p.id === id);
+        const label = meta?.label || id;
+        const summary = meta?.summary || '';
+        try {
+            await ElMessageBox.confirm(
+                `将套用「${label}」目标尺子${summary ? `：${summary}` : ''}。\n只改权益/固收/存款目标和安全带，不改优先加仓代码、禁开名单和格力上限。确认？`,
+                '一键套用预设',
+                { type: 'info', confirmButtonText: '套用', cancelButtonText: '取消' },
+            );
+        } catch (e) {
+            if (e === 'cancel' || e === 'close') return;
+            throw e;
+        }
+        localPresetLoading.value = true;
+        try {
+            const res = await api.applyDisciplinePreset(id);
+            const policy = res.data?.policy;
+            if (policy) disciplinePolicy.value = policy;
+            ElMessage.success(`已套用「${res.data?.label || label}」`);
+            await refreshDiscipline();
+            await fetchDisciplinePresets();
+            await runAfterDisciplineChange();
+        } catch (e) {
+            if (e === 'cancel' || e === 'close') return;
+            ElMessage.error(e?.response?.data?.detail || '套用失败');
+        } finally {
+            localPresetLoading.value = false;
+        }
+    };
+
     const refreshDiscipline = async () => {
-        await Promise.all([fetchDisciplineReport(), fetchDisciplineDrafts()]);
+        await Promise.all([fetchDisciplineReport(), fetchDisciplineDrafts(), fetchDisciplinePresets()]);
     };
 
     const openPolicyDialog = async () => {
@@ -311,6 +364,8 @@ const createDisciplineModule = ({
     return {
         fetchDisciplineReport,
         fetchDisciplineDrafts,
+        fetchDisciplinePresets,
+        applyDisciplinePreset,
         refreshDiscipline,
         openPolicyDialog,
         savePolicy,

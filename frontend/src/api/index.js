@@ -149,6 +149,8 @@ const api = {
     getDisciplineReport: () => axios.get(API + '/discipline/report', { timeout: 60000 }),
     getDisciplinePolicy: () => axios.get(API + '/discipline/policy'),
     saveDisciplinePolicy: (payload) => axios.put(API + '/discipline/policy', payload || {}),
+    listDisciplinePresets: () => axios.get(API + '/discipline/presets'),
+    applyDisciplinePreset: (presetId) => axios.post(API + '/discipline/presets/apply', { preset_id: presetId }),
     listDisciplineDrafts: (params = {}) => {
         const qs = new URLSearchParams();
         Object.entries(params || {}).forEach(([key, value]) => {
