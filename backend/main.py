@@ -120,23 +120,30 @@ def check_database_health():
 
 def health_payload():
     # 不暴露本机绝对路径（外网 /health 可达时避免信息泄露）
+    db_status = check_database_health()
+    status = "ok" if db_status == "ok" else "degraded"
     return {
-        "status": "ok",
-        "database": check_database_health(),
+        "status": status,
+        "database": db_status,
         "timezone": str(APP_CONFIG.local_timezone),
     }
 
 
 @app.get("/api/health")
 def health_check():
-    return health_payload()
+    payload = health_payload()
+    if payload.get("status") != "ok":
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(status_code=503, content=payload)
+    return payload
 
 
 @app.get("/health")
 def proxied_health_check():
     # Nginx strips the /api prefix before proxying to the backend,
     # so /api/health on the frontend reaches /health here.
-    return health_payload()
+    return health_check()
 
 
 if __name__ == "__main__":

@@ -148,7 +148,11 @@ def discipline_update_draft(draft_id: int, body: UpdateDraftBody):
     except KeyError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+        # 日期格式错误也走 422，和 Pydantic 校验对齐
+        msg = str(e)
+        if "日期" in msg:
+            raise HTTPException(status_code=422, detail=msg) from e
+        raise HTTPException(status_code=400, detail=msg) from e
 
 
 @router.delete("/discipline/drafts/{draft_id}")

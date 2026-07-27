@@ -1,9 +1,10 @@
 from datetime import date as dt_date
+import math
 import sqlite3
 from typing import Optional
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator, model_validator
 
 try:
     from .database import db_session, local_today_iso
@@ -35,6 +36,32 @@ except ImportError:
 router = APIRouter()
 
 
+def _normalize_optional_date(value):
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        return normalize_date_string(text, required=True)
+    except Exception as exc:
+        raise ValueError(f"日期格式无效：{text}") from exc
+
+
+def _require_finite_positive(name: str, value: float, *, allow_zero: bool = False):
+    if value is None:
+        raise ValueError(f"{name}不能为空")
+    num = float(value)
+    if not math.isfinite(num):
+        raise ValueError(f"{name}必须是有限数字")
+    if allow_zero:
+        if num < 0:
+            raise ValueError(f"{name}不能为负")
+    elif num <= 0:
+        raise ValueError(f"{name}必须大于0")
+    return num
+
+
 class DepositSchema(BaseModel):
     id: Optional[int] = None
     bank_name: str
@@ -44,6 +71,37 @@ class DepositSchema(BaseModel):
     due_date: Optional[str] = None
     remark: Optional[str] = None
 
+    @field_validator("bank_name")
+    @classmethod
+    def _bank_name(cls, v):
+        name = str(v or "").strip()
+        if not name:
+            raise ValueError("银行名称不能为空")
+        return name
+
+    @field_validator("amount")
+    @classmethod
+    def _amount(cls, v):
+        return _require_finite_positive("金额", v)
+
+    @field_validator("interest_rate")
+    @classmethod
+    def _rate(cls, v):
+        if v is None:
+            return None
+        return _require_finite_positive("利率", v, allow_zero=True)
+
+    @field_validator("start_date", "due_date", mode="before")
+    @classmethod
+    def _dates(cls, v):
+        return _normalize_optional_date(v)
+
+    @model_validator(mode="after")
+    def _date_order(self):
+        if self.start_date and self.due_date and self.start_date > self.due_date:
+            raise ValueError("起息日不能晚于到期日")
+        return self
+
 
 class DepositUpdate(BaseModel):
     bank_name: Optional[str] = None
@@ -52,6 +110,41 @@ class DepositUpdate(BaseModel):
     start_date: Optional[str] = None
     due_date: Optional[str] = None
     remark: Optional[str] = None
+
+    @field_validator("bank_name")
+    @classmethod
+    def _bank_name(cls, v):
+        if v is None:
+            return None
+        name = str(v or "").strip()
+        if not name:
+            raise ValueError("银行名称不能为空")
+        return name
+
+    @field_validator("amount")
+    @classmethod
+    def _amount(cls, v):
+        if v is None:
+            return None
+        return _require_finite_positive("金额", v)
+
+    @field_validator("interest_rate")
+    @classmethod
+    def _rate(cls, v):
+        if v is None:
+            return None
+        return _require_finite_positive("利率", v, allow_zero=True)
+
+    @field_validator("start_date", "due_date", mode="before")
+    @classmethod
+    def _dates(cls, v):
+        return _normalize_optional_date(v)
+
+    @model_validator(mode="after")
+    def _date_order(self):
+        if self.start_date and self.due_date and self.start_date > self.due_date:
+            raise ValueError("起息日不能晚于到期日")
+        return self
 
 
 @router.get("/deposits", response_model=list[DepositSchema])
@@ -107,8 +200,12 @@ async def import_deposits(file: UploadFile = File(...)):
                         if row.get("interest_rate") != ""
                         else None
                     )
+                    if interest_rate is not None and interest_rate < 0:
+                        raise ValueError("利率不能为负")
                     start_date = normalize_date_string(row.get("start_date"), required=False) or None
                     due_date = normalize_date_string(row.get("due_date"), required=False) or None
+                    if start_date and due_date and start_date > due_date:
+                        raise ValueError("起息日不能晚于到期日")
                     remark = row.get("remark") or ""
                     conn.execute(
                         """

@@ -1,4 +1,5 @@
 from database import LOCAL_TZ
+import math
 import sqlite3
 from datetime import datetime
 
@@ -97,8 +98,11 @@ def latest_holding_corrections(conn):
         return {}
 
 
-def current_holding_quantity(conn, code: str, exclude_transaction_id=None) -> float:
-    """Compute current holding quantity for a code from transactions + latest correction."""
+def holding_quantity_as_of(conn, code: str, as_of_date=None, exclude_transaction_id=None) -> float:
+    """Compute holding quantity for a code up to as_of_date (inclusive).
+
+    When as_of_date is None, uses all transactions (current holding).
+    """
     code = str(code or "").strip()
     if not code:
         return 0.0
@@ -110,6 +114,8 @@ def current_holding_quantity(conn, code: str, exclude_transaction_id=None) -> fl
         anchor = str(correction.get("date") or "")
     else:
         anchor = None
+
+    as_of = str(as_of_date or "").strip()[:10] or None
 
     query = """
         SELECT date, direction, quantity, id FROM transactions
@@ -125,6 +131,8 @@ def current_holding_quantity(conn, code: str, exclude_transaction_id=None) -> fl
         t_qty = float((t["quantity"] if isinstance(t, sqlite3.Row) else t[2]) or 0)
         if direction in ("申购待确认", "待确认申购"):
             continue
+        if as_of is not None and date > as_of:
+            continue
         if anchor is not None and date <= anchor:
             continue
         if direction in ("买入", "分红再投资"):
@@ -132,6 +140,16 @@ def current_holding_quantity(conn, code: str, exclude_transaction_id=None) -> fl
         elif direction == "卖出":
             qty = max(0.0, qty - t_qty)
     return float(qty)
+
+
+def current_holding_quantity(conn, code: str, exclude_transaction_id=None) -> float:
+    """Compute current holding quantity for a code from transactions + latest correction."""
+    return holding_quantity_as_of(conn, code, as_of_date=None, exclude_transaction_id=exclude_transaction_id)
+
+
+def _require_finite(name: str, value: float):
+    if not math.isfinite(value):
+        raise ValueError(f"{name}必须是有限数字")
 
 
 def validate_transaction_payload(
@@ -145,6 +163,7 @@ def validate_transaction_payload(
     fee,
     exclude_transaction_id=None,
     strict_oversell=True,
+    transaction_date=None,
 ):
     """Validate transaction fields. Raises ValueError on invalid input."""
     direction = str(direction or "").strip()
@@ -153,11 +172,16 @@ def validate_transaction_payload(
     px = float(price or 0)
     amt = float(amount or 0)
     f = float(fee or 0)
+    tx_date = str(transaction_date or "").strip()[:10] or None
 
     if direction not in ALLOWED_DIRECTIONS:
         raise ValueError("方向必须是：买入/卖出/分红/分红再投资/申购待确认")
     if not code:
         raise ValueError("代码不能为空")
+
+    for label, value in (("数量", qty), ("价格", px), ("金额", amt), ("手续费", f)):
+        _require_finite(label, value)
+
     if qty < 0:
         raise ValueError("数量不能为负")
     if px < 0:
@@ -175,10 +199,35 @@ def validate_transaction_payload(
         if qty <= 0:
             raise ValueError("卖出数量必须大于0")
         if strict_oversell and conn is not None:
-            available = current_holding_quantity(conn, code, exclude_transaction_id=exclude_transaction_id)
+            available = holding_quantity_as_of(
+                conn,
+                code,
+                as_of_date=tx_date,
+                exclude_transaction_id=exclude_transaction_id,
+            )
             # allow tiny float noise
             if qty > available + 1e-6:
+                if tx_date:
+                    raise ValueError(
+                        f"卖出数量 {qty} 超过 {tx_date} 时历史持仓 {round(available, 6)}（当前可用亦不可超）"
+                    )
                 raise ValueError(f"卖出数量 {qty} 超过当前持仓 {round(available, 6)}")
+
+    if direction in ("买入", "卖出"):
+        if qty > 0 and px <= 0 and amt <= 0:
+            raise ValueError(f"{direction}需要有效价格或金额")
+        if qty > 0 and px > 0:
+            gross = qty * px
+            tol = max(0.05, abs(gross) * 0.00002)
+            if direction == "买入":
+                ok = abs(amt - gross) <= tol or abs(amt - (gross + f)) <= tol
+            else:
+                ok = abs(amt - gross) <= tol or abs(amt - (gross - f)) <= tol
+            if not ok:
+                raise ValueError(
+                    f"{direction}金额 {amt} 与数量×价格 {round(gross, 6)} 不一致"
+                )
+
     if direction == "分红" and amt <= 0:
         raise ValueError("分红金额必须大于0")
     if direction == "分红再投资" and (qty <= 0 or amt <= 0):

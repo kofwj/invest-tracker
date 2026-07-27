@@ -1003,7 +1003,13 @@ def update_draft(conn, draft_id: int, payload: Dict[str, Any]) -> Dict[str, Any]
     if "category" in payload and payload["category"] is not None:
         fields["category"] = str(payload["category"] or "")
     if "date" in payload and payload["date"] is not None:
-        fields["date"] = str(payload["date"])[:10]
+        raw_date = str(payload["date"]).strip()
+        if not raw_date:
+            raise ValueError("日期不能为空")
+        try:
+            fields["date"] = datetime.strptime(raw_date[:10], "%Y-%m-%d").date().isoformat()
+        except ValueError as exc:
+            raise ValueError(f"日期格式无效：{raw_date}") from exc
     if "side" in payload and payload["side"] is not None:
         side = str(payload["side"]).lower().strip()
         if side not in ("buy", "sell"):
@@ -1019,6 +1025,13 @@ def update_draft(conn, draft_id: int, payload: Dict[str, Any]) -> Dict[str, Any]
         raise ValueError("金额必须大于 0")
     if not fields:
         raise ValueError("没有可更新的字段")
+
+    next_code = str(fields.get("code", d.get("code") or "")).strip()
+    next_side = str(fields.get("side", d.get("side") or "")).lower().strip()
+    if next_code and next_side in ("buy", "sell"):
+        existing = _find_open_draft(conn, next_code, next_side)
+        if existing and int(existing.get("id") or 0) != int(draft_id):
+            raise ValueError(f"已有未确认的 {next_code}/{next_side} 草稿，不能重复")
 
     sets = ", ".join(f"{k} = ?" for k in fields)
     vals = list(fields.values()) + [draft_id]
@@ -1100,6 +1113,7 @@ def confirm_draft(conn, draft_id: int, *, make_backup: bool = True) -> Dict[str,
         amount=amount,
         fee=float(d.get("fee") or 0),
         strict_oversell=True,
+        transaction_date=date,
     )
 
     backup_path = None

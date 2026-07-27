@@ -40,14 +40,29 @@ def safe_backup_path(filename: str) -> Path:
     return path
 
 
+REQUIRED_APP_TABLES = ("transactions", "holdings", "deposits", "settings")
+
+
 def check_sqlite(path: Path):
     try:
         with sqlite3.connect(str(path)) as conn:
             ok = conn.execute("PRAGMA integrity_check").fetchone()[0]
+            tables = {
+                str(r[0])
+                for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"备份文件无法读取：{e}")
     if str(ok).lower() != "ok":
         raise HTTPException(status_code=400, detail=f"备份完整性检查失败：{ok}")
+    missing = [name for name in REQUIRED_APP_TABLES if name not in tables]
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"不是本系统账本备份，缺少表：{', '.join(missing)}",
+        )
 
 
 @router.get("/maintenance/status")

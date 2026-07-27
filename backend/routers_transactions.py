@@ -177,6 +177,7 @@ async def import_transactions(file: UploadFile = File(...)):
                         amount=amount,
                         fee=fee,
                         strict_oversell=True,
+                        transaction_date=date_str,
                     )
                     conn.execute(
                         """
@@ -268,6 +269,7 @@ def add_transaction(trans: TransactionBase, backup: bool = True):
                 price=trans.price,
                 amount=trans.amount,
                 fee=trans.fee,
+                transaction_date=trans.date.isoformat() if hasattr(trans.date, "isoformat") else trans.date,
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
@@ -337,6 +339,7 @@ def update_transaction(transaction_id: int, trans: TransactionUpdate):
                 amount=merged["amount"],
                 fee=merged["fee"] or 0,
                 exclude_transaction_id=transaction_id,
+                transaction_date=merged.get("date"),
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))

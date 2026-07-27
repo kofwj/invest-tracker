@@ -197,7 +197,7 @@ def test_oversell_is_rejected(client, app_module):
         },
     )
     assert sell.status_code == 400
-    assert "超过当前持仓" in sell.json()["detail"]
+    assert "持仓" in sell.text
 
 
 def test_invalid_direction_rejected_on_add(client):

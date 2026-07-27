@@ -102,8 +102,18 @@ def create_safety_backup(label: str):
     """Create an integrity-checked SQLite backup before risky data mutations."""
     backup_dir = BACKUP_DIR
     os.makedirs(backup_dir, exist_ok=True)
-    ts = datetime.now(LOCAL_TZ).strftime("%Y%m%d_%H%M%S")
-    backup_path = os.path.join(backup_dir, f"invest_{ts}_{_safe_backup_label(label)}.db.bak")
+    base_ts = datetime.now(LOCAL_TZ).strftime("%Y%m%d_%H%M%S")
+    safe_label = _safe_backup_label(label)
+    backup_path = os.path.join(backup_dir, f"invest_{base_ts}_{safe_label}.db.bak")
+    # Avoid same-second overwrites when multiple backups happen quickly.
+    if os.path.exists(backup_path):
+        for i in range(1, 1000):
+            candidate = os.path.join(backup_dir, f"invest_{base_ts}_{safe_label}_{i:03d}.db.bak")
+            if not os.path.exists(candidate):
+                backup_path = candidate
+                break
+        else:
+            raise HTTPException(status_code=500, detail="备份文件名冲突，请稍后重试")
     with db_session() as src, sqlite3.connect(backup_path) as dst:
         src.backup(dst)
         ok = dst.execute("PRAGMA integrity_check").fetchone()[0]
