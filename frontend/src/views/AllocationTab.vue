@@ -443,7 +443,7 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="disciplinePolicyDialog = false">取消</el-button>
+        <el-button @click="cancelPolicy">取消</el-button>
         <el-button type="primary" @click="savePolicy">保存</el-button>
       </template>
     </el-dialog>
@@ -506,6 +506,7 @@ const {
   disciplineDraftEditForm,
   refreshDiscipline,
   openPolicyDialog,
+  cancelPolicy,
   savePolicy,
   createDraftsFromReport,
   openDraftEdit,

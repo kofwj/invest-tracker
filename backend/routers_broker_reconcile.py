@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import sqlite3
 from datetime import date as dt_date
 from typing import Any, Dict, List, Optional
@@ -13,13 +14,13 @@ try:
     from .broker_reconcile import compare_holdings, parse_broker_upload
     from .csv_utils import create_safety_backup
     from .database import db_session, local_today_iso
-    from .holding_calculator import infer_category, recalc_holdings
+    from .holding_calculator import infer_category, recalc_holdings, validate_holding_history
     from .portfolio_totals import compute_portfolio_totals
 except ImportError:
     from broker_reconcile import compare_holdings, parse_broker_upload
     from csv_utils import create_safety_backup
     from database import db_session, local_today_iso
-    from holding_calculator import infer_category, recalc_holdings
+    from holding_calculator import infer_category, recalc_holdings, validate_holding_history
     from portfolio_totals import compute_portfolio_totals
 
 router = APIRouter()
@@ -104,8 +105,15 @@ def broker_reconcile_apply(body: BrokerApplyBody):
             code = str(item.code or "").strip()
             if not code:
                 continue
-            if float(item.actual_quantity) < 0 or float(item.actual_avg_cost) < 0:
+            quantity = float(item.actual_quantity)
+            avg_cost = float(item.actual_avg_cost)
+            total_dividend = float(item.actual_total_dividend or 0)
+            if not all(math.isfinite(value) for value in (quantity, avg_cost, total_dividend)):
+                raise HTTPException(status_code=400, detail=f"{code} 数量/成本/分红必须是有限数字")
+            if quantity < 0 or avg_cost < 0:
                 raise HTTPException(status_code=400, detail=f"{code} 数量/成本不能为负")
+            if total_dividend < 0:
+                raise HTTPException(status_code=400, detail=f"{code} 累计分红不能为负")
             name = (item.name or "").strip() or code
             category = (item.category or "").strip() or infer_category(code, name)
             conn.execute(
@@ -119,16 +127,22 @@ def broker_reconcile_apply(body: BrokerApplyBody):
                     code,
                     name,
                     category,
-                    float(item.actual_quantity),
-                    float(item.actual_avg_cost),
-                    float(item.actual_total_dividend or 0),
+                    quantity,
+                    avg_cost,
+                    total_dividend,
                     item.remark or "券商对账单导入校正",
                 ),
             )
             codes.append(code)
             applied.append(code)
         if codes:
-            recalc_holdings(conn, codes=list(dict.fromkeys(codes)))
+            unique_codes = list(dict.fromkeys(codes))
+            try:
+                for code in unique_codes:
+                    validate_holding_history(conn, code)
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=str(e)) from e
+            recalc_holdings(conn, codes=unique_codes)
         conn.commit()
 
     recheck = None

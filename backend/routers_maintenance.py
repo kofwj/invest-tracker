@@ -39,7 +39,16 @@ def safe_backup_path(filename: str) -> Path:
     return path
 
 
-REQUIRED_APP_TABLES = ("transactions", "holdings", "deposits", "settings")
+REQUIRED_APP_COLUMNS = {
+    "transactions": {
+        "id", "date", "code", "name", "direction", "quantity", "price", "amount", "fee",
+    },
+    "holdings": {
+        "id", "code", "name", "quantity", "avg_cost", "diluted_cost", "total_dividend", "last_price",
+    },
+    "deposits": {"id", "bank_name", "amount", "interest_rate", "due_date"},
+    "settings": {"key", "value"},
+}
 
 
 def check_sqlite(path: Path):
@@ -56,12 +65,21 @@ def check_sqlite(path: Path):
         raise HTTPException(status_code=400, detail=f"备份文件无法读取：{e}")
     if str(ok).lower() != "ok":
         raise HTTPException(status_code=400, detail=f"备份完整性检查失败：{ok}")
-    missing = [name for name in REQUIRED_APP_TABLES if name not in tables]
+    missing = [name for name in REQUIRED_APP_COLUMNS if name not in tables]
     if missing:
         raise HTTPException(
             status_code=400,
             detail=f"不是本系统账本备份，缺少表：{', '.join(missing)}",
         )
+    with sqlite3.connect(str(path)) as conn:
+        for table, required in REQUIRED_APP_COLUMNS.items():
+            columns = {str(row[1]) for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+            missing_columns = sorted(required - columns)
+            if missing_columns:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"不是有效账本备份，{table} 缺少列：{', '.join(missing_columns)}",
+                )
 
 
 def restore_sqlite(source: Path):

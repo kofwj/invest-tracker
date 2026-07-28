@@ -589,6 +589,7 @@ const app = createApp({
             applyDisciplinePreset,
             refreshDiscipline,
             openPolicyDialog,
+            cancelPolicy,
             savePolicy,
             createDraftsFromReport,
             openDraftEdit,
@@ -712,7 +713,7 @@ const app = createApp({
             disciplineReport, disciplineDrafts, disciplinePolicy, disciplineLoading, disciplineDraftLoading, disciplinePolicyDialog,
             disciplineDraftEditDialog, disciplineDraftEditForm, disciplineSelectedDraftIds,
             disciplinePresets, disciplinePresetActiveId, disciplinePresetLoading,
-            fetchDisciplineReport, fetchDisciplineDrafts, fetchDisciplinePresets, applyDisciplinePreset, refreshDiscipline, openPolicyDialog, savePolicy, createDraftsFromReport,
+            fetchDisciplineReport, fetchDisciplineDrafts, fetchDisciplinePresets, applyDisciplinePreset, refreshDiscipline, openPolicyDialog, cancelPolicy, savePolicy, createDraftsFromReport,
             openDraftEdit, saveDraftEdit, deleteDraft, confirmDraft, onDraftSelectionChange, confirmSelectedDrafts,
             breaches, actions, planItems, helpNotes, snapshot, targets, summaryText,
         };

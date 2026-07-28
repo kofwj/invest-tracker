@@ -7,6 +7,8 @@ const numOr = (v, fallback) => {
     return Number.isFinite(n) ? n : fallback;
 };
 
+const clonePolicy = (value) => JSON.parse(JSON.stringify(value || {}));
+
 const createDisciplineModule = ({
     disciplineReport,
     disciplineDrafts,
@@ -27,6 +29,7 @@ const createDisciplineModule = ({
     const localPresets = disciplinePresets || ref([]);
     const localActiveId = disciplinePresetActiveId || ref(null);
     const localPresetLoading = disciplinePresetLoading || ref(false);
+    let policyBeforeEdit = null;
     const runAfterDisciplineChange = async () => {
         if (typeof afterDisciplineChange === 'function') {
             try {
@@ -148,9 +151,11 @@ const createDisciplineModule = ({
             const p = res.data || {};
             if (!p.targets) p.targets = { equity_pct: 45, fixed_income_pct: 30, deposit_pct: 25 };
             if (!p.plans) p.plans = { a500_batch_target_amount: 200000, gree_soft_max_pct: 15 };
-            disciplinePolicy.value = p;
-        } catch (_) {
-            /* keep existing */
+            policyBeforeEdit = clonePolicy(disciplinePolicy.value);
+            disciplinePolicy.value = clonePolicy(p);
+        } catch (e) {
+            ElMessage.error(e?.response?.data?.detail || '加载纪律参数失败，暂不能编辑');
+            return;
         }
         if (disciplinePolicy.value && !disciplinePolicy.value.targets) {
             disciplinePolicy.value.targets = { equity_pct: 45, fixed_income_pct: 30, deposit_pct: 25 };
@@ -159,6 +164,12 @@ const createDisciplineModule = ({
             disciplinePolicy.value.plans = { a500_batch_target_amount: 200000, gree_soft_max_pct: 15 };
         }
         disciplinePolicyDialog.value = true;
+    };
+
+    const cancelPolicy = () => {
+        if (policyBeforeEdit) disciplinePolicy.value = clonePolicy(policyBeforeEdit);
+        policyBeforeEdit = null;
+        disciplinePolicyDialog.value = false;
     };
 
     const savePolicy = async () => {
@@ -217,6 +228,7 @@ const createDisciplineModule = ({
             };
             await api.saveDisciplinePolicy(payload);
             ElMessage.success('纪律参数已保存');
+            policyBeforeEdit = null;
             disciplinePolicyDialog.value = false;
             await refreshDiscipline();
             await runAfterDisciplineChange();
@@ -343,9 +355,18 @@ const createDisciplineModule = ({
             );
             const res = await api.confirmDisciplineDrafts({ draft_ids: ids });
             const ok = res.data?.count || 0;
-            const errN = (res.data?.errors || []).length;
-            ElMessage.success(`批量完成：成功 ${ok}，失败 ${errN}`);
-            if (disciplineSelectedDraftIds) disciplineSelectedDraftIds.value = [];
+            const errors = res.data?.errors || [];
+            const errN = errors.length;
+            if (errN > 0) {
+                ElMessage.warning(`批量完成：成功 ${ok}，失败 ${errN}。失败项已保留勾选`);
+                const failedIds = new Set(errors.map((item) => item.draft_id).filter(Boolean));
+                if (disciplineSelectedDraftIds) {
+                    disciplineSelectedDraftIds.value = ids.filter((id) => failedIds.has(id));
+                }
+            } else {
+                ElMessage.success(`批量完成：成功 ${ok}`);
+                if (disciplineSelectedDraftIds) disciplineSelectedDraftIds.value = [];
+            }
             await refreshAfterLedgerChange();
         } catch (e) {
             if (e === 'cancel' || e === 'close') return;
@@ -368,6 +389,7 @@ const createDisciplineModule = ({
         applyDisciplinePreset,
         refreshDiscipline,
         openPolicyDialog,
+        cancelPolicy,
         savePolicy,
         createDraftsFromReport,
         openDraftEdit,

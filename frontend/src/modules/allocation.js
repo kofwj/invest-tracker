@@ -1,5 +1,6 @@
 import { formatMoney } from '../utils/index.js';
 import { computed, ref } from 'vue';
+import { ElMessage } from 'element-plus';
 import api from '../api/index.js';
 
 /**
@@ -207,6 +208,7 @@ const createAllocationModule = ({
             allocationStory.value = res.data || emptyStory();
         } catch (e) {
             console.warn('allocation story failed', e);
+            ElMessage.error(e?.response?.data?.detail || '配置诊断刷新失败，当前内容可能已过期');
             // keep last good story if any
             if (!allocationStory.value) allocationStory.value = emptyStory();
         } finally {

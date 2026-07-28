@@ -106,16 +106,25 @@ def holding_quantity_as_of(conn, code: str, as_of_date=None, exclude_transaction
     code = str(code or "").strip()
     if not code:
         return 0.0
-    corrections = latest_holding_corrections(conn)
-    correction = corrections.get(code)
+    as_of = str(as_of_date or "").strip()[:10] or None
+    if as_of is None:
+        correction = latest_holding_corrections(conn).get(code)
+    else:
+        row = conn.execute(
+            """
+            SELECT * FROM holding_corrections
+            WHERE code = ? AND date <= ?
+            ORDER BY date DESC, id DESC LIMIT 1
+            """,
+            (code, as_of),
+        ).fetchone()
+        correction = dict(row) if row else None
     qty = 0.0
     if correction:
         qty = float(correction.get("actual_quantity") or 0)
         anchor = str(correction.get("date") or "")
     else:
         anchor = None
-
-    as_of = str(as_of_date or "").strip()[:10] or None
 
     query = """
         SELECT date, direction, quantity, id FROM transactions

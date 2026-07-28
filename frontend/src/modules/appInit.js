@@ -15,13 +15,17 @@ const createAppInit = ({
     let bootstrapAfterAuth = async () => {};
 
     const bootstrap = async () => {
-        await Promise.all([
+        const results = await Promise.allSettled([
             fetchData(),
             queryTransactions(),
             queryCashFlows(),
             fetchSnapshots(),
             fetchMaintenance(),
         ]);
+        const failed = results.filter((result) => result.status === 'rejected');
+        if (failed.length) {
+            console.error('部分初始化数据加载失败', failed.map((result) => result.reason));
+        }
     };
 
     bootstrapAfterAuth = bootstrap;
@@ -40,7 +44,11 @@ const createAppInit = ({
         } catch (e) {
             console.error('获取登录状态失败', e);
         }
-        await bootstrapAfterAuth();
+        try {
+            await bootstrapAfterAuth();
+        } catch (e) {
+            console.error('初始化数据加载失败', e);
+        }
     };
 
     return {
