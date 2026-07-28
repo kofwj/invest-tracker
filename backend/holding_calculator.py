@@ -147,6 +147,38 @@ def current_holding_quantity(conn, code: str, exclude_transaction_id=None) -> fl
     return holding_quantity_as_of(conn, code, as_of_date=None, exclude_transaction_id=exclude_transaction_id)
 
 
+def validate_holding_history(conn, code: str) -> bool:
+    """Reject a ledger whose chronological sells exceed the holding then available."""
+    code = str(code or "").strip()
+    if not code:
+        return True
+    correction = latest_holding_corrections(conn).get(code)
+    quantity = float((correction or {}).get("actual_quantity") or 0)
+    anchor = str((correction or {}).get("date") or "") or None
+    rows = conn.execute(
+        """
+        SELECT date, direction, quantity FROM transactions
+        WHERE code = ? AND TRIM(code) != '' ORDER BY date, id
+        """,
+        (code,),
+    ).fetchall()
+    for row in rows:
+        date = str((row["date"] if isinstance(row, sqlite3.Row) else row[0]) or "")
+        direction = row["direction"] if isinstance(row, sqlite3.Row) else row[1]
+        tx_quantity = float((row["quantity"] if isinstance(row, sqlite3.Row) else row[2]) or 0)
+        if anchor is not None and date <= anchor:
+            continue
+        if direction in ("买入", "分红再投资"):
+            quantity += tx_quantity
+        elif direction == "卖出":
+            if tx_quantity > quantity + 1e-6:
+                raise ValueError(
+                    f"修改后 {date} 的卖出数量 {tx_quantity} 超过当时持仓 {round(quantity, 6)}"
+                )
+            quantity -= tx_quantity
+    return True
+
+
 def _require_finite(name: str, value: float):
     if not math.isfinite(value):
         raise ValueError(f"{name}必须是有限数字")

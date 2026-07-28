@@ -248,20 +248,25 @@ def add_deposit(dep: DepositSchema):
 @router.put("/deposits/{deposit_id}")
 def update_deposit(deposit_id: int, dep: DepositUpdate):
     backup_path = create_safety_backup("before_update_deposit")
-    updates = []
-    vals = []
-    for field in ["bank_name", "amount", "interest_rate", "start_date", "due_date", "remark"]:
-        v = getattr(dep, field)
-        if v is not None:
-            updates.append(f"{field} = ?")
-            vals.append(v)
-    if not updates:
-        raise HTTPException(status_code=400, detail="No fields to update")
-    vals.append(deposit_id)
-    with db_session() as conn:
-        conn.execute(f"UPDATE deposits SET {', '.join(updates)} WHERE id = ?", vals)
-        if conn.total_changes == 0:
+    with db_session(row_factory=sqlite3.Row) as conn:
+        existing = conn.execute("SELECT * FROM deposits WHERE id = ?", (deposit_id,)).fetchone()
+        if not existing:
             raise HTTPException(status_code=404, detail="Deposit not found")
+        updates = []
+        vals = []
+        merged = dict(existing)
+        for field in ["bank_name", "amount", "interest_rate", "start_date", "due_date", "remark"]:
+            v = getattr(dep, field)
+            if v is not None:
+                updates.append(f"{field} = ?")
+                vals.append(v)
+                merged[field] = v
+        if not updates:
+            raise HTTPException(status_code=400, detail="No fields to update")
+        if merged.get("start_date") and merged.get("due_date") and merged["start_date"] > merged["due_date"]:
+            raise HTTPException(status_code=422, detail="起息日不能晚于到期日")
+        vals.append(deposit_id)
+        conn.execute(f"UPDATE deposits SET {', '.join(updates)} WHERE id = ?", vals)
         conn.commit()
     return {"status": "success", "backup": backup_path}
 

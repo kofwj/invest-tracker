@@ -9,13 +9,13 @@ from pydantic import BaseModel
 try:
     from .csv_utils import create_safety_backup
     from .database import LOCAL_TZ, db_session
-    from .holding_calculator import infer_category, recalc_holdings
+    from .holding_calculator import infer_category, recalc_holdings, validate_holding_history
     from .return_sync import calculate_trailing_return_1y, ensure_holding_return_columns
     from .price_sync import fetch_eastmoney_prices, fetch_open_fund_nav
 except ImportError:
     from csv_utils import create_safety_backup
     from database import LOCAL_TZ, db_session
-    from holding_calculator import infer_category, recalc_holdings
+    from holding_calculator import infer_category, recalc_holdings, validate_holding_history
     from return_sync import calculate_trailing_return_1y, ensure_holding_return_columns
     from price_sync import fetch_eastmoney_prices, fetch_open_fund_nav
 
@@ -145,6 +145,10 @@ def add_holding_correction(payload: HoldingCorrectionBase):
             ),
         )
         new_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+        try:
+            validate_holding_history(conn, code)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
         recalc_holdings(conn, codes=[code])
         conn.commit()
     return {"status": "success", "id": new_id, "backup": backup_path}
@@ -161,6 +165,11 @@ def delete_holding_correction(correction_id: int):
             raise HTTPException(status_code=404, detail="Correction not found")
         code = str(existing["code"] or "").strip()
         conn.execute("DELETE FROM holding_corrections WHERE id = ?", (correction_id,))
+        try:
+            if code:
+                validate_holding_history(conn, code)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
         recalc_holdings(conn, codes=[code] if code else None)
         conn.commit()
     return {"status": "success", "backup": backup_path}

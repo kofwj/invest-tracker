@@ -1,5 +1,4 @@
 import os
-import shutil
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -10,10 +9,10 @@ from pydantic import BaseModel
 
 try:
     from .csv_utils import create_safety_backup
-    from .database import BACKUP_DIR, DB_PATH, LOCAL_TZ
+    from .database import BACKUP_DIR, DB_PATH, LOCAL_TZ, open_db
 except ImportError:
     from csv_utils import create_safety_backup
-    from database import BACKUP_DIR, DB_PATH, LOCAL_TZ
+    from database import BACKUP_DIR, DB_PATH, LOCAL_TZ, open_db
 
 router = APIRouter()
 
@@ -63,6 +62,24 @@ def check_sqlite(path: Path):
             status_code=400,
             detail=f"不是本系统账本备份，缺少表：{', '.join(missing)}",
         )
+
+
+def restore_sqlite(source: Path):
+    """Restore through SQLite's backup API, then migrate before serving requests."""
+    try:
+        with sqlite3.connect(str(source)) as src, open_db() as dst:
+            src.backup(dst)
+            try:
+                from .schema import ensure_app_schema
+            except ImportError:
+                from schema import ensure_app_schema
+            ensure_app_schema(dst)
+            ok = dst.execute("PRAGMA integrity_check").fetchone()[0]
+            if str(ok).lower() != "ok":
+                raise ValueError(f"恢复后完整性检查失败：{ok}")
+            dst.commit()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"恢复备份失败：{e}") from e
 
 
 @router.get("/maintenance/status")
@@ -124,12 +141,7 @@ def restore_backup(payload: RestoreRequest):
     backup = safe_backup_path(payload.filename)
     check_sqlite(backup)
     pre_restore = Path(create_safety_backup("before_restore"))
-    db = Path(DB_PATH)
-    db.parent.mkdir(parents=True, exist_ok=True)
-    tmp = db.with_suffix(db.suffix + ".restore_tmp")
-    shutil.copy2(str(backup), str(tmp))
-    tmp.replace(db)
-    check_sqlite(db)
+    restore_sqlite(backup)
     return {"status": "success", "restored": backup.name, "pre_restore_backup": pre_restore.name}
 
 
@@ -183,12 +195,7 @@ async def restore_uploaded_backup(file: UploadFile = File(...)):
 
     check_sqlite(upload_path)
     pre_restore = Path(create_safety_backup("before_restore_upload"))
-    db = Path(DB_PATH)
-    db.parent.mkdir(parents=True, exist_ok=True)
-    tmp = db.with_suffix(db.suffix + ".restore_tmp")
-    shutil.copy2(str(upload_path), str(tmp))
-    tmp.replace(db)
-    check_sqlite(db)
+    restore_sqlite(upload_path)
     return {
         "status": "success",
         "uploaded_backup": upload_path.name,

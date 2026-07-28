@@ -18,7 +18,7 @@ try:
         parse_float,
         read_upload_csv,
     )
-    from .holdings import ALLOWED_DIRECTIONS, infer_category, recalc_holdings, validate_transaction_payload
+    from .holdings import ALLOWED_DIRECTIONS, infer_category, recalc_holdings, validate_holding_history, validate_transaction_payload
 except ImportError:
     from database import db_session, local_today_iso, open_db
     from csv_utils import (
@@ -32,7 +32,7 @@ except ImportError:
         parse_float,
         read_upload_csv,
     )
-    from holdings import ALLOWED_DIRECTIONS, infer_category, recalc_holdings, validate_transaction_payload
+    from holdings import ALLOWED_DIRECTIONS, infer_category, recalc_holdings, validate_holding_history, validate_transaction_payload
 
 router = APIRouter()
 
@@ -153,6 +153,7 @@ async def import_transactions(file: UploadFile = File(...)):
         ensure_transaction_columns(conn)
         try:
             for idx, raw in enumerate(raw_rows, start=2):
+                conn.execute("SAVEPOINT import_transaction_row")
                 try:
                     row = normalize_csv_row(raw, TRANSACTION_HEADER_ALIASES)
                     date_str = normalize_date_string(row.get("date"))
@@ -186,8 +187,12 @@ async def import_transactions(file: UploadFile = File(...)):
                         """,
                         (date_str, code, name, category, account, direction, quantity, price, amount, fee, remark),
                     )
+                    validate_holding_history(conn, code)
+                    conn.execute("RELEASE SAVEPOINT import_transaction_row")
                     success += 1
                 except Exception as e:
+                    conn.execute("ROLLBACK TO SAVEPOINT import_transaction_row")
+                    conn.execute("RELEASE SAVEPOINT import_transaction_row")
                     errors.append({"row": idx, "error": str(e)})
             if success:
                 # Full rebuild on CSV import (many codes / safer)
@@ -292,6 +297,10 @@ def add_transaction(trans: TransactionBase, backup: bool = True):
                 trans.remark,
             ),
         )
+        try:
+            validate_holding_history(conn, trans.code)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
         recalc_holdings(conn, codes=[trans.code])
         conn.commit()
     return {"status": "success", "backup": backup_path}
@@ -347,6 +356,11 @@ def update_transaction(transaction_id: int, trans: TransactionUpdate):
         conn.execute(f"UPDATE transactions SET {', '.join(updates)} WHERE id = ?", vals)
         affected = {str(existing["code"] or "").strip(), str(merged["code"] or "").strip()}
         affected.discard("")
+        try:
+            for code in affected:
+                validate_holding_history(conn, code)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
         recalc_holdings(conn, codes=affected or None)
         conn.commit()
     return {"status": "success", "backup": backup_path}
@@ -361,6 +375,11 @@ def delete_transaction(transaction_id: int):
             raise HTTPException(status_code=404, detail="Transaction not found")
         code = str(existing["code"] or "").strip()
         conn.execute("DELETE FROM transactions WHERE id = ?", (transaction_id,))
+        try:
+            if code:
+                validate_holding_history(conn, code)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
         recalc_holdings(conn, codes=[code] if code else None)
         conn.commit()
     return {"status": "success", "backup": backup_path}

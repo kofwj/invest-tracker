@@ -13,6 +13,7 @@ try:
         latest_holding_corrections,
         normalized_transaction_cash,
         recalc_holdings,
+        validate_holding_history,
         validate_transaction_payload,
     )
 except ImportError:
@@ -23,6 +24,7 @@ except ImportError:
         latest_holding_corrections,
         normalized_transaction_cash,
         recalc_holdings,
+        validate_holding_history,
         validate_transaction_payload,
     )
 
