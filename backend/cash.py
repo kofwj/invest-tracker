@@ -1,3 +1,4 @@
+import math
 import sqlite3
 
 from datetime import date as dt_date
@@ -31,6 +32,8 @@ def transaction_cash_flow(conn):
 def normalize_cash_flow_amount(flow_type, amount):
     """资金流水金额符号：转入为正，转出为负，校准/其他按传入差额。"""
     amt = float(amount or 0)
+    if not math.isfinite(amt):
+        raise ValueError("资金流水金额必须是有限数字")
     if flow_type == '银证转入':
         return abs(amt)
     if flow_type == '银证转出':

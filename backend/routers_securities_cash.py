@@ -1,7 +1,8 @@
+import math
 import sqlite3
 from datetime import date as dt_date
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 try:
@@ -36,9 +37,12 @@ def get_securities_cash():
 
 @router.put("/securities-cash")
 def update_securities_cash(data: SecuritiesCashUpdate):
+    target = float(data.amount)
+    if not math.isfinite(target):
+        raise HTTPException(status_code=400, detail="证券现金必须是有限数字")
     with db_session(row_factory=sqlite3.Row) as conn:
         current, base, tx_flow = calculated_securities_cash(conn)
-        delta = float(data.amount or 0) - current
+        delta = target - current
         if abs(delta) >= 0.005:
             conn.execute(
                 """
@@ -51,16 +55,16 @@ def update_securities_cash(data: SecuritiesCashUpdate):
                     "现金校准",
                     delta,
                     current,
-                    float(data.amount or 0),
+                    target,
                     "现金设置页手动校准",
                 ),
             )
-        set_setting(conn, "securities_cash", data.amount)
+        set_setting(conn, "securities_cash", target)
         manual_flow = cash_flow_adjustment(conn)
         conn.commit()
     return {
         "status": "success",
-        "amount": data.amount,
+        "amount": target,
         "base_amount": base,
         "cash_flow_adjustment": manual_flow,
         "transaction_cash_flow": tx_flow,

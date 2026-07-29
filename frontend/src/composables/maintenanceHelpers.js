@@ -118,7 +118,7 @@ export function createMaintenanceHelpers({
             const channel_credentials = buildChannelCredentialsPayload();
             const body = {
                 enabled: !!notifyStatus.value.enabled,
-                cooldown_minutes: Number(notifyStatus.value.cooldown_minutes || 240),
+                cooldown_minutes: Number(notifyStatus.value.cooldown_minutes ?? 240),
                 template: notifyStatus.value.template || 'medium',
                 event_channels: notifyEventDraft.value,
             };

@@ -1,3 +1,4 @@
+import math
 import sqlite3
 from datetime import date as dt_date
 from typing import Optional
@@ -39,6 +40,8 @@ def normalize_portfolio_cash_flow(flow_type: str, amount) -> tuple:
         amt = abs(float(amount or 0))
     except (TypeError, ValueError) as e:
         raise HTTPException(status_code=400, detail="金额无效") from e
+    if not math.isfinite(amt):
+        raise HTTPException(status_code=400, detail="金额必须是有限数字")
     if amt <= 0:
         raise HTTPException(status_code=400, detail="金额必须大于 0")
     return t, amt

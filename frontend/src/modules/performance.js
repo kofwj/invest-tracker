@@ -30,6 +30,7 @@ const createPerformanceModule = ({
     showSyncNotice,
     nextTick,
 }) => {
+    let perfFlowSubmitting = false;
     const hasPerfFlows = computed(() => Number(perfSummary.value?.flow_count || 0) > 0);
 
     const perfStoryToneType = computed(() => {
@@ -271,11 +272,19 @@ const createPerformanceModule = ({
     }
 
     async function addPerfFlow() {
+        if (perfFlowSubmitting) return false;
+        perfFlowSubmitting = true;
         try {
             await api.addPortfolioCashFlow(perfFlowForm.value);
             showSyncNotice('新增成功');
-            fetchPerformance();
-        } catch (e) { showSyncNotice('新增失败: ' + (e.response?.data?.detail || e.message), 'error'); }
+            await fetchPerformance();
+            return true;
+        } catch (e) {
+            showSyncNotice('新增失败: ' + (e.response?.data?.detail || e.message), 'error');
+            return false;
+        } finally {
+            perfFlowSubmitting = false;
+        }
     }
 
     async function updatePerfFlow(id, payload) {
@@ -305,6 +314,8 @@ const createPerformanceModule = ({
     }
 
     async function applyPerfFlowSuggestion(row) {
+        if (perfFlowSubmitting) return;
+        perfFlowSubmitting = true;
         try {
             await api.addPortfolioCashFlow({
                 date: row.date,
@@ -314,9 +325,11 @@ const createPerformanceModule = ({
                 remark: row.remark || '',
             });
             showSyncNotice('已记入组合流水');
-            fetchPerformance();
+            await fetchPerformance();
         } catch (e) {
             showSyncNotice('写入失败: ' + (e?.response?.data?.detail || e.message), 'error');
+        } finally {
+            perfFlowSubmitting = false;
         }
     }
 

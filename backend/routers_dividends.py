@@ -1,4 +1,5 @@
 import logging
+import math
 from datetime import date as dt_date
 from typing import Any, Dict, List, Optional
 
@@ -181,6 +182,10 @@ def import_dividends(file: UploadFile = File(...)):
 
                     if amount <= 0:
                         raise ValueError("分红金额必须 > 0")
+                    if not math.isfinite(amount) or not math.isfinite(fee):
+                        raise ValueError("分红金额和手续费必须是有限数字")
+                    if fee < 0:
+                        raise ValueError("手续费不能为负数")
 
                     conn.execute(
                         """

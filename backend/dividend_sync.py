@@ -16,6 +16,7 @@ Open-end pure funds without stable calendar data remain out of scope.
 from __future__ import annotations
 
 import logging
+import math
 import re
 import sqlite3
 import time
@@ -636,6 +637,12 @@ def confirm_dividend_drafts(
                 continue
             if event_date is None:
                 errors.append({"code": code, "reason": "缺少分红日期"})
+                continue
+            if not math.isfinite(amount) or not math.isfinite(fee):
+                errors.append({"code": code, "reason": "金额和手续费必须是有限数字"})
+                continue
+            if fee < 0:
+                errors.append({"code": code, "reason": "手续费不能为负数"})
                 continue
             if amount <= 0:
                 errors.append({"code": code, "reason": "金额必须大于0"})

@@ -119,7 +119,14 @@ export function createDividendHelpers({
             };
             const res = await api.confirmDividends(payload);
             const data = res.data || {};
-            ElMessage.success(`入账完成：新建 ${data.created_count || 0}，跳过 ${data.skipped_count || 0}，失败 ${data.error_count || 0}`);
+            const errorCount = Number(data.error_count || 0);
+            const message = `入账完成：新建 ${data.created_count || 0}，跳过 ${data.skipped_count || 0}，失败 ${errorCount}`;
+            if (errorCount > 0) {
+                const reasons = (data.errors || []).slice(0, 3).map((item) => `${item.code || ''} ${item.reason || '失败'}`.trim()).join('；');
+                ElMessage.warning(reasons ? `${message}。${reasons}` : message);
+            } else {
+                ElMessage.success(message);
+            }
             await Promise.all([fetchData(), queryTransactions(), scanDividendDrafts()]);
         } catch (e) {
             if (e === 'cancel') return;

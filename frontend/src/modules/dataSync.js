@@ -25,21 +25,28 @@ const createDataSync = ({
     renderAllocationCharts,
 }) => {
     const fetchData = async () => {
-        const [dashRes, holdRes, depRes, cashRes, feeRes] = await Promise.all([
+        const results = await Promise.allSettled([
             api.getDashboard(),
             api.getHoldings(),
             api.getDeposits(),
             api.getSecuritiesCash(),
             api.getFeeSettings()
         ]);
-        dashboard.value = dashRes.data;
-        holdings.value = holdRes.data;
-        deposits.value = depRes.data;
-        cashForm.value.amount = cashRes.data.amount;
-        loadFeeSettingsToForm(feeRes.data || {});
+        const [dashRes, holdRes, depRes, cashRes, feeRes] = results;
+        if (dashRes.status === 'fulfilled') dashboard.value = dashRes.value.data;
+        if (holdRes.status === 'fulfilled') holdings.value = holdRes.value.data;
+        if (depRes.status === 'fulfilled') deposits.value = depRes.value.data;
+        if (cashRes.status === 'fulfilled') cashForm.value.amount = cashRes.value.data.amount;
+        if (feeRes.status === 'fulfilled') loadFeeSettingsToForm(feeRes.value.data || {});
+        const failed = results.filter((result) => result.status === 'rejected');
+        if (failed.length) {
+            const detail = failed[0].reason?.response?.data?.detail || failed[0].reason?.message || '未知错误';
+            ElMessage.warning(`部分数据刷新失败：${detail}`);
+        }
         if (!cashFlowForm.value.account) cashFlowForm.value.account = activeFeeAccount.value || '华泰证券';
         calculateAllocationAnalysis();
         if (activeTab.value === 'allocation') renderAllocationCharts();
+        return { failed: failed.length };
     };
 
     const syncPrices = async () => {

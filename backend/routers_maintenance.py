@@ -1,7 +1,9 @@
 import os
 import sqlite3
+import tempfile
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
@@ -50,6 +52,59 @@ REQUIRED_APP_COLUMNS = {
     "settings": {"key", "value"},
 }
 
+CURRENT_SCHEMA_COLUMNS = {
+    **REQUIRED_APP_COLUMNS,
+    "cash_flows": {"id", "date", "account", "flow_type", "amount"},
+    "daily_snapshots": {"id", "date", "total_assets", "pending_purchase", "lifetime_profit"},
+    "holding_corrections": {"id", "date", "code", "actual_quantity", "actual_avg_cost"},
+    "portfolio_cash_flows": {"id", "date", "flow_type", "amount"},
+    "discipline_drafts": {"id", "date", "code", "side", "amount", "status", "transaction_id"},
+    "alert_rules": {"id", "target_type", "code", "condition", "threshold"},
+    "alert_events": {"id", "rule_id", "trigger_time", "target_code"},
+    "notify_send_log": {"id", "event", "channel", "ok", "created_at"},
+}
+
+
+def _schema_helpers():
+    try:
+        from .schema import SCHEMA_VERSION, ensure_app_schema, get_schema_version
+    except ImportError:
+        from schema import SCHEMA_VERSION, ensure_app_schema, get_schema_version
+    return SCHEMA_VERSION, ensure_app_schema, get_schema_version
+
+
+def validate_restore_candidate(path: Path):
+    """Migrate and query a disposable copy so the live DB is never the compatibility test."""
+    schema_version, ensure_app_schema, get_schema_version = _schema_helpers()
+    with sqlite3.connect(str(path)) as source:
+        source.row_factory = sqlite3.Row
+        candidate_version = get_schema_version(source)
+        if candidate_version > schema_version:
+            raise HTTPException(
+                status_code=400,
+                detail=f"备份版本过新（{candidate_version}），当前程序仅支持到 {schema_version}",
+            )
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
+            tmp_path = Path(tmp.name)
+        try:
+            with sqlite3.connect(str(tmp_path)) as probe:
+                source.backup(probe)
+                ensure_app_schema(probe)
+                for table, required in CURRENT_SCHEMA_COLUMNS.items():
+                    columns = {str(row[1]) for row in probe.execute(f"PRAGMA table_info({table})").fetchall()}
+                    missing = sorted(required - columns)
+                    if missing:
+                        raise ValueError(f"{table} 缺少列：{', '.join(missing)}")
+                ok = probe.execute("PRAGMA integrity_check").fetchone()[0]
+                if str(ok).lower() != "ok":
+                    raise ValueError(f"迁移后完整性检查失败：{ok}")
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"备份与当前版本不兼容：{exc}") from exc
+        finally:
+            tmp_path.unlink(missing_ok=True)
+
 
 def check_sqlite(path: Path):
     try:
@@ -80,23 +135,31 @@ def check_sqlite(path: Path):
                     status_code=400,
                     detail=f"不是有效账本备份，{table} 缺少列：{', '.join(missing_columns)}",
                 )
+    validate_restore_candidate(path)
 
 
-def restore_sqlite(source: Path):
+def restore_sqlite(source: Path, *, rollback_source: Optional[Path] = None):
     """Restore through SQLite's backup API, then migrate before serving requests."""
     try:
         with sqlite3.connect(str(source)) as src, open_db() as dst:
             src.backup(dst)
-            try:
-                from .schema import ensure_app_schema
-            except ImportError:
-                from schema import ensure_app_schema
+            _, ensure_app_schema, _ = _schema_helpers()
             ensure_app_schema(dst)
             ok = dst.execute("PRAGMA integrity_check").fetchone()[0]
             if str(ok).lower() != "ok":
                 raise ValueError(f"恢复后完整性检查失败：{ok}")
             dst.commit()
     except Exception as e:
+        if rollback_source is not None:
+            try:
+                with sqlite3.connect(str(rollback_source)) as previous, open_db() as dst:
+                    previous.backup(dst)
+                    dst.commit()
+            except Exception as rollback_exc:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"恢复备份失败且自动回滚失败：{e}；{rollback_exc}",
+                ) from e
         raise HTTPException(status_code=500, detail=f"恢复备份失败：{e}") from e
 
 
@@ -159,7 +222,7 @@ def restore_backup(payload: RestoreRequest):
     backup = safe_backup_path(payload.filename)
     check_sqlite(backup)
     pre_restore = Path(create_safety_backup("before_restore"))
-    restore_sqlite(backup)
+    restore_sqlite(backup, rollback_source=pre_restore)
     return {"status": "success", "restored": backup.name, "pre_restore_backup": pre_restore.name}
 
 
@@ -213,7 +276,7 @@ async def restore_uploaded_backup(file: UploadFile = File(...)):
 
     check_sqlite(upload_path)
     pre_restore = Path(create_safety_backup("before_restore_upload"))
-    restore_sqlite(upload_path)
+    restore_sqlite(upload_path, rollback_source=pre_restore)
     return {
         "status": "success",
         "uploaded_backup": upload_path.name,

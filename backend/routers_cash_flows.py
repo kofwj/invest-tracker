@@ -60,9 +60,12 @@ def list_cash_flows(
 
 @router.post("/cash-flows")
 def add_cash_flow(flow_data: CashFlowBase):
+    try:
+        amount = normalize_cash_flow_amount(flow_data.flow_type, flow_data.amount)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     with db_session(row_factory=sqlite3.Row) as conn:
         before, _, _ = calculated_securities_cash(conn)
-        amount = normalize_cash_flow_amount(flow_data.flow_type, flow_data.amount)
         after = before + amount
         conn.execute(
             """
@@ -101,7 +104,10 @@ def update_cash_flow(flow_id: int, flow_data: CashFlowUpdate):
         new_type = flow_data.flow_type if flow_data.flow_type is not None else old["flow_type"]
         # Always re-normalize amount when type or amount changes (fixes type-only switch sign bugs).
         raw_amount = flow_data.amount if flow_data.amount is not None else old["amount"]
-        new_amount = normalize_cash_flow_amount(new_type, raw_amount)
+        try:
+            new_amount = normalize_cash_flow_amount(new_type, raw_amount)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
         updates = ["flow_type = ?", "amount = ?"]
         vals = [new_type, new_amount]

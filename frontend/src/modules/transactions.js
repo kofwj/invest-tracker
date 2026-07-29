@@ -22,6 +22,7 @@ const createTransactionsModule = ({
     estimateFeeIfAuto,
     fetchData,
 }) => {
+    let transSubmitting = false;
     // Asset query helpers (queryAssetBy*, selectTransAsset, autoMatchTransAsset)
     // merged into transactions module for form autocomplete ownership
     const {
@@ -42,15 +43,25 @@ const createTransactionsModule = ({
     };
 
     const submitTrans = async () => {
+        if (transSubmitting) return;
         autoMatchTransAsset(transForm.value.code ? 'code' : 'name');
         estimateFeeIfAuto();
+        transSubmitting = true;
         try {
             const payload = { ...transForm.value };
             await api.addTransaction(payload);
             ElMessage.success('录入成功');
-            await fetchData();
             resetForm();
-        } catch (e) { ElMessage.error('录入失败：' + apiErrorDetail(e)); }
+            try {
+                await fetchData();
+            } catch (refreshError) {
+                ElMessage.warning('交易已入账，但页面刷新失败：' + apiErrorDetail(refreshError));
+            }
+        } catch (e) {
+            ElMessage.error('录入失败：' + apiErrorDetail(e));
+        } finally {
+            transSubmitting = false;
+        }
     };
 
     const showTransactions = async (row) => {

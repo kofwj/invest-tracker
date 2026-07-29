@@ -19,6 +19,7 @@ try:
         current_holding_quantity,
         infer_category,
         recalc_holdings,
+        validate_holding_history,
         validate_transaction_payload,
     )
     from .portfolio_totals import compute_portfolio_totals
@@ -29,6 +30,7 @@ except ImportError:
         current_holding_quantity,
         infer_category,
         recalc_holdings,
+        validate_holding_history,
         validate_transaction_payload,
     )
     from portfolio_totals import compute_portfolio_totals
@@ -985,15 +987,15 @@ def update_draft(conn, draft_id: int, payload: Dict[str, Any]) -> Dict[str, Any]
 
     fields = {}
     if "quantity" in payload and payload["quantity"] is not None:
-        fields["quantity"] = max(0.0, float(payload["quantity"]))
+        fields["quantity"] = max(0.0, _finite(payload["quantity"], "数量"))
     if "price" in payload and payload["price"] is not None:
-        fields["price"] = max(0.0, float(payload["price"]))
+        fields["price"] = max(0.0, _finite(payload["price"], "价格"))
     if "amount" in payload and payload["amount"] is not None:
-        fields["amount"] = float(payload["amount"])
+        fields["amount"] = _finite(payload["amount"], "金额")
         if fields["amount"] <= 0:
             raise ValueError("金额必须大于 0")
     if "fee" in payload and payload["fee"] is not None:
-        fields["fee"] = max(0.0, float(payload["fee"]))
+        fields["fee"] = max(0.0, _finite(payload["fee"], "手续费"))
     if "reason" in payload and payload["reason"] is not None:
         fields["reason"] = str(payload["reason"])
     if "account" in payload and payload["account"] is not None:
@@ -1007,7 +1009,7 @@ def update_draft(conn, draft_id: int, payload: Dict[str, Any]) -> Dict[str, Any]
         if not raw_date:
             raise ValueError("日期不能为空")
         try:
-            fields["date"] = datetime.strptime(raw_date[:10], "%Y-%m-%d").date().isoformat()
+            fields["date"] = datetime.strptime(raw_date, "%Y-%m-%d").date().isoformat()
         except ValueError as exc:
             raise ValueError(f"日期格式无效：{raw_date}") from exc
     if "side" in payload and payload["side"] is not None:
@@ -1145,6 +1147,7 @@ def confirm_draft(conn, draft_id: int, *, make_backup: bool = True) -> Dict[str,
         ),
     )
     tx_id = int(cur.lastrowid)
+    validate_holding_history(conn, code)
     recalc_holdings(conn, code)
     now = datetime.now(LOCAL_TZ).replace(tzinfo=None)
     conn.execute(
@@ -1174,10 +1177,15 @@ def confirm_drafts(conn, draft_ids: List[int]) -> Dict[str, Any]:
         logger.warning("confirm_drafts shared backup failed: %s", exc)
         backup_path = None
     for did in draft_ids:
+        savepoint = f"discipline_confirm_{int(did)}"
+        conn.execute(f"SAVEPOINT {savepoint}")
         try:
             # single shared backup already taken
             results.append(confirm_draft(conn, int(did), make_backup=False))
+            conn.execute(f"RELEASE SAVEPOINT {savepoint}")
         except Exception as exc:
+            conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+            conn.execute(f"RELEASE SAVEPOINT {savepoint}")
             errors.append({"draft_id": did, "error": str(exc)})
     return {
         "confirmed": results,
