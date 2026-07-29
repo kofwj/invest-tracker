@@ -1,13 +1,13 @@
 import math
 import sqlite3
-from datetime import date as dt_date
+from datetime import date as dt_date, datetime
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 try:
-    from .database import db_session
+    from .database import LOCAL_TZ, db_session
     from .performance import (
         build_performance_contribution,
         build_performance_story,
@@ -16,7 +16,7 @@ try:
     )
     from .snapshots import ensure_portfolio_cash_flows_table
 except ImportError:
-    from database import db_session
+    from database import LOCAL_TZ, db_session
     from performance import (
         build_performance_contribution,
         build_performance_story,
@@ -86,6 +86,8 @@ def list_portfolio_cash_flows(start_date: Optional[str] = None, end_date: Option
 
 @router.post("/portfolio-cash-flows")
 def add_portfolio_cash_flow(flow: PortfolioCashFlowBase):
+    if flow.date > datetime.now(LOCAL_TZ).date():
+        raise HTTPException(status_code=400, detail="组合流水日期不能晚于今天")
     flow_type, amount = normalize_portfolio_cash_flow(flow.flow_type, flow.amount)
     with db_session() as conn:
         ensure_portfolio_cash_flows_table(conn)
@@ -105,6 +107,8 @@ def update_portfolio_cash_flow(flow_id: int, flow: PortfolioCashFlowUpdate):
         if not existing:
             raise HTTPException(status_code=404, detail="Flow not found")
         d = flow.date.isoformat() if flow.date else existing["date"]
+        if dt_date.fromisoformat(str(d)) > datetime.now(LOCAL_TZ).date():
+            raise HTTPException(status_code=400, detail="组合流水日期不能晚于今天")
         t = flow.flow_type if flow.flow_type is not None else existing["flow_type"]
         a = flow.amount if flow.amount is not None else existing["amount"]
         t, a = normalize_portfolio_cash_flow(t, a)

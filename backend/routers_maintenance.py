@@ -78,7 +78,19 @@ def validate_restore_candidate(path: Path):
     schema_version, ensure_app_schema, get_schema_version = _schema_helpers()
     with sqlite3.connect(str(path)) as source:
         source.row_factory = sqlite3.Row
-        candidate_version = get_schema_version(source)
+        version_row = source.execute(
+            "SELECT value FROM settings WHERE key='schema_version'"
+        ).fetchone()
+        if version_row is not None:
+            raw_version = version_row["value"] if isinstance(version_row, sqlite3.Row) else version_row[0]
+            try:
+                candidate_version = int(str(raw_version).strip())
+            except (TypeError, ValueError) as exc:
+                raise HTTPException(status_code=400, detail="备份 schema_version 无效") from exc
+            if candidate_version < 0:
+                raise HTTPException(status_code=400, detail="备份 schema_version 不能为负数")
+        else:
+            candidate_version = get_schema_version(source)
         if candidate_version > schema_version:
             raise HTTPException(
                 status_code=400,
@@ -274,9 +286,13 @@ async def restore_uploaded_backup(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"备份文件校验失败：{e}")
 
-    check_sqlite(upload_path)
-    pre_restore = Path(create_safety_backup("before_restore_upload"))
-    restore_sqlite(upload_path, rollback_source=pre_restore)
+    try:
+        check_sqlite(upload_path)
+        pre_restore = Path(create_safety_backup("before_restore_upload"))
+        restore_sqlite(upload_path, rollback_source=pre_restore)
+    except Exception:
+        upload_path.unlink(missing_ok=True)
+        raise
     return {
         "status": "success",
         "uploaded_backup": upload_path.name,

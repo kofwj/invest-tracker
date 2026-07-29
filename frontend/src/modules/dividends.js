@@ -56,7 +56,7 @@ export function createDividendHelpers({
         dividendDialog.value.selected = [];
     };
 
-    const scanDividendDrafts = async () => {
+    const scanDividendDrafts = async (preserveDraftKeys = []) => {
         dividendLoading.value = true;
         try {
             const res = await api.scanDividends({ lookback_days: dividendDialog.value.lookbackDays || 400 });
@@ -66,6 +66,10 @@ export function createDividendHelpers({
             dividendDialog.value.unsupported = data.unsupported || [];
             dividendDialog.value.failed = data.failed || [];
             dividendDialog.value.selected = [];
+            const preserved = new Set(preserveDraftKeys || []);
+            if (preserved.size) {
+                dividendDialog.value.selected = dividendDialog.value.drafts.filter((row) => preserved.has(row.draft_key));
+            }
             const s = data.summary || {};
             const tips = [];
             if ((s.unsupported_holdings || 0) > 0) {
@@ -127,7 +131,10 @@ export function createDividendHelpers({
             } else {
                 ElMessage.success(message);
             }
-            await Promise.all([fetchData(), queryTransactions(), scanDividendDrafts()]);
+            const failedKeys = errorCount > 0
+                ? new Set((data.errors || []).map((item) => item.draft_key).filter(Boolean))
+                : new Set();
+            await Promise.all([fetchData(), queryTransactions(), scanDividendDrafts([...failedKeys])]);
         } catch (e) {
             if (e === 'cancel') return;
             ElMessage.error('确认分红失败：' + (e?.response?.data?.detail || e?.message || '未知错误'));

@@ -619,6 +619,7 @@ def confirm_dividend_drafts(
 
     for raw in drafts:
         try:
+            draft_key = raw.get("draft_key")
             code = normalize_code(raw.get("code"))
             name = str(raw.get("name") or code).strip() or code
             category = raw.get("category") or infer_category(code, name)
@@ -630,22 +631,22 @@ def confirm_dividend_drafts(
             direction = str(raw.get("direction") or "分红").strip() or "分红"
             if direction != "分红":
                 # v1 only supports cash dividend confirmation
-                errors.append({"code": code, "reason": "半自动确认目前仅支持现金分红方向"})
+                errors.append({"code": code, "draft_key": draft_key, "reason": "半自动确认目前仅支持现金分红方向"})
                 continue
             if not code:
-                errors.append({"code": code, "reason": "代码为空"})
+                errors.append({"code": code, "draft_key": draft_key, "reason": "代码为空"})
                 continue
             if event_date is None:
-                errors.append({"code": code, "reason": "缺少分红日期"})
+                errors.append({"code": code, "draft_key": draft_key, "reason": "缺少分红日期"})
                 continue
             if not math.isfinite(amount) or not math.isfinite(fee):
-                errors.append({"code": code, "reason": "金额和手续费必须是有限数字"})
+                errors.append({"code": code, "draft_key": draft_key, "reason": "金额和手续费必须是有限数字"})
                 continue
             if fee < 0:
-                errors.append({"code": code, "reason": "手续费不能为负数"})
+                errors.append({"code": code, "draft_key": draft_key, "reason": "手续费不能为负数"})
                 continue
             if amount <= 0:
-                errors.append({"code": code, "reason": "金额必须大于0"})
+                errors.append({"code": code, "draft_key": draft_key, "reason": "金额必须大于0"})
                 continue
 
             if recheck_existing:
@@ -699,7 +700,7 @@ def confirm_dividend_drafts(
             )
         except Exception as exc:
             logger.exception("confirm dividend draft failed")
-            errors.append({"code": raw.get("code"), "reason": str(exc)})
+            errors.append({"code": raw.get("code"), "draft_key": raw.get("draft_key"), "reason": str(exc)})
 
     return {
         "created": created,

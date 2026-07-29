@@ -1,6 +1,7 @@
 """Fourth-pass deep audit regressions for sibling writers and restore compatibility."""
 import io
 import sqlite3
+from concurrent.futures import ThreadPoolExecutor
 
 
 def _tx(date, direction, *, code="DEEP", quantity=100, price=10):
@@ -125,3 +126,48 @@ def test_restore_dry_runs_full_schema_before_replacing_live_db(client, tmp_path)
     deposits = client.get("/deposits")
     assert deposits.status_code == 200, deposits.text
     assert any(row["bank_name"] == "恢复失败也保留" for row in deposits.json())
+
+
+def test_future_transaction_is_rejected_before_it_changes_today(client):
+    response = client.post("/transactions", json=_tx("2099-01-01", "买入", code="FUTURE"))
+    assert response.status_code in (400, 422), response.text
+
+
+def test_future_portfolio_flow_is_rejected(client):
+    response = client.post(
+        "/portfolio-cash-flows",
+        json={"date": "2099-01-01", "flow_type": "投入", "amount": 1000},
+    )
+    assert response.status_code in (400, 422), response.text
+
+
+def test_pending_purchase_fee_reduces_total_assets(client):
+    assert client.put("/securities-cash", json={"amount": 0}).status_code == 200
+    payload = _tx("2026-07-01", "申购待确认", code="PENDING", quantity=0, price=0)
+    payload.update(amount=1000, fee=10)
+    assert client.post("/transactions", json=payload).status_code == 200
+    dashboard = client.get("/dashboard").json()
+    assert dashboard["pending_purchase"] == 1000
+    assert dashboard["securities_cash"] == -1010
+    assert dashboard["total_assets"] == -10
+
+
+def test_restore_rejects_malformed_schema_version(client, tmp_path):
+    candidate = tmp_path / "malformed.db"
+    _create_restore_candidate(candidate, schema_version="garbage")
+    response = client.post(
+        "/maintenance/restore-upload",
+        files={"file": ("malformed.db", io.BytesIO(candidate.read_bytes()), "application/octet-stream")},
+    )
+    assert response.status_code == 400, response.text
+
+
+def test_concurrent_safety_backups_use_unique_paths(app_module):
+    import csv_utils
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        paths = list(pool.map(lambda _: csv_utils.create_safety_backup("race"), range(8)))
+    assert len(set(paths)) == len(paths)
+    for path in paths:
+        with sqlite3.connect(path) as conn:
+            assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"

@@ -50,7 +50,10 @@ def normalized_transaction_cash(direction, quantity, price, amount, fee):
     gross = qty * px if qty > 0 and px > 0 else 0.0
     tol = max(0.05, abs(gross) * 0.00002)
 
-    if direction in ("买入", "申购待确认", "待确认申购"):
+    if direction in ("申购待确认", "待确认申购"):
+        return amt + f
+
+    if direction == "买入":
         if gross > 0:
             if abs(amt - (gross + f)) <= tol:
                 return amt
@@ -219,6 +222,13 @@ def validate_transaction_payload(
         raise ValueError("方向必须是：买入/卖出/分红/分红再投资/申购待确认")
     if not code:
         raise ValueError("代码不能为空")
+    if tx_date:
+        try:
+            parsed_tx_date = datetime.strptime(tx_date, "%Y-%m-%d").date()
+        except ValueError as exc:
+            raise ValueError(f"日期格式无效：{transaction_date}") from exc
+        if parsed_tx_date > datetime.now(LOCAL_TZ).date():
+            raise ValueError("交易日期不能晚于今天")
 
     for label, value in (("数量", qty), ("价格", px), ("金额", amt), ("手续费", f)):
         _require_finite(label, value)

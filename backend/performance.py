@@ -64,7 +64,11 @@ def build_performance_summary(conn):
     pending = totals["pending_purchase"]
     holdings = totals["holdings"]
 
-    flows = conn.execute("SELECT * FROM portfolio_cash_flows ORDER BY date, id").fetchall()
+    today = _local_today()
+    flows = conn.execute(
+        "SELECT * FROM portfolio_cash_flows WHERE date <= ? ORDER BY date, id",
+        (today.isoformat(),),
+    ).fetchall()
     flows = [dict(f) for f in flows]
 
     total_in = sum(f["amount"] for f in flows if f["flow_type"] == "投入")
@@ -83,7 +87,6 @@ def build_performance_summary(conn):
             xirr_flows.append((d, -f["amount"]))
         elif f["flow_type"] == "取出":
             xirr_flows.append((d, f["amount"]))
-    today = _local_today()
     if total_assets > 0:
         xirr_flows.append((today, total_assets))
     xirr_flows.sort(key=lambda x: x[0])
@@ -103,8 +106,8 @@ def build_performance_summary(conn):
 
     ytd_start = today.replace(month=1, day=1)
     ytd_snap = conn.execute(
-        "SELECT * FROM daily_snapshots WHERE date >= ? ORDER BY date ASC LIMIT 1",
-        (ytd_start.isoformat(),),
+        "SELECT * FROM daily_snapshots WHERE date BETWEEN ? AND ? ORDER BY date ASC LIMIT 1",
+        (ytd_start.isoformat(), today.isoformat()),
     ).fetchone()
     ytd_start_assets = dict(ytd_snap)["total_assets"] if ytd_snap else total_assets
     ytd_flows = [f for f in flows if f["date"] >= ytd_start.isoformat()]

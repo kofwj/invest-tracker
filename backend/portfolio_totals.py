@@ -48,7 +48,7 @@ def pending_purchase_stats(conn):
     placeholders = ",".join("?" for _ in PENDING_DIRECTIONS)
     row = conn.execute(
         f"""
-        SELECT SUM(amount + COALESCE(fee, 0)) as total, COUNT(*) as cnt
+        SELECT SUM(amount) as total, COUNT(*) as cnt
         FROM transactions
         WHERE direction IN ({placeholders})
         """,
