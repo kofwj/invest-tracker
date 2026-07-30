@@ -1,6 +1,6 @@
 <template>
   <div class="header">
-    <div class="header-brand">
+    <button type="button" class="header-brand" @click="goTab('overview')" :title="`返回总览（当前：${activeTabLabel}）`" aria-label="返回总览">
       <div class="header-mark" aria-hidden="true">
         <Wallet :size="16" :stroke-width="2" />
       </div>
@@ -8,7 +8,7 @@
         <h2>Invest Tracker</h2>
         <div class="header-subtitle">真仓账本</div>
       </div>
-    </div>
+    </button>
 
     <nav class="header-nav" role="tablist" aria-label="功能分组">
       <button
@@ -54,8 +54,10 @@
 </template>
 
 <script setup>
+import { computed } from 'vue';
 import { LogOut, Monitor, Moon, Radar, RefreshCw, Sun, Wallet } from 'lucide-vue-next';
 import { useAppCtx } from '../composables/useAppCtx.js';
+import { tabLabel } from '../modules/tabNav.js';
 
 const {
   authEnabled,
@@ -72,6 +74,8 @@ const {
   activeTab,
   goTab,
 } = useAppCtx();
+
+const activeTabLabel = computed(() => tabLabel(activeTab?.value ?? activeTab));
 
 function onGroupClick(gid) {
   const hit = (tabGroups || []).find((x) => x.id === gid);
