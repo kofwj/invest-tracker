@@ -69,6 +69,8 @@ def clear_backend_module_cache():
         'portfolio_helpers',
         'notify',
         'routers_notify',
+        'kline_cache',
+        'routers_klines',
     ]
     for name in module_names:
         sys.modules.pop(name, None)

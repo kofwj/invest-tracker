@@ -5,6 +5,7 @@ try:
     from .database import open_db
     from .discipline import ensure_discipline_tables
     from .holdings import ensure_holding_return_columns
+    from .kline_cache import ensure_kline_cache_table
     from .market import ensure_alert_tables
     from .notify import ensure_notify_tables
     from .snapshots import ensure_snapshot_columns, ensure_portfolio_cash_flows_table
@@ -13,12 +14,13 @@ except ImportError:
     from database import open_db
     from discipline import ensure_discipline_tables
     from holdings import ensure_holding_return_columns
+    from kline_cache import ensure_kline_cache_table
     from market import ensure_alert_tables
     from notify import ensure_notify_tables
     from snapshots import ensure_snapshot_columns, ensure_portfolio_cash_flows_table
 
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 SCHEMA_VERSION_KEY = "schema_version"
 
 
@@ -134,6 +136,7 @@ def ensure_app_tables(conn):
     ensure_alert_tables(conn)
     ensure_discipline_tables(conn)
     ensure_notify_tables(conn)
+    ensure_kline_cache_table(conn)
 
 
 def migrate_to_v1_core_compat(conn):
@@ -227,6 +230,11 @@ def migrate_to_v9_notify(conn):
             set_setting(conn, key, default)
 
 
+def migrate_to_v10_kline_cache(conn):
+    """日K缓存表，用于持仓 K线图与未来技术指标。"""
+    ensure_kline_cache_table(conn)
+
+
 MIGRATIONS = [
     (1, migrate_to_v1_core_compat),
     (2, migrate_to_v2_holdings_and_snapshots),
@@ -237,6 +245,7 @@ MIGRATIONS = [
     (7, migrate_to_v7_discipline),
     (8, migrate_to_v8_deposit_start_date),
     (9, migrate_to_v9_notify),
+    (10, migrate_to_v10_kline_cache),
 ]
 
 

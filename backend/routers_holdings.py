@@ -270,6 +270,14 @@ def _sync_prices_impl(backup: bool = False):
                 failed.append({"code": code, "name": row["name"], "reason": str(e)})
 
         conn.commit()
+    # 顺手增量同步日K缓存（失败不影响同步价结果）
+    try:
+        from .kline_cache import sync_klines_for_holdings as _sync_klines
+        with db_session() as conn2:
+            _sync_klines(conn2, force=False)
+            conn2.commit()
+    except Exception as kline_exc:
+        logger.debug("kline incremental sync after price sync failed: %s", kline_exc)
     return {
         "status": "success",
         "updated": updated,

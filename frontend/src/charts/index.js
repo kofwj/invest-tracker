@@ -1,6 +1,7 @@
 import * as echarts from 'echarts/core';
-import { LineChart, PieChart } from 'echarts/charts';
+import { BarChart, CandlestickChart, LineChart, PieChart } from 'echarts/charts';
 import {
+    DataZoomComponent,
     TitleComponent,
     TooltipComponent,
     LegendComponent,
@@ -10,8 +11,11 @@ import { CanvasRenderer } from 'echarts/renderers';
 import { formatMoney } from '../utils/index.js';
 
 echarts.use([
+    BarChart,
+    CandlestickChart,
     LineChart,
     PieChart,
+    DataZoomComponent,
     TitleComponent,
     TooltipComponent,
     LegendComponent,
@@ -485,6 +489,85 @@ const resizeAllCharts = () => {
     });
 };
 
+let klineChart = null;
+
+/**
+ * 渲染 K线图（日K + 成交量）。
+ * @param {HTMLElement} el
+ * @param {Array<{date,open,high,low,close,volume}>} rows 升序
+ */
+const renderKlineChartView = (el, rows) => {
+    if (!el) return null;
+    if (klineChart) {
+        try { klineChart.dispose(); } catch (_) {}
+        klineChart = null;
+    }
+    if (!rows || !rows.length) {
+        klineChart = echarts.init(el);
+        klineChart.setOption({
+            title: { text: '暂无日K数据，点"刷新K线"重试', left: 'center', top: 'middle', textStyle: { color: '#999', fontSize: 14 } },
+        });
+        return klineChart;
+    }
+    const theme = readTheme();
+    const dates = rows.map(r => r.date);
+    const ohlc = rows.map(r => [Number(r.open), Number(r.close), Number(r.low), Number(r.high)]);
+    const volumes = rows.map(r => Number(r.volume || 0));
+
+    klineChart = echarts.init(el);
+    klineChart.setOption({
+        backgroundColor: theme.surface,
+        animation: false,
+        tooltip: {
+            trigger: 'axis',
+            axisPointer: { type: 'cross' },
+            backgroundColor: theme.surface,
+            borderColor: theme.border,
+            textStyle: { color: theme.text },
+            valueFormatter: (val, series) => series === 0 ? Array.isArray(val) ? `开 ${val[0]} / 高 ${val[3]} / 低 ${val[2]} / 收 ${val[1]}` : val : val,
+        },
+        axisPointer: { link: [{ xAxisIndex: 'all' }] },
+        grid: [
+            { left: 60, right: 20, top: 30, height: '62%' },
+            { left: 60, right: 20, top: '76%', height: '16%' },
+        ],
+        xAxis: [
+            { type: 'category', data: dates, scale: true, boundaryGap: false, splitLine: { show: false }, axisLabel: { color: theme.muted, fontSize: 10 } },
+            { type: 'category', gridIndex: 1, data: dates, scale: true, boundaryGap: false, splitLine: { show: false }, axisLabel: { show: false } },
+        ],
+        yAxis: [
+            { scale: true, splitLine: { lineStyle: { color: theme.border } }, axisLabel: { color: theme.muted, fontSize: 10 } },
+            { gridIndex: 1, splitNumber: 2, axisLabel: { show: false }, splitLine: { show: false } },
+        ],
+        dataZoom: [
+            { type: 'inside', xAxisIndex: [0, 1], start: 60, end: 100 },
+            { show: true, type: 'slider', xAxisIndex: [0, 1], bottom: 8, height: 16, start: 60, end: 100, textStyle: { color: theme.muted } },
+        ],
+        series: [
+            {
+                name: '日K',
+                type: 'candlestick',
+                data: ohlc,
+                itemStyle: {
+                    color: theme.up,
+                    color0: theme.down,
+                    borderColor: theme.up,
+                    borderColor0: theme.down,
+                },
+            },
+            {
+                name: '成交量',
+                type: 'bar',
+                xAxisIndex: 1,
+                yAxisIndex: 1,
+                data: volumes,
+                itemStyle: { color: theme.muted, opacity: 0.35 },
+            },
+        ],
+    });
+    return klineChart;
+};
+
 let chartResizeBound = false;
 const ensureChartResizeListener = () => {
     if (chartResizeBound || typeof window === 'undefined') return;
@@ -500,6 +583,7 @@ export {
     renderAllocationChartsView,
     renderPerfTimelineChartView,
     renderOverviewWeekChartView,
+    renderKlineChartView,
     waitForChartDom,
     resizeAllCharts,
     readTheme,
@@ -510,6 +594,8 @@ export default {
     renderAllocationChartsView,
     renderPerfTimelineChartView,
     renderOverviewWeekChartView,
+    renderKlineChartView,
     waitForChartDom,
     resizeAllCharts,
+    readTheme,
 };

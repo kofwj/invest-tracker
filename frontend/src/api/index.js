@@ -79,6 +79,9 @@ const api = {
     listHoldingCorrections: (code) => axios.get(API + '/holding-corrections?code=' + encodeURIComponent(code)),
     deleteHoldingCorrection: (id) => axios.delete(API + '/holding-corrections/' + id),
 
+    getKlines: (code, days = 120) => axios.get(API + '/klines/' + encodeURIComponent(code) + '?days=' + days, { timeout: 30000 }),
+    syncKlines: (payload = {}) => axios.post(API + '/klines/sync', payload, { timeout: 180000 }),
+
     createSnapshot: () => axios.post(API + '/snapshots'),
     listSnapshots: (range = []) => {
         let url = API + '/snapshots';

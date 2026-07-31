@@ -132,6 +132,7 @@
             <el-button type="warning" link @click="openHoldingCorrectionDialog(scope.row)">校正</el-button>
             <el-button type="info" link @click="openHoldingCorrectionHistory(scope.row)">记录</el-button>
             <el-button type="success" link @click="openLocalUzi(scope.row)">UZI</el-button>
+            <el-button type="primary" link @click="openKlineDialog(scope.row)">K线</el-button>
           </div>
         </template>
       </el-table-column>
@@ -208,15 +209,41 @@
         <el-button type="primary" @click="copyLocalUziPrompt">复制提示词</el-button>
       </template>
     </el-dialog>
+
+    <!-- K线弹窗 -->
+    <el-dialog
+      v-model="klineDialog.visible"
+      :title="`${klineDialog.name} (${klineDialog.code}) 日K线`"
+      width="860px"
+      top="6vh"
+      append-to-body
+      destroy-on-close
+      @opened="renderKline"
+    >
+      <div class="kline-toolbar">
+        <el-radio-group v-model="klineDialog.days" size="small" @change="loadKline">
+          <el-radio-button :value="60">60日</el-radio-button>
+          <el-radio-button :value="120">120日</el-radio-button>
+          <el-radio-button :value="250">250日</el-radio-button>
+        </el-radio-group>
+        <el-button size="small" type="primary" plain :loading="klineDialog.loading" @click="refreshKline">
+          刷新K线（拉取最新）
+        </el-button>
+        <span v-if="klineDialog.error" class="kline-error">{{ klineDialog.error }}</span>
+      </div>
+      <div ref="klineRef" class="kline-chart" v-loading="klineDialog.loading"></div>
+    </el-dialog>
   </PageShell>
 </template>
 
 <script setup>
 import PageShell from '../components/PageShell.vue';
-import { reactive } from 'vue';
+import { reactive, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { useAppCtx } from '../composables/useAppCtx.js';
 import { createUziAnalysisHelper, UZI_FOCUS_TEMPLATES } from '../modules/uziAnalysis.js';
+import { renderKlineChartView } from '../charts/index.js';
+import api from '../api/index.js';
 import HomeDashboard from '../components/HomeDashboard.vue';
 
 const {
@@ -310,6 +337,70 @@ async function copyLocalUziPrompt() {
     ElMessage.warning('自动复制失败，请手动全选复制提示词');
   }
 }
+
+// ---- K线 ----
+const klineRef = ref(null);
+const klineDialog = reactive({
+  visible: false,
+  code: '',
+  name: '',
+  days: 120,
+  loading: false,
+  error: '',
+  rows: [],
+});
+
+function openKlineDialog(row) {
+  const code = String(row?.code ?? '').trim();
+  if (!code) {
+    ElMessage.warning('该持仓缺少代码');
+    return;
+  }
+  klineDialog.code = code;
+  klineDialog.name = row?.name || code;
+  klineDialog.days = 120;
+  klineDialog.loading = false;
+  klineDialog.error = '';
+  klineDialog.rows = [];
+  klineDialog.visible = true;
+}
+
+async function loadKline() {
+  if (!klineDialog.code) return;
+  klineDialog.loading = true;
+  klineDialog.error = '';
+  try {
+    const res = await api.getKlines(klineDialog.code, klineDialog.days);
+    klineDialog.rows = res.data?.rows || [];
+    if (!klineDialog.rows.length) {
+      klineDialog.error = '本地无缓存，点"刷新K线"拉取';
+    }
+    renderKline();
+  } catch (e) {
+    klineDialog.error = '加载失败：' + (e?.response?.data?.detail || e?.message || '未知错误');
+  } finally {
+    klineDialog.loading = false;
+  }
+}
+
+async function refreshKline() {
+  if (!klineDialog.code) return;
+  klineDialog.loading = true;
+  klineDialog.error = '';
+  try {
+    await api.syncKlines({ code: klineDialog.code, force: true });
+    await loadKline();
+    ElMessage.success('K线已刷新');
+  } catch (e) {
+    klineDialog.loading = false;
+    klineDialog.error = '同步失败：' + (e?.response?.data?.detail || e?.message || '网络错误');
+  }
+}
+
+function renderKline() {
+  if (!klineRef.value) return;
+  renderKlineChartView(klineRef.value, klineDialog.rows);
+}
 </script>
 
 <style scoped>
@@ -331,5 +422,20 @@ async function copyLocalUziPrompt() {
   flex: 1;
   min-width: 240px;
   margin: 0 !important;
+}
+.kline-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.kline-chart {
+  width: 100%;
+  height: 420px;
+}
+.kline-error {
+  color: var(--app-down, #d64545);
+  font-size: 13px;
 }
 </style>
