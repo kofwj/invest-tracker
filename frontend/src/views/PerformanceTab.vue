@@ -349,7 +349,7 @@
 <script setup>
 import PageShell from '../components/PageShell.vue';
 import MetricCard from '../components/MetricCard.vue';
-import { ref, watch } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 
 const {
@@ -464,6 +464,16 @@ async function renderCategoryTrend() {
     if (!ready) return;
     await new Promise((r) => requestAnimationFrame(() => r()));
     renderCategoryTrendChartView(perfTimeline.value, catTrendMode.value);
+
+watch(perfTimeline, () => {
+  if (perfTimeline.value && perfTimeline.value.length >= 2) {
+    requestAnimationFrame(() => {
+      try { renderCategoryTrend(); } catch (_) {}
+    });
+  }
+}, { deep: true });
+
+
   } catch (e) {
     // ignore if chart lib not ready
   }
