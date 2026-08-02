@@ -89,12 +89,24 @@
 
     <!-- 大类结构与贡献（当前仓） -->
     <el-card v-if="categorySummary.length" shadow="never" style="margin-bottom: 8px;">
-      <div class="perf-contrib-title" style="margin-bottom: 6px;">大类结构与贡献（当前仓）</div>
+      <div class="perf-contrib-title" style="margin-bottom: 4px;">我现在钱是怎么分的</div>
+      <div style="font-size: 12px; color: var(--app-muted); margin-bottom: 8px;">
+        左边 = 我现在这个大类占了全部持仓的多少比例<br>
+        右边 = 这个大类目前帮我赚了多少钱（浮盈 + 分红）
+      </div>
+
+      <!-- 清晰的列头 -->
+      <div style="display: flex; align-items: center; font-size: 12px; color: var(--app-muted); padding: 0 4px 4px;">
+        <div style="width: 60px; flex-shrink: 0;">大类</div>
+        <div style="flex: 1; min-width: 120px;">占比（当前持仓）</div>
+        <div style="width: 120px; text-align: right; flex-shrink: 0;">目前赚了/亏了</div>
+      </div>
+
       <div class="perf-cat-list">
         <div v-for="c in categorySummary" :key="c.name" class="perf-cat-row">
           <div class="perf-cat-name">{{ c.name }}</div>
 
-          <!-- 结构占比 -->
+          <!-- 占比部分 -->
           <div class="perf-cat-track">
             <div class="perf-cat-fill is-alloc" :style="{ width: Math.max(4, c.allocPct) + '%' }"></div>
           </div>
@@ -102,13 +114,12 @@
             <span class="alloc-pct">{{ c.allocPct }}%</span>
           </div>
 
-          <!-- 贡献 -->
+          <!-- 贡献部分 -->
           <div class="perf-cat-amt" :class="c.contrib >= 0 ? 'num-up' : 'num-down'">
             {{ formatMoney(c.contrib, 2, true) }}
           </div>
         </div>
       </div>
-      <div class="perf-cat-foot">左：当前市值占比 &nbsp;|&nbsp; 右：浮盈+分红贡献</div>
     </el-card>
 
     <!-- 大类资产走势 -->
