@@ -118,8 +118,12 @@ def ensure_app_tables(conn):
         total_profit REAL,
         lifetime_profit REAL DEFAULT 0,
         holdings_count INTEGER,
+        equity_mv REAL DEFAULT 0,
+        bond_mv REAL DEFAULT 0,
+        reit_mv REAL DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )""")
+    ensure_snapshot_columns(conn)
     conn.execute("""CREATE TABLE IF NOT EXISTS holding_corrections (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         date DATE NOT NULL,

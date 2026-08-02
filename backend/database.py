@@ -63,8 +63,9 @@ def configure_sqlite_connection(conn: sqlite3.Connection) -> sqlite3.Connection:
 def open_db(*, row_factory=None):
     conn = sqlite3.connect(DB_PATH)
     configure_sqlite_connection(conn)
-    if row_factory is not None:
-        conn.row_factory = row_factory
+    if row_factory is None:
+        row_factory = sqlite3.Row
+    conn.row_factory = row_factory
     return conn
 
 

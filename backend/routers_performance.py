@@ -14,7 +14,7 @@ try:
         build_performance_summary,
         build_performance_timeline,
     )
-    from .snapshots import ensure_portfolio_cash_flows_table
+    from .snapshots import ensure_portfolio_cash_flows_table, ensure_snapshot_columns
 except ImportError:
     from database import LOCAL_TZ, db_session
     from performance import (
@@ -23,7 +23,7 @@ except ImportError:
         build_performance_summary,
         build_performance_timeline,
     )
-    from snapshots import ensure_portfolio_cash_flows_table
+    from snapshots import ensure_portfolio_cash_flows_table, ensure_snapshot_columns
 
 router = APIRouter()
 
@@ -146,6 +146,7 @@ def performance_summary():
 def performance_timeline(start_date: Optional[str] = None, end_date: Optional[str] = None):
     with db_session(row_factory=sqlite3.Row) as conn:
         ensure_portfolio_cash_flows_table(conn)
+        ensure_snapshot_columns(conn)
         result = build_performance_timeline(conn, start_date, end_date)
         conn.commit()
     return result

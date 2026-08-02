@@ -371,13 +371,25 @@ const localTimelineRange = ref(perfTimelineRange?.value || 'all');
 const catTrendMode = ref('value');
 
 const latestCategoryAlloc = computed(() => {
-  const rows = perfTimeline.value || [];
-  if (!rows.length) return { equity: 0, bond: 0, reit: 0, total: 0 };
-  const last = rows[rows.length - 1];
-  const e = Number(last?.equity_mv || 0);
-  const b = Number(last?.bond_mv || 0);
-  const r = Number(last?.reit_mv || 0);
-  return { equity: e, bond: b, reit: r, total: e + b + r };
+  const rows = perfContribution.value || [];
+  const buckets = { equity: 0, bond: 0, reit: 0 };
+  for (const r of rows) {
+    const cat = String(r?.category || "").toUpperCase();
+    const mv = Number(r?.market_value || 0);
+    if (cat.includes("REIT")) {
+      buckets.reit += mv;
+    } else if (cat.includes("债") || cat.includes("固收") || cat.includes("货币") || cat.includes("现金")) {
+      buckets.bond += mv;
+    } else {
+      buckets.equity += mv;
+    }
+  }
+  return {
+    equity: buckets.equity,
+    bond: buckets.bond,
+    reit: buckets.reit,
+    total: buckets.equity + buckets.bond + buckets.reit,
+  };
 });
 
 const categorySummary = computed(() => {
@@ -457,28 +469,26 @@ const onLoadFlowSuggest = async () => {
 
 
 async function renderCategoryTrend() {
-  if (!perfTimeline.value || perfTimeline.value.length < 2) return;
+  if (!perfTimeline.value || perfTimeline.value.length < 1) return;
   try {
     const { renderCategoryTrendChartView, waitForChartDom } = await import('../charts/index.js');
     const ready = await waitForChartDom(['categoryTrendChart'], { timeoutMs: 1500 });
     if (!ready) return;
     await new Promise((r) => requestAnimationFrame(() => r()));
     renderCategoryTrendChartView(perfTimeline.value, catTrendMode.value);
-
-watch(perfTimeline, () => {
-  if (perfTimeline.value && perfTimeline.value.length >= 2) {
-    requestAnimationFrame(() => {
-      try { renderCategoryTrend(); } catch (_) {}
-    });
-  }
-}, { deep: true });
-
-
   } catch (e) {
     // ignore if chart lib not ready
   }
 }
 
+// Auto-render category trend chart when timeline data is (re)loaded
+watch(perfTimeline, () => {
+  if (perfTimeline.value && perfTimeline.value.length >= 1) {
+    requestAnimationFrame(() => {
+      try { renderCategoryTrend(); } catch (_) {}
+    });
+  }
+}, { deep: true });
 
 const onContribRowClick = (row) => {
   if (!row?.code) return;
