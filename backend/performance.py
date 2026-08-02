@@ -176,6 +176,9 @@ def build_performance_timeline(conn, start_date=None, end_date=None):
                 "total_assets": snap.get("total_assets", 0),
                 "net_contribution": round(net, 2),
                 "total_gain": round(snap.get("total_assets", 0) - net, 2),
+                "equity_mv": snap.get("equity_mv", 0) or 0,
+                "bond_mv": snap.get("bond_mv", 0) or 0,
+                "reit_mv": snap.get("reit_mv", 0) or 0,
             }
         )
 

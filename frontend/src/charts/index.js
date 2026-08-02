@@ -578,10 +578,107 @@ const ensureChartResizeListener = () => {
 };
 ensureChartResizeListener();
 
+
+/** 大类资产走势：债基 / REITs / 权益 
+ * mode: 'value'（绝对市值） | 'pct'（相对占比，堆叠100%）
+ */
+const renderCategoryTrendChartView = (rows = [], mode = 'value') => {
+    const el = document.getElementById('categoryTrendChart');
+    if (!el) return false;
+    if (categoryTrendChart) {
+        try { categoryTrendChart.dispose(); } catch (_) {}
+        categoryTrendChart = null;
+    }
+    if (!rows || !rows.length) {
+        categoryTrendChart = echarts.init(el);
+        categoryTrendChart.setOption({
+            title: { text: '暂无大类快照数据', left: 'center', top: 'middle', textStyle: { color: '#999', fontSize: 12 } },
+        });
+        return categoryTrendChart;
+    }
+    const t = readTheme();
+    const sorted = [...rows].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+    const dates = sorted.map(r => r.date);
+
+    const rawEquity = sorted.map(r => Number(r.equity_mv || 0));
+    const rawBond = sorted.map(r => Number(r.bond_mv || 0));
+    const rawReit = sorted.map(r => Number(r.reit_mv || 0));
+
+    let equity, bond, reit;
+    let yFormatter, yAxisMax;
+    let isPct = mode === 'pct';
+
+    if (isPct) {
+        equity = []; bond = []; reit = [];
+        sorted.forEach((r, i) => {
+            const tot = rawEquity[i] + rawBond[i] + rawReit[i] || 1;
+            equity.push((rawEquity[i] / tot * 100));
+            bond.push((rawBond[i] / tot * 100));
+            reit.push((rawReit[i] / tot * 100));
+        });
+        yFormatter = v => v.toFixed(0) + '%';
+        yAxisMax = 100;
+    } else {
+        equity = rawEquity; bond = rawBond; reit = rawReit;
+        yFormatter = v => (Number(v)/10000).toFixed(0) + '万';
+        yAxisMax = null;
+    }
+
+    categoryTrendChart = echarts.init(el);
+    categoryTrendChart.setOption({
+        backgroundColor: t.surface,
+        animation: false,
+        tooltip: {
+            trigger: 'axis',
+            backgroundColor: t.surface,
+            borderColor: t.border,
+            textStyle: { color: t.text },
+            formatter: (params) => {
+                let res = params[0].axisValue + '<br/>';
+                params.forEach(p => {
+                    const idx = p.dataIndex;
+                    const val = isPct ? p.value.toFixed(1) + '%' : formatMoney(p.value);
+                    res += `${p.marker} ${p.seriesName}: ${val}<br/>`;
+                });
+                return res;
+            }
+        },
+        legend: {
+            data: ['权益', '债基', 'REITs'],
+            textStyle: { color: t.muted, fontSize: 11 },
+            top: 0,
+        },
+        grid: { left: 50, right: 20, top: 30, bottom: 25, containLabel: true },
+        xAxis: {
+            type: 'category',
+            data: dates,
+            axisLabel: { color: t.muted, fontSize: 10, formatter: d => (d || '').slice(5) },
+            axisLine: { lineStyle: { color: t.border } },
+        },
+        yAxis: {
+            type: 'value',
+            min: 0,
+            max: yAxisMax,
+            axisLabel: { color: t.muted, fontSize: 10, formatter: yFormatter },
+            splitLine: { lineStyle: { color: t.border } },
+        },
+        series: [
+            { name: '权益', type: 'line', data: equity, smooth: true, stack: isPct ? 'total' : null, lineStyle: { width: 1.6, color: t.up || '#3b82f6' }, areaStyle: { opacity: isPct ? 0.65 : 0.12 } },
+            { name: '债基', type: 'line', data: bond, smooth: true, stack: isPct ? 'total' : null, lineStyle: { width: 1.6, color: '#f59e0b' }, areaStyle: { opacity: isPct ? 0.65 : 0.12 } },
+            { name: 'REITs', type: 'line', data: reit, smooth: true, stack: isPct ? 'total' : null, lineStyle: { width: 1.6, color: '#10b981' }, areaStyle: { opacity: isPct ? 0.65 : 0.12 } },
+        ],
+    });
+    try { categoryTrendChart.resize(); } catch (_) {}
+    return categoryTrendChart;
+};
+
+let categoryTrendChart = null;
+
 export {
     renderSnapshotChartsView,
     renderAllocationChartsView,
     renderPerfTimelineChartView,
+    renderCategoryTrendChartView,
     renderOverviewWeekChartView,
     renderKlineChartView,
     waitForChartDom,
@@ -593,6 +690,7 @@ export default {
     renderSnapshotChartsView,
     renderAllocationChartsView,
     renderPerfTimelineChartView,
+    renderCategoryTrendChartView,
     renderOverviewWeekChartView,
     renderKlineChartView,
     waitForChartDom,

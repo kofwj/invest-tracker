@@ -17,6 +17,12 @@ def ensure_snapshot_columns(conn):
         conn.execute("ALTER TABLE daily_snapshots ADD COLUMN pending_purchase REAL DEFAULT 0")
     if "lifetime_profit" not in cols:
         conn.execute("ALTER TABLE daily_snapshots ADD COLUMN lifetime_profit REAL DEFAULT 0")
+    if "equity_mv" not in cols:
+        conn.execute("ALTER TABLE daily_snapshots ADD COLUMN equity_mv REAL DEFAULT 0")
+    if "bond_mv" not in cols:
+        conn.execute("ALTER TABLE daily_snapshots ADD COLUMN bond_mv REAL DEFAULT 0")
+    if "reit_mv" not in cols:
+        conn.execute("ALTER TABLE daily_snapshots ADD COLUMN reit_mv REAL DEFAULT 0")
 
 
 def ensure_portfolio_cash_flows_table(conn):
@@ -40,7 +46,8 @@ def create_snapshot_record(conn, today_iso, dashboard):
         conn.execute("""
             UPDATE daily_snapshots
             SET total_assets = ?, total_market_value = ?, bank_balance = ?, securities_cash = ?,
-                pending_purchase = ?, total_profit = ?, lifetime_profit = ?, holdings_count = ?, created_at = ?
+                pending_purchase = ?, total_profit = ?, lifetime_profit = ?, holdings_count = ?,
+                equity_mv = ?, bond_mv = ?, reit_mv = ?, created_at = ?
             WHERE date = ?
         """, (
             dashboard['total_assets'],
@@ -51,6 +58,9 @@ def create_snapshot_record(conn, today_iso, dashboard):
             dashboard['total_profit'],
             lifetime,
             dashboard['holdings_count'],
+            (dashboard.get("category_market_value") or {}).get("权益", 0),
+            (dashboard.get("category_market_value") or {}).get("债基", 0),
+            (dashboard.get("category_market_value") or {}).get("REITs", 0),
             now,
             today_iso,
         ))
@@ -59,8 +69,8 @@ def create_snapshot_record(conn, today_iso, dashboard):
     conn.execute("""
         INSERT INTO daily_snapshots
         (date, total_assets, total_market_value, bank_balance, securities_cash, pending_purchase,
-         total_profit, lifetime_profit, holdings_count, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         total_profit, lifetime_profit, holdings_count, equity_mv, bond_mv, reit_mv, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         today_iso,
         dashboard['total_assets'],
@@ -71,6 +81,9 @@ def create_snapshot_record(conn, today_iso, dashboard):
         dashboard['total_profit'],
         lifetime,
         dashboard['holdings_count'],
+        (dashboard.get("category_market_value") or {}).get("权益", 0),
+        (dashboard.get("category_market_value") or {}).get("债基", 0),
+        (dashboard.get("category_market_value") or {}).get("REITs", 0),
         now,
     ))
     snapshot_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]

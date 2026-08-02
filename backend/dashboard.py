@@ -50,4 +50,5 @@ def build_dashboard(conn):
         "price_age_hours": price_age_hours,
         "price_stale": price_stale,
         "latest_snapshot_date": snapshot_row["latest"] if snapshot_row else None,
+        "category_market_value": totals.get("category_market_value", {}),
     }

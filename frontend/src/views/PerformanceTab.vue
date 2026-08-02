@@ -87,24 +87,45 @@
       />
     </div>
 
-    <!-- 大类贡献 -->
-    <el-card v-if="perfCategoryBars.length" shadow="never" style="margin-bottom: 14px;">
-      <div class="perf-contrib-title" style="margin-bottom: 10px;">大类贡献（当前仓）</div>
+    <!-- 大类结构与贡献（当前仓） -->
+    <el-card v-if="categorySummary.length" shadow="never" style="margin-bottom: 8px;">
+      <div class="perf-contrib-title" style="margin-bottom: 6px;">大类结构与贡献（当前仓）</div>
       <div class="perf-cat-list">
-        <div v-for="c in perfCategoryBars" :key="c.name" class="perf-cat-row">
+        <div v-for="c in categorySummary" :key="c.name" class="perf-cat-row">
           <div class="perf-cat-name">{{ c.name }}</div>
+
+          <!-- 结构占比 -->
           <div class="perf-cat-track">
-            <div
-              class="perf-cat-fill"
-              :class="c.positive ? 'is-pos' : 'is-neg'"
-              :style="{ width: c.widthPct + '%' }"
-            ></div>
+            <div class="perf-cat-fill is-alloc" :style="{ width: Math.max(4, c.allocPct) + '%' }"></div>
           </div>
-          <div class="perf-cat-amt" :class="(c.positive ) ? 'num-up' : 'num-down'">
-            {{ formatMoney(c.amount, 2, true) }}
+          <div class="perf-cat-meta">
+            <span class="alloc-pct">{{ c.allocPct }}%</span>
+          </div>
+
+          <!-- 贡献 -->
+          <div class="perf-cat-amt" :class="c.contrib >= 0 ? 'num-up' : 'num-down'">
+            {{ formatMoney(c.contrib, 2, true) }}
           </div>
         </div>
       </div>
+      <div class="perf-cat-foot">左：当前市值占比 &nbsp;|&nbsp; 右：浮盈+分红贡献</div>
+    </el-card>
+
+    <!-- 大类资产走势 -->
+    <el-card shadow="never" style="margin-bottom: 14px;">
+      <template #header>
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+          <div>
+            <div class="perf-contrib-title" style="margin-bottom:2px;">大类资产走势</div>
+            <div class="perf-contrib-sub" style="margin:0;">权益 / 债基 / REITs</div>
+          </div>
+          <el-radio-group v-model="catTrendMode" size="small" @change="renderCategoryTrend">
+            <el-radio-button value="value">市值</el-radio-button>
+            <el-radio-button value="pct">占比</el-radio-button>
+          </el-radio-group>
+        </div>
+      </template>
+      <div id="categoryTrendChart" style="height: 260px;"></div>
     </el-card>
 
     <!-- 时间轴 -->
@@ -335,7 +356,7 @@ const {
   formatMoney, pct,
   perfSummary, perfTimeline, perfContribution, perfFlows, perfStory, perfLoading, perfFlowForm,
   hasPerfFlows, perfStoryToneType, perfGuideSteps, perfLensRows,
-  perfPrimaryCards, perfSecondaryCards, perfCategoryBars,
+  perfPrimaryCards, perfSecondaryCards,
   displayedPerfContribution, perfContributionFilter, perfContributionSort,
   perfContributionHeadline, perfContributionMix, perfTimelineRange,
   fetchPerformance, setPerfTimelineRange, addPerfFlow, updatePerfFlow, deletePerfFlow,
@@ -347,6 +368,38 @@ const perfFlowSuggestions = ref([]);
 const perfSuggestLoading = ref(false);
 const perfFlowEditId = ref(null);
 const localTimelineRange = ref(perfTimelineRange?.value || 'all');
+const catTrendMode = ref('value');
+
+const latestCategoryAlloc = computed(() => {
+  const rows = perfTimeline.value || [];
+  if (!rows.length) return { equity: 0, bond: 0, reit: 0, total: 0 };
+  const last = rows[rows.length - 1];
+  const e = Number(last?.equity_mv || 0);
+  const b = Number(last?.bond_mv || 0);
+  const r = Number(last?.reit_mv || 0);
+  return { equity: e, bond: b, reit: r, total: e + b + r };
+});
+
+const categorySummary = computed(() => {
+  const contribList = perfStory.value?.category_contrib || [];
+  const alloc = latestCategoryAlloc.value;
+  const tot = alloc.total || 1;
+
+  const cMap = {};
+  contribList.forEach((c) => { cMap[c.name] = Number(c.amount || 0); });
+
+  const order = ['权益', '债基', 'REITs'];
+  return order.map((name) => {
+    let allocAmt = 0;
+    if (name === '权益') allocAmt = alloc.equity;
+    else if (name === '债基') allocAmt = alloc.bond;
+    else allocAmt = alloc.reit;
+
+    const allocPct = tot > 0 ? (allocAmt / tot * 100) : 0;
+    const contrib = cMap[name] || 0;
+    return { name, allocAmt: Math.round(allocAmt), allocPct: Math.round(allocPct * 10) / 10, contrib };
+  }).filter((x) => x.allocAmt > 0 || Math.abs(x.contrib) > 0.01);
+});
 
 watch(
   () => perfTimelineRange?.value,
@@ -401,6 +454,21 @@ const onLoadFlowSuggest = async () => {
     perfSuggestLoading.value = false;
   }
 };
+
+
+async function renderCategoryTrend() {
+  if (!perfTimeline.value || perfTimeline.value.length < 2) return;
+  try {
+    const { renderCategoryTrendChartView, waitForChartDom } = await import('../charts/index.js');
+    const ready = await waitForChartDom(['categoryTrendChart'], { timeoutMs: 1500 });
+    if (!ready) return;
+    await new Promise((r) => requestAnimationFrame(() => r()));
+    renderCategoryTrendChartView(perfTimeline.value, catTrendMode.value);
+  } catch (e) {
+    // ignore if chart lib not ready
+  }
+}
+
 
 const onContribRowClick = (row) => {
   if (!row?.code) return;

@@ -66,6 +66,24 @@ def bank_balance_total(conn) -> float:
     return float(_row_get(row, "total", 0) or 0)
 
 
+def compute_category_market_values(holdings):
+    """按大类拆分当前市值：债基 / REITs / 权益。"""
+    buckets = {"债基": 0.0, "REITs": 0.0, "权益": 0.0}
+    for h in holdings or []:
+        cat = str(_row_get(h, "category", "") or "").strip()
+        qty = float(_row_get(h, "quantity", 0) or 0)
+        last = float(_row_get(h, "last_price", 0) or 0)
+        mv = qty * last
+        upper = cat.upper()
+        if "REIT" in upper:
+            buckets["REITs"] += mv
+        elif any(k in cat for k in ("债", "固收", "货币", "现金")):
+            buckets["债基"] += mv
+        else:
+            buckets["权益"] += mv
+    return {k: round(v, 2) for k, v in buckets.items()}
+
+
 def compute_portfolio_totals(conn, *, holdings=None):
     """Return market/cash/bank/pending/profits for current portfolio state."""
     ensure_cash_base(conn)
@@ -87,6 +105,8 @@ def compute_portfolio_totals(conn, *, holdings=None):
     securities_cash, cash_base, tx_flow = calculated_securities_cash(conn)
     total_assets = market_value + bank_balance + securities_cash + pending_purchase
 
+    cat_mv = compute_category_market_values(holdings)
+
     return {
         "holdings": holdings,
         "holdings_count": len(holdings),
@@ -100,4 +120,5 @@ def compute_portfolio_totals(conn, *, holdings=None):
         "total_assets": total_assets,
         "total_profit": total_profit,
         "lifetime_profit": lifetime_profit,
+        "category_market_value": cat_mv,
     }
