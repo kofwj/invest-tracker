@@ -452,6 +452,9 @@ const app = createApp({
             deletePerfFlow,
             loadPerfFlowSuggestions,
             applyPerfFlowSuggestion,
+            // 新增专业指标（防止 ReferenceError 导致整页空白）
+            perfRiskMetrics,
+            perfContributionSummary,
         } = createPerformanceModule({
             perfSummary,
             perfTimeline,
