@@ -218,6 +218,80 @@ const createPerformanceModule = ({
         };
     };
 
+    // === 专业组合级指标（portfolio level，非个股）===
+    // 从 timeline 计算最大回撤（peak to trough）
+    const perfRiskMetrics = computed(() => {
+        const rows = perfTimeline.value || [];
+        if (!rows || rows.length < 2) return null;
+        let peak = -Infinity;
+        let maxDD = 0;
+        let peakDate = null;
+        let troughDate = null;
+        let peakVal = 0;
+        for (const r of rows) {
+            const v = Number(r.total_assets || 0);
+            if (v > peak) {
+                peak = v;
+                peakDate = r.date;
+                peakVal = v;
+            }
+            const dd = peak > 0 ? (peak - v) / peak : 0;
+            if (dd > maxDD) {
+                maxDD = dd;
+                troughDate = r.date;
+            }
+        }
+        // 简单年化波动率近似（日回报标准差 * sqrt(252)），点数少时为 null
+        let approxVol = null;
+        if (rows.length >= 6) {
+            const rets = [];
+            for (let i = 1; i < rows.length; i++) {
+                const p = Number(rows[i - 1].total_assets || 0);
+                const c = Number(rows[i].total_assets || 0);
+                if (p > 0) rets.push((c - p) / p);
+            }
+            if (rets.length >= 3) {
+                const mean = rets.reduce((a, b) => a + b, 0) / rets.length;
+                const variance = rets.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / rets.length;
+                const dailyStd = Math.sqrt(variance);
+                approxVol = Number((dailyStd * Math.sqrt(252) * 100).toFixed(1));
+            }
+        }
+        return {
+            maxDrawdown: maxDD,
+            maxDrawdownPct: Number((maxDD * 100).toFixed(1)),
+            peak: roundOrNull(peakVal),
+            peakDate,
+            troughDate,
+            approxVol,
+            hasEnoughData: rows.length >= 6,
+        };
+    });
+
+    function roundOrNull(v) {
+        return v == null ? null : Number(Number(v).toFixed(2));
+    }
+
+    // 轻量贡献摘要（组合视角，代替详细个股表）
+    const perfContributionSummary = computed(() => {
+        const rows = perfContribution.value || [];
+        if (!rows.length) return { topWinners: [], topLosers: [], byCategory: [] };
+        const sorted = [...rows].sort((a, b) => Number(b.total_contribution || 0) - Number(a.total_contribution || 0));
+        const topWinners = sorted.filter(r => Number(r.total_contribution || 0) > 0).slice(0, 3);
+        const topLosers = [...sorted].filter(r => Number(r.total_contribution || 0) < 0).slice(-3).reverse();
+        // 类别汇总（与大类卡片呼应）
+        const cat = { '权益': 0, '债基': 0, 'REITs': 0 };
+        for (const r of rows) {
+            const c = (r.category || '').toString();
+            const amt = Number(r.total_contribution || 0);
+            if (c.includes('REIT') || c.toUpperCase().includes('REIT')) cat['REITs'] += amt;
+            else if (c.includes('债') || c.includes('固收')) cat['债基'] += amt;
+            else cat['权益'] += amt;
+        }
+        const byCategory = Object.entries(cat).map(([name, amount]) => ({ name, amount: Number(amount.toFixed(2)) }));
+        return { topWinners, topLosers, byCategory };
+    });
+
     const timelineQuery = () => {
         const range = perfTimelineRange?.value || 'all';
         if (range === 'ytd') return { start_date: yearStartIso() };
@@ -347,6 +421,9 @@ const createPerformanceModule = ({
         deletePerfFlow,
         loadPerfFlowSuggestions,
         applyPerfFlowSuggestion,
+        // 新增专业组合级指标
+        perfRiskMetrics,
+        perfContributionSummary,
     };
 };
 

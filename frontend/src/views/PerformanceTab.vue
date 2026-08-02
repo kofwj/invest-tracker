@@ -45,16 +45,7 @@
         <div class="perf-story-headline" :class="'is-' + (perfStory.tone || 'neutral')">{{ perfStory.headline }}</div>
         <el-tag :type="perfStoryToneType" size="small">{{ perfStory.as_of_date || '今日' }}</el-tag>
       </div>
-      <div class="perf-story-cols" v-if="(perfStory.winners || []).length || (perfStory.losers || []).length">
-        <div class="perf-story-col is-win" v-if="(perfStory.winners || []).length">
-          <div class="perf-story-col-title">赚钱靠前</div>
-          <div v-for="w in perfStory.winners" :key="'w'+w.code" class="perf-story-col-row">{{ w.text }}</div>
-        </div>
-        <div class="perf-story-col is-lose" v-if="(perfStory.losers || []).length">
-          <div class="perf-story-col-title">拖累靠前</div>
-          <div v-for="w in perfStory.losers" :key="'l'+w.code" class="perf-story-col-row">{{ w.text }}</div>
-        </div>
-      </div>
+      <!-- 故事聚焦组合层面，个股详细贡献已移至「组合归因与风险」卡片和「持仓明细」 -->
     </el-card>
 
     <!-- 普通人核心指标（3 张最重要） -->
@@ -151,105 +142,57 @@
       </el-col>
     </el-row>
 
-    <!-- 贡献表 -->
+        <!-- 组合归因与风险（专业视角，portfolio level） -->
     <el-card shadow="never" style="margin-bottom: 14px;">
-      <div class="perf-contrib-toolbar">
-        <div>
-          <div class="perf-contrib-title">标的收益贡献</div>
-          <div class="perf-contrib-sub">默认当前仓贡献；对账优先看全周期。点名称可看该标的交易。</div>
+      <div style="margin-bottom:8px;">
+        <div class="perf-contrib-title">组合归因与风险</div>
+        <div class="perf-contrib-sub">聚焦整户层面。单标的详细浮盈、操作请去「持仓明细」页。</div>
+      </div>
+
+      <!-- 轻量贡献摘要（避免与持仓明细重复） -->
+      <div v-if="perfContributionSummary" style="margin-bottom:12px;">
+        <div style="font-size:12px;color:var(--app-muted);margin-bottom:4px;">主要贡献来源（前三 + 大类汇总）</div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:6px;">
+          <div v-for="w in (perfContributionSummary.topWinners || [])" :key="w.code" style="font-size:13px;">
+            <span class="num-up">{{ w.name || w.code }}</span> {{ formatMoney(w.total_contribution || 0, 2, true) }}
+          </div>
+          <div v-for="l in (perfContributionSummary.topLosers || [])" :key="l.code" style="font-size:13px;">
+            <span class="num-down">{{ l.name || l.code }}</span> {{ formatMoney(l.total_contribution || 0, 2, true) }}
+          </div>
         </div>
-        <div class="perf-contrib-controls">
-          <el-tag size="small" type="info">共 {{ perfContribution.length }} 个</el-tag>
-          <el-select v-model="perfContributionFilter" size="small" style="width: 110px;">
-            <el-option label="全部" value="all" />
-            <el-option label="正贡献" value="positive" />
-            <el-option label="负贡献" value="negative" />
-          </el-select>
-          <el-select v-model="perfContributionSort" size="small" style="width: 140px;">
-            <el-option label="当前仓贡献" value="contribution" />
-            <el-option label="全周期盈亏" value="lifetime" />
-            <el-option label="收益占比" value="share" />
-            <el-option label="市值" value="market_value" />
-          </el-select>
+        <div style="font-size:12px;">
+          <span>大类贡献：</span>
+          <span v-for="c in (perfContributionSummary.byCategory || [])" :key="c.name" style="margin-right:12px;">
+            {{ c.name }} {{ formatMoney(c.amount || 0, 2, true) }}
+          </span>
         </div>
       </div>
-      <div class="perf-contrib-summary">
-        <div class="perf-summary-pill is-positive">
-          <div class="perf-summary-label">头号来源</div>
-          <div class="perf-summary-main">{{ perfContributionHeadline.best?.name || '—' }}</div>
-          <div class="perf-summary-sub">{{ perfContributionHeadline.best ? formatMoney(perfContributionHeadline.best.total_contribution, 2, true) : '暂无' }}</div>
-        </div>
-        <div class="perf-summary-pill is-negative">
-          <div class="perf-summary-label">最大拖累</div>
-          <div class="perf-summary-main">{{ perfContributionHeadline.worst?.name || '—' }}</div>
-          <div class="perf-summary-sub">{{ perfContributionHeadline.worst ? formatMoney(perfContributionHeadline.worst.total_contribution, 2, true) : '暂无' }}</div>
-        </div>
-        <div class="perf-summary-pill is-neutral">
-          <div class="perf-summary-label">结构</div>
-          <div class="perf-summary-main">正 {{ perfContributionMix.positiveCount }} / 负 {{ perfContributionMix.negativeCount }}</div>
-          <div class="perf-summary-sub">前 3 合计 {{ formatMoney(perfContributionMix.top3Contribution, 2, true) }}</div>
-        </div>
+
+      <!-- 专业风险指标 -->
+      <div v-if="perfRiskMetrics" class="ledger-metrics cols-3" style="margin-bottom:4px;">
+        <MetricCard
+          label="最大回撤"
+          :value="(perfRiskMetrics.maxDrawdownPct || 0) + '%'"
+          :sub="perfRiskMetrics.peakDate && perfRiskMetrics.troughDate ? (perfRiskMetrics.peakDate + ' → ' + perfRiskMetrics.troughDate) : '基于历史快照'"
+          :tone="perfRiskMetrics.maxDrawdown > 0.05 ? 'down' : 'neutral'"
+        />
+        <MetricCard
+          label="年化波动近似"
+          :value="perfRiskMetrics.approxVol != null ? perfRiskMetrics.approxVol + '%' : '—'"
+          sub="日回报标准差 × √252（数据足够时）"
+          secondary
+        />
+        <MetricCard
+          label="峰值总资产"
+          :value="formatMoney(perfRiskMetrics.peak)"
+          :sub="perfRiskMetrics.peakDate || '—'"
+          secondary
+        />
       </div>
-      <el-table
-        :data="displayedPerfContribution"
-        stripe
-        size="small"
-        class="perf-contrib-table table-clickable"
-        style="width: 100%"
-        @row-click="onContribRowClick"
-      >
-        <el-table-column label="标的" min-width="180" fixed="left">
-          <template #default="s">
-            <div class="perf-name-cell">
-              <span class="perf-rank-badge" :class="{ 'perf-rank-top': s.$index < 3 }">{{ s.$index + 1 }}</span>
-              <div class="perf-name-main">
-                <div class="perf-name-title">{{ s.row.name }}</div>
-                <div class="perf-name-code">{{ s.row.code }} · {{ s.row.category || '未分类' }}</div>
-              </div>
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="市值" min-width="110" align="right" header-align="right">
-          <template #default="s">
-            <div>{{ formatMoney(s.row.market_value) }}</div>
-            <div class="perf-contrib-share">占比 {{ pct(s.row.market_value, perfSummary?.total_assets || 0) }}</div>
-          </template>
-        </el-table-column>
-        <el-table-column label="当前仓贡献" min-width="130" align="right" header-align="right">
-          <template #header>
-            <el-tooltip content="浮盈 + 累计分红；只看当前仓" placement="top">
-              <span>当前仓贡献</span>
-            </el-tooltip>
-          </template>
-          <template #default="s">
-            <div class="perf-contrib-value" :class="(s.row.total_contribution >= 0 ) ? 'num-up' : 'num-down'">
-              {{ formatMoney(s.row.total_contribution, 2, true) }}
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="全周期" min-width="120" align="right" header-align="right">
-          <template #header>
-            <el-tooltip content="接近券商累计盈亏" placement="top">
-              <span>全周期</span>
-            </el-tooltip>
-          </template>
-          <template #default="s">
-            <span :class="((s.row.lifetime_profit || 0) >= 0 ) ? 'num-up' : 'num-down'">
-              {{ formatMoney(s.row.lifetime_profit || 0, 2, true) }}
-            </span>
-          </template>
-        </el-table-column>
-        <el-table-column label="强度" min-width="140">
-          <template #default="s">
-            <div class="perf-bar-track">
-              <div class="perf-bar-fill" :style="contributionBarStyle(s.row.total_contribution)"></div>
-            </div>
-          </template>
-        </el-table-column>
-      </el-table>
+      <div v-else style="color:var(--app-muted);font-size:12px;margin:8px 0;">时间序列数据不足，风险指标暂不可用。</div>
     </el-card>
 
-    <!-- 流水 -->
+<!-- 流水 -->
     <el-card id="perf-flow-section" shadow="never" style="margin-bottom: 14px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px;flex-wrap:wrap;">
         <div>
@@ -365,11 +308,13 @@ const {
   perfSummary, perfTimeline, perfContribution, perfFlows, perfStory, perfLoading, perfFlowForm,
   hasPerfFlows, perfStoryToneType, perfGuideSteps, perfLensRows,
   perfPrimaryCards, perfSecondaryCards,
-  displayedPerfContribution, perfContributionFilter, perfContributionSort,
-  perfContributionHeadline, perfContributionMix, perfTimelineRange,
+  perfTimelineRange,
   fetchPerformance, setPerfTimelineRange, addPerfFlow, updatePerfFlow, deletePerfFlow,
-  loadPerfFlowSuggestions, applyPerfFlowSuggestion, contributionBarStyle,
+  loadPerfFlowSuggestions, applyPerfFlowSuggestion,
   showTransactions, goTab,
+  // 新专业指标
+  perfRiskMetrics,
+  perfContributionSummary,
 } = useAppCtx();
 
 const perfFlowSuggestions = ref([]);
