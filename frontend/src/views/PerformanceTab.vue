@@ -142,160 +142,79 @@
       </el-col>
     </el-row>
 
-        <!-- 组合归因与风险（专业视角，portfolio level） -->
+        <!-- 组合风险（精简 3 张核心） -->
     <el-card shadow="never" style="margin-bottom: 14px;">
       <div style="margin-bottom:8px;">
-        <div class="perf-contrib-title">组合归因与风险</div>
-        <div class="perf-contrib-sub">聚焦整户层面。单标的详细浮盈、操作请去「持仓明细」页。</div>
+        <div class="perf-contrib-title">风险一览</div>
+        <div class="perf-contrib-sub">最大回撤 = 历史最高点跌到最低点的跌幅。年化波动 = 平时上下抖多大。</div>
       </div>
 
-      <!-- 轻量贡献摘要（避免与持仓明细重复） -->
-      <div v-if="perfContributionSummary" style="margin-bottom:12px;">
-        <div style="font-size:12px;color:var(--app-muted);margin-bottom:4px;">主要贡献来源（前三 + 大类汇总）</div>
-        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:6px;">
-          <div v-for="w in (perfContributionSummary.topWinners || [])" :key="w.code" style="font-size:13px;">
-            <span class="num-up">{{ w.name || w.code }}</span> {{ formatMoney(w.total_contribution || 0, 2, true) }}
-          </div>
-          <div v-for="l in (perfContributionSummary.topLosers || [])" :key="l.code" style="font-size:13px;">
-            <span class="num-down">{{ l.name || l.code }}</span> {{ formatMoney(l.total_contribution || 0, 2, true) }}
-          </div>
-        </div>
-        <div style="font-size:12px;">
-          <span>大类贡献：</span>
-          <span v-for="c in (perfContributionSummary.byCategory || [])" :key="c.name" style="margin-right:12px;">
-            {{ c.name }} {{ formatMoney(c.amount || 0, 2, true) }}
-          </span>
-        </div>
-      </div>
-
-      <!-- 专业风险与归因指标（更细化） -->
       <div class="ledger-metrics cols-3" style="margin-bottom:8px;">
         <MetricCard
-          v-if="perfSummary?.twr != null"
-          label="TWR（时间加权）"
-          :value="(perfSummary.twr || 0) + '%'"
-          sub="剥离现金流时机，只看资产本身表现"
-          :tone="(perfSummary.twr || 0) >= 0 ? 'up' : 'down'"
-        />
-        <MetricCard
-          v-if="perfSummary?.sharpe != null"
-          label="Sharpe（简单）"
-          :value="String(perfSummary.sharpe)"
-          sub="每单位波动赚的超额（Rf≈2%）"
-          secondary
+          label="最大回撤"
+          :value="((perfRiskMetrics?.maxDrawdownPct) || 0) + '%'"
+          :sub="(perfRiskMetrics?.peakDate) && (perfRiskMetrics?.troughDate) ? (perfRiskMetrics.peakDate + ' → ' + perfRiskMetrics.troughDate) : '基于历史快照'"
+          :tone="(perfRiskMetrics?.maxDrawdown || 0) > 0.05 ? 'down' : 'neutral'"
         />
         <MetricCard
           v-if="perfSummary?.underwater"
-          label="离峰值距离"
+          label="当前离峰值"
           :value="(perfSummary.underwater.underwater_pct || 0) + '%'"
-          :sub="'峰值 ' + (perfSummary.underwater.peak_date || '')"
-          :tone="perfSummary.underwater.underwater_pct > 5 ? 'down' : 'neutral'"
+          :sub="'峰值日 ' + (perfSummary.underwater.peak_date || '—')"
+          :tone="(perfSummary.underwater.underwater_pct || 0) > 5 ? 'down' : 'neutral'"
+        />
+        <MetricCard
+          label="年化波动"
+          :value="(perfRiskMetrics?.approxVol) != null ? (perfRiskMetrics.approxVol) + '%' : '—'"
+          sub="平时上下抖多大幅度"
+          :tone="(perfRiskMetrics?.approxVol || 0) > 15 ? 'down' : 'neutral'"
         />
       </div>
 
-      <div v-if="perfSummary?.monthly_stats" style="margin-bottom:8px; font-size:13px;">
-        <strong>月度表现：</strong>
-        最好 {{ perfSummary.monthly_stats.best_month }}% ｜ 最差 {{ perfSummary.monthly_stats.worst_month }}%
-        ｜ 平均 {{ perfSummary.monthly_stats.avg_monthly }}% ｜ 正收益月 {{ perfSummary.monthly_stats.positive_pct }}%
-      </div>
+      <el-collapse class="perf-advanced-collapse" style="margin-top: 8px;">
+        <el-collapse-item title="更多指标（进阶）" name="advanced">
+          <div style="font-size:12px;color:var(--app-muted);margin-bottom:10px;">想看细节再展开。</div>
 
-      <div v-if="perfSummary?.dividend_contrib_pct != null" style="margin-bottom:8px; font-size:13px;">
-        分红贡献当前浮盈+分红的 <strong>{{ perfSummary.dividend_contrib_pct }}%</strong>
-      </div>
+          <div v-if="perfSummary?.twr != null" style="margin-bottom:8px; font-size:13px;">
+            <strong>TWR（时间加权）{{ perfSummary.twr }}%</strong>
+            <span style="color:var(--app-muted);"> —— 剥离你出金/入金时机，只看资产本身涨跌。</span>
+          </div>
 
-      <div v-if="perfSummary?.xirr != null && perfSummary?.twr != null" style="font-size:12px; color:var(--app-muted); margin-bottom:8px;">
-        XIRR（资金加权）{{ perfSummary.xirr }}% vs TWR {{ perfSummary.twr }}% —— 差距反映现金流时机影响（正值通常意味着你在相对低位多投入了）。
-      </div>
+          <div v-if="perfSummary?.xirr != null && perfSummary?.twr != null" style="font-size:12px;color:var(--app-muted);margin-bottom:8px;">
+            XIRR {{ perfSummary.xirr }}% vs TWR {{ perfSummary.twr }}% —— 差距反映现金流时机影响（正值通常意味着你在相对低位多投了）。
+          </div>
 
-      <!-- 滚动 + 恢复 + Calmar/Sortino + 现金拖累 + Benchmark + Brinson -->
-      <div style="margin: 10px 0 8px;">
-        <div style="font-size:12px; color:var(--app-muted); margin-bottom:4px;">滚动收益率（简单资产增长率）</div>
-        <div style="display:flex; gap:12px; flex-wrap:wrap; font-size:13px;">
-          <span v-for="(v, k) in (perfSummary?.rolling_returns || {})" :key="k">
-            <strong>{{ k }}</strong>: {{ v != null ? v + '%' : '—' }}
-          </span>
-        </div>
-      </div>
+          <div v-if="perfSummary?.rolling_returns && Object.keys(perfSummary.rolling_returns).length" style="margin-bottom:10px;">
+            <div style="font-size:12px; color:var(--app-muted); margin-bottom:4px;">滚动收益率</div>
+            <div style="display:flex; gap:14px; flex-wrap:wrap; font-size:13px;">
+              <span v-for="(v, k) in perfSummary.rolling_returns" :key="k">
+                <strong>{{ k }}</strong>: {{ v != null ? v + '%' : '—' }}
+              </span>
+            </div>
+          </div>
 
-      <div v-if="perfSummary?.drawdown_recovery" class="ledger-metrics cols-3" style="margin-bottom:8px;">
-        <MetricCard
-          label="最长回撤持续"
-          :value="(perfSummary.drawdown_recovery.longest_dd_duration_days || 0) + '天'"
-          sub="峰值到完全恢复的最长时间"
-          secondary
-        />
-        <MetricCard
-          label="当前恢复天数"
-          :value="(perfSummary.drawdown_recovery.current_recovery_days || 0) + '天'"
-          :sub="'峰值 ' + (perfSummary.drawdown_recovery.peak_date || '')"
-          :tone="perfSummary.drawdown_recovery.current_recovery_days > 30 ? 'down' : 'neutral'"
-        />
-        <MetricCard
-          label="最长恢复耗时"
-          :value="(perfSummary.drawdown_recovery.max_recovery_days || 0) + '天'"
-          sub="最难恢复的一次"
-          secondary
-        />
-      </div>
+          <div v-if="perfSummary?.monthly_stats" style="margin-bottom:8px; font-size:13px;">
+            <span style="font-size:12px;color:var(--app-muted);">月度表现：</span>
+            最好 {{ perfSummary.monthly_stats.best_month }}% ｜ 最差 {{ perfSummary.monthly_stats.worst_month }}%
+            ｜ 平均 {{ perfSummary.monthly_stats.avg_monthly }}% ｜ 正收益月 {{ perfSummary.monthly_stats.positive_pct }}%
+          </div>
 
-      <div class="ledger-metrics cols-3" style="margin-bottom:8px;">
-        <MetricCard
-          v-if="perfSummary?.calmar != null"
-          label="Calmar"
-          :value="String(perfSummary.calmar)"
-          sub="年化收益 / 最大回撤（越大越好）"
-          secondary
-        />
-        <MetricCard
-          v-if="perfSummary?.sortino != null"
-          label="Sortino"
-          :value="String(perfSummary.sortino)"
-          sub="只惩罚下行波动（越高越好）"
-          secondary
-        />
-        <MetricCard
-          v-if="perfSummary?.cash_drag_pct != null"
-          label="现金拖累"
-          :value="(perfSummary.cash_drag_pct || 0) + '%'"
-          sub="平均现金+存款占总资产比例"
-          secondary
-        />
-      </div>
+          <div v-if="perfSummary?.dividend_contrib_pct != null" style="margin-bottom:8px; font-size:13px;">
+            分红占浮盈+分红合计 <strong>{{ perfSummary.dividend_contrib_pct }}%</strong>
+          </div>
 
-      <div v-if="perfSummary?.benchmark_relative && Object.keys(perfSummary.benchmark_relative).length" style="margin-bottom:8px; font-size:13px;">
-        <strong>Benchmark 相对：</strong>
-        <span v-for="(b, k) in perfSummary.benchmark_relative" :key="k" style="margin-right:10px;">
-          {{ b.name }} {{ b.relative >= 0 ? '+' : '' }}{{ b.relative }}% (组合 {{ b.port_ret }}% vs {{ b.bench_ret }}%)
-        </span>
-      </div>
+          <div v-if="perfSummary?.sharpe != null" style="margin-bottom:8px; font-size:13px;">
+            Sharpe {{ perfSummary.sharpe }} —— 每单位波动赚的超额（无风险利率≈2%）
+          </div>
 
-      <div v-if="perfSummary?.brinson_simple" style="margin-bottom:8px; font-size:13px;">
-        <strong>简单 Brinson（配置近似）：</strong>
-        配置效应 {{ perfSummary.brinson_simple.allocation_effect_approx }}% ｜
-        当前权重 {{ perfSummary.brinson_simple.weights_pct ? Object.entries(perfSummary.brinson_simple.weights_pct).map(([k,v])=>k+':'+v+'%').join(' ') : '' }}
-        <div style="font-size:11px;color:var(--app-muted);">{{ perfSummary.brinson_simple.note }}</div>
-      </div>
-
-      <div v-if="perfRiskMetrics" class="ledger-metrics cols-3" style="margin-bottom:4px;">
-        <MetricCard
-          label="最大回撤"
-          :value="(perfRiskMetrics.maxDrawdownPct || 0) + '%'"
-          :sub="perfRiskMetrics.peakDate && perfRiskMetrics.troughDate ? (perfRiskMetrics.peakDate + ' → ' + perfRiskMetrics.troughDate) : '基于历史快照'"
-          :tone="perfRiskMetrics.maxDrawdown > 0.05 ? 'down' : 'neutral'"
-        />
-        <MetricCard
-          label="年化波动近似"
-          :value="perfRiskMetrics.approxVol != null ? perfRiskMetrics.approxVol + '%' : '—'"
-          sub="日回报标准差 × √252（数据足够时）"
-          secondary
-        />
-        <MetricCard
-          label="峰值总资产"
-          :value="formatMoney(perfRiskMetrics.peak)"
-          :sub="perfRiskMetrics.peakDate || '—'"
-          secondary
-        />
-      </div>
+          <div v-if="perfSummary?.benchmark_relative && Object.keys(perfSummary.benchmark_relative).length" style="margin-bottom:8px; font-size:13px;">
+            <span style="font-size:12px;color:var(--app-muted);">对比大盘：</span>
+            <span v-for="(b, k) in perfSummary.benchmark_relative" :key="k" style="margin-right:10px;">
+              {{ b.name }} 相对 {{ b.relative >= 0 ? '+' : '' }}{{ b.relative }}% (组合 {{ b.port_ret }}% / 基准 {{ b.bench_ret }}%)
+            </span>
+          </div>
+        </el-collapse-item>
+      </el-collapse>
     </el-card>
 
 <!-- 流水 -->
@@ -598,6 +517,22 @@ const onContribRowClick = (row) => {
   color: var(--app-text);
 }
 .perf-contrib-table { cursor: pointer; }
+.perf-advanced-collapse { border: none; }
+.perf-advanced-collapse :deep(.el-collapse-item__header) {
+  font-weight: 600;
+  color: var(--app-muted);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--app-surface) 90%, var(--app-bg0));
+  padding: 0 12px;
+  height: 40px;
+  border: 1px solid var(--app-border);
+  font-size: 13px;
+}
+.perf-advanced-collapse :deep(.el-collapse-item__wrap) { border: none; background: transparent; }
+.perf-advanced-collapse :deep(.el-collapse-item__content) {
+  padding: 12px 2px 4px;
+  color: var(--app-text);
+}
 @media (max-width: 640px) {
   .perf-cat-row { grid-template-columns: 64px 1fr 90px; }
 }
