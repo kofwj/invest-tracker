@@ -26,7 +26,7 @@
 
       <aside class="mix-card">
         <div class="mix-head">
-          <div class="mix-title"><Activity :size="14" :stroke-width="2" />近一周资产</div>
+          <div class="mix-title"><Activity :size="14" :stroke-width="2" />近半月资产</div>
           <div class="mix-chip">{{ weekChipText }}</div>
         </div>
         <div class="mix-total" :title="formatMoney(dashboard.total_assets)">{{ formatMoney(dashboard.total_assets) }}</div>
@@ -34,7 +34,7 @@
           <span class="mix-delta-main">{{ weekDeltaText }}</span>
           <span class="mix-delta-sub">{{ weekDeltaSubText }}</span>
         </div>
-        <div id="overviewWeekChart" class="mix-chart" aria-label="近一周总资产曲线"></div>
+        <div id="overviewWeekChart" class="mix-chart" aria-label="近半月总资产曲线"></div>
         <div class="mix-meta">
           <div class="mix-meta-box">
             <div class="l">期初</div>
@@ -218,8 +218,8 @@ const {
   resolvedTheme,
 } = useAppCtx();
 
-const WEEK_LOOKBACK_DAYS = 7;
-const WEEK_MAX_POINTS = 8;
+const TREND_LOOKBACK_DAYS = 15;
+const TREND_MAX_POINTS = 16;
 
 function isoDaysAgo(days) {
   const d = new Date(`${todayLocalIso()}T00:00:00`);
@@ -249,16 +249,16 @@ function normalizeSnapshotRows(list) {
   return [...byDate.values()].sort((a, b) => String(a.date).localeCompare(String(b.date)));
 }
 
-/** 近一周快照；窗口内不足时回退最近若干条，避免总览空白 */
+/** 近半月快照；窗口内不足时回退最近若干条，避免总览空白 */
 const weekSeriesMeta = computed(() => {
   const all = normalizeSnapshotRows(snapshots?.value ?? snapshots ?? []);
-  const start = isoDaysAgo(WEEK_LOOKBACK_DAYS - 1);
+  const start = isoDaysAgo(TREND_LOOKBACK_DAYS - 1);
   let rows = all.filter((r) => r.date >= start);
   let mode = 'week';
 
-  // 近 7 天不足 2 点：用最近快照（最多 7 条）兜底，本地/断档时仍能看趋势
+  // 近半月快照不足 2 点：用最近快照（最多 15 条左右）兜底，本地/断档时仍能看趋势
   if (rows.length < 2) {
-    rows = all.slice(-WEEK_LOOKBACK_DAYS);
+    rows = all.slice(-TREND_LOOKBACK_DAYS);
     mode = rows.length ? 'recent' : 'empty';
   }
 
@@ -273,8 +273,8 @@ const weekSeriesMeta = computed(() => {
   }
 
   // 防止点过多挤在一起
-  if (rows.length > WEEK_MAX_POINTS) {
-    rows = rows.slice(-WEEK_MAX_POINTS);
+  if (rows.length > TREND_MAX_POINTS) {
+    rows = rows.slice(-TREND_MAX_POINTS);
   }
 
   return { rows, mode };
@@ -369,7 +369,7 @@ const weekChipText = computed(() => {
   if (!n) return '无数据';
   const mode = weekSeriesMeta.value.mode;
   if (mode === 'recent') return `最近 ${n} 点`;
-  return `近一周 ${n} 点`;
+  return `近半月 ${n} 点`;
 });
 
 async function paintWeekChart() {

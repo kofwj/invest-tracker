@@ -327,7 +327,7 @@ const renderPerfTimelineChartView = (perfTimeline = []) => {
     return true;
 };
 
-/** 总览右上：近一周总资产曲线（单线 + 面积，Y 轴贴合波动） */
+/** 总览右上：近半月总资产曲线（单线 + 面积，Y 轴贴合波动） */
 const renderOverviewWeekChartView = (rows = []) => {
     const el = document.getElementById('overviewWeekChart');
     if (!el) return false;
@@ -343,7 +343,7 @@ const renderOverviewWeekChartView = (rows = []) => {
         overviewWeekChart.clear();
         overviewWeekChart.setOption({
             title: {
-                text: '暂无近一周快照',
+                text: '暂无近半月快照',
                 left: 'center',
                 top: 'middle',
                 textStyle: { color: t.muted, fontSize: 12, fontWeight: 500 },
