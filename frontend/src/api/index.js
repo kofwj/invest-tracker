@@ -103,7 +103,7 @@ const api = {
     performanceContribution: () => axios.get(API + '/performance/contribution'),
     performanceStory: () => axios.get(API + '/performance/story'),
     allocationStory: () => axios.get(API + '/allocation/story', { timeout: 60000 }),
-    listPortfolioCashFlows: () => axios.get(API + '/portfolio-cash-flows'),
+    listPortfolioCashFlows: (params = {}) => axios.get(API + '/portfolio-cash-flows', { params }),
     addPortfolioCashFlow: (payload) => axios.post(API + '/portfolio-cash-flows', payload),
     updatePortfolioCashFlow: (id, payload) => axios.put(API + '/portfolio-cash-flows/' + id, payload),
     deletePortfolioCashFlow: (id) => axios.delete(API + '/portfolio-cash-flows/' + id),

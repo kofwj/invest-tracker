@@ -134,10 +134,10 @@ def delete_portfolio_cash_flow(flow_id: int):
 
 
 @router.get("/performance/summary")
-def performance_summary():
+def performance_summary(start_date: Optional[str] = None, end_date: Optional[str] = None):
     with db_session(row_factory=sqlite3.Row) as conn:
         ensure_portfolio_cash_flows_table(conn)
-        data = build_performance_summary(conn)
+        data = build_performance_summary(conn, start_date, end_date)
         conn.commit()
     return data
 
@@ -160,10 +160,10 @@ def performance_contribution():
 
 
 @router.get("/performance/story")
-def performance_story():
+def performance_story(start_date: Optional[str] = None, end_date: Optional[str] = None):
     with db_session(row_factory=sqlite3.Row) as conn:
         ensure_portfolio_cash_flows_table(conn)
-        data = build_performance_story(conn)
+        data = build_performance_story(conn, start_date, end_date)
         conn.commit()
     return data
 

@@ -82,77 +82,70 @@ const createPerformanceModule = ({
         },
     ]));
 
-    /** 主卡 4 张：结论优先 */
+    /** 普通人核心 3 张卡 + 辅助 */
     const perfPrimaryCards = computed(() => {
         const s = perfSummary.value;
         if (!s) return [];
         const flowReady = Number(s.flow_count || 0) > 0;
-        const gainColor = s.total_gain >= 0 ? 'var(--app-up)' : 'var(--app-down)';
-        return [
+
+        // 优先用“本期”数据（时间范围改变时）
+        const isPeriod = !!s.period_start_date;
+        const mainGain = isPeriod ? (s.period_gain ?? s.total_gain) : s.total_gain;
+        const mainGainPct = isPeriod ? (s.period_gain_pct ?? s.total_gain_pct) : s.total_gain_pct;
+        const mainNet = isPeriod ? (s.period_net_contribution ?? s.net_contribution) : s.net_contribution;
+
+        const gainColor = (mainGain || 0) >= 0 ? 'var(--app-up)' : 'var(--app-down)';
+
+        const cards = [
             {
-                label: '累计净投入',
-                plain: '你还净投了多少',
-                value: flowReady ? formatMoney(s.net_contribution) : '待录入',
+                label: '现在总资产',
+                plain: '你现在一共有多少钱',
+                value: formatMoney(s.total_assets),
+                sub: '市值 + 现金 + 存款 + 在途',
+                color: 'var(--app-text)',
+                main: true,
+            },
+            {
+                label: isPeriod ? '本期净投入' : '累计净投入',
+                plain: isPeriod ? '这段时间又投/取了多少' : '你总共还净投了多少',
+                value: flowReady ? formatMoney(mainNet) : '待录入',
                 sub: flowReady
-                    ? `投入 ${formatMoney(s.total_in)} − 取出 ${formatMoney(s.total_out)}`
-                    : '请在下方录「投入/取出」',
+                    ? (isPeriod ? '期间投入减取出' : `投入 ${formatMoney(s.total_in)} − 取出 ${formatMoney(s.total_out)}`)
+                    : '建议录「投入/取出」',
                 color: flowReady ? 'var(--app-text)' : 'var(--app-warn)',
             },
             {
-                label: '累计总收益',
-                plain: '整户一共赚了多少',
-                value: flowReady ? formatMoney(s.total_gain) : '待录入',
+                label: isPeriod ? '这段时间赚/亏' : '累计总收益',
+                plain: isPeriod ? '选的时间段里赚了多少' : '整户一共赚了多少',
+                value: flowReady ? formatMoney(mainGain) : '待录入',
                 sub: flowReady
-                    ? `相对净投入 ${Number(s.total_gain_pct || 0).toFixed(2)}%`
-                    : '公式：总资产 − 净投入',
+                    ? `相对净投入 ${Number(mainGainPct || 0).toFixed(1)}%`
+                    : '总资产 − 净投入',
                 color: flowReady ? gainColor : 'var(--app-warn)',
                 main: true,
             },
-            {
-                label: 'XIRR 年化',
-                plain: '考虑进出时间后的年化',
-                value: s.xirr != null ? `${Number(s.xirr).toFixed(2)}%` : (flowReady ? '—' : '待录入'),
-                sub: s.xirr_status === 'ok'
-                    ? '资金加权年化'
-                    : (s.xirr_message || '需有效投入/取出与当前资产'),
-                color: s.xirr != null ? ((s.xirr || 0) >= 0 ? 'var(--app-up)' : 'var(--app-down)') : 'var(--app-muted)',
-                main: true,
-            },
-            {
-                label: '全周期盈亏',
-                plain: '接近券商累计盈亏',
-                value: formatMoney(s.lifetime_profit),
-                sub: 'Σ(现价 − 摊薄成本)×数量',
-                color: Number(s.lifetime_profit || 0) >= 0 ? 'var(--app-up)' : 'var(--app-down)',
-            },
         ];
+        return cards;
     });
 
-    /** 次卡：浮盈+分红 / YTD / 总资产 */
+    /** 辅助信息（次要） */
     const perfSecondaryCards = computed(() => {
         const s = perfSummary.value;
         if (!s) return [];
         const floatSum = Number(s.current_unrealized_profit || 0) + Number(s.total_dividend_income || 0);
         return [
             {
-                label: '当前总资产',
-                plain: '你现在一共有多少钱',
-                value: formatMoney(s.total_assets),
-                sub: '市值 + 现金 + 存款 + 在途',
-                color: 'var(--app-text)',
-            },
-            {
                 label: '当前仓浮盈+分红',
-                plain: '现在还拿着的仓赚多少',
+                plain: '现在还拿着的东西赚多少',
                 value: formatMoney(floatSum),
-                sub: `浮盈 ${formatMoney(s.current_unrealized_profit)} / 分红 ${formatMoney(s.total_dividend_income)}`,
+                sub: `浮盈 ${formatMoney(s.current_unrealized_profit)} + 分红`,
                 color: floatSum >= 0 ? 'var(--app-up)' : 'var(--app-down)',
             },
             {
-                label: 'YTD 收益',
-                plain: '今年初至今',
+                label: '今年以来',
+                plain: 'YTD',
                 value: formatMoney(s.ytd_gain),
-                sub: `相对年初快照 ${Number(s.ytd_gain_pct || 0).toFixed(2)}%`,
+                sub: `${Number(s.ytd_gain_pct || 0).toFixed(1)}%`,
                 color: s.ytd_gain >= 0 ? 'var(--app-up)' : 'var(--app-down)',
             },
         ];
@@ -246,11 +239,11 @@ const createPerformanceModule = ({
         try {
             const q = timelineQuery();
             const [sumR, tlR, ctR, flR, stR] = await Promise.all([
-                api.performanceSummary(),
+                api.performanceSummary(q),
                 api.performanceTimeline(q),
                 api.performanceContribution(),
-                api.listPortfolioCashFlows(),
-                api.performanceStory(),
+                api.listPortfolioCashFlows(q),
+                api.performanceStory(q),
             ]);
             perfSummary.value = sumR.data;
             perfTimeline.value = tlR.data;

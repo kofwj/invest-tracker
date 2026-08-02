@@ -57,8 +57,8 @@
       </div>
     </el-card>
 
-    <!-- 主卡 4 -->
-    <div class="ledger-metrics cols-4">
+    <!-- 普通人核心指标（3 张最重要） -->
+    <div class="ledger-metrics cols-3" style="margin-bottom: 8px;">
       <MetricCard
         v-for="m in perfPrimaryCards"
         :key="m.label"
@@ -72,8 +72,8 @@
       />
     </div>
 
-    <!-- 次卡 3 -->
-    <div class="ledger-metrics cols-3">
+    <!-- 辅助小信息 -->
+    <div class="ledger-metrics cols-2" style="margin-bottom: 12px;">
       <MetricCard
         v-for="m in perfSecondaryCards"
         :key="m.label"
@@ -134,8 +134,8 @@
         <el-card shadow="never">
           <template #header>
             <div>
-              <div class="perf-contrib-title">资产 vs 净投入</div>
-              <div class="perf-contrib-sub">蓝线总资产，橙线累计净投入。资产在净投入上方表示整户赚钱。时间范围见页顶筛选。</div>
+              <div class="perf-contrib-title">我的钱是怎么变的</div>
+              <div class="perf-contrib-sub">蓝线 = 总资产　|　橙线 = 我累计净投入<br/>蓝线在橙线上方 = 整体赚钱</div>
             </div>
           </template>
           <div id="perfTimelineChart" style="height: 280px;"></div>
