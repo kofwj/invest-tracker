@@ -11,6 +11,7 @@ const loaders = {
     decision: () => import('../views/DecisionTab.vue'),
     performance: () => import('../views/PerformanceTab.vue'),
     allocation: () => import('../views/AllocationTab.vue'),
+    klines: () => import('../views/KlineTab.vue'),
     snapshots: () => import('../views/SnapshotsTab.vue'),
     ops_notify: () => import('../views/NotifyOpsTab.vue'),
     ops_backup: () => import('../views/BackupOpsTab.vue'),

@@ -2,7 +2,7 @@
 
 export const SCREENSHOT_TABS = [
     'overview',
-    'decision', 'snapshots', 'allocation', 'performance', 'market', 'discipline',
+    'decision', 'snapshots', 'allocation', 'performance', 'klines', 'market', 'discipline',
     'holdings', 'deposits', 'transactions', 'broker', 'cash',
     'ops_notify', 'ops_backup',
     // 旧名兼容（截图/书签）
@@ -14,7 +14,7 @@ export const TAB_GROUPS = [
     { id: 'home', label: '总览', tabs: ['overview'] },
     { id: 'daily', label: '日常', tabs: ['holdings', 'transactions', 'deposits'] },
     // P2 真合并：决策+市场 → decision；配置+纪律 → allocation
-    { id: 'analysis', label: '分析', tabs: ['decision', 'performance', 'allocation'] },
+    { id: 'analysis', label: '分析', tabs: ['decision', 'performance', 'allocation', 'klines'] },
     // 原「维护」→「设置」：推送 / 证券账户(费率+现金) / 备份
     { id: 'ops', label: '设置', tabs: ['ops_notify', 'cash', 'ops_backup'] },
 ];
@@ -30,6 +30,7 @@ export const ROUTE_META = {
     decision: { path: '/decision', label: '今天该看' },
     performance: { path: '/performance', label: '收益分析' },
     allocation: { path: '/allocation', label: '结构与目标' },
+    klines: { path: '/klines', label: 'K线查询' },
     snapshots: { path: '/snapshots', label: '资产快照' },
     market: { path: '/market', label: '市场摘要' },
     discipline: { path: '/discipline', label: '纪律与再平衡' },
