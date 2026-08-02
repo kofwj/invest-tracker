@@ -168,7 +168,45 @@
         </div>
       </div>
 
-      <!-- 专业风险指标 -->
+      <!-- 专业风险与归因指标（更细化） -->
+      <div class="ledger-metrics cols-3" style="margin-bottom:8px;">
+        <MetricCard
+          v-if="perfSummary?.twr != null"
+          label="TWR（时间加权）"
+          :value="(perfSummary.twr || 0) + '%'"
+          sub="剥离现金流时机，只看资产本身表现"
+          :tone="(perfSummary.twr || 0) >= 0 ? 'up' : 'down'"
+        />
+        <MetricCard
+          v-if="perfSummary?.sharpe != null"
+          label="Sharpe（简单）"
+          :value="String(perfSummary.sharpe)"
+          sub="每单位波动赚的超额（Rf≈2%）"
+          secondary
+        />
+        <MetricCard
+          v-if="perfSummary?.underwater"
+          label="离峰值距离"
+          :value="(perfSummary.underwater.underwater_pct || 0) + '%'"
+          :sub="'峰值 ' + (perfSummary.underwater.peak_date || '')"
+          :tone="perfSummary.underwater.underwater_pct > 5 ? 'down' : 'neutral'"
+        />
+      </div>
+
+      <div v-if="perfSummary?.monthly_stats" style="margin-bottom:8px; font-size:13px;">
+        <strong>月度表现：</strong>
+        最好 {{ perfSummary.monthly_stats.best_month }}% ｜ 最差 {{ perfSummary.monthly_stats.worst_month }}%
+        ｜ 平均 {{ perfSummary.monthly_stats.avg_monthly }}% ｜ 正收益月 {{ perfSummary.monthly_stats.positive_pct }}%
+      </div>
+
+      <div v-if="perfSummary?.dividend_contrib_pct != null" style="margin-bottom:8px; font-size:13px;">
+        分红贡献当前浮盈+分红的 <strong>{{ perfSummary.dividend_contrib_pct }}%</strong>
+      </div>
+
+      <div v-if="perfSummary?.xirr != null && perfSummary?.twr != null" style="font-size:12px; color:var(--app-muted); margin-bottom:8px;">
+        XIRR（资金加权）{{ perfSummary.xirr }}% vs TWR {{ perfSummary.twr }}% —— 差距反映现金流时机影响（正值通常意味着你在相对低位多投入了）。
+      </div>
+
       <div v-if="perfRiskMetrics" class="ledger-metrics cols-3" style="margin-bottom:4px;">
         <MetricCard
           label="最大回撤"
@@ -189,7 +227,6 @@
           secondary
         />
       </div>
-      <div v-else style="color:var(--app-muted);font-size:12px;margin:8px 0;">时间序列数据不足，风险指标暂不可用。</div>
     </el-card>
 
 <!-- 流水 -->

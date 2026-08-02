@@ -142,11 +142,44 @@ def build_performance_summary(conn, start_date=None, end_date=None):
         period_gain = total_assets - period_start_assets - period_net if period_start_assets else total_assets - period_net
         period_gain_pct = (period_gain / period_start_assets * 100) if period_start_assets and period_start_assets > 0 else 0
 
+    # ===== 专业扩展指标计算 =====
+    snap_assets_full = []
+    try:
+        snap_rows = conn.execute("SELECT date, total_assets FROM daily_snapshots ORDER BY date ASC").fetchall()
+        snap_assets_full = [float(s["total_assets"] or 0) for s in snap_rows]
+    except Exception:
+        pass
+
+    twr_val, twr_status = calculate_twr(snap_assets_full) if snap_assets_full else (None, "无快照")
+    sharpe_val = None
+    if snap_assets_full and len(snap_assets_full) >= 4:
+        rets_for_sharpe = _simple_returns_from_assets(snap_assets_full)
+        sharpe_val = calculate_sharpe(rets_for_sharpe)
+
+    monthly = None
+    try:
+        tl_full = build_performance_timeline(conn)
+        monthly = build_monthly_stats(tl_full)
+    except Exception:
+        pass
+
+    underwater = None
+    try:
+        if 'tl_full' in locals() and tl_full:
+            underwater = compute_underwater(tl_full)
+    except Exception:
+        pass
+
+    float_plus_div = (unrealized + total_dividend) or 0
+    div_contrib_pct = round((total_dividend / float_plus_div * 100), 1) if float_plus_div > 0 else 0
+
+    xirr_flows_detail = [{"date": f["date"], "flow_type": f["flow_type"], "amount": round(float(f["amount"]), 2), "source": f.get("source") or ""} for f in all_flows]
+
     return {
         "as_of_date": today.isoformat(),
         "total_assets": round(total_assets, 2),
-        "net_contribution": round(net_contribution, 2),   # 全周期净投入
-        "total_gain": round(total_gain, 2),               # 全周期收益
+        "net_contribution": round(net_contribution, 2),
+        "total_gain": round(total_gain, 2),
         "total_gain_pct": round(total_gain_pct, 4),
         "xirr": xirr_val,
         "xirr_status": xirr_status,
@@ -161,7 +194,15 @@ def build_performance_summary(conn, start_date=None, end_date=None):
         "total_in": round(total_in, 2),
         "total_out": round(total_out, 2),
 
-        # 关键：期间数据（时间范围改变时用这些）
+        # 新专业字段
+        "twr": twr_val,
+        "twr_status": twr_status,
+        "sharpe": sharpe_val,
+        "monthly_stats": monthly,
+        "underwater": underwater,
+        "dividend_contrib_pct": div_contrib_pct,
+        "xirr_flows_detail": xirr_flows_detail,
+
         "period_start_date": period_start_date,
         "period_net_contribution": round(period_net, 2),
         "period_gain": round(period_gain, 2),
@@ -383,5 +424,116 @@ def build_performance_story(conn, start_date=None, end_date=None):
             "xirr": summary.get("xirr"),
             "has_external_flows": has_flows,
         },
+    }
+
+
+# ==================== 专业指标扩展（TWR、Sharpe、月度、现金流影响、underwater 等） ====================
+
+def _simple_returns_from_assets(assets_list):
+    """从连续总资产序列计算简单回报"""
+    rets = []
+    for i in range(1, len(assets_list)):
+        prev = assets_list[i-1]
+        curr = assets_list[i]
+        if prev and prev > 0:
+            rets.append((curr - prev) / prev)
+    return rets
+
+
+def calculate_twr(assets_series):
+    """时间加权收益率（TWR）：几何链乘 (1+r) - 1。核心是剥离你现金流投得准不准。"""
+    if not assets_series or len(assets_series) < 2:
+        return None, "数据不足"
+    rets = _simple_returns_from_assets([a for a in assets_series if a is not None])
+    if not rets:
+        return None, "无有效回报"
+    growth = 1.0
+    for r in rets:
+        growth *= (1 + r)
+    twr = growth - 1
+    return round(twr * 100, 2), "ok"
+
+
+def calculate_sharpe(returns, rf_annual=0.02, periods=252):
+    """简单年化 Sharpe。rf 默认 2%（可按 1 年期国债调整）。数据少时 None。"""
+    if not returns or len(returns) < 3:
+        return None
+    import math
+    mean_ret = sum(returns) / len(returns)
+    variance = sum((r - mean_ret)**2 for r in returns) / len(returns)
+    std = math.sqrt(variance)
+    if std == 0:
+        return None
+    ann_excess = (mean_ret * periods - rf_annual)
+    ann_std = std * math.sqrt(periods)
+    sharpe = ann_excess / ann_std if ann_std > 0 else None
+    return round(sharpe, 2) if sharpe is not None else None
+
+
+def build_monthly_stats(timeline_rows):
+    """月度收益统计：最好/最差月、平均月回报、正收益月占比。"""
+    if not timeline_rows or len(timeline_rows) < 2:
+        return None
+    from collections import defaultdict
+    from datetime import datetime as dt
+    monthly = defaultdict(list)
+    for r in timeline_rows:
+        d = dt.fromisoformat(str(r.get("date", ""))[:10])
+        key = (d.year, d.month)
+        monthly[key].append((d, float(r.get("total_assets") or 0)))
+
+    month_ends = []
+    for key in sorted(monthly.keys()):
+        last = sorted(monthly[key], key=lambda x: x[0])[-1]
+        month_ends.append(last[1])
+
+    if len(month_ends) < 2:
+        return None
+
+    monthly_rets = []
+    for i in range(1, len(month_ends)):
+        p = month_ends[i-1]
+        c = month_ends[i]
+        if p > 0:
+            monthly_rets.append((c - p) / p)
+
+    if not monthly_rets:
+        return None
+
+    best = max(monthly_rets) * 100
+    worst = min(monthly_rets) * 100
+    avg = (sum(monthly_rets) / len(monthly_rets)) * 100
+    positive = sum(1 for r in monthly_rets if r > 0)
+    pos_pct = round(positive / len(monthly_rets) * 100, 1)
+
+    return {
+        "best_month": round(best, 2),
+        "worst_month": round(worst, 2),
+        "avg_monthly": round(avg, 2),
+        "positive_pct": pos_pct,
+        "months_count": len(monthly_rets),
+    }
+
+
+def compute_underwater(timeline_rows):
+    """当前离所有时峰值的距离（underwater %），和峰值日期。"""
+    if not timeline_rows:
+        return None
+    peak = -1.0
+    peak_date = None
+    for r in timeline_rows:
+        v = float(r.get("total_assets") or 0)
+        if v > peak:
+            peak = v
+            peak_date = r.get("date")
+    current = float(timeline_rows[-1].get("total_assets") or 0) if timeline_rows else 0
+    if peak <= 0:
+        return None
+    uw = (peak - current) / peak * 100
+    return {
+        "underwater_pct": round(max(uw, 0), 2),
+        "peak": round(peak, 2),
+        "peak_date": peak_date,
+        "current": round(current, 2),
     }
 
