@@ -207,6 +207,75 @@
         XIRR（资金加权）{{ perfSummary.xirr }}% vs TWR {{ perfSummary.twr }}% —— 差距反映现金流时机影响（正值通常意味着你在相对低位多投入了）。
       </div>
 
+      <!-- 滚动 + 恢复 + Calmar/Sortino + 现金拖累 + Benchmark + Brinson -->
+      <div style="margin: 10px 0 8px;">
+        <div style="font-size:12px; color:var(--app-muted); margin-bottom:4px;">滚动收益率（简单资产增长率）</div>
+        <div style="display:flex; gap:12px; flex-wrap:wrap; font-size:13px;">
+          <span v-for="(v, k) in (perfSummary?.rolling_returns || {})" :key="k">
+            <strong>{{ k }}</strong>: {{ v != null ? v + '%' : '—' }}
+          </span>
+        </div>
+      </div>
+
+      <div v-if="perfSummary?.drawdown_recovery" class="ledger-metrics cols-3" style="margin-bottom:8px;">
+        <MetricCard
+          label="最长回撤持续"
+          :value="(perfSummary.drawdown_recovery.longest_dd_duration_days || 0) + '天'"
+          sub="峰值到完全恢复的最长时间"
+          secondary
+        />
+        <MetricCard
+          label="当前恢复天数"
+          :value="(perfSummary.drawdown_recovery.current_recovery_days || 0) + '天'"
+          :sub="'峰值 ' + (perfSummary.drawdown_recovery.peak_date || '')"
+          :tone="perfSummary.drawdown_recovery.current_recovery_days > 30 ? 'down' : 'neutral'"
+        />
+        <MetricCard
+          label="最长恢复耗时"
+          :value="(perfSummary.drawdown_recovery.max_recovery_days || 0) + '天'"
+          sub="最难恢复的一次"
+          secondary
+        />
+      </div>
+
+      <div class="ledger-metrics cols-3" style="margin-bottom:8px;">
+        <MetricCard
+          v-if="perfSummary?.calmar != null"
+          label="Calmar"
+          :value="String(perfSummary.calmar)"
+          sub="年化收益 / 最大回撤（越大越好）"
+          secondary
+        />
+        <MetricCard
+          v-if="perfSummary?.sortino != null"
+          label="Sortino"
+          :value="String(perfSummary.sortino)"
+          sub="只惩罚下行波动（越高越好）"
+          secondary
+        />
+        <MetricCard
+          v-if="perfSummary?.cash_drag_pct != null"
+          label="现金拖累"
+          :value="(perfSummary.cash_drag_pct || 0) + '%'"
+          sub="平均现金+存款占总资产比例"
+          secondary
+        />
+      </div>
+
+      <div v-if="perfSummary?.benchmark_relative && Object.keys(perfSummary.benchmark_relative).length" style="margin-bottom:8px; font-size:13px;">
+        <strong>Benchmark 相对：</strong>
+        <span v-for="(b, k) in perfSummary.benchmark_relative" :key="k" style="margin-right:10px;">
+          {{ b.name }} {{ b.relative >= 0 ? '+' : '' }}{{ b.relative }}% (组合 {{ b.port_ret }}% vs {{ b.bench_ret }}%)
+        </span>
+      </div>
+
+      <div v-if="perfSummary?.brinson_simple" style="margin-bottom:8px; font-size:13px;">
+        <strong>简单 Brinson（配置近似）：</strong>
+        配置效应 {{ perfSummary.brinson_simple.allocation_effect_approx }}% ｜
+        当前权重 {{ perfSummary.brinson_simple.weights_pct ? Object.entries(perfSummary.brinson_simple.weights_pct).map(([k,v])=>k+':'+v+'%').join(' ') : '' }}
+        <div style="font-size:11px;color:var(--app-muted);">{{ perfSummary.brinson_simple.note }}</div>
+      </div>
+
       <div v-if="perfRiskMetrics" class="ledger-metrics cols-3" style="margin-bottom:4px;">
         <MetricCard
           label="最大回撤"
