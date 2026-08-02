@@ -87,36 +87,33 @@
       />
     </div>
 
-    <!-- 大类结构与贡献（当前仓） -->
-    <el-card v-if="categorySummary.length" shadow="never" style="margin-bottom: 8px;">
-      <div class="perf-contrib-title" style="margin-bottom: 4px;">我现在钱是怎么分的</div>
-      <div style="font-size: 12px; color: var(--app-muted); margin-bottom: 8px;">
-        左边 = 我现在这个大类占了全部持仓的多少比例<br>
-        右边 = 这个大类目前帮我赚了多少钱（浮盈 + 分红）
-      </div>
-
-      <!-- 清晰的列头 -->
-      <div style="display: flex; align-items: center; font-size: 12px; color: var(--app-muted); padding: 0 4px 4px;">
-        <div style="width: 60px; flex-shrink: 0;">大类</div>
-        <div style="flex: 1; min-width: 120px;">占比（当前持仓）</div>
-        <div style="width: 120px; text-align: right; flex-shrink: 0;">目前赚了/亏了</div>
+        <!-- 大类结构 - 漂亮版 -->
+    <el-card v-if="categorySummary.length" shadow="never" style="margin-bottom: 10px;">
+      <div style="display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px;">
+        <div class="perf-contrib-title">我现在钱是怎么分的</div>
+        <div style="font-size:11px; color:var(--app-muted);">当前持仓占比 + 浮盈+分红</div>
       </div>
 
       <div class="perf-cat-list">
         <div v-for="c in categorySummary" :key="c.name" class="perf-cat-row">
           <div class="perf-cat-name">{{ c.name }}</div>
 
-          <!-- 占比部分 -->
-          <div class="perf-cat-track">
-            <div class="perf-cat-fill is-alloc" :style="{ width: Math.max(4, c.allocPct) + '%' }"></div>
-          </div>
-          <div class="perf-cat-meta">
-            <span class="alloc-pct">{{ c.allocPct }}%</span>
+          <div class="perf-cat-alloc">
+            <div class="perf-cat-track">
+              <div class="perf-cat-fill" 
+                   :style="{ width: Math.max(5, c.allocPct) + '%' }"></div>
+            </div>
+            <div class="alloc-meta">
+              <span class="alloc-pct">{{ c.allocPct }}%</span>
+              <span class="alloc-amt">{{ (c.allocAmt / 10000).toFixed(1) }}万</span>
+            </div>
           </div>
 
-          <!-- 贡献部分 -->
-          <div class="perf-cat-amt" :class="c.contrib >= 0 ? 'num-up' : 'num-down'">
-            {{ formatMoney(c.contrib, 2, true) }}
+          <div class="perf-cat-contrib">
+            <div class="perf-cat-amt" :class="c.contrib >= 0 ? 'num-up' : 'num-down'">
+              {{ formatMoney(c.contrib, 2, true) }}
+            </div>
+            <div class="contrib-sub">浮盈+分红</div>
           </div>
         </div>
       </div>
@@ -521,16 +518,16 @@ const onContribRowClick = (row) => {
 .perf-metric-card.is-secondary {
   background: color-mix(in srgb, var(--app-surface) 92%, var(--app-bg0));
 }
-.perf-cat-list { display: flex; flex-direction: column; gap: 10px; }
+.perf-cat-list { display: flex; flex-direction: column; gap: 14px; }
 .perf-cat-row { display: grid; grid-template-columns: 72px 1fr 110px; gap: 10px; align-items: center; }
 .perf-cat-name { font-size: 13px; color: var(--app-muted); }
 .perf-cat-track {
-  height: 10px;
+  height: 18px;
   background: color-mix(in srgb, var(--app-border) 80%, var(--app-surface));
   border-radius: 999px;
   overflow: hidden;
 }
-.perf-cat-fill { height: 100%; border-radius: 999px; }
+.perf-cat-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--app-up), color-mix(in srgb, var(--app-up) 85%, #fff)); }
 .perf-cat-fill.is-pos { background: linear-gradient(90deg, color-mix(in srgb, var(--app-up) 55%, transparent), var(--app-up)); }
 .perf-cat-fill.is-neg { background: linear-gradient(90deg, color-mix(in srgb, var(--app-down) 55%, transparent), var(--app-down)); }
 .perf-cat-amt { text-align: right; font-weight: 650; font-variant-numeric: tabular-nums; font-size: 13px; }
