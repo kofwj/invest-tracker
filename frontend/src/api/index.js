@@ -90,6 +90,8 @@ const api = {
     },
     snapshotSummary: (range = []) => axios.get(API + `/snapshots/summary?start_date=${range[0]}&end_date=${range[1]}`),
     compactSnapshots: () => axios.post(API + '/snapshots/compact'),
+    saveReconcile: (payload) => axios.post(API + '/snapshots/reconcile', payload),
+    getReconcile: () => axios.get(API + '/snapshots/reconcile'),
 
     maintenanceStatus: () => axios.get(API + '/maintenance/status'),
     listBackups: () => axios.get(API + '/maintenance/backups'),

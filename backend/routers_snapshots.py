@@ -10,13 +10,13 @@ try:
     from .database import LOCAL_TZ, db_session
     from .csv_utils import create_safety_backup, csv_response
     from .dashboard import build_dashboard
-    from .snapshots import create_snapshot_record, list_snapshots_rows, snapshots_summary_data
+    from .snapshots import create_snapshot_record, list_snapshots_rows, snapshots_summary_data, save_reconcile, latest_reconcile_with_gap
 except ImportError:
     import database as database_module
     from database import LOCAL_TZ, db_session
     from csv_utils import create_safety_backup, csv_response
     from dashboard import build_dashboard
-    from snapshots import create_snapshot_record, list_snapshots_rows, snapshots_summary_data
+    from snapshots import create_snapshot_record, list_snapshots_rows, snapshots_summary_data, save_reconcile, latest_reconcile_with_gap
 
 router = APIRouter()
 
@@ -30,6 +30,12 @@ class SnapshotSchema(BaseModel):
     pending_purchase: float = 0.0
     total_profit: float
     holdings_count: int
+
+
+class ReconcileSchema(BaseModel):
+    date: dt_date
+    manual_total_assets: float
+    note: Optional[str] = None
 
 
 @router.post("/snapshots")
@@ -54,6 +60,25 @@ def snapshots_summary(start_date: Optional[str] = None, end_date: Optional[str] 
     with db_session(row_factory=sqlite3.Row) as conn:
         changes = snapshots_summary_data(conn, start_date, end_date)
     return changes
+
+
+@router.post("/snapshots/reconcile")
+def save_snapshot_reconcile(payload: ReconcileSchema):
+    with db_session(row_factory=sqlite3.Row) as conn:
+        result = save_reconcile(
+            conn,
+            payload.date.isoformat(),
+            payload.manual_total_assets,
+            payload.note or "",
+        )
+        conn.commit()
+    return result
+
+
+@router.get("/snapshots/reconcile")
+def get_snapshot_reconcile():
+    with db_session(row_factory=sqlite3.Row) as conn:
+        return latest_reconcile_with_gap(conn)
 
 
 SNAPSHOT_CSV_COLUMNS = [

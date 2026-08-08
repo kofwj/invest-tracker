@@ -26,10 +26,10 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 import requests
 
 try:
-    from .database import LOCAL_TZ
+    from .database import LOCAL_TZ, local_today_iso
     from .holding_calculator import infer_category, latest_holding_corrections
 except ImportError:
-    from database import LOCAL_TZ
+    from database import LOCAL_TZ, local_today_iso
     from holding_calculator import infer_category, latest_holding_corrections
 
 logger = logging.getLogger(__name__)
@@ -468,6 +468,15 @@ def build_draft_from_market_row(
     remark = f"自动草稿|{plan}|{unit_label}{per_share:.4f}|登记日数量{round(quantity, 4)}"
     row_source = str(market_row.get("_source") or "eastmoney_sharebonus")
 
+    # 到账跟踪提示：除息日已过但尚未入账 → 提示"该到账/可确认"，不猜测具体到账日
+    today_s = local_today_iso()
+    arrival_hint = None
+    if status == "new" and estimated_amount > 0:
+        if (ex_date or event_date).isoformat() <= today_s:
+            arrival_hint = "已过除息日，通常该到账了，可确认入账"
+        else:
+            arrival_hint = f"到账日通常在除息日({(ex_date or event_date).isoformat()})附近，届时确认"
+
     return {
         "draft_key": draft_key,
         "code": code,
@@ -492,6 +501,7 @@ def build_draft_from_market_row(
         "matched_transaction_id": matched.get("id") if matched else None,
         "matched_transaction": matched,
         "source": row_source,
+        "arrival_hint": arrival_hint,
         "selectable": status == "new" and estimated_amount > 0,
     }
 

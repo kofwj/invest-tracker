@@ -6,6 +6,7 @@ no auto-trading. Homogeneity tags are coarse name/category heuristics.
 
 from __future__ import annotations
 
+import math
 import re
 import sqlite3
 from datetime import datetime, timedelta
@@ -505,6 +506,57 @@ def _build_scenarios(snapshot: Dict[str, Any]) -> List[Dict[str, Any]]:
     return out
 
 
+# 卫星仓目标占比（占总资产）：510880 上证红利 ~6%，159201 自由现金流 ~4%
+SATELLITE_TARGETS = [
+    {"code": "510880", "target_pct": 6.0, "label": "510880 上证红利"},
+    {"code": "159201", "target_pct": 4.0, "label": "159201 自由现金流"},
+]
+
+
+def build_satellite_progress(holdings: List[Dict[str, Any]], total_assets: float) -> Dict[str, Any]:
+    """510880 / 159201 卫星仓建仓进度：当前占比 vs 目标，差多少、还需几手（按现价）。"""
+    by_code = {str(h.get("code") or "").replace("f", ""): h for h in holdings}
+    rows = []
+    for t in SATELLITE_TARGETS:
+        code = t["code"]
+        h = by_code.get(code)
+        cur_mv = float((h or {}).get("market_value") or 0)
+        cur_pct = (cur_mv / total_assets * 100.0) if total_assets > 0 else 0.0
+        target_mv = total_assets * t["target_pct"] / 100.0
+        need_amount = target_mv - cur_mv
+        price = float((h or {}).get("last_price") or 0)
+        need_lots = 0
+        if price > 0 and need_amount > 0:
+            # A 股 ETF 一手 = 100 份
+            need_lots = math.ceil(need_amount / (price * 100))
+        rows.append(
+            {
+                "code": code,
+                "label": t["label"],
+                "target_pct": t["target_pct"],
+                "market_value": round(cur_mv, 2),
+                "pct": round(cur_pct, 2),
+                "target_mv": round(target_mv, 2),
+                "need_amount": round(need_amount, 2),
+                "held": bool(h),
+                "quantity": float((h or {}).get("quantity") or 0),
+                "last_price": round(price, 4),
+                "need_lots": need_lots,
+            }
+        )
+    total_need = sum(float(r["need_amount"]) for r in rows)
+    achieved_pct = sum(float(r["pct"]) for r in rows)
+    target_pct = sum(float(r["target_pct"]) for r in rows)
+    overall = round(achieved_pct / target_pct * 100.0, 1) if target_pct > 0 else 0.0
+    return {
+        "rows": rows,
+        "target_total_pct": target_pct,
+        "achieved_total_pct": round(achieved_pct, 2),
+        "total_need_amount": round(total_need, 2),
+        "overall_progress_pct": overall,
+    }
+
+
 def build_allocation_story(conn) -> Dict[str, Any]:
     """Human-readable allocation diagnosis; all figures from tools, not guesses."""
     report = build_discipline_report(conn)
@@ -582,5 +634,6 @@ def build_allocation_story(conn) -> Dict[str, Any]:
         },
         "discipline_summary": report.get("summary") or "",
         "open_draft_count": int(report.get("open_draft_count") or 0),
+        "satellite": build_satellite_progress(holdings, total_assets),
         "generated_at": generated,
     }

@@ -225,6 +225,42 @@
           </div>
         </el-card>
 
+        <!-- 卫星仓进度：510880 ~6% + 159201 ~4% -->
+        <el-card shadow="never" class="merge-card satellite-card" v-if="satelliteRows.length">
+          <template #header>
+            <div>
+              <div class="section-title">卫星仓（红利 + 自由现金流）</div>
+              <div class="hint">510880 ~6% + 159201 ~4%，合计约 10%；从格力/石化/REIT 转</div>
+            </div>
+          </template>
+          <div class="satellite-overall">
+            整体进度
+            <b :class="satOverall >= 99 ? 'num-up' : ''">{{ satOverall.toFixed(1) }}%</b>
+            <span class="hint">（已配置 {{ fmtPct(satAchieved) }} / 目标 {{ fmtPct(satTarget) }}）</span>
+          </div>
+          <div class="satellite-list">
+            <div v-for="r in satelliteRows" :key="r.code" class="satellite-item">
+              <div class="satellite-head">
+                <span class="satellite-name">{{ r.label }}</span>
+                <span class="satellite-nums">
+                  <b>{{ fmtPct(r.pct) }}</b> / {{ fmtPct(r.target_pct) }}
+                  <template v-if="r.need_amount > 0">
+                    · 还差 {{ formatMoney(r.need_amount) }}
+                    <template v-if="r.last_price > 0">（约 {{ r.need_lots }} 手）</template>
+                  </template>
+                  <template v-else-if="r.pct >= r.target_pct">· 已到位</template>
+                </span>
+              </div>
+              <el-progress
+                :percentage="Math.min(Math.max(Number(r.pct) / Number(r.target_pct) * 100, 0), 100)"
+                :stroke-width="8"
+                :status="r.pct >= r.target_pct ? 'success' : undefined"
+              />
+              <div v-if="!r.held && r.pct === 0" class="hint">未建仓（0 份）——真买后从交易页录入即自动纳入进度</div>
+            </div>
+          </div>
+        </el-card>
+
         <el-card shadow="never" class="merge-card" v-loading="disciplineLoading">
           <template #header><span class="section-title">纪律检查</span></template>
           <div class="breach-list">
@@ -575,6 +611,13 @@ const storyBullets = computed(() => {
   const b = story.value?.bullets;
   return Array.isArray(b) ? b : [];
 });
+
+// 卫星仓（510880 ~6% + 159201 ~4%）进度
+const satellite = computed(() => story.value?.satellite || null);
+const satelliteRows = computed(() => (Array.isArray(satellite.value?.rows) ? satellite.value.rows : []));
+const satOverall = computed(() => Number(satellite.value?.overall_progress_pct || 0));
+const satAchieved = computed(() => Number(satellite.value?.achieved_total_pct || 0));
+const satTarget = computed(() => Number(satellite.value?.target_total_pct || 0));
 
 const storyIssues = computed(() => {
   const list = story.value?.issues;

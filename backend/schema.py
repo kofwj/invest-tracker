@@ -8,7 +8,7 @@ try:
     from .kline_cache import ensure_kline_cache_table
     from .market import ensure_alert_tables
     from .notify import ensure_notify_tables
-    from .snapshots import ensure_snapshot_columns, ensure_portfolio_cash_flows_table
+    from .snapshots import ensure_snapshot_columns, ensure_portfolio_cash_flows_table, ensure_reconcile_table
 except ImportError:
     from cash import ensure_cash_base, set_setting
     from database import open_db
@@ -17,10 +17,10 @@ except ImportError:
     from kline_cache import ensure_kline_cache_table
     from market import ensure_alert_tables
     from notify import ensure_notify_tables
-    from snapshots import ensure_snapshot_columns, ensure_portfolio_cash_flows_table
+    from snapshots import ensure_snapshot_columns, ensure_portfolio_cash_flows_table, ensure_reconcile_table
 
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 SCHEMA_VERSION_KEY = "schema_version"
 
 
@@ -239,6 +239,11 @@ def migrate_to_v10_kline_cache(conn):
     ensure_kline_cache_table(conn)
 
 
+def migrate_to_v11_reconcile(conn):
+    """人工对账表：手录实盘总资产与计算快照对比。"""
+    ensure_reconcile_table(conn)
+
+
 MIGRATIONS = [
     (1, migrate_to_v1_core_compat),
     (2, migrate_to_v2_holdings_and_snapshots),
@@ -250,6 +255,7 @@ MIGRATIONS = [
     (8, migrate_to_v8_deposit_start_date),
     (9, migrate_to_v9_notify),
     (10, migrate_to_v10_kline_cache),
+    (11, migrate_to_v11_reconcile),
 ]
 
 

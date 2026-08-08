@@ -3,6 +3,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# 目标年化收益（约 4%），用于业绩页"距目标缺口"提示
+TARGET_ANNUAL_PCT = 0.04
+
 try:
     from .database import LOCAL_TZ
     from .portfolio_totals import compute_portfolio_totals, holding_lifetime_profit
@@ -223,6 +226,12 @@ def build_performance_summary(conn, start_date=None, end_date=None):
         "flow_count": len(all_flows),
         "total_in": round(total_in, 2),
         "total_out": round(total_out, 2),
+
+        # 距目标收益缺口（约 4% 净投入年化）
+        "target_return_pct": round(TARGET_ANNUAL_PCT, 2),
+        "target_income": round(net_contribution * TARGET_ANNUAL_PCT, 2),
+        "target_gap": round(net_contribution * TARGET_ANNUAL_PCT - total_gain, 2),
+        "target_gap_pct": round((net_contribution * TARGET_ANNUAL_PCT - total_gain) / net_contribution * 100, 2) if net_contribution > 0 else None,
 
         # 新专业字段
         "twr": twr_val,

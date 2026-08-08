@@ -11,6 +11,9 @@ const createSnapshotsModule = ({
     snapshotMetrics,
     snapshotChangeRows,
     snapshotLoading,
+    reconcileData,
+    reconcileForm,
+    reconcileSaving,
     fetchData,
     nextTick,
 }) => {
@@ -27,6 +30,35 @@ const createSnapshotsModule = ({
             ElMessage.error(detail);
         } finally {
             snapshotLoading.value = false;
+        }
+    };
+
+    const fetchReconcile = async () => {
+        try {
+            const res = await api.getReconcile();
+            reconcileData.value = res.data || null;
+        } catch (e) {
+            console.error('获取人工对账失败', e);
+        }
+    };
+
+    const saveReconcile = async () => {
+        if (reconcileSaving.value) return;
+        const { date, amount, note } = reconcileForm.value || {};
+        if (!date || !(Number(amount) > 0)) {
+            ElMessage.warning('请选择日期并填写实盘总资产');
+            return;
+        }
+        reconcileSaving.value = true;
+        try {
+            await api.saveReconcile({ date, manual_total_assets: Number(amount), note: note || '' });
+            ElMessage.success('已保存人工对账');
+            await fetchReconcile();
+            await fetchData();
+        } catch (e) {
+            ElMessage.error('保存失败：' + (e?.response?.data?.detail || e?.message || '未知错误'));
+        } finally {
+            reconcileSaving.value = false;
         }
     };
 
@@ -123,6 +155,7 @@ const createSnapshotsModule = ({
             buildSnapshotAnalysis();
             if (activeTab.value === 'snapshots') nextTick(renderSnapshotCharts);
         } catch (e) { console.error('获取快照失败', e); }
+        fetchReconcile();
     };
 
     const snapshotInsights = computed(() => {
@@ -168,6 +201,8 @@ const createSnapshotsModule = ({
         exportSnapshots,
         compactSnapshots,
         snapshotInsights,
+        fetchReconcile,
+        saveReconcile,
     };
 };
 

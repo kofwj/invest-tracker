@@ -337,6 +337,14 @@
                         <span style="color:var(--app-muted);font-size:12px;">{{ scope.row.reason || scope.row.assign_progress || '' }}</span>
                     </template>
                 </el-table-column>
+                <el-table-column label="到账提示" min-width="200" show-overflow-tooltip>
+                    <template #default="scope">
+                        <el-tag v-if="scope.row.arrival_hint && scope.row.status === 'new'" size="small" :type="scope.row.arrival_hint.includes('该到账') ? 'success' : 'info'">
+                            {{ scope.row.arrival_hint }}
+                        </el-tag>
+                        <span v-else style="color:var(--app-muted);font-size:12px;">—</span>
+                    </template>
+                </el-table-column>
             </el-table>
             <template #footer>
                 <div style="display:flex;justify-content:space-between;align-items:center;width:100%;gap:12px;flex-wrap:wrap;">

@@ -1,7 +1,7 @@
 import api from '../api/index.js';
 import { createAssetHelpers } from './assets.js';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { todayLocalIso, apiErrorDetail } from '../utils/index.js';
+import { todayLocalIso, apiErrorDetail, formatMoney } from '../utils/index.js';
 
 const createTransactionsModule = ({
     activeTab,
@@ -49,6 +49,54 @@ const createTransactionsModule = ({
         transSubmitting = true;
         try {
             const payload = { ...transForm.value };
+
+            // ---- 反向校验：数量×单价 vs 总金额 ----
+            const { quantity, price, amount, fee, direction } = payload;
+            const q = Number(quantity || 0);
+            const p = Number(price || 0);
+            const a = Number(amount || 0);
+            const f = Number(fee || 0);
+            let crossWarn = null;
+            if (direction !== '申购待确认' && q > 0 && p > 0) {
+                const gross = q * p;
+                // 买入/分红再投资：总额≈数量×单价+费；卖出：≈数量×单价-费
+                const expected = (direction === '卖出' || direction === '分红') ? gross - f : gross + f;
+                const tol = Math.max(0.5, gross * 0.002);
+                if (Math.abs(a - expected) > tol) {
+                    const sensible = direction === '卖出' || direction === '分红' ? gross - f : gross + f;
+                    crossWarn = `「数量×单价${(direction === '卖出' || direction === '分红') ? '−' : '+'}手续费」≈ ${formatMoney(sensible)}，与填写的总额 ${formatMoney(a)} 差 ${formatMoney(Math.abs(a - sensible), 2, true)}。可能是总金额或单价填错，请核对。`;
+                }
+            }
+
+            // ---- 关键交易二次确认：大额 / 大比例卖出 ----
+            let criticalWarn = null;
+            const sellRatio = Number(holdings.value?.find(h => String(h.code).replace(/^f/i, '') === String(payload.code || '').replace(/^f/i, ''))?.quantity || 0);
+            if (direction === '卖出' && q > 0) {
+                const bigAmount = a >= 50000;
+                const bigPct = sellRatio > 0 && (q / sellRatio) >= 0.5;
+                if (bigAmount || bigPct) {
+                    const heldPct = sellRatio > 0 ? `（占当前持仓 ${((q / sellRatio) * 100).toFixed(0)}%）` : '';
+                    criticalWarn = `这是笔关键卖出：金额 ${formatMoney(a)}${heldPct}。确认无误？`;
+                }
+            }
+
+            if (crossWarn || criticalWarn) {
+                const lines = [crossWarn, criticalWarn].filter(Boolean).join('\n\n');
+                try {
+                    await ElMessageBox.confirm(lines, '提交前核对', {
+                        type: 'warning',
+                        confirmButtonText: '确认无误，提交',
+                        cancelButtonText: '返回修改',
+                        confirmButtonClass: 'el-button--danger',
+                        title: '提交前核对',
+                        message: lines,
+                    });
+                } catch (boxErr) {
+                    transSubmitting = false;
+                    return; // 用户返回修改
+                }
+            }
+
             await api.addTransaction(payload);
             ElMessage.success('录入成功');
             resetForm();

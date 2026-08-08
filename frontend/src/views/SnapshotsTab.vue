@@ -36,6 +36,52 @@
                         style="margin-bottom: 16px;"
                     ></el-alert>
 
+                    <el-card shadow="never" header="人工对账（实盘核对）" style="margin-bottom: 18px;">
+                        <div class="reconcile-grid">
+                            <div v-if="reconcileData" class="reconcile-result">
+                                <div class="reconcile-line">
+                                    <span class="reconcile-label">实盘总资产</span>
+                                    <span class="num-cell">{{ formatMoney(reconcileData.manual_total_assets) }}</span>
+                                </div>
+                                <div v-if="reconcileData.calculated_total_assets != null" class="reconcile-line">
+                                    <span class="reconcile-label">当日计算快照</span>
+                                    <span class="num-cell">{{ formatMoney(reconcileData.calculated_total_assets) }}</span>
+                                </div>
+                                <div v-if="reconcileData.gap != null" class="reconcile-line">
+                                    <span class="reconcile-label">误差</span>
+                                    <span class="num-cell" :class="Math.abs(reconcileData.gap) < 50 ? 'num-up' : 'num-down'">
+                                        {{ formatMoney(reconcileData.gap, 2, true) }}（{{ reconcileData.gap_pct }}%）
+                                    </span>
+                                </div>
+                                <div v-if="reconcileData.date" class="reconcile-line reconcile-muted">最近记录：{{ reconcileData.date }}</div>
+                            </div>
+                            <div v-else class="reconcile-empty">还没有人工对账记录。每周对照券商/银行实际余额录一次，用误差锁死账本。</div>
+                        </div>
+                        <el-form :model="reconcileForm" label-width="110px" style="margin-top: 12px;">
+                            <el-row :gutter="20">
+                                <el-col :span="8">
+                                    <el-form-item label="日期">
+                                        <el-date-picker v-model="reconcileForm.date" type="date" value-format="YYYY-MM-DD" style="width: 100%"></el-date-picker>
+                                    </el-form-item>
+                                </el-col>
+                                <el-col :span="8">
+                                    <el-form-item label="实盘总资产">
+                                        <el-input-number v-model="reconcileForm.amount" :precision="2" :controls="false" class="wide-number-input" placeholder="券商+银行实际总额"></el-input-number>
+                                    </el-form-item>
+                                </el-col>
+                                <el-col :span="8">
+                                    <el-form-item label="备注">
+                                        <el-input v-model="reconcileForm.note" placeholder="可选" clearable></el-input>
+                                    </el-form-item>
+                                </el-col>
+                            </el-row>
+                            <el-form-item>
+                                <el-button type="warning" plain :loading="reconcileSaving" @click="saveReconcile">保存实盘对账</el-button>
+                                <span style="color: var(--app-muted); font-size: 12px;">留最近一次，重复录同一天会覆盖。</span>
+                            </el-form-item>
+                        </el-form>
+                    </el-card>
+
                     <div class="ledger-metrics cols-4">
                         <MetricCard
                             v-for="(m, idx) in snapshotMetrics"
@@ -163,5 +209,5 @@
 import PageShell from '../components/PageShell.vue';
 import MetricCard from '../components/MetricCard.vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
-const { snapshots, snapshotRange, snapshotMetrics, snapshotChangeRows, snapshotInsights, snapshotSummary, snapshotLoading, createSnapshot, fetchSnapshots, exportSnapshots, compactSnapshots, formatMoney, pct } = useAppCtx();
+const { snapshots, snapshotRange, snapshotMetrics, snapshotChangeRows, snapshotInsights, snapshotSummary, snapshotLoading, reconcileData, reconcileForm, reconcileSaving, createSnapshot, fetchSnapshots, exportSnapshots, compactSnapshots, saveReconcile, formatMoney, pct } = useAppCtx();
 </script>

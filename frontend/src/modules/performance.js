@@ -149,6 +149,20 @@ const createPerformanceModule = ({
                 color: s.ytd_gain >= 0 ? 'var(--app-up)' : 'var(--app-down)',
             },
         ];
+
+        // 距目标收益缺口（约 4% 净投入年化）
+        if (flowReady && s.target_gap != null) {
+            cards.push({
+                label: '距目标收益缺口',
+                plain: `离约 ${s.target_return_pct ?? 4}% 目标还差多少`,
+                value: formatMoney(s.target_gap, 2, true),
+                sub: s.target_gap >= 0
+                    ? `还差 ${formatMoney(s.target_gap)} 达到目标（目标收益约 ${formatMoney(s.target_income)}）`
+                    : `已超目标 ${formatMoney(-s.target_gap)}（目标收益约 ${formatMoney(s.target_income)}）`,
+                color: s.target_gap <= 0 ? 'var(--app-up)' : 'var(--app-down)',
+            });
+        }
+        return cards;
     });
 
     // 兼容旧字段

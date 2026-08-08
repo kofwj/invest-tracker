@@ -114,6 +114,9 @@ const app = createApp({
         const snapshotMetrics = ref([]);
         const snapshotChangeRows = ref([]);
         const snapshotLoading = ref(false);
+        const reconcileData = ref(null);
+        const reconcileForm = ref({ date: todayLocalIso(), amount: 0, note: '' });
+        const reconcileSaving = ref(false);
         const maintenanceStatus = ref({});
         const backups = ref([]);
         const maintenanceLoading = ref(false);
@@ -372,7 +375,7 @@ const app = createApp({
             transQuery,
         });
 
-        const { createSnapshot, buildSnapshotAnalysis, renderSnapshotCharts, fetchSnapshots, exportSnapshots, compactSnapshots, snapshotInsights } = createSnapshotsModule({
+        const { createSnapshot, buildSnapshotAnalysis, renderSnapshotCharts, fetchSnapshots, exportSnapshots, compactSnapshots, snapshotInsights, fetchReconcile, saveReconcile } = createSnapshotsModule({
             activeTab,
             snapshots,
             snapshotRange,
@@ -380,6 +383,9 @@ const app = createApp({
             snapshotMetrics,
             snapshotChangeRows,
             snapshotLoading,
+            reconcileData,
+            reconcileForm,
+            reconcileSaving,
             fetchData,
             nextTick,
         });
@@ -689,7 +695,7 @@ const app = createApp({
             themeMode, resolvedTheme, themeLabel, setThemeMode, cycleThemeMode,
             showLoginOverlay, loginLoading, loginPassword, loginError, authEnabled, handleLogin, handleLogout,
             activeTab, tabGroup, tabGroups, goTab, dashboard, holdings, deposits, depositRows, depositSummary, depositBankBreakdown, depositMaturityBuckets, syncing, trailingSyncing, syncNotice,
-            snapshots, snapshotRange, snapshotSummary, snapshotMetrics, snapshotChangeRows, snapshotInsights, snapshotLoading, maintenanceStatus, backups, maintenanceLoading, dividendLoading, dividendConfirming, dividendDialog, dividendTableRef, todayIso, todaySnapshotDone, latestPriceStatusText, latestBackupText,
+            snapshots, snapshotRange, snapshotSummary, snapshotMetrics, snapshotChangeRows, snapshotInsights, snapshotLoading, reconcileData, reconcileForm, reconcileSaving, fetchReconcile, saveReconcile, maintenanceStatus, backups, maintenanceLoading, dividendLoading, dividendConfirming, dividendDialog, dividendTableRef, todayIso, todaySnapshotDone, latestPriceStatusText, latestBackupText,
             transForm, feeSettings, feeAccounts, activeFeeAccount, newFeeAccountName, feeCategories, feeSettingRows, feeAutoHint, depositDialog, cashForm, cashFlows, cashFlowForm, cashFlowQuery, cashFlowSummary, cashFlowEditDialog, transDialog, allocationAnalysis, macroAllocationAnalysis, allocationSummary, allocationHealth, portfolioExpectedReturn, allocationStory, allocationStoryLoading, fetchAllocationStory,
             allTransactions, filteredTransactions, pendingTransactions, pendingPurchaseTotal, transQuery, transPage, transEditDialog,
             syncPrices, syncTrailingReturns, openDividendDraftDialog, openEveningBrief, eveningBriefDialog, scanDividendDrafts, confirmSelectedDividends, selectSelectableDividendDrafts, clearDividendDraftSelection, onDividendSelectionChange, isDividendDraftSelectable, dividendStatusLabel, dividendStatusType, submitTrans, resetForm, fetchData, markFeeManual, saveFeeSettings, resetFeeSettings, addFeeAccount, removeFeeAccount, onActiveFeeAccountChange,

@@ -37,6 +37,55 @@ def ensure_portfolio_cash_flows_table(conn):
     )""")
 
 
+def ensure_reconcile_table(conn):
+    """人工对账表：手录实盘总资产，与计算快照对比误差。"""
+    conn.execute("""CREATE TABLE IF NOT EXISTS snapshot_reconcile (
+        date TEXT PRIMARY KEY,
+        manual_total_assets REAL NOT NULL,
+        note TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )""")
+
+
+def save_reconcile(conn, date_iso, manual_total_assets, note=""):
+    ensure_reconcile_table(conn)
+    conn.execute(
+        """INSERT INTO snapshot_reconcile (date, manual_total_assets, note)
+           VALUES (?, ?, ?)
+           ON CONFLICT(date) DO UPDATE SET
+               manual_total_assets = excluded.manual_total_assets,
+               note = excluded.note,
+               created_at = CURRENT_TIMESTAMP""",
+        (date_iso, float(manual_total_assets), str(note or "")),
+    )
+    return {"status": "success", "date": date_iso}
+
+
+def latest_reconcile_with_gap(conn):
+    """最近一次人工对账：与当日计算快照对比误差。"""
+    ensure_reconcile_table(conn)
+    row = conn.execute(
+        "SELECT * FROM snapshot_reconcile ORDER BY date DESC LIMIT 1"
+    ).fetchone()
+    if not row:
+        return None
+    rec = dict(row)
+    rec["manual_total_assets"] = float(rec.get("manual_total_assets") or 0)
+    snap = conn.execute(
+        "SELECT total_assets FROM daily_snapshots WHERE date = ?",
+        (rec["date"],),
+    ).fetchone()
+    calc = float(snap["total_assets"]) if (snap and snap["total_assets"] is not None) else None
+    rec["calculated_total_assets"] = calc
+    if calc is not None:
+        rec["gap"] = round(rec["manual_total_assets"] - calc, 2)
+        rec["gap_pct"] = round(rec["gap"] / calc * 100, 2) if calc != 0 else None
+    else:
+        rec["gap"] = None
+        rec["gap_pct"] = None
+    return rec
+
+
 def create_snapshot_record(conn, today_iso, dashboard):
     ensure_snapshot_columns(conn)
     now = datetime.now(LOCAL_TZ).replace(tzinfo=None)
