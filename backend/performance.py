@@ -241,9 +241,11 @@ def build_performance_summary(conn, start_date=None, end_date=None):
 def build_performance_windows(conn):
     """一次性返回时间轴各窗口的收益（今天/本月/今年/近一年/开仓至今）。
 
-    每个窗口 = 当前总资产 − 窗口起点快照总资产 − 窗口内净投入（口径与 ytd 一致）。
-    flows 只读一次复用；快照按 >= 起点挑选最早一条。
-    返回 [{key, label, start_date, gain, gain_pct}]，gain_pct 缺快照时为 None。
+    每个窗口 = 当前总资产 − 起点快照总资产 − 起点快照日期之后、今天之前的净投入。
+    关键：净投入以「起点快照日期」为界（快照市值已包含其之前的全部投入），
+    不能以窗口起点算，否则会重复扣掉快照日之前的投入（本地快照常从年中开始）。
+    开仓至今没有基准快照 → 直接 = 当前总资产 − 累计净投入。
+    返回 [{key, label, start_date, gain, gain_pct}]，缺快照时 gain 为 None。
     """
     totals = compute_portfolio_totals(conn)
     total_assets = totals["total_assets"]
@@ -256,82 +258,84 @@ def build_performance_windows(conn):
     ).fetchall()
     all_flows = [dict(f) for f in all_flows]
 
-    # 起始快照（>= start 最早一条），start=None 表示开仓至今 → 用最早快照
-    def _start_snapshot(start_iso):
-        if start_iso:
-            row = conn.execute(
-                "SELECT date, total_assets FROM daily_snapshots WHERE date >= ? ORDER BY date ASC LIMIT 1",
-                (start_iso,),
-            ).fetchone()
-        else:
-            row = conn.execute(
-                "SELECT date, total_assets FROM daily_snapshots ORDER BY date ASC LIMIT 1"
-            ).fetchone()
-        return (dict(row) if row else None)
-
-    def _net_in(start_iso):
-        # 开仓至今(start=None) → 全周期净投入
-        if start_iso:
-            return sum(
-                (f["amount"] if f["flow_type"] == "投入" else -f["amount"])
-                for f in all_flows if f["date"] >= start_iso
-            )
+    def _net_in_since(start_iso):
         return sum(
-            (f["amount"] if f["flow_type"] == "投入" else -f["amount"]) for f in all_flows
+            (f["amount"] if f["flow_type"] == "投入" else -f["amount"])
+            for f in all_flows if f["date"] >= start_iso
         )
 
+    def _snap_at_or_after(start_iso):
+        row = conn.execute(
+            "SELECT date, total_assets FROM daily_snapshots WHERE date >= ? ORDER BY date ASC LIMIT 1",
+            (start_iso,),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def _snap_latest_before(cut_iso):
+        row = conn.execute(
+            "SELECT date, total_assets FROM daily_snapshots WHERE date < ? ORDER BY date DESC LIMIT 1",
+            (cut_iso,),
+        ).fetchone()
+        return dict(row) if row else None
+
     def _window(key, label, start_iso):
-        snap = _start_snapshot(start_iso)
-        start_assets = float(snap["total_assets"]) if snap else None
-        net = _net_in(start_iso)
-        if start_assets is not None and start_assets > 0:
+        snap = _snap_at_or_after(start_iso)
+        if not snap:
+            return {"key": key, "label": label, "start_date": None, "gain": None, "gain_pct": None}
+        start_assets = float(snap["total_assets"])
+        # 净投入从快照日期算起：快照值已含其之前的投入
+        net = _net_in_since(snap["date"])
+        if start_assets > 0:
             gain = total_assets - start_assets - net
             gain_pct = gain / start_assets * 100
         else:
-            gain = total_assets - net if start_assets is not None else None
-            gain_pct = None
+            gain, gain_pct = None, None
         return {
             "key": key,
             "label": label,
-            "start_date": snap["date"] if snap else None,
+            "start_date": snap["date"],
             "gain": round(gain, 2) if gain is not None else None,
             "gain_pct": round(gain_pct, 2) if gain_pct is not None else None,
         }
+
+    # 今天：起点 = 今天之前最近一次快照（盘中尚无今日快照，取其昨日收盘为基准）
+    today_snap = _snap_latest_before(today_iso)
+    if today_snap and float(today_snap["total_assets"]) > 0:
+        net = _net_in_since(today_snap["date"])
+        g = total_assets - float(today_snap["total_assets"]) - net
+        today_win = {
+            "key": "today",
+            "label": "今天",
+            "start_date": today_snap["date"],
+            "gain": round(g, 2),
+            "gain_pct": round(g / float(today_snap["total_assets"]) * 100, 2),
+        }
+    else:
+        today_win = {"key": "today", "label": "今天", "start_date": None, "gain": None, "gain_pct": None}
+
+    # 开仓至今：无基准快照 → 当前总资产 − 累计净投入
+    total_net = sum(
+        (f["amount"] if f["flow_type"] == "投入" else -f["amount"]) for f in all_flows
+    )
+    all_gain = total_assets - total_net
 
     month_start = today.replace(day=1).isoformat()
     ytd_start = today.replace(month=1, day=1).isoformat()
     from datetime import timedelta
     one_year_start = (today - timedelta(days=365)).isoformat()
 
-    # 今天：起点取「今天或今天之前最近一次快照」= 今日开盘基准（若无当日快照则退回昨日）
-    today_snap = _start_snapshot(today_iso)
-    if today_snap is None:
-        prev_snap = conn.execute(
-            "SELECT date, total_assets FROM daily_snapshots WHERE date < ? ORDER BY date DESC LIMIT 1",
-            (today_iso,),
-        ).fetchone()
-        today_snap = dict(prev_snap) if prev_snap else None
-    today_net = _net_in(today_snap["date"]) if today_snap else _net_in(today_iso)
-    if today_snap and float(today_snap["total_assets"]) > 0:
-        today_gain = total_assets - float(today_snap["total_assets"]) - today_net
-        today_pct = today_gain / float(today_snap["total_assets"]) * 100
-    else:
-        today_gain, today_pct = None, None
-
-    today_win = {
-        "key": "today",
-        "label": "今天",
-        "start_date": today_snap["date"] if today_snap else None,
-        "gain": round(today_gain, 2) if today_gain is not None else None,
-        "gain_pct": round(today_pct, 2) if today_pct is not None else None,
-    }
-
     return [
         today_win,
         _window("month", "本月", month_start),
         _window("ytd", "今年", ytd_start),
         _window("1y", "近一年", one_year_start),
-        _window("all", "开仓至今", None),
+        {
+            "key": "all",
+            "label": "开仓至今",
+            "start_date": None,
+            "gain": round(all_gain, 2),
+            "gain_pct": round(all_gain / total_net * 100, 2) if total_net > 0 else None,
+        },
     ]
 
 
