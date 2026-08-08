@@ -100,10 +100,11 @@ const api = {
     restoreUploadedBackup: (formData) => axios.post(API + '/maintenance/restore-upload', formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 180000 }),
     deleteBackup: (filename) => axios.delete(API + '/maintenance/backups/' + encodeURIComponent(filename)),
 
-    performanceSummary: () => axios.get(API + '/performance/summary'),
+    performanceSummary: (params = {}) => axios.get(API + '/performance/summary', { params }),
+    performanceWindows: () => axios.get(API + '/performance/windows'),
     performanceTimeline: (params = {}) => axios.get(API + '/performance/timeline', { params }),
     performanceContribution: () => axios.get(API + '/performance/contribution'),
-    performanceStory: () => axios.get(API + '/performance/story'),
+    performanceStory: (params = {}) => axios.get(API + '/performance/story', { params }),
     allocationStory: () => axios.get(API + '/allocation/story', { timeout: 60000 }),
     listPortfolioCashFlows: (params = {}) => axios.get(API + '/portfolio-cash-flows', { params }),
     addPortfolioCashFlow: (payload) => axios.post(API + '/portfolio-cash-flows', payload),

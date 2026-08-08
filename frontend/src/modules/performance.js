@@ -16,6 +16,11 @@ function yearStartIso() {
     return `${new Date().getFullYear()}-01-01`;
 }
 
+function monthStartIso() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+}
+
 const createPerformanceModule = ({
     perfSummary,
     perfTimeline,
@@ -26,6 +31,7 @@ const createPerformanceModule = ({
     perfContributionFilter,
     perfContributionSort,
     perfTimelineRange,
+    perfWindows,
     perfFlowForm,
     showSyncNotice,
     nextTick,
@@ -232,6 +238,31 @@ const createPerformanceModule = ({
         };
     };
 
+    // === 时间轴收益尺卡片（今天/本月/今年/近一年/开仓至今）===
+    const perfWindowCards = computed(() => {
+        const wins = perfWindows.value || [];
+        const active = perfTimelineRange?.value || 'all';
+        return wins.map((w) => {
+            const gain = Number(w.gain);
+            const pct = w.gain_pct != null ? Number(w.gain_pct) : null;
+            let tone = 'neutral';
+            if (pct != null) tone = pct > 0 ? 'up' : (pct < 0 ? 'down' : 'neutral');
+            else if (gain > 0) tone = 'up';
+            else if (gain < 0) tone = 'down';
+            return {
+                key: w.key,
+                label: w.label,
+                gain: Number.isFinite(gain) ? gain : null,
+                gainPct: pct,
+                active: w.key === active,
+                tone,
+                disabled: gain == null,
+            };
+        });
+    });
+
+    const selectPerfWindow = (key) => setPerfTimelineRange(key);
+
     // === 专业组合级指标（portfolio level，非个股）===
     // 从 timeline 计算最大回撤（peak to trough）
     const perfRiskMetrics = computed(() => {
@@ -308,6 +339,8 @@ const createPerformanceModule = ({
 
     const timelineQuery = () => {
         const range = perfTimelineRange?.value || 'all';
+        if (range === 'today') return { start_date: shiftIsoDays(0) };
+        if (range === 'month') return { start_date: monthStartIso() };
         if (range === 'ytd') return { start_date: yearStartIso() };
         if (range === '1y') return { start_date: shiftIsoDays(-365) };
         return {};
@@ -326,18 +359,20 @@ const createPerformanceModule = ({
         perfLoading.value = true;
         try {
             const q = timelineQuery();
-            const [sumR, tlR, ctR, flR, stR] = await Promise.all([
+            const [sumR, tlR, ctR, flR, stR, winR] = await Promise.all([
                 api.performanceSummary(q),
                 api.performanceTimeline(q),
                 api.performanceContribution(),
                 api.listPortfolioCashFlows(q),
                 api.performanceStory(q),
+                api.performanceWindows(),
             ]);
             perfSummary.value = sumR.data;
             perfTimeline.value = tlR.data;
             perfContribution.value = ctR.data;
             perfFlows.value = flR.data;
             perfStory.value = stR.data;
+            perfWindows.value = winR.data || [];
             nextTick(renderPerfChart);
         } catch (e) {
             console.error('fetchPerformance', e);
@@ -438,6 +473,9 @@ const createPerformanceModule = ({
         // 新增专业组合级指标
         perfRiskMetrics,
         perfContributionSummary,
+        // 时间轴收益尺
+        perfWindowCards,
+        selectPerfWindow,
     };
 };
 

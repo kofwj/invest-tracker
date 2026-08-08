@@ -13,6 +13,7 @@ try:
         build_performance_story,
         build_performance_summary,
         build_performance_timeline,
+        build_performance_windows,
     )
     from .snapshots import ensure_portfolio_cash_flows_table, ensure_snapshot_columns
 except ImportError:
@@ -22,6 +23,7 @@ except ImportError:
         build_performance_story,
         build_performance_summary,
         build_performance_timeline,
+        build_performance_windows,
     )
     from snapshots import ensure_portfolio_cash_flows_table, ensure_snapshot_columns
 
@@ -138,6 +140,16 @@ def performance_summary(start_date: Optional[str] = None, end_date: Optional[str
     with db_session(row_factory=sqlite3.Row) as conn:
         ensure_portfolio_cash_flows_table(conn)
         data = build_performance_summary(conn, start_date, end_date)
+        conn.commit()
+    return data
+
+
+@router.get("/performance/windows")
+def performance_windows():
+    with db_session(row_factory=sqlite3.Row) as conn:
+        ensure_portfolio_cash_flows_table(conn)
+        ensure_snapshot_columns(conn)
+        data = build_performance_windows(conn)
         conn.commit()
     return data
 

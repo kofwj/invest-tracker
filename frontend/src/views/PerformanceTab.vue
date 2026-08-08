@@ -4,12 +4,6 @@
     subtitle="先看整户赚没赚，再看谁贡献。数字和券商对不上时，多半是口径不同。"
   >
     <template #actions>
-
-        <el-radio-group v-model="localTimelineRange" size="small" @change="onRangeChange">
-          <el-radio-button value="ytd">今年</el-radio-button>
-          <el-radio-button value="1y">近一年</el-radio-button>
-          <el-radio-button value="all">全部</el-radio-button>
-        </el-radio-group>
         <el-tag :type="perfSummary?.xirr_status === 'ok' ? 'success' : (hasPerfFlows ? 'info' : 'warning')" size="small">
           {{ perfSummary?.xirr_status === 'ok' ? '年化已算' : (hasPerfFlows ? (perfSummary?.xirr_message || '年化暂不可用') : '外部流水未录入') }}
         </el-tag>
@@ -20,6 +14,21 @@
     <!-- 加载骨架 -->
     <div v-if="perfLoading && !perfSummary" class="sk-metrics" aria-hidden="true">
       <div v-for="i in 4" :key="'sk'+i" class="sk-block sk-metric"></div>
+    </div>
+
+    <!-- 时间轴收益尺：今天/本月/今年/近一年/开仓至今 -->
+    <div class="perf-window-strip" :class="{ 'is-loading': perfLoading && !perfSummary }">
+      <div
+        v-for="w in perfWindowCards"
+        :key="w.key"
+        class="perf-window-card"
+        :class="[w.active ? 'is-active' : '', 'is-' + w.tone, { 'is-disabled': w.disabled }]"
+        @click="!w.disabled && selectPerfWindow(w.key)"
+      >
+        <div class="perf-window-label">{{ w.label }}</div>
+        <div class="perf-window-gain">{{ w.gain != null ? (w.gain >= 0 ? '+' : '') + formatMoney(w.gain, 0, true) : '—' }}</div>
+        <div class="perf-window-pct">{{ w.gainPct != null ? (w.gainPct >= 0 ? '+' : '') + w.gainPct.toFixed(1) + '%' : '无快照' }}</div>
+      </div>
     </div>
 
     <!-- 未录流水强提示 -->
@@ -106,54 +115,9 @@
           :tone="(perfRiskMetrics?.approxVol || 0) > 15 ? 'down' : 'neutral'"
         />
       </div>
+      </el-card>
 
-      <el-collapse class="perf-advanced-collapse" style="margin-top: 8px;">
-        <el-collapse-item title="更多指标（进阶）" name="advanced">
-          <div style="font-size:12px;color:var(--app-muted);margin-bottom:10px;">想看细节再展开。</div>
-
-          <div v-if="perfSummary?.twr != null" style="margin-bottom:8px; font-size:13px;">
-            <strong>TWR（时间加权）{{ perfSummary.twr }}%</strong>
-            <span style="color:var(--app-muted);"> —— 剥离你出金/入金时机，只看资产本身涨跌。</span>
-          </div>
-
-          <div v-if="perfSummary?.xirr != null && perfSummary?.twr != null" style="font-size:12px;color:var(--app-muted);margin-bottom:8px;">
-            XIRR {{ perfSummary.xirr }}% vs TWR {{ perfSummary.twr }}% —— 差距反映现金流时机影响（正值通常意味着你在相对低位多投了）。
-          </div>
-
-          <div v-if="perfSummary?.rolling_returns && Object.keys(perfSummary.rolling_returns).length" style="margin-bottom:10px;">
-            <div style="font-size:12px; color:var(--app-muted); margin-bottom:4px;">滚动收益率</div>
-            <div style="display:flex; gap:14px; flex-wrap:wrap; font-size:13px;">
-              <span v-for="(v, k) in perfSummary.rolling_returns" :key="k">
-                <strong>{{ k }}</strong>: {{ v != null ? v + '%' : '—' }}
-              </span>
-            </div>
-          </div>
-
-          <div v-if="perfSummary?.monthly_stats" style="margin-bottom:8px; font-size:13px;">
-            <span style="font-size:12px;color:var(--app-muted);">月度表现：</span>
-            最好 {{ perfSummary.monthly_stats.best_month }}% ｜ 最差 {{ perfSummary.monthly_stats.worst_month }}%
-            ｜ 平均 {{ perfSummary.monthly_stats.avg_monthly }}% ｜ 正收益月 {{ perfSummary.monthly_stats.positive_pct }}%
-          </div>
-
-          <div v-if="perfSummary?.dividend_contrib_pct != null" style="margin-bottom:8px; font-size:13px;">
-            分红占浮盈+分红合计 <strong>{{ perfSummary.dividend_contrib_pct }}%</strong>
-          </div>
-
-          <div v-if="perfSummary?.sharpe != null" style="margin-bottom:8px; font-size:13px;">
-            Sharpe {{ perfSummary.sharpe }} —— 每单位波动赚的超额（无风险利率≈2%）
-          </div>
-
-          <div v-if="perfSummary?.benchmark_relative && Object.keys(perfSummary.benchmark_relative).length" style="margin-bottom:8px; font-size:13px;">
-            <span style="font-size:12px;color:var(--app-muted);">对比大盘：</span>
-            <span v-for="(b, k) in perfSummary.benchmark_relative" :key="k" style="margin-right:10px;">
-              {{ b.name }} 相对 {{ b.relative >= 0 ? '+' : '' }}{{ b.relative }}% (组合 {{ b.port_ret }}% / 基准 {{ b.bench_ret }}%)
-            </span>
-          </div>
-        </el-collapse-item>
-      </el-collapse>
-    </el-card>
-
-<!-- 流水 -->
+      <!-- 流水 -->
     <el-card id="perf-flow-section" shadow="never" style="margin-bottom: 14px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px;flex-wrap:wrap;">
         <div>
@@ -269,19 +233,20 @@ const {
   perfSummary, perfTimeline, perfContribution, perfFlows, perfStory, perfLoading, perfFlowForm,
   hasPerfFlows, perfStoryToneType, perfGuideSteps, perfLensRows,
   perfPrimaryCards, perfSecondaryCards,
-  perfTimelineRange,
-  fetchPerformance, setPerfTimelineRange, addPerfFlow, updatePerfFlow, deletePerfFlow,
+  fetchPerformance, addPerfFlow, updatePerfFlow, deletePerfFlow,
   loadPerfFlowSuggestions, applyPerfFlowSuggestion,
   showTransactions, goTab,
   // 新专业指标
   perfRiskMetrics,
   perfContributionSummary,
+  // 时间轴收益尺
+  perfWindowCards,
+  selectPerfWindow,
 } = useAppCtx();
 
 const perfFlowSuggestions = ref([]);
 const perfSuggestLoading = ref(false);
 const perfFlowEditId = ref(null);
-const localTimelineRange = ref(perfTimelineRange?.value || 'all');
 const catTrendMode = ref('value');
 
 const latestCategoryAlloc = computed(() => {
@@ -326,19 +291,6 @@ const categorySummary = computed(() => {
     return { name, allocAmt: Math.round(allocAmt), allocPct: Math.round(allocPct * 10) / 10, contrib };
   }).filter((x) => x.allocAmt > 0 || Math.abs(x.contrib) > 0.01);
 });
-
-watch(
-  () => perfTimelineRange?.value,
-  (v) => { if (v) localTimelineRange.value = v; },
-);
-
-const onRangeChange = (val) => {
-  if (typeof setPerfTimelineRange === 'function') setPerfTimelineRange(val);
-  else if (perfTimelineRange) {
-    perfTimelineRange.value = val;
-    fetchPerformance();
-  }
-};
 
 const scrollToFlows = () => {
   const el = document.getElementById('perf-flow-section');
@@ -453,23 +405,42 @@ const onContribRowClick = (row) => {
   color: var(--app-text);
 }
 .perf-contrib-table { cursor: pointer; }
-.perf-advanced-collapse { border: none; }
-.perf-advanced-collapse :deep(.el-collapse-item__header) {
-  font-weight: 600;
-  color: var(--app-muted);
+
+/* 时间轴收益尺 */
+.perf-window-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.perf-window-card {
+  background: var(--app-surface, #fff);
+  border: 1px solid var(--app-border, #e5e7eb);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--app-surface) 90%, var(--app-bg0));
-  padding: 0 12px;
-  height: 40px;
-  border: 1px solid var(--app-border);
-  font-size: 13px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: border-color .15s, box-shadow .15s, transform .12s;
+  user-select: none;
 }
-.perf-advanced-collapse :deep(.el-collapse-item__wrap) { border: none; background: transparent; }
-.perf-advanced-collapse :deep(.el-collapse-item__content) {
-  padding: 12px 2px 4px;
-  color: var(--app-text);
+.perf-window-card:hover { border-color: var(--app-primary, #409eff); transform: translateY(-1px); }
+.perf-window-card.is-active {
+  border-color: var(--app-primary, #409eff);
+  box-shadow: 0 0 0 1px var(--app-primary, #409eff);
+  background: color-mix(in srgb, var(--app-primary, #409eff) 7%, var(--app-surface, #fff));
 }
+.perf-window-card.is-disabled { cursor: default; opacity: .6; }
+.perf-window-card.is-disabled:hover { border-color: var(--app-border, #e5e7eb); transform: none; }
+.perf-window-label { font-size: 12px; color: var(--app-muted, #6b7280); margin-bottom: 4px; }
+.perf-window-gain { font-size: 15px; font-weight: 700; color: var(--app-text, #111); }
+.perf-window-card.is-up .perf-window-gain { color: var(--app-up, #e74c3c); }
+.perf-window-card.is-down .perf-window-gain { color: var(--app-down, #07c160); }
+.perf-window-pct { font-size: 12px; color: var(--app-soft, #9ca3af); margin-top: 2px; }
+.perf-window-card.is-up .perf-window-pct { color: var(--app-up, #e74c3c); }
+.perf-window-card.is-down .perf-window-pct { color: var(--app-down, #07c160); }
+.perf-window-strip.is-loading { opacity: .5; pointer-events: none; }
+
 @media (max-width: 640px) {
+  .perf-window-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .perf-cat-row { grid-template-columns: 64px 1fr 90px; }
 }
 </style>

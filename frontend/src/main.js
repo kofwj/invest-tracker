@@ -425,6 +425,7 @@ const app = createApp({
         const perfContribution = ref([]);
         const perfFlows = ref([]);
         const perfStory = ref(null);
+        const perfWindows = ref([]);
         const perfLoading = ref(false);
         const perfContributionFilter = ref('all');
         const perfContributionSort = ref('contribution');
@@ -461,6 +462,9 @@ const app = createApp({
             // 新增专业指标（防止 ReferenceError 导致整页空白）
             perfRiskMetrics,
             perfContributionSummary,
+            // 时间轴收益尺
+            perfWindowCards,
+            selectPerfWindow,
         } = createPerformanceModule({
             perfSummary,
             perfTimeline,
@@ -471,6 +475,7 @@ const app = createApp({
             perfContributionFilter,
             perfContributionSort,
             perfTimelineRange,
+            perfWindows,
             perfFlowForm,
             showSyncNotice,
             nextTick,
@@ -710,7 +715,7 @@ const app = createApp({
             perfSummary, perfTimeline, perfContribution, perfFlows, perfStory, perfLoading, perfFlowForm, hasPerfFlows, perfStoryToneType, perfGuideSteps, perfLensRows, perfPrimaryCards, perfSecondaryCards, perfCards, perfCategoryBars,
             displayedPerfContribution, perfContributionFilter, perfContributionSort, perfContributionHeadline, perfContributionMix, perfTimelineRange,
             fetchPerformance, setPerfTimelineRange, addPerfFlow, updatePerfFlow, deletePerfFlow, loadPerfFlowSuggestions, applyPerfFlowSuggestion, contributionBarStyle, fetchMaintenance, createDbBackup, downloadBackup, restoreBackup, deleteBackup, restoreUploadedBackup,
-            perfRiskMetrics, perfContributionSummary,
+            perfRiskMetrics, perfContributionSummary, perfWindowCards, selectPerfWindow,
             notifyStatus, notifyLogs, notifyLoading, notifyEventDraft, notifyChannelDraft, notifyChannelClear, fetchNotifyPanel, saveNotifyPanel, testNotifyPush, pushDepositDueNow, pushDisciplineNow,
             brokerResult, brokerLoading, brokerSelected, brokerAsOfDate, brokerCashInput,
             statusLabel: brokerStatusLabel, statusType: brokerStatusType,
