@@ -26,7 +26,7 @@
         @click="!w.disabled && selectPerfWindow(w.key)"
       >
         <div class="perf-window-label">{{ w.label }}</div>
-        <div class="perf-window-gain">{{ w.gain != null ? (w.gain >= 0 ? '+' : '') + formatMoney(w.gain, 0, true) : '—' }}</div>
+        <div class="perf-window-gain">{{ w.gain != null ? formatMoney(w.gain, 0, true) : '—' }}</div>
         <div class="perf-window-pct">{{ w.gainPct != null ? (w.gainPct >= 0 ? '+' : '') + w.gainPct.toFixed(1) + '%' : '无快照' }}</div>
       </div>
     </div>
