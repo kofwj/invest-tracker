@@ -327,17 +327,14 @@ chmod +x scripts/cron_sync_prices.sh
 
 先手动跑一次确认日志正常再写入 crontab。
 
-备份 cron（示例）：
+备份 cron（示例，推荐用 `scripts/backup_daily.sh`，自带保留轮转，默认保留最近 30 份，可用 `BACKUP_RETAIN` 覆盖）：
 
 ```cron
-15 2 * * * curl -fsS -X POST http://127.0.0.1:8080/api/maintenance/backups >/dev/null
+15 2 * * * /home/kofwj/invest-tracker/scripts/backup_daily.sh >> /home/kofwj/invest-tracker/backups/backup_daily.log 2>&1
 ```
 
-若开启了 `INVEST_TRACKER_PASSWORD`，curl 备份接口需带 Bearer token；更稳妥是：
-
-```cron
-15 2 * * * cd /home/kofwj/invest-tracker && python3 scripts/backup_db.py --label daily >/dev/null
-```
+若已配置 `DB_PATH`/`BACKUP_DIR`，脚本自动读取；否则默认 `data/invest.db` → `backups/`。
+（旧方式：curl 备份接口，或 `python3 scripts/backup_db.py --label daily`，现均可加 `--retain N` 轮转。）
 
 ## 10. Docker 构建缓存清理
 

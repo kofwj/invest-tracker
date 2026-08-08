@@ -183,28 +183,12 @@ def build_performance_summary(conn, start_date=None, end_date=None):
 
     # 新扩展指标
     rolling = {}
-    dd_rec = None
-    cash_drag = None
     bench_rel = {}
-    brinson = None
-    calmar_v = None
-    sortino_v = None
     try:
         tl_for_metrics = build_performance_timeline(conn, start_date, end_date) or build_performance_timeline(conn)
         if tl_for_metrics:
             rolling = compute_rolling_returns(tl_for_metrics)
-            dd_rec = compute_drawdown_recovery(tl_for_metrics)
-            cash_drag = compute_cash_drag(tl_for_metrics)
             bench_rel = build_benchmark_relative(tl_for_metrics)
-            brinson = simple_brinson(tl_for_metrics)
-            # rets for sortino from simple diff
-            rets = _simple_returns_from_assets([float(r.get("total_assets") or 0) for r in tl_for_metrics])
-            sortino_v = calculate_sortino(rets)
-            # annualized rough for calmar (use total_gain_pct as proxy annualized if long enough)
-            if dd_rec and dd_rec.get("max_dd_pct"):
-                # annualized rough for calmar (use total_gain_pct as proxy)
-                ann_proxy = float(total_gain_pct or 0)
-                calmar_v = calculate_calmar(ann_proxy, dd_rec["max_dd_pct"])
     except Exception as e:
         logger.warning("build_performance_summary 专业指标计算失败: %s", e)
 
@@ -250,12 +234,7 @@ def build_performance_summary(conn, start_date=None, end_date=None):
 
         # 扩展专业指标
         "rolling_returns": rolling,
-        "drawdown_recovery": dd_rec,
-        "cash_drag_pct": cash_drag,
         "benchmark_relative": bench_rel,
-        "brinson_simple": brinson,
-        "calmar": calmar_v,
-        "sortino": sortino_v,
     }
 
 
@@ -623,94 +602,6 @@ def compute_rolling_returns(timeline):
             res[label] = None
     return res
 
-def compute_drawdown_recovery(timeline):
-    """最大回撤恢复天数 + 最长回撤持续时间 + 当前恢复天数 + 峰值后恢复时间"""
-    if not timeline or len(timeline) < 2:
-        return None
-    rows = sorted(timeline, key=lambda x: x["date"])
-    peak_v = float(rows[0].get("total_assets") or 0)
-    peak_d = _parse_date(rows[0]["date"])
-    max_dd = 0.0
-    trough_v = peak_v
-    trough_d = peak_d
-    dd_start_d = peak_d
-    in_dd = False
-    recovery_times = []
-    dd_durations = []
-    current_recovery_days = 0
-    last_peak_d = peak_d
-
-    for r in rows[1:]:
-        v = float(r.get("total_assets") or 0)
-        d = _parse_date(r["date"])
-        if v >= peak_v:
-            if in_dd:
-                rec_days = (d - trough_d).days
-                recovery_times.append(rec_days)
-                dd_dur = (d - dd_start_d).days
-                dd_durations.append(dd_dur)
-                in_dd = False
-            peak_v = v
-            peak_d = d
-            last_peak_d = d
-        else:
-            if not in_dd:
-                in_dd = True
-                dd_start_d = peak_d
-                trough_d = d
-                trough_v = v
-            dd = (peak_v - v) / peak_v if peak_v > 0 else 0
-            if dd > max_dd:
-                max_dd = dd
-                trough_v = v
-                trough_d = d
-        if in_dd:
-            current_recovery_days = (d - trough_d).days
-
-    max_rec = max(recovery_times) if recovery_times else 0
-    longest_dd = max(dd_durations) if dd_durations else 0
-    return {
-        "max_dd_pct": round(max_dd * 100, 2),
-        "longest_dd_duration_days": longest_dd,
-        "max_recovery_days": max_rec,
-        "current_recovery_days": current_recovery_days if in_dd else 0,
-        "peak_date": str(peak_d),
-    }
-
-def calculate_calmar(annualized_return_pct, max_dd_pct):
-    if not max_dd_pct or abs(max_dd_pct) < 0.01:
-        return None
-    return round(annualized_return_pct / abs(max_dd_pct), 2)
-
-def calculate_sortino(returns, rf_annual=0.02, periods=252):
-    if not returns or len(returns) < 3:
-        return None
-    downside = [r for r in returns if r < 0]
-    if not downside:
-        return None
-    mean_r = sum(returns) / len(returns)
-    d_var = sum(r*r for r in downside) / len(downside)
-    d_std = math.sqrt(d_var)
-    ann_ex = mean_r * periods - rf_annual
-    ann_d = d_std * math.sqrt(periods)
-    if ann_d == 0:
-        return None
-    return round(ann_ex / ann_d, 2)
-
-def compute_cash_drag(timeline):
-    """平均现金/存款拖累（securities_cash + bank_balance / total_assets）"""
-    if not timeline:
-        return None
-    ratios = []
-    for r in timeline:
-        cash = float(r.get("securities_cash", 0) or 0) + float(r.get("bank_balance", 0) or 0)
-        tot = float(r.get("total_assets", 0) or 0)
-        if tot > 0:
-            ratios.append(cash / tot)
-    if not ratios:
-        return None
-    return round(sum(ratios) / len(ratios) * 100, 1)
-
 def _fetch_bench_closes(code, min_date, max_date):
     try:
         from .kline_cache import fetch_tencent_kline_ohlc
@@ -762,30 +653,3 @@ def build_benchmark_relative(timeline):
             "relative": round(port_ret - b_ret, 2),
         }
     return out
-
-def simple_brinson(timeline):
-    """简单 Brinson：大类配置 vs 选择贡献近似（基于快照MV变化）"""
-    if not timeline or len(timeline) < 2:
-        return None
-    first = timeline[0]
-    last = timeline[-1]
-    cats = ["equity_mv", "bond_mv", "reit_mv"]
-    labels = ["权益", "债基", "REITs"]
-    s_tot = sum(float(first.get(c, 0) or 0) for c in cats) or 1
-    e_tot = sum(float(last.get(c, 0) or 0) for c in cats) or 1
-    w_p = [float(last.get(c, 0) or 0) / e_tot for c in cats]
-    cat_rets = []
-    for c in cats:
-        s = float(first.get(c, 0) or 0)
-        e = float(last.get(c, 0) or 0)
-        cat_rets.append((e - s) / s * 100 if s > 0 else 0.0)
-    # 中性基准权重示例（防守型可调）
-    w_b = [0.40, 0.50, 0.10]
-    # 配置效应近似：(wp - wb) * rp （用实际类别回报作为 proxy）
-    alloc = sum((wp - wb) * rp for wp, wb, rp in zip(w_p, w_b, cat_rets))
-    return {
-        "weights_pct": {lab: round(w*100, 1) for lab, w in zip(labels, w_p)},
-        "cat_rets_pct": {lab: round(r, 1) for lab, r in zip(labels, cat_rets)},
-        "allocation_effect_approx": round(alloc, 2),
-        "note": "基于大类MV变化的简单配置效应估算（中性40/50/10参考）",
-    }
