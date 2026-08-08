@@ -7,7 +7,6 @@ no auto-trading. Homogeneity tags are coarse name/category heuristics.
 from __future__ import annotations
 
 import math
-import re
 import sqlite3
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
@@ -15,27 +14,13 @@ from typing import Any, Dict, List, Optional, Tuple
 try:
     from .database import LOCAL_TZ, local_today_iso
     from .discipline import _holding_rows, build_discipline_report, get_policy
-    from .performance import build_performance_contribution
 except ImportError:
     from database import LOCAL_TZ, local_today_iso
     from discipline import _holding_rows, build_discipline_report, get_policy
-    from performance import build_performance_contribution
 
 # Fine-category concentration warn threshold (single module constant; not policy yet).
 CATEGORY_CONCENTRATION_WARN_PCT = 35.0
 
-# Homogeneity: coarse tags (not official industry classification).
-HOMOGENEITY_TAGS: List[Tuple[str, List[str], List[str]]] = [
-    ("红利/高股息", ["港股ETF", "A股ETF", "A股权益"], [r"红利", r"高股息", r"股息"]),
-    ("银行", ["A股权益", "A股ETF"], [r"银行", r"农行", r"工行", r"建行", r"中行"]),
-    ("石油/能源", ["A股权益", "A股ETF"], [r"石化", r"石油", r"油气"]),
-    ("黄金", ["黄金"], [r"黄金"]),
-    ("REITs", ["REITs"], [r"REIT", r"REITs"]),
-    ("债/货币", ["债基"], [r"债", r"货币", r"丰享"]),
-]
-
-HOMOGENEITY_EQUITY_WARN_PCT = 50.0
-PROFIT_DEPENDENCY_WARN_SHARE = 0.70
 EQUITY_SHOCKS = (-5.0, -10.0, -20.0)
 
 
@@ -341,98 +326,6 @@ def _build_headline(
     return headline, severity, bullets[:5]
 
 
-def _build_homogeneity(
-    holdings: List[Dict[str, Any]], total_assets: float, equity_mv: float
-) -> Dict[str, Any]:
-    groups: List[Dict[str, Any]] = []
-    for tag, cat_subs, name_res in HOMOGENEITY_TAGS:
-        matched = []
-        for h in holdings:
-            cat = str(h.get("category") or "")
-            name = str(h.get("name") or "")
-            cat_ok = (not cat_subs) or any(s in cat for s in cat_subs) or cat in cat_subs
-            # Allow match by name regex even if category slightly off, when name hits.
-            name_ok = any(re.search(rx, name, re.I) for rx in name_res)
-            if name_ok or (cat_ok and any(re.search(rx, name, re.I) for rx in name_res)):
-                # Prefer explicit name hit; also include pure category membership for 黄金/REITs/债基.
-                if name_ok or cat in cat_subs or any(s == cat for s in cat_subs):
-                    matched.append(h)
-                elif cat_ok and tag in ("黄金", "REITs", "债/货币"):
-                    matched.append(h)
-        # Deduplicate by code
-        by_code = {}
-        for h in matched:
-            by_code[str(h.get("code") or id(h))] = h
-        matched = list(by_code.values())
-        if not matched:
-            continue
-        mv = sum(float(h.get("market_value") or 0) for h in matched)
-        pct_total = (mv / total_assets * 100.0) if total_assets > 0 else 0.0
-        pct_eq = (mv / equity_mv * 100.0) if equity_mv > 0 else 0.0
-        level = "ok"
-        if len(matched) >= 2 and pct_eq >= HOMOGENEITY_EQUITY_WARN_PCT:
-            level = "warning"
-        elif len(matched) >= 2 and pct_eq >= 30:
-            level = "info"
-        groups.append(
-            {
-                "tag": tag,
-                "codes": [str(h.get("code") or "") for h in matched],
-                "names": [str(h.get("name") or h.get("code") or "") for h in matched],
-                "pct_of_equity": round(pct_eq, 2),
-                "pct_of_total": round(pct_total, 2),
-                "level": level,
-            }
-        )
-    groups.sort(key=lambda g: g["pct_of_total"], reverse=True)
-    return {
-        "groups": groups,
-        "note": "标签粗分（名称/品类关键词），不是官方行业分类",
-    }
-
-
-def _build_profit_dependency(conn) -> Dict[str, Any]:
-    rows = build_performance_contribution(conn) or []
-    positive = [r for r in rows if float(r.get("total_contribution") or 0) > 0]
-    positive.sort(key=lambda r: float(r.get("total_contribution") or 0), reverse=True)
-    pos_sum = sum(float(r.get("total_contribution") or 0) for r in positive)
-    abs_sum = sum(abs(float(r.get("total_contribution") or 0)) for r in rows) or 0.0
-
-    top = positive[:2]
-    top_names = [str(r.get("name") or r.get("code") or "") for r in top]
-    top_pos = sum(float(r.get("total_contribution") or 0) for r in top)
-    top_abs = sum(abs(float(r.get("total_contribution") or 0)) for r in top)
-    share_pos = (top_pos / pos_sum) if pos_sum > 0 else 0.0
-    share_abs = (top_abs / abs_sum) if abs_sum > 0 else 0.0
-
-    level = "ok"
-    if len(positive) >= 2 and share_pos >= PROFIT_DEPENDENCY_WARN_SHARE:
-        level = "warning"
-    elif len(positive) >= 1 and share_pos >= 0.5:
-        level = "info"
-
-    if not top_names:
-        text = "当前仓没有明显正贡献，谈不上收益集中。"
-    elif level == "warning":
-        text = (
-            f"正贡献主要靠「{'、'.join(top_names)}」，约占全部正贡献的 {share_pos * 100:.0f}%，"
-            f"赚钱过于集中。"
-        )
-    else:
-        text = (
-            f"前两大正贡献「{'、'.join(top_names)}」约占正贡献 {share_pos * 100:.0f}%"
-            f"（口径：当前仓浮盈+分红）。"
-        )
-
-    return {
-        "top_names": top_names,
-        "top_share_of_positive": round(share_pos, 4),
-        "top_share_of_abs": round(share_abs, 4),
-        "level": level,
-        "text": text,
-    }
-
-
 def _build_liquidity(conn, snapshot: Dict[str, Any]) -> Dict[str, Any]:
     cash = float(snapshot.get("securities_cash") or 0)
     pending = float(snapshot.get("pending_purchase") or 0)
@@ -597,18 +490,15 @@ def build_allocation_story(conn) -> Dict[str, Any]:
         snapshot, policy_slice, issues, concentration
     )
 
-    equity_mv = float(snapshot.get("equity_mv") or 0)
-    homogeneity = _build_homogeneity(holdings, total_assets, equity_mv)
-    profit_dependency = _build_profit_dependency(conn)
-    liquidity = _build_liquidity(conn, snapshot)
-    scenarios = _build_scenarios(snapshot)
-
     # Attach UI type for frontend convenience on health
     health_ui = []
     for h in health:
         item = dict(h)
         item["type"] = _level_to_ui_type(str(h.get("level") or "ok"))
         health_ui.append(item)
+
+    liquidity = _build_liquidity(conn, snapshot)
+    scenarios = _build_scenarios(snapshot)
 
     generated = report.get("generated_at") or datetime.now(LOCAL_TZ).replace(
         tzinfo=None
@@ -624,8 +514,9 @@ def build_allocation_story(conn) -> Dict[str, Any]:
         "health": health_ui,
         "concentration": concentration,
         "issues": issues,
-        "homogeneity": homogeneity,
-        "profit_dependency": profit_dependency,
+        # 同质化/收益依赖已不在前端展示，保留空占位以兼容旧调用
+        "homogeneity": {"groups": [], "note": ""},
+        "profit_dependency": None,
         "liquidity": liquidity,
         "scenarios": scenarios,
         "expected_return": {

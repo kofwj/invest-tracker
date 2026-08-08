@@ -97,26 +97,7 @@
           </div>
         </el-card>
 
-        <div class="diag-grid" v-if="homoGroups.length || story?.profit_dependency || story?.liquidity">
-          <el-card shadow="never" class="merge-card diag-card" header="同质化粗分" v-if="homoGroups.length">
-            <div class="hint" style="margin-bottom:8px;">{{ story?.homogeneity?.note || '名称/品类关键词粗分，不是官方行业' }}</div>
-            <div class="homo-list">
-              <div v-for="g in homoGroups" :key="g.tag" class="homo-item">
-                <div class="homo-head">
-                  <span>{{ g.tag }}</span>
-                  <el-tag size="small" :type="tagType(g.level)" effect="plain">
-                    占总 {{ Number(g.pct_of_total || 0).toFixed(1) }}%
-                  </el-tag>
-                </div>
-                <div class="hint">{{ (g.names || []).join('、') }}</div>
-              </div>
-            </div>
-          </el-card>
-
-          <el-card shadow="never" class="merge-card diag-card" header="收益依赖">
-            <div class="risk-text">{{ story?.profit_dependency?.text || '加载中…' }}</div>
-          </el-card>
-
+        <div class="diag-grid" v-if="story?.liquidity">
           <el-card shadow="never" class="merge-card diag-card" header="流动性（30 天）">
             <div class="risk-text">{{ story?.liquidity?.text || '加载中…' }}</div>
             <div class="liq-metrics" v-if="story?.liquidity">
@@ -697,7 +678,6 @@ const visibleBreaches = computed(() => {
   return list.filter((b) => b.level !== 'ok');
 });
 
-const homoGroups = computed(() => story.value?.homogeneity?.groups || []);
 const storyScenarios = computed(() => story.value?.scenarios || []);
 
 const activePresetLabel = computed(() => {
