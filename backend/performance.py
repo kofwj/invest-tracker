@@ -119,7 +119,9 @@ def build_performance_summary(conn, start_date=None, end_date=None):
         (ytd_start.isoformat(), today.isoformat()),
     ).fetchone()
     ytd_start_assets = dict(ytd_snap)["total_assets"] if ytd_snap else total_assets
-    ytd_flows = [f for f in all_flows if f["date"] >= ytd_start.isoformat()]
+    # 净投入以「起点快照日期」为界：快照市值已含其之前的投入，不能按日历起点重复扣
+    ytd_cut = dict(ytd_snap)["date"] if ytd_snap else ytd_start.isoformat()
+    ytd_flows = [f for f in all_flows if f["date"] >= ytd_cut]
     ytd_net = sum(f["amount"] for f in ytd_flows if f["flow_type"] == "投入") - sum(
         f["amount"] for f in ytd_flows if f["flow_type"] == "取出"
     )
@@ -134,19 +136,25 @@ def build_performance_summary(conn, start_date=None, end_date=None):
     period_start_date = start_date
 
     if start_date:
-        p_flows = [f for f in all_flows if f["date"] >= start_date]
+        snap = conn.execute(
+            "SELECT date, total_assets FROM daily_snapshots WHERE date >= ? ORDER BY date ASC LIMIT 1",
+            (start_date,),
+        ).fetchone()
+        period_start_assets = float(snap["total_assets"]) if snap else None
+        # 净投入以「起点快照日期」为界：快照市值已含其之前的投入，不能按日历起点重复扣
+        period_cut = snap["date"] if snap else start_date
+        p_flows = [f for f in all_flows if f["date"] >= period_cut]
         p_in = sum(f["amount"] for f in p_flows if f["flow_type"] == "投入")
         p_out = sum(f["amount"] for f in p_flows if f["flow_type"] == "取出")
         period_net = p_in - p_out
 
-        snap = conn.execute(
-            "SELECT total_assets FROM daily_snapshots WHERE date >= ? ORDER BY date ASC LIMIT 1",
-            (start_date,),
-        ).fetchone()
-        period_start_assets = float(snap["total_assets"]) if snap else total_assets
-
-        period_gain = total_assets - period_start_assets - period_net if period_start_assets else total_assets - period_net
-        period_gain_pct = (period_gain / period_start_assets * 100) if period_start_assets and period_start_assets > 0 else 0
+        if period_start_assets and period_start_assets > 0:
+            period_gain = total_assets - period_start_assets - period_net
+            period_gain_pct = (period_gain / period_start_assets * 100)
+        else:
+            # 无快照：退化为「当前 − 本期净投入」
+            period_gain = total_assets - period_net
+            period_gain_pct = (period_gain / (total_assets - period_net) * 100) if (total_assets - period_net) else 0
 
     # ===== 专业扩展指标计算 =====
     snap_assets_full = []
