@@ -84,19 +84,6 @@
           </div>
         </el-card>
 
-        <el-card shadow="never" class="merge-card" header="问题清单" v-if="storyIssues.length">
-          <div class="issue-list">
-            <div v-for="(iss, i) in storyIssues" :key="iss.id + '-' + i" class="issue-item" :class="'lv-' + (iss.level || 'info')">
-              <div class="issue-head">
-                <span>{{ iss.title }}</span>
-                <el-tag size="small" :type="tagType(iss.level)">{{ levelLabel(iss.level) }}</el-tag>
-              </div>
-              <div class="issue-text">{{ iss.text }}</div>
-              <div v-if="iss.action_hint" class="hint">{{ iss.action_hint }}</div>
-            </div>
-          </div>
-        </el-card>
-
         <el-card v-if="story?.liquidity" shadow="never" class="merge-card" header="流动性（30 天）">
             <div class="risk-text">{{ story?.liquidity?.text || '加载中…' }}</div>
             <div class="liq-metrics" v-if="story?.liquidity">
@@ -251,6 +238,19 @@
               <div class="breach-text">{{ b.text }}</div>
             </div>
             <el-empty v-if="!visibleBreaches.length" description="暂无非正常提醒" :image-size="56" />
+          </div>
+        </el-card>
+
+        <el-card shadow="never" class="merge-card" header="问题清单" v-if="storyIssues.length">
+          <div class="issue-list">
+            <div v-for="(iss, i) in storyIssues" :key="iss.id + '-' + i" class="issue-item" :class="'lv-' + (iss.level || 'info')">
+              <div class="issue-head">
+                <span>{{ iss.title }}</span>
+                <el-tag size="small" :type="tagType(iss.level)">{{ levelLabel(iss.level) }}</el-tag>
+              </div>
+              <div class="issue-text">{{ iss.text }}</div>
+              <div v-if="iss.action_hint" class="hint">{{ iss.action_hint }}</div>
+            </div>
           </div>
         </el-card>
 
