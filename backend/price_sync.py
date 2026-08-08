@@ -1,9 +1,12 @@
 import os
 import threading
 import time
+import logging
 from typing import Dict, Optional
 
 import requests
+
+logger = logging.getLogger(__name__)
 
 # Short in-process cache to cut Eastmoney chatter (summary + alerts in same minute).
 _QUOTE_CACHE_LOCK = threading.Lock()
@@ -55,10 +58,15 @@ def fetch_eastmoney_quotes(codes, secid_map=None, *, use_cache: bool = True):
     """
     secid_map = secid_map or {}
     numeric_codes = []
+    skipped = []
     for c in codes:
         raw = str(c).strip().lower().replace("f", "")
         if raw.isdigit() and len(raw) == 6:
             numeric_codes.append(raw)
+        elif str(c).strip():
+            skipped.append(str(c).strip())
+    if skipped:
+        logger.warning("跳过无法转东方财富代码的标的: %s", ", ".join(skipped))
     if not numeric_codes:
         return {}
 
@@ -123,6 +131,9 @@ def fetch_eastmoney_quotes(codes, secid_map=None, *, use_cache: bool = True):
             }
         quotes.update(batch_quotes)
         _cache_put(batch_quotes, now)
+        no_return = [c for c in missing if c not in batch_quotes]
+        if no_return:
+            logger.warning("东方财富未返回报价的标的: %s", ", ".join(no_return))
     return quotes
 
 

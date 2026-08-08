@@ -68,10 +68,7 @@ const createDataSync = ({
                 showSyncNotice(msg, 'success');
             }
 
-            fetchData().catch(refreshErr => {
-                const refreshDetail = refreshErr?.response?.data?.detail || refreshErr?.message || '未知错误';
-                showSyncNotice(msg + `。但刷新页面数据失败：${refreshDetail}`, 'warning');
-            });
+            await fetchData();
         } catch (e) {
             const detail = e?.response?.data?.detail || e?.message || '未知错误';
             showSyncNotice('最新价同步失败：' + detail, 'error');

@@ -1,4 +1,7 @@
 from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 try:
     from .database import LOCAL_TZ
@@ -147,8 +150,8 @@ def build_performance_summary(conn, start_date=None, end_date=None):
     try:
         snap_rows = conn.execute("SELECT date, total_assets FROM daily_snapshots ORDER BY date ASC").fetchall()
         snap_assets_full = [float(s["total_assets"] or 0) for s in snap_rows]
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("读取快照序列失败: %s", e)
 
     twr_val, twr_status = calculate_twr(snap_assets_full) if snap_assets_full else (None, "无快照")
     sharpe_val = None
@@ -160,15 +163,15 @@ def build_performance_summary(conn, start_date=None, end_date=None):
     try:
         tl_full = build_performance_timeline(conn)
         monthly = build_monthly_stats(tl_full)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("构建月度统计失败: %s", e)
 
     underwater = None
     try:
         if 'tl_full' in locals() and tl_full:
             underwater = compute_underwater(tl_full)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("计算水下曲线失败: %s", e)
 
     float_plus_div = (unrealized + total_dividend) or 0
     div_contrib_pct = round((total_dividend / float_plus_div * 100), 1) if float_plus_div > 0 else 0
@@ -196,10 +199,11 @@ def build_performance_summary(conn, start_date=None, end_date=None):
             sortino_v = calculate_sortino(rets)
             # annualized rough for calmar (use total_gain_pct as proxy annualized if long enough)
             if dd_rec and dd_rec.get("max_dd_pct"):
-                ann_proxy = float(summary.get("total_gain_pct") or total_gain_pct or 0)   # rough
+                # annualized rough for calmar (use total_gain_pct as proxy)
+                ann_proxy = float(total_gain_pct or 0)
                 calmar_v = calculate_calmar(ann_proxy, dd_rec["max_dd_pct"])
     except Exception as e:
-        pass
+        logger.warning("build_performance_summary 专业指标计算失败: %s", e)
 
     return {
         "as_of_date": today.isoformat(),
