@@ -450,6 +450,134 @@ def build_satellite_progress(holdings: List[Dict[str, Any]], total_assets: float
     }
 
 
+def _build_focus_checks(
+    holdings: List[Dict[str, Any]],
+    snapshot: Dict[str, Any],
+    policy: Dict[str, Any],
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """风格桶 / 削弱动作 / 黄金 三项实时体检（读 focus 配置，不硬编码）。
+
+    返回 (health_items, issue_items)，都挂在现有「配置健康检查 + 问题清单」下。
+    """
+    focus = policy.get("focus") or {}
+    total_assets = float(snapshot.get("total_assets") or 0)
+    equity_mv = float(snapshot.get("equity_mv") or 0)
+    by_code = {str(h.get("code") or "").replace("f", ""): h for h in holdings}
+
+    def _mv_by_codes(codes):
+        s = 0.0
+        for c in codes or []:
+            h = by_code.get(str(c))
+            if h:
+                s += float(h.get("market_value") or 0)
+        return s
+
+    health: List[Dict[str, Any]] = []
+    issues: List[Dict[str, Any]] = []
+
+    # ---- 1) 高股息同风格桶：合计占权益 ---- 
+    div_codes = focus.get("dividend_bucket_codes") or []
+    div_max_eq = float(focus.get("dividend_bucket_equity_max_pct") or 50)
+    if div_codes and equity_mv > 0:
+        bucket_mv = _mv_by_codes(div_codes)
+        bucket_eq_pct = bucket_mv / equity_mv * 100
+        over = bucket_eq_pct > div_max_eq
+        listed = [str(by_code.get(str(c), {}).get("name") or c) for c in div_codes if by_code.get(str(c))]
+        health.append({
+            "code": "dividend_bucket",
+            "label": "高股息风格桶",
+            "status": "偏重" if over else "适中",
+            "level": "warning" if over else "ok",
+            "text": (
+                f"农行/石化/港股红利等 {len(listed)} 只合计 {bucket_mv / total_assets * 100:.1f}% 总资产、"
+                f"{bucket_eq_pct:.1f}% 权益（上限 {div_max_eq:.0f}%）；同涨同跌，等于一个仓位押多遍。"
+            ),
+        })
+        if over:
+            issues.append({
+                "id": "dividend_bucket",
+                "level": "warning",
+                "title": "高股息风格桶偏重",
+                "text": health[-1]["text"],
+                "action_hint": "去右栏看再平衡建议或调整参数",
+            })
+
+    # ---- 2) 削弱动作进度：该清/该减的还挂着 ----
+    for task in focus.get("reduce_tasks") or []:
+        code = str(task.get("code") or "")
+        kind = task.get("kind")
+        label = task.get("label") or code
+        h = by_code.get(code)
+        if not h:
+            continue
+        mv = float(h.get("market_value") or 0)
+        pct = (mv / total_assets * 100.0) if total_assets > 0 else 0.0
+        if kind == "clear":
+            health.append({
+                "code": f"reduce_{code}",
+                "label": label,
+                "status": "未清完",
+                "level": "info",
+                "text": f"{label}还在，占 {pct:.1f}%（{_money_cn(mv)}），动作只做了一半。",
+            })
+            issues.append({
+                "id": f"reduce_{code}",
+                "level": "info",
+                "title": f"{label} 还没清完",
+                "text": health[-1]["text"],
+                "action_hint": "看个人计划/再平衡建议",
+            })
+        elif kind == "reduce":
+            target_pct = float(task.get("target_pct") or 0)
+            over = target_pct > 0 and pct > target_pct
+            health.append({
+                "code": f"reduce_{code}",
+                "label": label,
+                "status": "超目标" if over else "正常",
+                "level": "warning" if over else "ok",
+                "text": f"{label}占 {pct:.1f}%（目标降到 {target_pct:.0f}% 内），当前 {_money_cn(mv)}。",
+            })
+            if over:
+                issues.append({
+                    "id": f"reduce_{code}",
+                    "level": "warning",
+                    "title": f"{label} 超目标",
+                    "text": health[-1]["text"],
+                    "action_hint": "去右栏看再平衡建议",
+                })
+
+    # ---- 3) 黄金：占总资产低于下限则偏薄 ----
+    gold_codes = focus.get("gold_codes") or []
+    g_min = float(focus.get("gold_target_min_pct") or 0)
+    g_max = float(focus.get("gold_target_max_pct") or g_min)
+    if gold_codes and total_assets > 0:
+        gold_mv = _mv_by_codes(gold_codes)
+        gold_pct = gold_mv / total_assets * 100
+        low = gold_pct < g_min
+        high = gold_pct > g_max
+        health.append({
+            "code": "gold",
+            "label": "黄金对冲",
+            "status": ("偏高" if high else "偏低" if low else "适中"),
+            "level": ("info" if (low or high) else "ok"),
+            "text": (
+                f"黄金 {gold_mv / 10000:.1f} 万，占 {gold_pct:.1f}%"
+                f"（目标 {g_min:.0f}–{g_max:.0f}%），"
+                + ("偏薄，可随缘小步补。" if low else "偏多。" if high else "在区间内。")
+            ),
+        })
+        if low:
+            issues.append({
+                "id": "gold",
+                "level": "info",
+                "title": "黄金偏薄",
+                "text": health[-1]["text"],
+                "action_hint": "随缘小步补，不抢主线",
+            })
+
+    return health, issues
+
+
 def build_allocation_story(conn) -> Dict[str, Any]:
     """Human-readable allocation diagnosis; all figures from tools, not guesses."""
     report = build_discipline_report(conn)
@@ -486,6 +614,10 @@ def build_allocation_story(conn) -> Dict[str, Any]:
         report.get("plans") or [],
         health,
     )
+    # 风格桶 / 削弱动作 / 黄金 三项实时体检，注入既有的健康检查 + 问题清单
+    focus_health, focus_issues = _build_focus_checks(holdings, snapshot, policy)
+    health = health + focus_health
+    issues = issues + focus_issues
     headline, severity, bullets = _build_headline(
         snapshot, policy_slice, issues, concentration
     )

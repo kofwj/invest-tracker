@@ -75,6 +75,22 @@ DEFAULT_POLICY: Dict[str, Any] = {
         "gree_name": "格力电器",
         "gree_soft_max_pct": 15.0,  # 超此占比提示减仓
     },
+    # 风格桶 / 削弱动作 / 黄金 体检：结构页的额外实时判断（可调，持久化）
+    "focus": {
+        # 高股息同风格桶：这些代码同涨同跌，合计占「权益」超过上限时提示
+        "dividend_bucket_codes": ["601288", "600028", "513530"],  # 农行/石化/港股红利
+        "dividend_bucket_equity_max_pct": 50.0,  # 占权益上限 %
+        # 削弱动作：仍持有/超目标 → 提示 "只做了一半"
+        "reduce_tasks": [
+            {"code": "600028", "kind": "clear", "label": "石化清仓"},
+            {"code": "508056", "kind": "clear", "label": "REIT 转化"},
+            {"code": "000651", "kind": "reduce", "target_pct": 11.0, "label": "格力减仓"},
+        ],
+        # 黄金占「总资产」目标区间
+        "gold_codes": ["518880"],
+        "gold_target_min_pct": 3.0,
+        "gold_target_max_pct": 5.0,
+    },
 }
 
 # 一键套用：只改结构尺子，不改优先加仓代码/个人禁开/格力名单等私货。
