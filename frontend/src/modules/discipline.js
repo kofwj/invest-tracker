@@ -30,6 +30,7 @@ const createDisciplineModule = ({
     const localActiveId = disciplinePresetActiveId || ref(null);
     const localPresetLoading = disciplinePresetLoading || ref(false);
     let policyBeforeEdit = null;
+    const greeReducePct = ref(null);
     const runAfterDisciplineChange = async () => {
         if (typeof afterDisciplineChange === 'function') {
             try {
@@ -151,6 +152,7 @@ const createDisciplineModule = ({
             const p = res.data || {};
             if (!p.targets) p.targets = { equity_pct: 45, fixed_income_pct: 30, deposit_pct: 25 };
             if (!p.plans) p.plans = { a500_batch_target_amount: 200000, gree_soft_max_pct: 15 };
+            if (!p.focus) p.focus = { dividend_bucket_equity_max_pct: 50, gold_target_min_pct: 3, gold_target_max_pct: 5, reduce_tasks: [] };
             policyBeforeEdit = clonePolicy(disciplinePolicy.value);
             disciplinePolicy.value = clonePolicy(p);
         } catch (e) {
@@ -163,6 +165,9 @@ const createDisciplineModule = ({
         if (disciplinePolicy.value && !disciplinePolicy.value.plans) {
             disciplinePolicy.value.plans = { a500_batch_target_amount: 200000, gree_soft_max_pct: 15 };
         }
+        // 初始化 focus 组编辑值（格力减仓目标）
+        const greeTask = (disciplinePolicy.value.focus?.reduce_tasks || []).find((t) => t.code === '000651');
+        greeReducePct.value = greeTask && greeTask.target_pct != null ? Number(greeTask.target_pct) : null;
         disciplinePolicyDialog.value = true;
     };
 
@@ -225,7 +230,23 @@ const createDisciplineModule = ({
                 defensive_extra_categories: Array.isArray(p.defensive_extra_categories)
                     ? p.defensive_extra_categories
                     : undefined,
+                focus: {
+                    dividend_bucket_equity_max_pct: numOr(p.focus?.dividend_bucket_equity_max_pct, 50),
+                    gold_target_min_pct: numOr(p.focus?.gold_target_min_pct, 3),
+                    gold_target_max_pct: numOr(p.focus?.gold_target_max_pct, 5),
+                },
             };
+            // 格力减仓目标写回 reduce_tasks（若 greeReducePct 有值）
+            if (greeReducePct.value != null) {
+                const tasks = Array.isArray(p.focus?.reduce_tasks)
+                    ? p.focus.reduce_tasks.map((t) => ({ ...t }))
+                    : [];
+                const greeIdx = tasks.findIndex((t) => t.code === '000651');
+                const greeTask = { code: '000651', kind: 'reduce', label: '格力减仓', target_pct: Number(greeReducePct.value) };
+                if (greeIdx >= 0) tasks[greeIdx] = { ...tasks[greeIdx], ...greeTask };
+                else tasks.push(greeTask);
+                payload.focus.reduce_tasks = tasks;
+            }
             await api.saveDisciplinePolicy(payload);
             ElMessage.success('纪律参数已保存');
             policyBeforeEdit = null;
@@ -391,6 +412,7 @@ const createDisciplineModule = ({
         openPolicyDialog,
         cancelPolicy,
         savePolicy,
+        greeReducePct,
         createDraftsFromReport,
         openDraftEdit,
         saveDraftEdit,

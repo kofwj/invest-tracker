@@ -441,6 +441,19 @@
         <el-form-item label="格力软上限%">
           <el-input-number v-model="disciplinePolicy.plans.gree_soft_max_pct" :min="0" :max="100" :step="1" />
         </el-form-item>
+        <el-form-item label="高股息桶权益上限%">
+          <el-input-number v-model="disciplinePolicy.focus.dividend_bucket_equity_max_pct" :min="0" :max="100" :step="1" />
+        </el-form-item>
+        <el-form-item label="黄金目标区间%">
+          <div class="range-inputs">
+            <el-input-number v-model="disciplinePolicy.focus.gold_target_min_pct" :min="0" :max="100" :step="0.5" />
+            <span class="range-sep">—</span>
+            <el-input-number v-model="disciplinePolicy.focus.gold_target_max_pct" :min="0" :max="100" :step="0.5" />
+          </div>
+        </el-form-item>
+        <el-form-item label="格力减仓目标%">
+          <el-input-number v-model="greeReducePct" :min="0" :max="100" :step="0.5" />
+        </el-form-item>
         <el-form-item label="防守额外品类">
           <el-select
             v-model="disciplinePolicy.defensive_extra_categories"
@@ -523,6 +536,7 @@ const {
   openPolicyDialog,
   cancelPolicy,
   savePolicy,
+  greeReducePct,
   createDraftsFromReport,
   openDraftEdit,
   saveDraftEdit,
@@ -975,6 +989,9 @@ watch(
   margin-bottom: 4px;
 }
 .breach-text { font-size: 12px; color: var(--app-muted); line-height: 1.5; }
+.range-inputs { display: flex; align-items: center; gap: 6px; width: 100%; }
+.range-inputs .el-input-number { width: 120px; }
+.range-sep { color: var(--app-muted); }
 .chart-container { height: 260px; min-height: 220px; width: 100%; }
 @media (max-width: 960px) {
   .merge-grid { grid-template-columns: 1fr; }
