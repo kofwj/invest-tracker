@@ -97,16 +97,14 @@
           </div>
         </el-card>
 
-        <div class="diag-grid" v-if="story?.liquidity">
-          <el-card shadow="never" class="merge-card diag-card" header="流动性（30 天）">
+        <el-card v-if="story?.liquidity" shadow="never" class="merge-card" header="流动性（30 天）">
             <div class="risk-text">{{ story?.liquidity?.text || '加载中…' }}</div>
             <div class="liq-metrics" v-if="story?.liquidity">
               <span>证券现金 {{ formatMoney(story.liquidity.securities_cash) }}</span>
               <span>近端存款 {{ formatMoney(story.liquidity.deposit_due_30d_amount) }}</span>
               <span>可挪约 {{ formatMoney(story.liquidity.deployable_30d) }}</span>
             </div>
-          </el-card>
-        </div>
+        </el-card>
 
         <el-card shadow="never" class="merge-card">
           <template #header>
@@ -921,13 +919,6 @@ watch(
   color: var(--app-soft);
   font-weight: 500;
 }
-.diag-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin-bottom: 12px;
-}
-.diag-grid .diag-card { margin-bottom: 0; }
 .gap-list { display: grid; gap: 12px; }
 .gap-row-head {
   display: flex;
@@ -989,6 +980,5 @@ watch(
   .merge-grid { grid-template-columns: 1fr; }
   .preset-row { flex-direction: column; align-items: stretch; }
   .preset-seg { width: 100%; }
-  .diag-grid { grid-template-columns: 1fr; }
 }
 </style>
