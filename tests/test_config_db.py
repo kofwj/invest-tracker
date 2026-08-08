@@ -24,13 +24,41 @@ def test_database_fetch_helper_returns_dict_rows(app_module):
 
 
 def test_database_initialization_records_schema_version(app_module):
+    import schema
     rows = app_module.fetch_all_as_dicts(
         app_module.DB_PATH,
         'SELECT value FROM settings WHERE key = ?',
         ('schema_version',),
     )
 
-    assert rows == [{'value': '11'}]
+    assert rows == [{'value': str(schema.SCHEMA_VERSION)}]
+
+
+def test_migrate_v12_focus_generalizes(app_module):
+    import json
+    import sqlite3
+
+    with app_module.get_db_connection(app_module.DB_PATH) as conn:
+        # 全新库(无持仓)运行迁移 -> 不注入
+        from schema import migrate_to_v12_focus_defaults
+        migrate_to_v12_focus_defaults(conn)
+        row = conn.execute(
+            "SELECT value FROM settings WHERE key='discipline_policy'"
+        ).fetchone()
+        assert row is None or json.loads(row[0] or '{}') == {}
+
+        # 有持仓但 focus 未自定义 -> 固化 legacy
+        conn.execute(
+            "INSERT INTO holdings(code,name,category,quantity,last_price,avg_cost,diluted_cost,total_dividend) "
+            "VALUES ('600028','中国石化','A股权益',100000,6.0,5.0,5.0,0)"
+        )
+        migrate_to_v12_focus_defaults(conn)
+        row = conn.execute(
+            "SELECT value FROM settings WHERE key='discipline_policy'"
+        ).fetchone()
+        focus = json.loads(row[0]).get('focus', {})
+        assert '601288' in (focus.get('dividend_bucket_codes') or [])
+        assert focus.get('gold_codes') == ['518880']
 
 
 def test_database_initialization_migrates_missing_transaction_account(app_module):

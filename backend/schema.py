@@ -1,9 +1,10 @@
+import json
 import sqlite3
 
 try:
     from .cash import ensure_cash_base, set_setting
     from .database import open_db
-    from .discipline import ensure_discipline_tables
+    from .discipline import ensure_discipline_tables, set_policy
     from .holdings import ensure_holding_return_columns
     from .kline_cache import ensure_kline_cache_table
     from .market import ensure_alert_tables
@@ -12,7 +13,7 @@ try:
 except ImportError:
     from cash import ensure_cash_base, set_setting
     from database import open_db
-    from discipline import ensure_discipline_tables
+    from discipline import ensure_discipline_tables, set_policy
     from holdings import ensure_holding_return_columns
     from kline_cache import ensure_kline_cache_table
     from market import ensure_alert_tables
@@ -20,7 +21,7 @@ except ImportError:
     from snapshots import ensure_snapshot_columns, ensure_portfolio_cash_flows_table, ensure_reconcile_table
 
 
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 SCHEMA_VERSION_KEY = "schema_version"
 
 
@@ -244,6 +245,54 @@ def migrate_to_v11_reconcile(conn):
     ensure_reconcile_table(conn)
 
 
+# 通用化：个人默认从代码 DEFAULT_POLICY 里移走后，这里保留"王此前默认的行为"，
+# 仅给「已有持仓但 focus 从未自定义」的库固化，避免升级丢失；全新空库不注入。
+LEGACY_FOCUS_DEFAULTS = {
+    "dividend_bucket_codes": ["601288", "600028", "513530"],  # 农行/石化/港股红利
+    "dividend_bucket_equity_max_pct": 50.0,  # 占权益上限 %
+    "reduce_tasks": [
+        {"code": "600028", "kind": "clear", "label": "石化清仓"},
+        {"code": "508056", "kind": "clear", "label": "REIT 转化"},
+        {"code": "000651", "kind": "reduce", "target_pct": 11.0, "label": "格力减仓"},
+    ],
+    "gold_codes": ["518880"],
+    "gold_target_min_pct": 3.0,
+    "gold_target_max_pct": 5.0,
+}
+
+
+def migrate_to_v12_focus_defaults(conn):
+    """把「已有持仓但 focus 未自定义」的库固化为 legacy 默认，保持行为；全新/空库不注入。"""
+    try:
+        has_holdings = conn.execute(
+            "SELECT COUNT(*) FROM holdings WHERE quantity > 0"
+        ).fetchone()[0] > 0
+    except Exception:
+        return
+    if not has_holdings:
+        return
+    row = conn.execute(
+        "SELECT value FROM settings WHERE key = ?",
+        ("discipline_policy",),
+    ).fetchone()
+    raw = {}
+    if row and row[0]:
+        try:
+            raw = json.loads(row[0])
+        except Exception:
+            raw = {}
+    focus = raw.get("focus")
+    if isinstance(focus, dict) and (focus.get("dividend_bucket_codes") or focus.get("gold_codes")):
+        # 已有用户自己的 focus，不动
+        return
+    raw["focus"] = LEGACY_FOCUS_DEFAULTS
+    conn.execute(
+        "INSERT INTO settings(key, value) VALUES (?, ?) "
+        "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+        ("discipline_policy", json.dumps(raw, ensure_ascii=False)),
+    )
+
+
 MIGRATIONS = [
     (1, migrate_to_v1_core_compat),
     (2, migrate_to_v2_holdings_and_snapshots),
@@ -256,6 +305,7 @@ MIGRATIONS = [
     (9, migrate_to_v9_notify),
     (10, migrate_to_v10_kline_cache),
     (11, migrate_to_v11_reconcile),
+    (12, migrate_to_v12_focus_defaults),
 ]
 
 
