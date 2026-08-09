@@ -23,6 +23,7 @@ def fundamental_check(code: str):
             extras = build_company_extras(code)
             data["profile"] = extras.get("profile")
             data["dividends"] = extras.get("dividends")
+            data["dividend_summary"] = extras.get("dividend_summary")
     except Exception as exc:  # 数据源偶发失败不应 500
         raise HTTPException(status_code=502, detail=f"基本面数据获取失败：{exc}") from exc
     return data

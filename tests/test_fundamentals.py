@@ -196,6 +196,7 @@ def test_company_extras_builds_profile_and_dividends(monkeypatch):
     }])
     div_df = pd.DataFrame([{
         "报告期": "2025-09-30", "方案进度": "实施分配",
+        "现金分红-现金分红比例": 10.0,
         "现金分红-现金分红比例描述": "10派10.00元(含税,扣税后9.00元)",
         "现金分红-股息率": 0.0245, "股权登记日": "2026-01-22",
         "除权除息日": "2026-01-23",
@@ -232,6 +233,53 @@ def test_company_extras_builds_profile_and_dividends(monkeypatch):
     assert "10派10.00元" in d["desc"]
     assert d["yield_pct"] == 2.45  # 0.0245 -> 2.45
     assert d["ex_date"] == "2026-01-23"
+    assert d["per10"] == 10.0  # 每10股派10元
+    # 近一年累计（最近1次）：每10股 40/一手? -> 仅 1 次 10 元 => 一手 100
+    s = r["dividend_summary"]
+    assert s is not None
+    assert s["per10_12m"] == 10.0
+    assert s["per_hand"] == 100.0
+    assert s["count"] == 1
+
+
+def test_dividend_summary_12m(monkeypatch):
+    """"近一年"按最新除息日往前365天框定，多期加总为每手现金流。"""
+    import pandas as pd
+
+    div_df = pd.DataFrame([
+        # 按除权除息日排序。最新 2026-01-23，往前12个月 → 含 2025-05-15 三次
+        {"报告期": "2025-09-30", "方案进度": "实施分配",
+         "现金分红-现金分红比例": 10.0,
+         "现金分红-现金分红比例描述": "10派10.00元",
+         "现金分红-股息率": 0.0245, "除权除息日": "2026-01-23"},
+        {"报告期": "2024-12-31", "方案进度": "实施分配",
+         "现金分红-现金分红比例": 20.0,
+         "现金分红-现金分红比例描述": "10派20.00元",
+         "现金分红-股息率": 0.042, "除权除息日": "2025-08-29"},
+        {"报告期": "2024-06-30", "方案进度": "实施分配",
+         "现金分红-现金分红比例": 10.0,
+         "现金分红-现金分红比例描述": "10派10.00元",
+         "现金分红-股息率": 0.021, "除权除息日": "2025-05-15"},
+        # 老于12个月 → 不计入
+        {"报告期": "2023-12-31", "方案进度": "实施分配",
+         "现金分红-现金分红比例": 23.8,
+         "现金分红-现金分红比例描述": "10派23.80元",
+         "现金分红-股息率": 0.057, "除权除息日": "2024-08-28"},
+    ])
+
+    class _FakeAk:
+        @staticmethod
+        def stock_fhps_detail_em(symbol=None, **kw):
+            return div_df
+
+    mod = _load_company_extras_with_fake_akshare(monkeypatch, _FakeAk)
+    rows = mod.build_dividend_history("000651", limit=0)
+    s = mod.dividend_summary(rows)
+    assert s is not None
+    assert s["per10_12m"] == 40.0      # 10+20+10
+    assert s["per_hand"] == 400.0      # 一手100股 = 40*10
+    assert s["count"] == 3
+    assert s["newest"] == "2026-01-23"
 
 
 def test_company_extras_degrades_for_etf(monkeypatch):

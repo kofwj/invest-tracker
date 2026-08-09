@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import datetime
 import logging
 import math
 
@@ -113,7 +114,7 @@ def build_company_profile(code: str) -> dict | None:
 def build_dividend_history(code: str, limit: int = 6):
     """返回最近 N 次已实施分红 []（拉不到/无分红返回空列表）。
 
-    每项：{report, desc('每10股派…'), yield_pct, record_date, ex_date}。
+    每项：{report, desc('每10股派…'), per10, yield_pct, record_date, ex_date}。
     """
     c = str(code or "").strip()
     if not c:
@@ -129,14 +130,20 @@ def build_dividend_history(code: str, limit: int = 6):
         df = df[mask]
         df = df.sort_values(by="除权除息日", ascending=False)
         out = []
-        for _, r in df.head(limit).iterrows():
+        for _, r in df.iterrows():
             report = str(r.get("报告期") or "")[:7]  # 2024-12-31 -> 2024-12
             desc = str(r.get("现金分红-现金分红比例描述") or "").strip()
             ex = str(r.get("除权除息日") or "").strip() or None
             record = str(r.get("股权登记日") or "").strip() or None
+            per10 = r.get("现金分红-现金分红比例")
+            try:
+                per10 = round(float(per10), 2) if per10 is not None and math.isfinite(float(per10)) else None
+            except (TypeError, ValueError):
+                per10 = None
             yield_pct = r.get("现金分红-股息率")
             try:
-                yield_pct = round(float(yield_pct) * 100, 2) if yield_pct is not None else None
+                yield_pct = (round(float(yield_pct) * 100, 2)
+                             if yield_pct is not None and math.isfinite(float(yield_pct)) else None)
             except (TypeError, ValueError):
                 yield_pct = None
             if report.startswith(("NaT", "None", "nan")):
@@ -144,14 +151,53 @@ def build_dividend_history(code: str, limit: int = 6):
             out.append({
                 "report": report,
                 "desc": desc,
+                "per10": per10,
                 "yield_pct": yield_pct,
                 "record_date": record,
                 "ex_date": ex,
             })
-        return out
+        # limit=None/0 表示全量
+        return out if limit in (0, None) else out[:limit]
     except Exception as exc:
         logger.info("历史分红 %s 获取失败: %s", c, exc)
         return []
+
+
+def dividend_summary(rows: list) -> dict | None:
+    """近一年已实施现金分红累计（拿真金白银）。
+
+    以最新除息日为锚往前 365 天，累加 '每10股派X元' 的 per10；
+    per_hand = 一手(100股)到手 = per10 * 10。
+    rows 需含 per10 与 ex_date；算不出来返回 None。
+    """
+    dated = [
+        r for r in rows
+        if r.get("per10") is not None and r.get("ex_date")
+    ]
+    if not dated:
+        return None
+    parsed = []
+    for r in dated:
+        try:
+            d = datetime.date.fromisoformat(r["ex_date"])
+        except (TypeError, ValueError):
+            continue
+        parsed.append((r, d))
+    if not parsed:
+        return None
+    _, newest = max(parsed, key=lambda x: x[1])
+    cutoff = newest - datetime.timedelta(days=365)
+    picked = [(r, d) for r, d in parsed if d >= cutoff]
+    if not picked:
+        return None
+    per10 = round(sum(r["per10"] for r, _ in picked), 2)
+    return {
+        "per10_12m": per10,          # 每10股，近一年累计
+        "per_hand": round(per10 * 10, 2),  # 一手(100股)到手
+        "count": len(picked),        # 近一年分红了几次
+        "newest": newest.isoformat(),
+        "cutoff": cutoff.isoformat(),
+    }
 
 
 def build_company_extras(code: str) -> dict:
@@ -162,7 +208,9 @@ def build_company_extras(code: str) -> dict:
     if profile is not None and holders is not None:
         profile["top_holders"] = holders.get("holders", [])
         profile["holder_count"] = holders.get("holder_count")
+    all_divs = build_dividend_history(code, limit=0)  # 全量算近一年
     return {
         "profile": profile,
-        "dividends": build_dividend_history(code),
+        "dividends": all_divs[:6],  # 列表只显示最近 6 次
+        "dividend_summary": dividend_summary(all_divs),
     }

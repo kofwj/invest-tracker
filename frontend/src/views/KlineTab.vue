@@ -112,10 +112,15 @@
       </div>
 
       <!-- 历史分红 -->
-      <div v-if="fundDividends && fundDividends.length" class="cx-block">
+      <div v-if="fundDivSummary || (fundDividends && fundDividends.length)" class="cx-block">
         <div class="cx-header">
           <span class="fund-title">历史分红</span>
           <span class="fund-sub">最近 {{ fundDividends.length }} 次已实施</span>
+        </div>
+        <div v-if="fundDivSummary" class="cx-summary">
+          <span class="cx-sum-key">近一年累计</span><b>每10股 {{ fundDivSummary.per10_12m }} 元</b>
+          <span class="cx-sum-key">· 一手(100股)到手</span><b>{{ fundDivSummary.per_hand }} 元</b>
+          <span class="cx-sum-note">近一年分红 {{ fundDivSummary.count }} 次（按除息日 {{ fundDivSummary.newest }} 往前12个月）</span>
         </div>
         <div class="cx-divs">
           <div class="cx-div-row" v-for="(d, i) in fundDividends" :key="i">
@@ -183,6 +188,7 @@ const fundError = ref('');
 const trend = ref(null);
 const fundProfile = ref(null);
 const fundDividends = ref([]);
+const fundDivSummary = ref(null);
 
 const latestDate = computed(() => {
   if (!rows.value.length) return '';
@@ -232,6 +238,7 @@ async function loadFundamental(c) {
     fundError.value = '';
     fundProfile.value = null;
     fundDividends.value = [];
+    fundDivSummary.value = null;
     return;
   }
   fundCode.value = c;
@@ -243,6 +250,7 @@ async function loadFundamental(c) {
     fundSections.value = res.data?.sections || [];
     fundProfile.value = res.data?.profile || null;
     fundDividends.value = res.data?.dividends || [];
+    fundDivSummary.value = res.data?.dividend_summary || null;
     if (res.data?.error) fundError.value = res.data.error;
   } catch (e) {
     fundError.value = '体检拉取失败：' + (e?.response?.data?.detail || e?.message || '网络错误');
