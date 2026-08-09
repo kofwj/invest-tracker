@@ -613,6 +613,91 @@ const renderKlineChartView = (el, rows) => {
     return klineChart;
 };
 
+/**
+ * 走势解读（均线视角）——纯前端基于日K rows 计算，返回白话结论 + 状态标签。
+ * 延续"体检不是打分卡"：只给状态观察，不给买卖指令。
+ * @param {Array<{date,open,high,low,close,volume}>} rows 升序
+ */
+const analyzeKlineTrend = (rows) => {
+    if (!rows || rows.length < 20) {
+        return { ok: false, brief: '数据不足 20 条，暂无法解读' };
+    }
+    const closes = rows.map(r => Number(r.close));
+    const last = closes.length - 1;
+    const cur = closes[last];
+    const sma = (span) => {
+        if (closes.length < span) return null;
+        const s = closes.slice(last + 1 - span, last + 1).reduce((a, b) => a + b, 0) / span;
+        return Math.round(s * 100) / 100;
+    };
+    const ma5 = sma(5), ma10 = sma(10), ma20 = sma(20);
+    if (ma5 == null || ma10 == null || ma20 == null) {
+        return { ok: false, brief: '均线数据不足' };
+    }
+    const pct = (v, base) => ((v - base) / base) * 100;
+
+    // 1) 均线排列
+    let arrangement = 'mix', arrangementText = '均线纠缠，方向未明';
+    if (ma5 >= ma10 && ma10 >= ma20) { arrangement = 'bull'; arrangementText = '多头排列，趋势向上'; }
+    else if (ma5 <= ma10 && ma10 <= ma20) { arrangement = 'bear'; arrangementText = '空头排列，趋势向下'; }
+
+    // 2) 价格 vs MA20 位置与偏离
+    let pos, posText;
+    const dev20 = pct(cur, ma20);
+    if (cur >= ma20) { pos = 'above'; posText = `价在20日线上方，偏离 ${Math.abs(dev20).toFixed(1)}%`; }
+    else { pos = 'below'; posText = `价在20日线下方，偏离 ${Math.abs(dev20).toFixed(1)}%`; }
+
+    // 3) 金叉/死叉：最近一次 MA5 与 MA10 交叉
+    const ma5s = [], ma10s = [];
+    for (let i = 0; i < closes.length; i++) {
+        if (i >= 4) ma5s.push(closes.slice(i - 4, i + 1).reduce((a, b) => a + b, 0) / 5);
+        if (i >= 9) ma10s.push(closes.slice(i - 9, i + 1).reduce((a, b) => a + b, 0) / 10);
+    }
+    let cross = null;
+    for (let i = ma10s.length - 1; i > 0; i--) {
+        const prevDiff = ma5s[i - 1] - ma10s[i - 1];
+        const curDiff = ma5s[i] - ma10s[i];
+        if ((prevDiff <= 0 && curDiff > 0) || (prevDiff >= 0 && curDiff < 0)) {
+            cross = { type: curDiff > 0 ? 'gold' : 'death', daysAgo: ma10s.length - 1 - i + 1 };
+            break;
+        }
+    }
+    let crossText = '近期无显著金叉/死叉';
+    if (cross && cross.type === 'gold') crossText = `最近金叉约${cross.daysAgo}天前，短线转强`;
+    else if (cross && cross.type === 'death') crossText = `最近死叉约${cross.daysAgo}天前，短线转弱`;
+
+    // 4) 近 5/10/20 日涨跌幅
+    const chg = (n) => closes.length > n ? Math.round(pct(cur, closes[last - n]) * 10) / 10 : null;
+    const c5 = chg(5), c10 = chg(10), c20 = chg(20);
+
+    // 5) 状态 & 白话结论
+    let status = 'ok', tag = '正常', summary = [];
+    if (arrangement === 'bear' || pos === 'below') { status = 'high'; tag = '偏弱'; }
+    else if (arrangement === 'mix') { status = 'low'; tag = '震荡'; }
+    if (arrangement === 'bull' && pos === 'above') summary.push('均线多头排列，价格站上20日线，趋势向上。');
+    else if (arrangement === 'bear' && pos === 'below') summary.push('均线空头排列，价格在20日线下，趋势偏弱，别急着抄。');
+    else summary.push(`${arrangementText}，价格在20日线${pos === 'above' ? '上' : '下'}。`);
+    if (Math.abs(dev20) > 5) {
+        summary.push(dev20 > 0
+            ? `价格已比20日线高 ${Math.abs(dev20).toFixed(1)}%，涨得偏急，留意回调（偏离太远别追）。`
+            : `价格已比20日线低 ${Math.abs(dev20).toFixed(1)}%，跌得偏多，注意别接飞刀。`);
+    } else {
+        summary.push(`价格距20日线 ${Math.abs(dev20).toFixed(1)}%，偏离正常。`);
+    }
+    if (crossText !== '近期无显著金叉/死叉') summary.push(crossText);
+
+    return {
+        ok: true,
+        brief: `${arrangementText}；${pos === 'above' ? '价格在上' : '价格在下'}`,
+        status, tag,
+        ma5, ma10, ma20, cur,
+        dev20: Math.round(dev20 * 10) / 10,
+        cross, crossText,
+        chg5: c5, chg10: c10, chg20: c20,
+        points: summary,
+    };
+};
+
 let chartResizeBound = false;
 const ensureChartResizeListener = () => {
     if (chartResizeBound || typeof window === 'undefined') return;
@@ -726,6 +811,7 @@ export {
     renderCategoryTrendChartView,
     renderOverviewWeekChartView,
     renderKlineChartView,
+    analyzeKlineTrend,
     waitForChartDom,
     resizeAllCharts,
     readTheme,

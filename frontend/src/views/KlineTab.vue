@@ -52,6 +52,26 @@
 
       <div v-if="error" class="kline-error">{{ error }}</div>
 
+      <!-- 走势解读：均线视角 -->
+      <div v-if="trend && trend.ok" class="trend-block">
+        <div class="trend-header">
+          <span class="trend-title">走势解读（均线）</span>
+          <span class="fund-tag" :class="'s-' + trend.status">{{ trend.tag }}</span>
+        </div>
+        <div class="trend-brief">{{ trend.brief }}</div>
+        <div class="trend-grid">
+          <div class="trend-cell"><span class="trend-k">现价</span><b>{{ trend.cur }}</b></div>
+          <div class="trend-cell"><span class="trend-k">MA5</span><b>{{ trend.ma5 }}</b></div>
+          <div class="trend-cell"><span class="trend-k">MA10</span><b>{{ trend.ma10 }}</b></div>
+          <div class="trend-cell"><span class="trend-k">MA20</span><b>{{ trend.ma20 }}</b></div>
+          <div class="trend-cell"><span class="trend-k">偏离20日</span><b :class="trend.dev20 >= 0 ? 'up' : 'down'">{{ trend.dev20 >= 0 ? '+' : '' }}{{ trend.dev20 }}%</b></div>
+        </div>
+        <ul class="trend-points">
+          <li v-for="(p, i) in trend.points" :key="i">{{ p }}</li>
+        </ul>
+      </div>
+      <div v-if="trend && !trend.ok" class="kline-hint">{{ trend.brief }}</div>
+
       <!-- 基本面体检：估值 / 盈利 / 杠杆 / 现金 -->
       <div v-if="fundCode" class="fund-block">
         <div class="fund-header">
@@ -90,7 +110,7 @@
 import { ref, onMounted, computed } from 'vue';
 import PageShell from '../components/PageShell.vue';
 import api from '../api/index.js';
-import { renderKlineChartView } from '../charts/index.js';
+import { renderKlineChartView, analyzeKlineTrend } from '../charts/index.js';
 import { ElMessage } from 'element-plus';
 
 const code = ref('');
@@ -105,6 +125,7 @@ const fundCode = ref('');
 const fundSections = ref([]);
 const fundLoading = ref(false);
 const fundError = ref('');
+const trend = ref(null);
 
 const latestDate = computed(() => {
   if (!rows.value.length) return '';
@@ -161,6 +182,7 @@ async function loadKline() {
     if (!rows.value.length) {
       error.value = '本地暂无缓存，点击「拉取最新」从网络获取';
     }
+    trend.value = analyzeKlineTrend(rows.value);
     renderChart();
     loadFundamental(c);
   } catch (e) {
@@ -225,6 +247,7 @@ function clearAll() {
   rows.value = [];
   info.value = null;
   error.value = '';
+  trend.value = null;
   loadFundamental('');
   if (chartEl.value) {
     renderKlineChartView(chartEl.value, []);
@@ -279,6 +302,65 @@ onMounted(() => {
 }
 .fund-block {
   margin-top: 16px;
+}
+.trend-block {
+  margin-top: 16px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-surface);
+  padding: 12px;
+}
+.trend-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.trend-title {
+  font-weight: 700;
+  color: var(--app-text);
+  font-size: 14px;
+}
+.trend-brief {
+  font-size: 13px;
+  color: var(--app-text);
+  margin-bottom: 8px;
+}
+.trend-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.trend-cell {
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.trend-k {
+  color: var(--app-muted);
+}
+.trend-cell b {
+  font-weight: 600;
+  color: var(--app-text);
+  font-variant-numeric: tabular-nums;
+}
+.trend-cell b.up {
+  color: #16a34a;
+}
+.trend-cell b.down {
+  color: #dc2626;
+}
+.trend-points {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  color: var(--app-text);
+  line-height: 1.7;
 }
 .fund-header {
   display: flex;
