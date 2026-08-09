@@ -119,6 +119,36 @@ def test_get_cached_klines_returns_ascending(tmp_db):
     assert dates == sorted(dates)
 
 
+def test_kline_api_otcfund_returns_is_fund(client):
+    """场外开放式基金（f 开头，如 f002864 安泽短债）没有股票式 K 线。
+    必须返回 is_fund 标记 + 空 rows，且不得把 f 剥掉当 A 股串台拉取。"""
+    res = client.get("/klines/f002864?days=5")
+    assert res.status_code == 200
+    data = res.json()
+    assert data.get("is_fund") is True
+    assert data["rows"] == []
+    assert data["count"] == 0
+
+
+def test_sync_kline_skips_otcfund(tmp_db):
+    """sync_kline_for_code 对 f 前缀基金直接跳过，不触发任何拉取。"""
+    db_module, _ = tmp_db
+    import kline_cache
+    calls = {"n": 0}
+
+    def _explode(code, count=420):
+        calls["n"] += 1
+        raise AssertionError("场外基金不该走股票K线接口")
+
+    kline_cache.fetch_tencent_kline_ohlc = _explode
+    kline_cache.fetch_eastmoney_kline_ohlc = _explode
+    with db_module.open_db() as conn:
+        n = kline_cache.sync_kline_for_code(conn, "f002864", force=True)
+        conn.commit()
+    assert n == 0
+    assert calls["n"] == 0
+
+
 def test_kline_api_endpoints(client, monkeypatch):
     """通过 API 测 /klines/{code} 与 /klines/sync 的契约。"""
     import kline_cache

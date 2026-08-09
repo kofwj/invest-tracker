@@ -179,6 +179,13 @@ async function loadKline() {
       code: res.data?.code || c,
       count: res.data?.count || rows.value.length,
     };
+    // 场外开放式基金（f 开头）没有股票式 K 线，只给净值走势
+    if (res.data?.is_fund) {
+      error.value = '场外基金没有K线（无盘中开收高低），只有每日净值，看持仓/净值走势即可';
+      trend.value = null;
+      renderChart();
+      return;
+    }
     if (!rows.value.length) {
       error.value = '本地暂无缓存，点击「拉取最新」从网络获取';
     }

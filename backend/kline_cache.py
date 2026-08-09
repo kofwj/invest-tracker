@@ -159,6 +159,9 @@ def sync_kline_for_code(conn, code: str, *, force: bool = False) -> int:
     code = str(code or "").strip()
     if not code:
         return 0
+    # f 前缀 = 场外开放式基金，没有股票式 K 线；当股票拉会把 f 剥掉串台。
+    if code.lower().startswith("f"):
+        return 0
     ensure_kline_cache_table(conn)
     # 增量检查：如果今天已同步过则跳过（除非 force）
     if not force:

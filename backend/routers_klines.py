@@ -42,6 +42,10 @@ def get_klines(code: str, days: int = 120):
     code = str(code or "").strip()
     if not code:
         raise HTTPException(status_code=400, detail="代码不能为空")
+    # f 前缀 = 场外开放式基金（如 f002864 安泽短债），没有股票式 K 线。
+    # 若当股票查，_tencent_symbol 会把 f 剥掉变成另一个 A 股代码（串台）。
+    if code.lower().startswith("f"):
+        return {"code": code, "days": days, "count": 0, "rows": [], "is_fund": True}
     days = max(1, min(int(days), 500))
     rows = get_cached_klines(code, days=days)
     if not rows:
