@@ -1,8 +1,9 @@
 """基本面体检：从 akshare 拉估值 + 财务指标，组装成 估值/盈利/杠杆/现金 四块。
 
-按巴菲特/段永平式"体检表"拆——只给指标和白话提示，不给买/卖结论。
-akshare 是 lazy import（应用启动/单测不依赖）；任一块拉不到就返回空说明，
-不因网络或对象缺数据让整页挂掉。
+按巴菲特/段永平式\"体检表\"拆——只给指标和白话提示，不给买/卖结论。
+每个指标带 status 判读标签（ok 正常 / high 偏高 / low 偏低）+ 一句白话，
+前端一扫就知道哪块亮灯。akshare 是 lazy import（应用启动/单测不依赖）；
+任一块拉不到就返回空说明，不因网络或对象缺数据让整页挂掉。
 """
 
 from __future__ import annotations
@@ -63,6 +64,132 @@ def _pct(v):
     return round(v, 2)
 
 
+# ---- 判读标签 ----
+# status: "ok" 正常 / "high" 偏高(红) / "low" 偏低(黄)；None 不给标签(中性数值项)。
+def _mk(label, value, status=None, note=None):
+    return {"label": label, "value": value, "status": status, "note": note}
+
+
+def _judge_pe(pe):
+    if pe is None:
+        return None, None
+    if pe <= 0:
+        return "high", "负 PE = 近一年亏钱，先看亏在哪"
+    if pe <= 15:
+        return "ok", "15 以内相对不贵（还要结合行业看）"
+    if pe <= 30:
+        return "ok", "十几到三十，中性区间"
+    return "high", "超过 30 偏贵（高成长股除外）"
+
+
+def _judge_pb(pb):
+    if pb is None:
+        return None, None
+    if pb < 1:
+        return "low", "跌破净资产，先看资产质量（银行/地产另算）"
+    if pb <= 5:
+        return "ok", "净值的一到五倍，中性"
+    return "high", "超过净值 5 倍偏贵（轻资产高 ROE 的除外）"
+
+
+def _judge_ps(ps):
+    if ps is None:
+        return None, None
+    if ps <= 1:
+        return "ok", "营收一倍以内，相对便宜"
+    if ps <= 5:
+        return "ok", "一到五倍，中性"
+    return "high", "超过营收 5 倍偏贵（成长/互联网另说）"
+
+
+def _judge_peg(peg):
+    if peg is None:
+        return None, None
+    if peg < 0:
+        return None, "负 PEG：利润在缩或刚亏过，参考意义弱"
+    if peg < 1:
+        return "ok", "成长相对便宜"
+    if peg < 2:
+        return "ok", "成长价合理"
+    return "high", "成长价不便宜"
+
+
+def _judge_roe(roe):
+    if roe is None:
+        return None, None
+    if roe <= 0:
+        return "high", "股东钱在亏，难以为继"
+    if roe >= 15:
+        return "ok", "股东钱回报率高，段永平式的优等生"
+    if roe >= 10:
+        return "ok", "回报不错"
+    return "low", "回报一般，长期上不去要警惕"
+
+
+def _judge_gm(gm):
+    if gm is None:
+        return None, None
+    if gm >= 40:
+        return "ok", "毛利厚，有『墙』（护城河）"
+    if gm >= 20:
+        return "ok", "正常水平"
+    return "low", "毛利薄，行业竞争激烈"
+
+
+def _judge_nm(nm):
+    if nm is None:
+        return None, None
+    if nm <= 0:
+        return "high", "净利率为负，在亏钱"
+    if nm >= 20:
+        return "ok", "很能赚"
+    if nm >= 10:
+        return "ok", "不错"
+    return "low", "偏薄"
+
+
+def _judge_dar(dar):
+    if dar is None:
+        return None, None
+    if dar <= 30:
+        return "ok", "负债低，稳"
+    if dar <= 50:
+        return "ok", "正常范围"
+    return "high", "负债偏高（金融/地产本来就高，另看）"
+
+
+def _judge_em(em):
+    """权益乘数 = 总资产/净资产，越大杠杆越高。"""
+    if em is None:
+        return None, None
+    if em <= 2:
+        return "ok", "杠杆低"
+    if em <= 3.3:
+        return "ok", "正常（约对应负债率 50% 内）"
+    return "high", "杠杆高（约对应负债率 70% 以上）"
+
+
+def _judge_cr(cr):
+    if cr is None:
+        return None, None
+    if cr >= 2:
+        return "ok", "短期偿债充裕"
+    if cr >= 1:
+        return "ok", "够用"
+    return "high", "不到 1，短期偿债偏紧"
+
+
+def _judge_cf(cf):
+    """现金/净利润：赚的钱真到账没。"""
+    if cf is None:
+        return None, None
+    if cf >= 1:
+        return "ok", "利润是真钱，真到账"
+    if cf >= 0.6:
+        return "ok", "基本合格"
+    return "low", "利润多是纸面（压货/应收），查账"
+
+
 def _fetch_value(code):
     import akshare as ak
 
@@ -89,14 +216,7 @@ def _fetch_abstract(code):
 
 
 def build_fundamental_check(code: str) -> dict:
-    """返回 {code, sections: [{key,label,items:[{label,value,note}]}], error?}。"""
-
-    def _value_item(label, v, fmt="num"):
-        if v is None:
-            return {"label": label, "value": None}
-        if fmt == "pct":
-            return {"label": label, "value": round(v, 2)}
-        return {"label": label, "value": v}
+    """返回 {code, sections: [{key,label,items:[{label,value,status,note}]}], error?}。"""
 
     out = {"code": str(code or "").strip(), "sections": [], "source_time": None}
     c = str(code or "").strip().lower()
@@ -116,74 +236,64 @@ def build_fundamental_check(code: str) -> dict:
         out["error"] = "取不到数据（可能是 ETF/指数或数据源暂不可用）"
         return out
 
-    # ---- 估值 ----
+    # ---- 估值（便不便宜）----
     val_items = []
     if value:
-        pe = value["pe_ttm"]
-        note = None
-        if pe is not None:
-            if pe > 0:
-                note = "每年把这数换成一年利润要花多少年；太高通常偏贵，具体结合行业看"
-            else:
-                note = "负 PE = 近一年亏钱，先看亏在哪"
-        val_items.append({"label": "市盈率 PE(TTM)", "value": round(pe, 1) if pe is not None else None, "note": note})
-        val_items.append({
-            "label": "市净率 PB", "value": value["pb"],
-            "note": "股价是净资产的几倍；低不一定便宜，看资产质量" if value["pb"] is not None else None,
-        })
-        if value["ps"] is not None:
-            val_items.append({"label": "市销率 PS", "value": value["ps"], "note": "股价是每年营收的几倍"})
-        if value["peg"] is not None:
-            val_items.append({"label": "PEG", "value": value["peg"], "note": "<1 常被认为成长相对便宜" if value["peg"] is not None and 0 <= value["peg"] < 1 else None})
+        st, note = _judge_pe(value["pe_ttm"])
+        val_items.append(_mk("市盈率 PE(TTM)", round(value["pe_ttm"], 1) if value["pe_ttm"] is not None else None, st, note))
+        st, note = _judge_pb(value["pb"])
+        val_items.append(_mk("市净率 PB", value["pb"], st, note))
+        st, note = _judge_ps(value["ps"])
+        val_items.append(_mk("市销率 PS", value["ps"], st, note))
+        st, note = _judge_peg(value["peg"])
+        val_items.append(_mk("PEG", value["peg"], st, note))
         if value["market_cap"]:
-            val_items.append({"label": "总市值", "value": round(value["market_cap"] / 1e8, 0), "note": "亿元"})
+            val_items.append(_mk("总市值", round(value["market_cap"] / 1e8, 0), None, "亿元"))
     out["sections"].append({"key": "valuation", "label": "估值（便不便宜）", "items": val_items})
 
-    # ---- 盈利 ----
+    # ---- 盈利（赚不赚钱）----
     profit_items = []
     roe = _pick_metric(abs_df, "盈利能力", "净资产收益率(ROE)")
     gm = _pick_metric(abs_df, "盈利能力", "毛利率")
     nm = _pick_metric(abs_df, "盈利能力", "销售净利率")
     ngm = _pick_metric(abs_df, "常用指标", "归母净利润")
     rev = _pick_metric(abs_df, "常用指标", "营业总收入")
-    if roe is not None:
-        profit_items.append({"label": "净资产收益率 ROE", "value": _pct(roe), "note": "股东钱的回报率，段永平最看重；长期稳在 10%+ 才算会赚钱"})
-    if gm is not None:
-        profit_items.append({"label": "毛利率", "value": _pct(gm), "note": "收入扣成本还留多少；高且稳一般说明有『墙』"})
-    if nm is not None:
-        profit_items.append({"label": "销售净利率", "value": _pct(nm)})
+    st, note = _judge_roe(roe)
+    profit_items.append(_mk("净资产收益率 ROE", _pct(roe), st, note))
+    st, note = _judge_gm(gm)
+    profit_items.append(_mk("毛利率", _pct(gm), st, note))
+    st, note = _judge_nm(nm)
+    profit_items.append(_mk("销售净利率", _pct(nm), st, note))
     if ngm is not None:
-        profit_items.append({"label": "归母净利润", "value": round(ngm / 1e8, 1), "note": "亿元（最近报告期）"})
+        profit_items.append(_mk("归母净利润", round(ngm / 1e8, 1), None, "亿元（最近报告期）"))
     if rev is not None:
-        profit_items.append({"label": "营业总收入", "value": round(rev / 1e8, 1), "note": "亿元（最近报告期）"})
+        profit_items.append(_mk("营业总收入", round(rev / 1e8, 1), None, "亿元（最近报告期）"))
     out["sections"].append({"key": "profit", "label": "盈利（赚不赚钱）", "items": profit_items})
 
-    # ---- 杠杆 ----
+    # ---- 杠杆（风险高不高）----
     lev_items = []
     dar = _pick_metric(abs_df, "财务风险", "资产负债率")
     em = _pick_metric(abs_df, "财务风险", "权益乘数")
     cr = _pick_metric(abs_df, "财务风险", "流动比率")
-    if dar is not None:
-        note = "借的钱占资产多少；越低越稳，高负债的利润要打个问号" if dar is not None else None
-        lev_items.append({"label": "资产负债率", "value": _pct(dar), "note": note})
-    if em is not None:
-        lev_items.append({"label": "权益乘数", "value": em, "note": "总资产是净资产的几倍；越大杠杆越高"})
-    if cr is not None:
-        lev_items.append({"label": "流动比率", "value": cr, "note": "短期要还的钱能不能用流动资产顶上；<1 偏紧"})
+    st, note = _judge_dar(dar)
+    lev_items.append(_mk("资产负债率", _pct(dar), st, note))
+    st, note = _judge_em(em)
+    lev_items.append(_mk("权益乘数", em, st, note))
+    st, note = _judge_cr(cr)
+    lev_items.append(_mk("流动比率", cr, st, note))
     out["sections"].append({"key": "leverage", "label": "杠杆（风险高不高）", "items": lev_items})
 
-    # ---- 现金 / 收益质量 ----
+    # ---- 现金（钱真不真）----
     cash_items = []
     ocf = _pick_metric(abs_df, "常用指标", "经营现金流量净额")
     cf = _pick_metric(abs_df, "收益质量", "经营活动净现金/归属母公司的净利润")
     pcf = _pick_metric(abs_df, "每股指标", "每股经营现金流")
     if ocf is not None:
-        cash_items.append({"label": "经营现金流净额", "value": round(ocf / 1e8, 1), "note": "亿元（最近报告期）"})
-    if cf is not None:
-        note = "赚到的钱真到账没；>1 说明利润是真钱，长期 <<1 利润可能是纸面" if cf is not None else None
-        cash_items.append({"label": "现金/净利润", "value": cf, "note": note})
+        cash_items.append(_mk("经营现金流净额", round(ocf / 1e8, 1), None, "亿元（最近报告期）"))
+    st, note = _judge_cf(cf)
+    cash_items.append(_mk("现金/净利润", cf, st, note))
     if pcf is not None:
-        cash_items.append({"label": "每股经营现金流", "value": pcf})
+        cash_items.append(_mk("每股经营现金流", pcf))
     out["sections"].append({"key": "cash", "label": "现金（钱真不真）", "items": cash_items})
 
     # 去掉空块，避免前端一堆空卡片

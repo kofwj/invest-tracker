@@ -90,3 +90,52 @@ def test_fundamental_check_builds_sections(monkeypatch):
     profit = next(s for s in result["sections"] if s["key"] == "profit")
     roe = next(i for i in profit["items"] if "ROE" in i["label"])
     assert roe["value"] == 10.57
+
+
+def test_fundamental_check_status_tags(monkeypatch):
+    """每项带 status 判读标签；高负债/低现金触发 high/low。"""
+    import pandas as pd
+
+    # 低负债、低现金/净利、高 PE —— 用于触发不同 status
+    value_df = pd.DataFrame(
+        [
+            {
+                "数据日期": "2026-08-07",
+                "当日收盘价": 10.0,
+                "总市值": 3e10,
+                "PE(TTM)": 45.0,
+                "PE(静)": 44.0,
+                "市净率": 7.0,
+                "PEG值": 2.5,
+                "市销率": 8.0,
+                "市现率": 30.0,
+            }
+        ]
+    )
+    abs_df = pd.DataFrame(
+        [
+            {"选项": "盈利能力", "指标": "净资产收益率(ROE)", "20260331": 20.0},
+            {"选项": "财务风险", "指标": "资产负债率", "20260331": 65.0},
+            {"选项": "收益质量", "指标": "经营活动净现金/归属母公司的净利润", "20260331": 0.3},
+        ]
+    )
+
+    class _FakeAk:
+        @staticmethod
+        def stock_value_em(symbol=None, **kw):
+            return value_df
+
+        @staticmethod
+        def stock_financial_abstract(symbol=None, **kw):
+            return abs_df
+
+    fundamentals = _load_fundamentals_with_fake_akshare(monkeypatch, _FakeAk)
+    result = fundamentals.build_fundamental_check("600519")
+    flat = {i["label"]: i for s in result["sections"] for i in s["items"]}
+
+    assert flat["市盈率 PE(TTM)"]["status"] == "high"  # 45 > 30
+    assert flat["资产负债率"]["status"] == "high"  # 65 > 50
+    assert flat["现金/净利润"]["status"] == "low"  # 0.3 < 0.6
+    assert flat["净资产收益率 ROE"]["status"] == "ok"  # 20 >= 15
+    # 中性数值项不给标签
+    assert flat["总市值"].get("status") is None

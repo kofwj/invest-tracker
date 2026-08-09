@@ -65,11 +65,14 @@
           <div v-for="sec in fundSections" :key="sec.key" class="fund-card">
             <div class="fund-card-title">{{ sec.label }}</div>
             <div class="fund-row" v-for="item in sec.items" :key="item.label">
-              <span class="fund-row-label">{{ item.label }}</span>
-              <span class="fund-row-value" :class="{ 'muted': item.value == null }">
-                {{ item.value != null ? item.value : '—' }}
-              </span>
-              <span v-if="item.note" class="fund-row-note" :title="item.note">?</span>
+              <div class="fund-row-head">
+                <span class="fund-row-label">{{ item.label }}</span>
+                <span class="fund-row-value" :class="{ 'muted': item.value == null }">
+                  {{ item.value != null ? item.value : '—' }}
+                </span>
+                <span v-if="item.status" class="fund-tag" :class="'s-' + item.status">{{ item.status === 'ok' ? '正常' : item.status === 'high' ? '偏高' : '偏低' }}</span>
+              </div>
+              <div v-if="item.note" class="fund-row-note">{{ item.note }}</div>
             </div>
           </div>
         </div>
@@ -298,7 +301,7 @@ onMounted(() => {
 }
 .fund-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 10px;
 }
 .fund-card {
@@ -314,11 +317,13 @@ onMounted(() => {
   margin-bottom: 8px;
 }
 .fund-row {
+  padding: 3px 0;
+  font-size: 13px;
+}
+.fund-row-head {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  padding: 3px 0;
-  font-size: 13px;
 }
 .fund-row-label {
   color: var(--app-muted);
@@ -334,9 +339,29 @@ onMounted(() => {
   color: var(--app-muted);
   font-weight: 400;
 }
-.fund-row-note {
-  cursor: help;
-  color: var(--app-warn);
+.fund-tag {
   font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.fund-tag.s-ok {
+  color: #16a34a;
+  background: rgba(22, 163, 74, 0.12);
+}
+.fund-tag.s-high {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.12);
+}
+.fund-tag.s-low {
+  color: #d97706;
+  background: rgba(217, 119, 6, 0.15);
+}
+.fund-row-note {
+  color: var(--app-muted);
+  font-size: 11px;
+  line-height: 1.5;
+  margin-top: 1px;
 }
 </style>
