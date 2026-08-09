@@ -514,22 +514,66 @@ const renderKlineChartView = (el, rows) => {
     const ohlc = rows.map(r => [Number(r.open), Number(r.close), Number(r.low), Number(r.high)]);
     const volumes = rows.map(r => Number(r.volume || 0));
 
+    // 5 / 10 / 20 日均线（收盘价），中文图例
+    const maLines = [
+        { label: 'MA5（5日均线）', span: 5, color: '#f97316' },
+        { label: 'MA10（10日均线）', span: 10, color: '#3b82f6' },
+        { label: 'MA20（20日均线）', span: 20, color: '#a855f7' },
+    ];
+    const maSeries = maLines.map(m => ({
+        name: m.label,
+        type: 'line',
+        symbol: 'none',
+        smooth: true,
+        lineStyle: { width: 1.2, color: m.color, opacity: 0.9 },
+        data: rows.map((_, i) => {
+            if (i < m.span - 1) return null;
+            const sum = rows.slice(i - m.span + 1, i + 1).reduce((s, r) => s + Number(r.close), 0);
+            return +(sum / m.span).toFixed(2);
+        }),
+    }));
+
     klineChart = echarts.init(el);
     klineChart.setOption({
         backgroundColor: theme.surface,
         animation: false,
+        legend: {
+            data: [ '日K', ...maLines.map(m => m.label) ],
+            top: 4, left: 60, right: 20, type: 'scroll',
+            textStyle: { color: theme.muted, fontSize: 10 },
+            itemWidth: 14, itemHeight: 8,
+        },
         tooltip: {
             trigger: 'axis',
             axisPointer: { type: 'cross' },
             backgroundColor: theme.surface,
             borderColor: theme.border,
             textStyle: { color: theme.text },
-            valueFormatter: (val, series) => series === 0 ? Array.isArray(val) ? `开 ${val[0]} / 高 ${val[3]} / 低 ${val[2]} / 收 ${val[1]}` : val : val,
+            formatter: (params) => {
+                if (!params || !params.length) return '';
+                const p = params[0];
+                const date = p.axisValue;
+                const d = ohlc[typeof p.dataIndex === 'number' ? p.dataIndex : 0] || [];
+                const parts = [`${date}<br/>开 ${d[0]}　高 ${d[3]}　低 ${d[2]}　收 ${d[1]}`];
+                const priceKeys = new Set(maLines.map(m => m.label));
+                params.forEach(q => {
+                    const v = q.value;
+                    if (Array.isArray(v)) return; // K线本体
+                    if (v == null) return;
+                    if (priceKeys.has(q.seriesName)) {
+                        parts.push(`${q.seriesName}：${v}`);
+                    }
+                });
+                // 成交量
+                const vp = params.find(q => q.seriesName === '成交量');
+                if (vp && vp.value != null) parts.push(`成交量：${vp.value.toLocaleString()}`);
+                return parts.join('<br/>');
+            },
         },
         axisPointer: { link: [{ xAxisIndex: 'all' }] },
         grid: [
-            { left: 60, right: 20, top: 30, height: '62%' },
-            { left: 60, right: 20, top: '76%', height: '16%' },
+            { left: 60, right: 20, top: 26, height: '60%' },
+            { left: 60, right: 20, top: '74%', height: '14%' },
         ],
         xAxis: [
             { type: 'category', data: dates, scale: true, boundaryGap: false, splitLine: { show: false }, axisLabel: { color: theme.muted, fontSize: 10 } },
@@ -555,6 +599,7 @@ const renderKlineChartView = (el, rows) => {
                     borderColor0: theme.down,
                 },
             },
+            ...maSeries,
             {
                 name: '成交量',
                 type: 'bar',
