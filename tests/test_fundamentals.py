@@ -210,11 +210,22 @@ def test_company_extras_builds_profile_and_dividends(monkeypatch):
         def stock_fhps_detail_em(symbol=None, **kw):
             return div_df
 
+        @staticmethod
+        def stock_main_stock_holder(stock=None, **kw):
+            return pd.DataFrame([{
+                "股东名称": "香港中央结算有限公司", "持股比例": None, "股本性质": "流通A股",
+                "截至日期": "2026-06-23", "股东总数": "123456",
+            }])
+
     mod = _load_company_extras_with_fake_akshare(monkeypatch, _FakeAk)
     r = mod.build_company_extras("000651")
     assert r["profile"]["name"] == "珠海格力电器股份有限公司"
     assert r["profile"]["listed"] == "1996-11-18"
     assert r["profile"]["main_biz"] == "空调、干衣机等家用电器。"
+    # 前十大股东：北向资金应被识别
+    assert r["profile"]["top_holders"][0]["kind"] == "north"
+    assert r["profile"]["top_holders"][0]["pct"] is None  # NaN → None，非 JSON NaN
+    assert r["profile"]["holder_count"] == 123456
     assert len(r["dividends"]) == 1
     d = r["dividends"][0]
     assert d["report"] == "2025-09"

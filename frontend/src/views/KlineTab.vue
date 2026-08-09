@@ -72,6 +72,55 @@
       </div>
       <div v-if="trend && !trend.ok" class="kline-hint">{{ trend.brief }}</div>
 
+      <!-- 公司简报 -->
+      <div v-if="fundProfile" class="cx-block">
+        <div class="cx-header">
+          <span class="fund-title">公司简报</span>
+          <span v-if="fundProfile.holder_count" class="fund-sub">股东户数 {{ Number(fundProfile.holder_count).toLocaleString() }}</span>
+        </div>
+        <div class="cx-profile">
+          <div class="cx-name">{{ fundProfile.name }} <span v-if="fundProfile.short_name" class="cx-short">({{ fundProfile.short_name }})</span></div>
+          <div class="cx-kv">
+            <span class="cx-k">行业</span><b>{{ fundProfile.industry || '—' }}</b>
+            <span class="cx-k">法人</span><b>{{ fundProfile.legal_rep || '—' }}</b>
+            <span class="cx-k">上市</span><b>{{ fundProfile.listed || '—' }}</b>
+            <span class="cx-k">成立</span><b>{{ fundProfile.founded || '—' }}</b>
+          </div>
+          <div v-if="fundProfile.main_biz" class="cx-biz">主营：{{ fundProfile.main_biz }}</div>
+          <div class="cx-kv">
+            <span class="cx-k">市场</span><b>{{ fundProfile.market || '—' }}</b>
+            <span class="cx-k">官网</span><b>{{ fundProfile.website || '—' }}</b>
+          </div>
+        </div>
+
+        <!-- 机构持仓：前十大股东 -->
+        <div v-if="fundProfile.top_holders && fundProfile.top_holders.length" class="cx-holders">
+          <div class="cx-subtitle">前十大股东</div>
+          <div class="cx-holder-row" v-for="(h, i) in fundProfile.top_holders" :key="i">
+            <span class="cx-holder-idx">{{ i + 1 }}</span>
+            <span class="cx-holder-name">{{ h.name }}</span>
+            <span class="cx-holder-kind" :class="'k-' + h.kind">{{ holderKindText(h.kind) }}</span>
+            <span class="cx-holder-pct">{{ h.pct != null ? h.pct + '%' : '—' }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 历史分红 -->
+      <div v-if="fundDividends && fundDividends.length" class="cx-block">
+        <div class="cx-header">
+          <span class="fund-title">历史分红</span>
+          <span class="fund-sub">最近 {{ fundDividends.length }} 次已实施</span>
+        </div>
+        <div class="cx-divs">
+          <div class="cx-div-row" v-for="(d, i) in fundDividends" :key="i">
+            <span class="cx-div-report">{{ d.report }}</span>
+            <span class="cx-div-desc">{{ d.desc }}</span>
+            <span v-if="d.yield_pct != null" class="cx-div-yield">{{ d.yield_pct }}%</span>
+            <span v-if="d.ex_date" class="cx-div-date">除息 {{ d.ex_date }}</span>
+          </div>
+        </div>
+      </div>
+
       <!-- 基本面体检：估值 / 盈利 / 杠杆 / 现金 -->
       <div v-if="fundCode" class="fund-block">
         <div class="fund-header">
@@ -97,43 +146,6 @@
           </div>
         </div>
         <div v-else class="fund-hint">该标的无财务/估值数据（可能是 ETF 或指数）。</div>
-      </div>
-
-      <!-- 公司简报 -->
-      <div v-if="fundProfile" class="cx-block">
-        <div class="cx-header">
-          <span class="fund-title">公司简报</span>
-        </div>
-        <div class="cx-profile">
-          <div class="cx-name">{{ fundProfile.name }} <span v-if="fundProfile.short_name" class="cx-short">({{ fundProfile.short_name }})</span></div>
-          <div class="cx-kv">
-            <span class="cx-k">行业</span><b>{{ fundProfile.industry || '—' }}</b>
-            <span class="cx-k">法人</span><b>{{ fundProfile.legal_rep || '—' }}</b>
-            <span class="cx-k">上市</span><b>{{ fundProfile.listed || '—' }}</b>
-            <span class="cx-k">成立</span><b>{{ fundProfile.founded || '—' }}</b>
-          </div>
-          <div v-if="fundProfile.main_biz" class="cx-biz">主营：{{ fundProfile.main_biz }}</div>
-          <div class="cx-kv">
-            <span class="cx-k">市场</span><b>{{ fundProfile.market || '—' }}</b>
-            <span class="cx-k">官网</span><b>{{ fundProfile.website || '—' }}</b>
-          </div>
-        </div>
-      </div>
-
-      <!-- 历史分红 -->
-      <div v-if="fundDividends && fundDividends.length" class="cx-block">
-        <div class="cx-header">
-          <span class="fund-title">历史分红</span>
-          <span class="fund-sub">最近 {{ fundDividends.length }} 次已实施分红</span>
-        </div>
-        <div class="cx-divs">
-          <div class="cx-div-row" v-for="(d, i) in fundDividends" :key="i">
-            <span class="cx-div-report">{{ d.report }}</span>
-            <span class="cx-div-desc">{{ d.desc }}</span>
-            <span v-if="d.yield_pct != null" class="cx-div-yield">{{ d.yield_pct }}%</span>
-            <span v-if="d.ex_date" class="cx-div-date">除息 {{ d.ex_date }}</span>
-          </div>
-        </div>
       </div>
 
       <div v-if="!code && !rows.length" class="kline-hint">
@@ -171,6 +183,12 @@ const latestDate = computed(() => {
   const last = rows.value[rows.value.length - 1];
   return last?.date || '';
 });
+
+// 股东类别中文标签
+function holderKindText(kind) {
+  const map = { north: '北向', institution: '机构', state: '国有', person: '个人', other: '' };
+  return map[kind] || '';
+}
 
 async function loadHoldings() {
   try {
@@ -492,6 +510,67 @@ onMounted(() => {
 .cx-div-date {
   color: var(--app-muted);
   font-size: 12px;
+}
+.cx-holders {
+  margin-top: 10px;
+  border-top: 1px solid var(--app-border);
+  padding-top: 8px;
+}
+.cx-subtitle {
+  font-weight: 600;
+  color: var(--app-text);
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+.cx-holder-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12.5px;
+  border-bottom: 1px dashed var(--app-border);
+}
+.cx-holder-row:last-child {
+  border-bottom: none;
+}
+.cx-holder-idx {
+  color: var(--app-muted);
+  width: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.cx-holder-name {
+  flex: 1;
+  color: var(--app-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cx-holder-kind {
+  font-size: 11px;
+  padding: 0 5px;
+  border-radius: 4px;
+  color: var(--app-muted);
+  background: var(--app-bg);
+}
+.cx-holder-kind.k-north {
+  color: #2563eb;
+  background: rgba(37, 99, 235, 0.12);
+}
+.cx-holder-kind.k-institution {
+  color: #7c3aed;
+  background: rgba(124, 58, 237, 0.12);
+}
+.cx-holder-kind.k-state {
+  color: #d97706;
+  background: rgba(217, 119, 6, 0.15);
+}
+.cx-holder-pct {
+  font-weight: 600;
+  color: var(--app-text);
+  font-variant-numeric: tabular-nums;
+  min-width: 52px;
+  text-align: right;
 }
 .fund-header {
   display: flex;
