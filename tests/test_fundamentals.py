@@ -139,3 +139,40 @@ def test_fundamental_check_status_tags(monkeypatch):
     assert flat["净资产收益率 ROE"]["status"] == "ok"  # 20 >= 15
     # 中性数值项不给标签
     assert flat["总市值"].get("status") is None
+
+
+def test_fundamental_check_sanitizes_nan(monkeypatch):
+    """数据源返回 NaN（如银行不披露流动比率）不得泄到 JSON 成为非法 NaN 字面量。"""
+    import json
+
+    import pandas as pd
+
+    value_df = pd.DataFrame(
+        [{"数据日期": "2026-08-07", "当日收盘价": 5.0, "总市值": 2e12,
+          "PE(TTM)": 7.7, "PE(静)": 7.5, "市净率": 0.8, "PEG值": 2.4,
+          "市销率": 3.0, "市现率": 10.0}]
+    )
+    abs_df = pd.DataFrame(
+        [
+            {"选项": "盈利能力", "指标": "净资产收益率(ROE)", "20260331": 2.65},
+            {"选项": "财务风险", "指标": "资产负债率", "20260331": 93.5},
+            {"选项": "财务风险", "指标": "流动比率", "20260331": float("nan")},  # 银行常缺
+        ]
+    )
+
+    class _FakeAk:
+        @staticmethod
+        def stock_value_em(symbol=None, **kw):
+            return value_df
+
+        @staticmethod
+        def stock_financial_abstract(symbol=None, **kw):
+            return abs_df
+
+    fundamentals = _load_fundamentals_with_fake_akshare(monkeypatch, _FakeAk)
+    result = fundamentals.build_fundamental_check("601288")
+    # 前端 axios 用严格 JSON.parse；含 NaN 字面量会抛错 → 必须能标准反序列化
+    json.loads(json.dumps(result, ensure_ascii=False))
+    lev = next(s for s in result["sections"] if s["key"] == "leverage")
+    cr = next(i for i in lev["items"] if "流动比率" in i["label"])
+    assert cr["value"] is None  # NaN → None

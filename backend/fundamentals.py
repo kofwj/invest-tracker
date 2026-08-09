@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import logging
+import math
 
 logger = logging.getLogger(__name__)
 
@@ -22,12 +23,14 @@ SECTIONS = [
 
 
 def _num(v):
-    """稳健转 float；空 / '--' / 非数返回 None。"""
+    """稳健转 float；空 / '--' / 非数 / 非有限值返回 None。"""
     if v is None:
         return None
     try:
         n = float(str(v).replace(",", "").strip())
     except (TypeError, ValueError):
+        return None
+    if not math.isfinite(n):
         return None
     return n
 
