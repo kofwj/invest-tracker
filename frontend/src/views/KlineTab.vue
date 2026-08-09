@@ -95,19 +95,19 @@
 
         <!-- 机构持仓：前十大股东 -->
         <div v-if="fundProfile.top_holders && fundProfile.top_holders.length" class="cx-holders">
-          <div class="cx-subtitle">前十大股东</div>
+          <div class="cx-subtitle">前十大股东 <span class="cx-sub-meta">最新一期 · 环比为上期披露</span></div>
           <div class="cx-holder-row" v-for="(h, i) in fundProfile.top_holders" :key="i">
-            <span class="cx-holder-idx">{{ i + 1 }}</span>
-            <span class="cx-holder-name">{{ h.name }}</span>
+            <span class="cx-holder-idx">{{ i < 3 ? ['①','②','③'][i] : i + 1 }}</span>
+            <span class="cx-holder-name" :title="h.name">{{ h.name }}</span>
             <span class="cx-holder-kind" :class="'k-' + h.kind">{{ holderKindText(h.kind) }}</span>
             <span class="cx-holder-pct">{{ h.pct != null ? h.pct + '%' : '—' }}</span>
+            <span v-if="h.change != null" class="cx-holder-delta" :class="{ up: h.change > 0, down: h.change < 0, flat: h.change === 0 }">
+              {{ h.change > 0 ? '▲' : h.change < 0 ? '▼' : '—' }}<em>{{ h.change !== 0 ? Math.abs(h.change).toFixed(2) : '持平' }}</em>
+            </span>
+            <span v-else class="cx-holder-delta muted">新进</span>
           </div>
           <!-- 合计行：钱攥在谁手里 -->
-          <div v-if="holderSummary.top != null" class="cx-summary">
-            <span class="cx-sum-key">前十大合计</span><b>{{ holderSummary.top }}%</b>
-            <span v-if="holderSummary.inst" class="cx-sum-key">机构/北向/国资合计</span><b>{{ holderSummary.inst }}%</b>
-            <span v-if="holderSummary.hasMissing" class="cx-sum-note">（含未披露持股数股东，合计为披露部分）</span>
-          </div>
+          <div v-if="holderSummary.top != null" class="cx-summary"><span class="cx-sum-key">前十大合计</span><b>{{ holderSummary.top }}%</b><span class="cx-sum-sep">·</span><span v-if="holderSummary.inst" class="cx-sum-key">机构/北向/国资合计</span><b v-if="holderSummary.inst">{{ holderSummary.inst }}%</b><span v-if="holderSummary.hasMissing" class="cx-sum-note">含未披露持股数股东，合计为披露部分</span></div>
         </div>
       </div>
 
@@ -556,11 +556,17 @@ onMounted(() => {
   font-size: 12px;
   margin-bottom: 6px;
 }
+.cx-sub-meta {
+  font-weight: 400;
+  color: var(--app-muted);
+  font-size: 11px;
+  margin-left: 6px;
+}
 .cx-holder-row {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
-  padding: 4px 0;
+  padding: 5px 2px;
   font-size: 12.5px;
   border-bottom: 1px dashed var(--app-border);
 }
@@ -569,20 +575,24 @@ onMounted(() => {
 }
 .cx-holder-idx {
   color: var(--app-muted);
-  width: 18px;
+  width: 20px;
+  flex: none;
   text-align: center;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
 }
 .cx-holder-name {
   flex: 1;
+  min-width: 0;
   color: var(--app-text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .cx-holder-kind {
+  flex: none;
   font-size: 11px;
-  padding: 0 5px;
+  padding: 1px 6px;
   border-radius: 4px;
   color: var(--app-muted);
   background: var(--app-bg);
@@ -600,12 +610,29 @@ onMounted(() => {
   background: rgba(217, 119, 6, 0.15);
 }
 .cx-holder-pct {
+  flex: none;
   font-weight: 600;
   color: var(--app-text);
   font-variant-numeric: tabular-nums;
-  min-width: 52px;
+  min-width: 56px;
   text-align: right;
 }
+.cx-holder-delta {
+  flex: none;
+  min-width: 58px;
+  text-align: right;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.3px;
+}
+.cx-holder-delta em {
+  font-style: normal;
+  font-weight: 600;
+}
+.cx-holder-delta.up { color: #dc2626; }   /* 增持红 */
+.cx-holder-delta.down { color: #16a34a; } /* 减持绿 */
+.cx-holder-delta.flat { color: var(--app-muted); }
+.cx-holder-delta.muted { color: var(--app-muted); }
 .cx-summary {
   margin-top: 8px;
   padding: 7px 8px;
@@ -623,6 +650,9 @@ onMounted(() => {
 }
 .cx-sum-key {
   color: var(--app-muted);
+}
+.cx-sum-sep {
+  color: var(--app-border);
 }
 .cx-sum-note {
   color: var(--app-muted);

@@ -297,3 +297,53 @@ def test_company_extras_degrades_for_etf(monkeypatch):
     r = mod.build_company_extras("159352")
     assert r["profile"] is None
     assert r["dividends"] == []
+    assert r["dividend_summary"] is None
+
+
+def test_top_holders_multiperiod(monkeypatch):
+    """"最新一期"前十大 + 环比 + 北向(NaN 往期补) 都应在多期数据下正确。"""
+    import pandas as pd
+
+    # 两期各十大，按東财真实结构（最新期北向比例是 NaN）
+    rows = [
+        # 最新一期 2026-06-23：北向(NaN)、明骏减持、中国证金退出读数
+        {"编号": "1", "股东名称": "珠海明骏投资合伙企业(有限合伙)", "持股比例": 15.35,
+         "股本性质": "流通A股", "截至日期": "2026-06-23"},
+        {"编号": "2", "股东名称": "京海互联网科技发展有限公司", "持股比例": 7.83,
+         "股本性质": "流通A股", "截至日期": "2026-06-23"},
+        {"编号": "3", "股东名称": "香港中央结算有限公司", "持股比例": None,
+         "股本性质": "流通A股", "截至日期": "2026-06-23", "股东总数": "500000"},
+        # 上一期 2026-04-28：北向有值、明骏更高
+        {"编号": "1", "股东名称": "珠海明骏投资合伙企业(有限合伙)", "持股比例": 16.11,
+         "股本性质": "流通A股", "截至日期": "2026-04-28"},
+        {"编号": "3", "股东名称": "香港中央结算有限公司", "持股比例": 3.20,
+         "股本性质": "流通A股", "截至日期": "2026-04-28"},
+        # 再上一期 2026-03-31：北向略高，用于环比
+        {"编号": "3", "股东名称": "香港中央结算有限公司", "持股比例": 3.24,
+         "股本性质": "流通A股", "截至日期": "2026-03-31"},
+    ]
+
+    class _FakeAk:
+        @staticmethod
+        def stock_main_stock_holder(stock=None, **kw):
+            return pd.DataFrame(rows)
+
+    mod = _load_company_extras_with_fake_akshare(monkeypatch, _FakeAk)
+    h = mod._fetch_top_holders("000651")
+    hs = h["holders"]
+    # 顺序按编号：明骏、京海、北向
+    assert [x["name"] for x in hs] == [
+        "珠海明骏投资合伙企业(有限合伙)", "京海互联网科技发展有限公司", "香港中央结算有限公司"]
+    # date 标注该股东比例对应的有效披露期（北向最新期 NaN，补自 04-28）
+    assert hs[0]["date"] == "2026-06-23"
+    assert hs[1]["date"] == "2026-06-23"
+    north = hs[2]
+    assert north["date"] == "2026-04-28"
+    # 北向最新期比例 NaN → 取最近有值期 3.20，环比 vs 3.24
+    assert north["kind"] == "north"
+    assert north["pct"] == 3.20
+    assert north["change"] == -0.04
+    # 明骏环比 15.35 - 16.11 = -0.76
+    assert hs[0]["change"] == -0.76
+    # 唯一有股东总数的记录是 2026-04-28(北向)，最新期无 → 取最新期值
+    assert h["holder_count"] is None

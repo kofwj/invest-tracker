@@ -18,9 +18,14 @@ logger = logging.getLogger(__name__)
 
 
 def _fetch_top_holders(code: str, limit: int = 10):
-    """前十大股东 + 股东户数。返回 {holders:[{name,pct,type,date}], holder_count}。
+    """最新一期前十大股东 + 股东户数 + 每期环比。
 
-    股本性质用来粗分机构/个人/国有（深交所字段多为'流通A股'，尽力而为）。
+    东财 stock_main_stock_holder 返回多期（每期十大）：
+      - 最新一期 = 截至日期最大的那组，即当前十大股东
+      - 北向(香港中央结算)最新一期比例常为 NaN，取最近一期已披露的有效值补上
+      - 环比 = 该股东最近两个已披露有效比例的差（上披露期 → 本期）
+    返回 {holders:[{name,pct,type,kind,date,date_label,change}], holder_count}。
+    change 单位与 pct 相同（百分比点），None 表示无从比较（只披露一期）。
     """
     c = str(code or "").strip()
     if not c:
@@ -31,8 +36,21 @@ def _fetch_top_holders(code: str, limit: int = 10):
         df = ak.stock_main_stock_holder(stock=c)
         if df is None or df.empty:
             return None
-        holders = []
-        for _, r in df.drop_duplicates(subset=["股东名称"]).head(limit).iterrows():
+        df = df.sort_values(by="截至日期", ascending=False).reset_index(drop=True)
+        latest_date = df.iloc[0]["截至日期"]
+        # 最新一期的这组股东（东财排名顺序：编号 1..10）
+        latest_rows = df[df["截至日期"] == latest_date].copy()
+        if "编号" in latest_rows.columns:
+            latest_rows["_rank"] = latest_rows["编号"].astype(str).str.extract(r"(\d+)")[0].astype(float)
+            latest_rows = latest_rows.sort_values("_rank").head(limit)
+        else:
+            latest_rows = latest_rows.head(limit)
+        # 每个股东的所有 (披露比例, 日期)，按日期降序（去 NaN）
+        by_name: dict[str, list] = {}
+        for _, r in df.iterrows():
+            name = str(r.get("股东名称") or "").strip()
+            if not name:
+                continue
             pct = r.get("持股比例")
             try:
                 pct = float(pct) if pct is not None else None
@@ -40,11 +58,16 @@ def _fetch_top_holders(code: str, limit: int = 10):
                 pct = None
             if pct is not None and not math.isfinite(pct):
                 pct = None
+            by_name.setdefault(name, []).append(
+                (pct, r.get("截至日期"), str(r.get("股本性质") or ""))
+            )
+        holders = []
+        for _, r in latest_rows.iterrows():
             name = str(r.get("股东名称") or "").strip()
             if not name:
                 continue
-            # 北向资金 = 香港中央结算
             tail = str(r.get("股本性质") or "")
+            # 北向资金 = 香港中央结算
             if "香港中央结算" in name:
                 kind = "north"
             else:
@@ -58,14 +81,23 @@ def _fetch_top_holders(code: str, limit: int = 10):
                     kind = "person"
                 else:
                     kind = "other"
+            # 该股东最近两个已披露有效比例
+            valid = [(p, d) for p, d, _ in by_name.get(name, []) if p is not None]
+            pct = valid[0][0] if valid else None
+            date = valid[0][1] if valid else latest_date
+            prev_pct = valid[1][0] if len(valid) > 1 else None
+            change = None
+            if pct is not None and prev_pct is not None:
+                change = round(pct - prev_pct, 2)
             holders.append({
                 "name": name,
                 "pct": pct,
                 "type": tail or "",
                 "kind": kind,
-                "date": str(r.get("截至日期") or "").strip() or None,
+                "date": str(date),
+                "change": change,
             })
-        # 股东户数取第一行
+        # 股东户数取最新一期的值
         holder_count = None
         try:
             hc = float(str(df.iloc[0].get("股东总数") or "").replace(",", ""))
