@@ -102,6 +102,12 @@
             <span class="cx-holder-kind" :class="'k-' + h.kind">{{ holderKindText(h.kind) }}</span>
             <span class="cx-holder-pct">{{ h.pct != null ? h.pct + '%' : '—' }}</span>
           </div>
+          <!-- 合计行：钱攥在谁手里 -->
+          <div v-if="holderSummary.top != null" class="cx-summary">
+            <span class="cx-sum-key">前十大合计</span><b>{{ holderSummary.top }}%</b>
+            <span v-if="holderSummary.inst" class="cx-sum-key">机构/北向/国资合计</span><b>{{ holderSummary.inst }}%</b>
+            <span v-if="holderSummary.hasMissing" class="cx-sum-note">（含未披露持股数股东，合计为披露部分）</span>
+          </div>
         </div>
       </div>
 
@@ -189,6 +195,26 @@ function holderKindText(kind) {
   const map = { north: '北向', institution: '机构', state: '国有', person: '个人', other: '' };
   return map[kind] || '';
 }
+
+// 前十大股东汇总：合计占比 + 机构/北向/国资合计
+const holderSummary = computed(() => {
+  const hs = fundProfile.value?.top_holders;
+  if (!hs || !hs.length) return { top: null, inst: null, hasMissing: false };
+  let top = 0, inst = 0, hasVal = false, hasMissing = false;
+  const instKinds = new Set(['institution', 'north', 'state']);
+  for (const h of hs) {
+    if (h.pct == null) { hasMissing = true; continue; }
+    top += h.pct; hasVal = true;
+    if (instKinds.has(h.kind)) inst += h.pct;
+  }
+  if (!hasVal) return { top: null, inst: null, hasMissing };
+  const fmt = (n) => (Math.round(n * 10) / 10).toFixed(1).replace(/\.0$/, '');
+  return {
+    top: fmt(top),
+    inst: inst > 0 ? fmt(inst) : null,
+    hasMissing,
+  };
+});
 
 async function loadHoldings() {
   try {
@@ -571,6 +597,29 @@ onMounted(() => {
   font-variant-numeric: tabular-nums;
   min-width: 52px;
   text-align: right;
+}
+.cx-summary {
+  margin-top: 8px;
+  padding: 7px 8px;
+  background: var(--app-bg);
+  border-radius: 6px;
+  font-size: 12.5px;
+  color: var(--app-text);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+}
+.cx-summary b {
+  font-weight: 700;
+}
+.cx-sum-key {
+  color: var(--app-muted);
+}
+.cx-sum-note {
+  color: var(--app-muted);
+  font-size: 11px;
+  width: 100%;
 }
 .fund-header {
   display: flex;
