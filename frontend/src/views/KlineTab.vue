@@ -99,6 +99,43 @@
         <div v-else class="fund-hint">该标的无财务/估值数据（可能是 ETF 或指数）。</div>
       </div>
 
+      <!-- 公司简报 -->
+      <div v-if="fundProfile" class="cx-block">
+        <div class="cx-header">
+          <span class="fund-title">公司简报</span>
+        </div>
+        <div class="cx-profile">
+          <div class="cx-name">{{ fundProfile.name }} <span v-if="fundProfile.short_name" class="cx-short">({{ fundProfile.short_name }})</span></div>
+          <div class="cx-kv">
+            <span class="cx-k">行业</span><b>{{ fundProfile.industry || '—' }}</b>
+            <span class="cx-k">法人</span><b>{{ fundProfile.legal_rep || '—' }}</b>
+            <span class="cx-k">上市</span><b>{{ fundProfile.listed || '—' }}</b>
+            <span class="cx-k">成立</span><b>{{ fundProfile.founded || '—' }}</b>
+          </div>
+          <div v-if="fundProfile.main_biz" class="cx-biz">主营：{{ fundProfile.main_biz }}</div>
+          <div class="cx-kv">
+            <span class="cx-k">市场</span><b>{{ fundProfile.market || '—' }}</b>
+            <span class="cx-k">官网</span><b>{{ fundProfile.website || '—' }}</b>
+          </div>
+        </div>
+      </div>
+
+      <!-- 历史分红 -->
+      <div v-if="fundDividends && fundDividends.length" class="cx-block">
+        <div class="cx-header">
+          <span class="fund-title">历史分红</span>
+          <span class="fund-sub">最近 {{ fundDividends.length }} 次已实施分红</span>
+        </div>
+        <div class="cx-divs">
+          <div class="cx-div-row" v-for="(d, i) in fundDividends" :key="i">
+            <span class="cx-div-report">{{ d.report }}</span>
+            <span class="cx-div-desc">{{ d.desc }}</span>
+            <span v-if="d.yield_pct != null" class="cx-div-yield">{{ d.yield_pct }}%</span>
+            <span v-if="d.ex_date" class="cx-div-date">除息 {{ d.ex_date }}</span>
+          </div>
+        </div>
+      </div>
+
       <div v-if="!code && !rows.length" class="kline-hint">
         输入代码后点击「查询」或从上方持仓快捷选择。数据优先走本地缓存，首次或点「拉取最新」会从网络更新。
       </div>
@@ -126,6 +163,8 @@ const fundSections = ref([]);
 const fundLoading = ref(false);
 const fundError = ref('');
 const trend = ref(null);
+const fundProfile = ref(null);
+const fundDividends = ref([]);
 
 const latestDate = computed(() => {
   if (!rows.value.length) return '';
@@ -147,6 +186,8 @@ async function loadFundamental(c) {
     fundCode.value = '';
     fundSections.value = [];
     fundError.value = '';
+    fundProfile.value = null;
+    fundDividends.value = [];
     return;
   }
   fundCode.value = c;
@@ -156,6 +197,8 @@ async function loadFundamental(c) {
   try {
     const res = await api.fundamentalCheck(c);
     fundSections.value = res.data?.sections || [];
+    fundProfile.value = res.data?.profile || null;
+    fundDividends.value = res.data?.dividends || [];
     if (res.data?.error) fundError.value = res.data.error;
   } catch (e) {
     fundError.value = '体检拉取失败：' + (e?.response?.data?.detail || e?.message || '网络错误');
@@ -368,6 +411,87 @@ onMounted(() => {
   font-size: 13px;
   color: var(--app-text);
   line-height: 1.7;
+}
+
+.cx-block {
+  margin-top: 16px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-surface);
+  padding: 12px;
+}
+.cx-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.cx-profile {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.cx-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--app-text);
+}
+.cx-short {
+  font-weight: 400;
+  color: var(--app-muted);
+  font-size: 12px;
+}
+.cx-kv {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: 12px;
+  color: var(--app-muted);
+}
+.cx-kv b {
+  color: var(--app-text);
+  font-weight: 600;
+  margin-left: 2px;
+}
+.cx-biz {
+  font-size: 13px;
+  color: var(--app-text);
+  line-height: 1.6;
+  padding: 5px 8px;
+  background: var(--app-bg);
+  border-radius: 6px;
+}
+.cx-divs {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+}
+.cx-div-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--app-border);
+}
+.cx-div-row:last-child {
+  border-bottom: none;
+}
+.cx-div-report {
+  color: var(--app-muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 60px;
+}
+.cx-div-desc {
+  color: var(--app-text);
+  flex: 1;
+}
+.cx-div-yield {
+  color: #16a34a;
+  font-weight: 600;
+}
+.cx-div-date {
+  color: var(--app-muted);
+  font-size: 12px;
 }
 .fund-header {
   display: flex;

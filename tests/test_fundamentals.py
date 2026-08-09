@@ -176,3 +176,65 @@ def test_fundamental_check_sanitizes_nan(monkeypatch):
     lev = next(s for s in result["sections"] if s["key"] == "leverage")
     cr = next(i for i in lev["items"] if "流动比率" in i["label"])
     assert cr["value"] is None  # NaN → None
+
+
+def _load_company_extras_with_fake_akshare(monkeypatch, fake_ak):
+    monkeypatch.setitem(sys.modules, "akshare", fake_ak)
+    return importlib.import_module("company_extras")
+
+
+def test_company_extras_builds_profile_and_dividends(monkeypatch):
+    """个股：公司简报 + 历史分红都应返回。"""
+    import pandas as pd
+
+    profile_df = pd.DataFrame([{
+        "公司名称": "珠海格力电器股份有限公司", "A股简称": "格力电器",
+        "所属行业": "电气机械和器材制造业", "法人代表": "董明珠",
+        "成立日期": "1989-12-13", "上市日期": "1996-11-18",
+        "主营业务": "空调、干衣机等家用电器。", "官方网站": "www.gree.com.cn",
+        "所属市场": "深交所主板", "经营范围": "x",
+    }])
+    div_df = pd.DataFrame([{
+        "报告期": "2025-09-30", "方案进度": "实施分配",
+        "现金分红-现金分红比例描述": "10派10.00元(含税,扣税后9.00元)",
+        "现金分红-股息率": 0.0245, "股权登记日": "2026-01-22",
+        "除权除息日": "2026-01-23",
+    }])
+
+    class _FakeAk:
+        @staticmethod
+        def stock_profile_cninfo(symbol=None, **kw):
+            return profile_df
+
+        @staticmethod
+        def stock_fhps_detail_em(symbol=None, **kw):
+            return div_df
+
+    mod = _load_company_extras_with_fake_akshare(monkeypatch, _FakeAk)
+    r = mod.build_company_extras("000651")
+    assert r["profile"]["name"] == "珠海格力电器股份有限公司"
+    assert r["profile"]["listed"] == "1996-11-18"
+    assert r["profile"]["main_biz"] == "空调、干衣机等家用电器。"
+    assert len(r["dividends"]) == 1
+    d = r["dividends"][0]
+    assert d["report"] == "2025-09"
+    assert "10派10.00元" in d["desc"]
+    assert d["yield_pct"] == 2.45  # 0.0245 -> 2.45
+    assert d["ex_date"] == "2026-01-23"
+
+
+def test_company_extras_degrades_for_etf(monkeypatch):
+    """ETF（无财报/无公司信息）应静默返回空，不抛异常。"""
+    class _FakeAk:
+        @staticmethod
+        def stock_profile_cninfo(symbol=None, **kw):
+            raise IndexError("ETF 无公司资料")
+
+        @staticmethod
+        def stock_fhps_detail_em(symbol=None, **kw):
+            raise TypeError("ETF 无分红")
+
+    mod = _load_company_extras_with_fake_akshare(monkeypatch, _FakeAk)
+    r = mod.build_company_extras("159352")
+    assert r["profile"] is None
+    assert r["dividends"] == []
