@@ -28,6 +28,7 @@ try:
     from .routers_deposits import router as deposits_router
     from .routers_holdings import router as holdings_router
     from .routers_klines import router as klines_router
+    from .routers_fundamentals import router as fundamentals_router
     from .routers_performance import router as performance_router
     from .routers_maintenance import router as maintenance_router
     from .routers_market import router as market_router
@@ -56,6 +57,7 @@ except ImportError:  # Allows tests to load this file directly via importlib.
     from routers_deposits import router as deposits_router
     from routers_holdings import router as holdings_router
     from routers_klines import router as klines_router
+    from routers_fundamentals import router as fundamentals_router
     from routers_performance import router as performance_router
     from routers_maintenance import router as maintenance_router
     from routers_market import router as market_router
@@ -106,6 +108,7 @@ app.include_router(cash_router, dependencies=[Depends(require_auth)])
 app.include_router(snapshots_router, dependencies=[Depends(require_auth)])
 app.include_router(holdings_router, dependencies=[Depends(require_auth)])
 app.include_router(klines_router, dependencies=[Depends(require_auth)])
+app.include_router(fundamentals_router, dependencies=[Depends(require_auth)])
 app.include_router(dividends_router, dependencies=[Depends(require_auth)])
 app.include_router(dashboard_router, dependencies=[Depends(require_auth)])
 app.include_router(performance_router, dependencies=[Depends(require_auth)])

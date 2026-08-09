@@ -81,6 +81,7 @@ const api = {
 
     getKlines: (code, days = 120) => axios.get(API + '/klines/' + encodeURIComponent(code) + '?days=' + days, { timeout: 30000 }),
     syncKlines: (payload = {}) => axios.post(API + '/klines/sync', payload, { timeout: 180000 }),
+    fundamentalCheck: (code) => axios.get(API + '/analysis/' + encodeURIComponent(code), { timeout: 45000 }),
 
     createSnapshot: () => axios.post(API + '/snapshots'),
     listSnapshots: (range = []) => {

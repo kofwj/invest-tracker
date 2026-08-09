@@ -52,6 +52,30 @@
 
       <div v-if="error" class="kline-error">{{ error }}</div>
 
+      <!-- 基本面体检：估值 / 盈利 / 杠杆 / 现金 -->
+      <div v-if="fundCode" class="fund-block">
+        <div class="fund-header">
+          <span class="fund-title">基本面体检</span>
+          <span class="fund-sub">输入代码自动拉取，只给指标和白话，不是买卖结论</span>
+          <el-button v-if="fundLoading" size="small" text loading>体检中…</el-button>
+        </div>
+        <div v-if="fundLoading" class="fund-hint">正在拉取财报与估值指标…</div>
+        <div v-else-if="fundError" class="fund-hint">{{ fundError }}</div>
+        <div v-else-if="fundSections && fundSections.length" class="fund-grid">
+          <div v-for="sec in fundSections" :key="sec.key" class="fund-card">
+            <div class="fund-card-title">{{ sec.label }}</div>
+            <div class="fund-row" v-for="item in sec.items" :key="item.label">
+              <span class="fund-row-label">{{ item.label }}</span>
+              <span class="fund-row-value" :class="{ 'muted': item.value == null }">
+                {{ item.value != null ? item.value : '—' }}
+              </span>
+              <span v-if="item.note" class="fund-row-note" :title="item.note">?</span>
+            </div>
+          </div>
+        </div>
+        <div v-else class="fund-hint">该标的无财务/估值数据（可能是 ETF 或指数）。</div>
+      </div>
+
       <div v-if="!code && !rows.length" class="kline-hint">
         输入代码后点击「查询」或从上方持仓快捷选择。数据优先走本地缓存，首次或点「拉取最新」会从网络更新。
       </div>
@@ -74,6 +98,10 @@ const error = ref('');
 const chartEl = ref(null);
 const holdings = ref([]);
 const info = ref(null);
+const fundCode = ref('');
+const fundSections = ref([]);
+const fundLoading = ref(false);
+const fundError = ref('');
 
 const latestDate = computed(() => {
   if (!rows.value.length) return '';
@@ -87,6 +115,28 @@ async function loadHoldings() {
     holdings.value = Array.isArray(res.data) ? res.data : (res.data?.items || []);
   } catch (e) {
     // 静默
+  }
+}
+
+async function loadFundamental(c) {
+  if (!c) {
+    fundCode.value = '';
+    fundSections.value = [];
+    fundError.value = '';
+    return;
+  }
+  fundCode.value = c;
+  fundLoading.value = true;
+  fundError.value = '';
+  fundSections.value = [];
+  try {
+    const res = await api.fundamentalCheck(c);
+    fundSections.value = res.data?.sections || [];
+    if (res.data?.error) fundError.value = res.data.error;
+  } catch (e) {
+    fundError.value = '体检拉取失败：' + (e?.response?.data?.detail || e?.message || '网络错误');
+  } finally {
+    fundLoading.value = false;
   }
 }
 
@@ -109,6 +159,7 @@ async function loadKline() {
       error.value = '本地暂无缓存，点击「拉取最新」从网络获取';
     }
     renderChart();
+    loadFundamental(c);
   } catch (e) {
     error.value = '加载失败：' + (e?.response?.data?.detail || e?.message || '未知错误');
   } finally {
@@ -171,6 +222,7 @@ function clearAll() {
   rows.value = [];
   info.value = null;
   error.value = '';
+  loadFundamental('');
   if (chartEl.value) {
     renderKlineChartView(chartEl.value, []);
   }
@@ -221,5 +273,70 @@ onMounted(() => {
   margin-top: 12px;
   color: var(--app-muted);
   font-size: 12px;
+}
+.fund-block {
+  margin-top: 16px;
+}
+.fund-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.fund-title {
+  font-weight: 700;
+  color: var(--app-text);
+  font-size: 14px;
+}
+.fund-sub {
+  color: var(--app-muted);
+  font-size: 12px;
+}
+.fund-hint {
+  color: var(--app-muted);
+  font-size: 13px;
+}
+.fund-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 10px;
+}
+.fund-card {
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-surface);
+  padding: 12px;
+}
+.fund-card-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--app-primary);
+  margin-bottom: 8px;
+}
+.fund-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 13px;
+}
+.fund-row-label {
+  color: var(--app-muted);
+  min-width: 0;
+  flex: 1;
+}
+.fund-row-value {
+  color: var(--app-text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.fund-row-value.muted {
+  color: var(--app-muted);
+  font-weight: 400;
+}
+.fund-row-note {
+  cursor: help;
+  color: var(--app-warn);
+  font-size: 11px;
 }
 </style>
