@@ -9,6 +9,7 @@ try:
     from .kline_cache import ensure_kline_cache_table
     from .market import ensure_alert_tables
     from .notify import ensure_notify_tables
+    from .broker_reconcile import ensure_broker_reconcile_history_table
     from .snapshots import ensure_snapshot_columns, ensure_portfolio_cash_flows_table, ensure_reconcile_table
 except ImportError:
     from cash import ensure_cash_base, set_setting
@@ -18,10 +19,11 @@ except ImportError:
     from kline_cache import ensure_kline_cache_table
     from market import ensure_alert_tables
     from notify import ensure_notify_tables
+    from broker_reconcile import ensure_broker_reconcile_history_table
     from snapshots import ensure_snapshot_columns, ensure_portfolio_cash_flows_table, ensure_reconcile_table
 
 
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 SCHEMA_VERSION_KEY = "schema_version"
 
 
@@ -142,6 +144,7 @@ def ensure_app_tables(conn):
     ensure_discipline_tables(conn)
     ensure_notify_tables(conn)
     ensure_kline_cache_table(conn)
+    ensure_broker_reconcile_history_table(conn)
 
 
 def migrate_to_v1_core_compat(conn):
@@ -261,6 +264,11 @@ LEGACY_FOCUS_DEFAULTS = {
 }
 
 
+def migrate_to_v13_broker_reconcile_history(conn):
+    """券商对账运行历史：预览/应用各记一条，便于回看上次差异。"""
+    ensure_broker_reconcile_history_table(conn)
+
+
 def migrate_to_v12_focus_defaults(conn):
     """把「已有持仓但 focus 未自定义」的库固化为 legacy 默认，保持行为；全新/空库不注入。"""
     try:
@@ -306,6 +314,7 @@ MIGRATIONS = [
     (10, migrate_to_v10_kline_cache),
     (11, migrate_to_v11_reconcile),
     (12, migrate_to_v12_focus_defaults),
+    (13, migrate_to_v13_broker_reconcile_history),
 ]
 
 

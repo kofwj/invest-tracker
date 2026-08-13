@@ -7,6 +7,7 @@ const createBrokerReconcileModule = ({
     brokerSelected,
     brokerAsOfDate,
     brokerCashInput,
+    brokerHistory,
     fetchData,
     showSyncNotice,
 }) => {
@@ -39,6 +40,7 @@ const createBrokerReconcileModule = ({
             const res = await api.brokerReconcilePreview(fd);
             brokerResult.value = res.data || {};
             brokerSelected.value = [];
+            fetchBrokerHistory();
             const n = Number(brokerResult.value.diff_count || 0);
             if (n === 0) ElMessage.success(brokerResult.value.summary_text || '全部一致');
             else ElMessage.warning(brokerResult.value.summary_text || `发现 ${n} 处差异`);
@@ -63,17 +65,32 @@ const createBrokerReconcileModule = ({
         brokerSelected.value = [];
     }
 
+    async function fetchBrokerHistory() {
+        try {
+            const res = await api.brokerReconcileHistory(20);
+            brokerHistory.value = res.data?.items || [];
+        } catch {
+            brokerHistory.value = [];
+        }
+    }
+
     async function applySelectedCorrections() {
         const items = brokerSelected.value || [];
         if (!items.length) {
             ElMessage.warning('请先勾选要校正的行');
             return;
         }
+        const qtyLines = items.slice(0, 8).map((s) => {
+            const qty = Number(s.actual_quantity || 0).toLocaleString();
+            const cost = Number(s.actual_avg_cost || 0).toFixed(4);
+            return `${s.code} ${s.name || ''} → 数量 ${qty} / 成本 ${cost}`;
+        });
+        const more = items.length > 8 ? `\n…另有 ${items.length - 8} 条` : '';
         try {
             await ElMessageBox.confirm(
-                `将按券商数据写入 ${items.length} 条持仓校正（会先自动备份）。校正后自动重扫差异。确定？`,
-                '应用券商校正',
-                { type: 'warning', confirmButtonText: '写入校正', cancelButtonText: '取消' }
+                `将按券商数据改写 ${items.length} 个持仓的数量与成本（先自动备份，再重扫差异）：\n\n${qtyLines.join('\n')}${more}`,
+                '确认应用券商校正',
+                { type: 'warning', confirmButtonText: `确认写入 ${items.length} 条`, cancelButtonText: '取消', dangerouslyUseHTMLString: false }
             );
         } catch {
             return;
@@ -101,6 +118,7 @@ const createBrokerReconcileModule = ({
             showSyncNotice?.(`已写入 ${n} 条持仓校正` + (res.data?.backup ? `（已备份）` : ''), 'success');
             ElMessage.success(`已写入 ${n} 条校正`);
             await fetchData?.();
+            fetchBrokerHistory();
             brokerSelected.value = [];
             if (res.data?.recheck) {
                 brokerResult.value = {
@@ -131,6 +149,7 @@ const createBrokerReconcileModule = ({
         selectAllSuggestions,
         clearBrokerSelection,
         applySelectedCorrections,
+        fetchBrokerHistory,
     };
 };
 

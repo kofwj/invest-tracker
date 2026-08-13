@@ -3,7 +3,7 @@ import api from '../api/index.js';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { formatMoney, todayLocalIso, apiErrorDetail } from '../utils/index.js';
 
-const createCashModule = ({ dashboard, cashForm, cashFlows, cashFlowForm, cashFlowQuery, cashFlowEditDialog, activeFeeAccount, fetchData }) => {
+const createCashModule = ({ dashboard, cashForm, cashFlows, cashFlowForm, cashFlowQuery, cashFlowEditDialog, cashAudit, activeFeeAccount, fetchData }) => {
     const queryCashFlows = async () => {
         try {
             const params = [];
@@ -16,8 +16,24 @@ const createCashModule = ({ dashboard, cashForm, cashFlows, cashFlowForm, cashFl
             if (q.flow_type) params.push(`flow_type=${encodeURIComponent(q.flow_type)}`);
             const res = await api.listCashFlows(params);
             cashFlows.value = res.data || [];
+            fetchCashAudit();
         } catch (e) {
             ElMessage.error('获取资金流水失败：' + apiErrorDetail(e));
+        }
+    };
+
+    const fetchCashAudit = async () => {
+        try {
+            const q = cashFlowQuery.value || {};
+            const params = {};
+            if (q.dateRange && q.dateRange.length === 2) {
+                params.start_date = q.dateRange[0];
+                params.end_date = q.dateRange[1];
+            }
+            const res = await api.brokerCashAudit(params);
+            cashAudit.value = res.data || null;
+        } catch {
+            cashAudit.value = null;
         }
     };
 
@@ -95,7 +111,7 @@ const createCashModule = ({ dashboard, cashForm, cashFlows, cashFlowForm, cashFl
         }
     };
 
-    return { updateCash, queryCashFlows, resetCashFlowQuery, cashFlowSummary, cashFlowTagType, addCashFlow, openCashFlowEditDialog, saveCashFlowEdit, deleteCashFlow };
+    return { updateCash, queryCashFlows, resetCashFlowQuery, cashFlowSummary, cashFlowTagType, addCashFlow, openCashFlowEditDialog, saveCashFlowEdit, deleteCashFlow, fetchCashAudit };
 };
 
 export { createCashModule };

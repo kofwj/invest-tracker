@@ -108,6 +108,7 @@ const app = createApp({
         const cashFlowForm = ref({ date: todayLocalIso(), account: '华泰证券', flow_type: '银证转入', amount: 0, remark: '' });
         const cashFlowQuery = ref({ dateRange: [], account: '', flow_type: '' });
         const cashFlowEditDialog = ref({ visible: false, editId: null, form: { date: '', account: '', flow_type: '', amount: 0, remark: '' } });
+        const cashAudit = ref(null);
         const snapshots = ref([]);
         const snapshotRange = ref([]);
         const snapshotSummary = ref(null);
@@ -328,6 +329,7 @@ const app = createApp({
             openCashFlowEditDialog,
             saveCashFlowEdit,
             deleteCashFlow,
+            fetchCashAudit,
         } = createCashModule({
             dashboard,
             cashForm,
@@ -335,6 +337,7 @@ const app = createApp({
             cashFlowForm,
             cashFlowQuery,
             cashFlowEditDialog,
+            cashAudit,
             activeFeeAccount,
             fetchData,
         });
@@ -486,6 +489,7 @@ const app = createApp({
         const brokerSelected = ref([]);
         const brokerAsOfDate = ref(todayLocalIso());
         const brokerCashInput = ref('');
+        const brokerHistory = ref([]);
         const {
             statusLabel: brokerStatusLabel,
             statusType: brokerStatusType,
@@ -494,12 +498,14 @@ const app = createApp({
             selectAllSuggestions,
             clearBrokerSelection,
             applySelectedCorrections,
+            fetchBrokerHistory,
         } = createBrokerReconcileModule({
             brokerResult,
             brokerLoading,
             brokerSelected,
             brokerAsOfDate,
             brokerCashInput,
+            brokerHistory,
             fetchData,
             showSyncNotice,
         });
@@ -663,6 +669,9 @@ const app = createApp({
             if (val === 'cash') {
                 queryCashFlows();
             }
+            if (val === 'broker') {
+                fetchBrokerHistory();
+            }
         });
 
         // Bootstrap + init extracted
@@ -702,12 +711,12 @@ const app = createApp({
             showLoginOverlay, loginLoading, loginPassword, loginError, authEnabled, handleLogin, handleLogout,
             activeTab, tabGroup, tabGroups, goTab, dashboard, holdings, deposits, depositRows, depositSummary, depositBankBreakdown, depositMaturityBuckets, syncing, trailingSyncing, syncNotice,
             snapshots, snapshotRange, snapshotSummary, snapshotMetrics, snapshotChangeRows, snapshotInsights, snapshotLoading, reconcileData, reconcileForm, reconcileSaving, fetchReconcile, saveReconcile, maintenanceStatus, backups, maintenanceLoading, dividendLoading, dividendConfirming, dividendDialog, dividendTableRef, todayIso, todaySnapshotDone, latestPriceStatusText, latestBackupText,
-            transForm, feeSettings, feeAccounts, activeFeeAccount, newFeeAccountName, feeCategories, feeSettingRows, feeAutoHint, depositDialog, cashForm, cashFlows, cashFlowForm, cashFlowQuery, cashFlowSummary, cashFlowEditDialog, transDialog, allocationAnalysis, macroAllocationAnalysis, allocationSummary, allocationHealth, portfolioExpectedReturn, allocationStory, allocationStoryLoading, fetchAllocationStory,
+            transForm, feeSettings, feeAccounts, activeFeeAccount, newFeeAccountName, feeCategories, feeSettingRows, feeAutoHint, depositDialog, cashForm, cashFlows, cashFlowForm, cashFlowQuery, cashFlowSummary, cashFlowEditDialog, cashAudit, transDialog, allocationAnalysis, macroAllocationAnalysis, allocationSummary, allocationHealth, portfolioExpectedReturn, allocationStory, allocationStoryLoading, fetchAllocationStory,
             allTransactions, filteredTransactions, pendingTransactions, pendingPurchaseTotal, transQuery, transPage, transEditDialog,
             syncPrices, syncTrailingReturns, openDividendDraftDialog, openEveningBrief, eveningBriefDialog, scanDividendDrafts, confirmSelectedDividends, selectSelectableDividendDrafts, clearDividendDraftSelection, onDividendSelectionChange, isDividendDraftSelectable, dividendStatusLabel, dividendStatusType, submitTrans, resetForm, fetchData, markFeeManual, saveFeeSettings, resetFeeSettings, addFeeAccount, removeFeeAccount, onActiveFeeAccountChange,
             downloadTransactionsTemplate, exportTransactions, importTransactions, downloadDepositsTemplate, exportDeposits, importDeposits, downloadDividendTemplate, importDividends,
             queryAssetByCode, queryAssetByName, selectTransAsset, autoMatchTransAsset,
-            openDepositDialog, saveDeposit, deleteDeposit, updateCash, queryCashFlows, resetCashFlowQuery, addCashFlow, openCashFlowEditDialog, saveCashFlowEdit, deleteCashFlow, cashFlowTagType,
+            openDepositDialog, saveDeposit, deleteDeposit, updateCash, queryCashFlows, resetCashFlowQuery, addCashFlow, openCashFlowEditDialog, saveCashFlowEdit, deleteCashFlow, cashFlowTagType, fetchCashAudit,
             createSnapshot, fetchSnapshots, exportSnapshots, compactSnapshots, showTransactions,
             queryTransactions, applyTransFilter, resetTransQuery, handleTransPageChange, handleTransPageSizeChange, goPendingTransactions, openTransEditDialog, saveTransactionEdit, deleteTransaction,
             openExpectedReturnDialog, saveExpectedReturn, openHoldingCorrectionDialog, saveHoldingCorrection, openHoldingCorrectionHistory, deleteHoldingCorrection,
@@ -718,9 +727,9 @@ const app = createApp({
             fetchPerformance, setPerfTimelineRange, addPerfFlow, updatePerfFlow, deletePerfFlow, loadPerfFlowSuggestions, applyPerfFlowSuggestion, contributionBarStyle, fetchMaintenance, createDbBackup, downloadBackup, restoreBackup, deleteBackup, restoreUploadedBackup,
             perfRiskMetrics, perfContributionSummary, perfWindowCards, selectPerfWindow,
             notifyStatus, notifyLogs, notifyLoading, notifyEventDraft, notifyChannelDraft, notifyChannelClear, fetchNotifyPanel, saveNotifyPanel, testNotifyPush, pushDepositDueNow, pushDisciplineNow,
-            brokerResult, brokerLoading, brokerSelected, brokerAsOfDate, brokerCashInput,
+            brokerResult, brokerLoading, brokerSelected, brokerAsOfDate, brokerCashInput, brokerHistory,
             statusLabel: brokerStatusLabel, statusType: brokerStatusType,
-            onBrokerFileChange, onBrokerSelectionChange, selectAllSuggestions, clearBrokerSelection, applySelectedCorrections,
+            onBrokerFileChange, onBrokerSelectionChange, selectAllSuggestions, clearBrokerSelection, applySelectedCorrections, fetchBrokerHistory,
             marketSummary, alertRules, alertEvents, marketLoading, alertChecking, alertEventsLoading, alertForm, alertEditDialog, triggeredAlerts,
             alertEventCodeFilter, alertEventStartDate, alertEventEndDate, watchlistDraft, watchlistSaving,
             fetchMarketSummary, fetchAlertRules, fetchAlertEvents, exportAlertEvents, clearAlertEvents, refreshMarket, resetAlertForm, saveAlertRule, openAlertCreate, openAlertEdit,

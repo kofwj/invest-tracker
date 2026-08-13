@@ -153,10 +153,48 @@
         </div>
       </template>
     </el-card>
+
+    <el-card shadow="never" class="broker-card" style="margin-top: 14px">
+      <template #header>
+        <div class="ops-card-head">
+          <div>
+            <div class="ops-section-title">对账历史</div>
+            <div class="ops-hint">每次预览和应用都会留一条摘要，方便回看上次差了哪些代码</div>
+          </div>
+          <el-button size="small" @click="fetchBrokerHistory">刷新</el-button>
+        </div>
+      </template>
+      <el-table :data="brokerHistory" stripe size="small" empty-text="还没有对账记录" style="width: 100%">
+        <el-table-column label="时间" width="170">
+          <template #default="s">{{ s.row.created_at || '—' }}</template>
+        </el-table-column>
+        <el-table-column label="类型" width="80">
+          <template #default="s">
+            <el-tag size="small" :type="s.row.kind === 'apply' ? 'warning' : 'info'">
+              {{ s.row.kind === 'apply' ? '应用' : '预览' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="as_of_date" label="锚点日" width="110" />
+        <el-table-column prop="filename" label="文件" min-width="120" show-overflow-tooltip />
+        <el-table-column label="差异" width="80" align="right">
+          <template #default="s">{{ s.row.diff_count ?? 0 }}</template>
+        </el-table-column>
+        <el-table-column label="写入" width="80" align="right">
+          <template #default="s">{{ s.row.applied_count ?? 0 }}</template>
+        </el-table-column>
+        <el-table-column label="现金" width="90">
+          <template #default="s">{{ s.row.cash_status || '—' }}</template>
+        </el-table-column>
+        <el-table-column prop="summary_text" label="摘要" min-width="220" show-overflow-tooltip />
+        <el-table-column prop="codes" label="代码" min-width="140" show-overflow-tooltip />
+      </el-table>
+    </el-card>
   </PageShell>
 </template>
 
 <script setup>
+import { onMounted } from 'vue';
 import PageShell from '../components/PageShell.vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 
@@ -166,6 +204,7 @@ const {
   brokerSelected,
   brokerAsOfDate,
   brokerCashInput,
+  brokerHistory,
   statusLabel,
   statusType,
   onBrokerFileChange,
@@ -173,5 +212,30 @@ const {
   selectAllSuggestions,
   clearBrokerSelection,
   applySelectedCorrections,
+  fetchBrokerHistory,
 } = useAppCtx();
+
+onMounted(() => {
+  fetchBrokerHistory?.();
+});
 </script>
+
+<style scoped>
+.ops-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.ops-section-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--app-text);
+}
+.ops-hint {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--app-soft);
+}
+</style>

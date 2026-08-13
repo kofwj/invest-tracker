@@ -117,6 +117,8 @@ const api = {
 
     brokerReconcilePreview: (formData) => axios.post(API + '/broker-reconcile/preview', formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120000 }),
     brokerReconcileApply: (payload) => axios.post(API + '/broker-reconcile/apply', payload || {}, { timeout: 120000 }),
+    brokerReconcileHistory: (limit = 20) => axios.get(API + '/broker-reconcile/history?limit=' + encodeURIComponent(limit)),
+    brokerCashAudit: (params = {}) => axios.get(API + '/broker-reconcile/cash-audit', { params }),
 
     getMarketSummary: () => axios.get(API + '/market/summary', { timeout: 60000 }),
     getTradingDay: (date) => axios.get(API + '/market/trading-day' + (date ? ('?date=' + encodeURIComponent(date)) : '')),

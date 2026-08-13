@@ -1,7 +1,12 @@
 # -*- coding: utf-8 -*-
 import sqlite3
 
-from broker_reconcile import compare_holdings, parse_broker_csv_text, parse_broker_upload
+from broker_reconcile import (
+    audit_bank_vs_portfolio_flows,
+    compare_holdings,
+    parse_broker_csv_text,
+    parse_broker_upload,
+)
 
 
 def test_parse_simple_csv():
@@ -97,9 +102,20 @@ def test_broker_reconcile_preview_apply_recheck(client, app_module):
     assert apply.json()["applied_count"] == 1
     assert apply.json().get("recheck") is not None
     assert apply.json()["recheck"]["diff_count"] == 0
+    assert apply.json().get("run_id")
+    assert preview.json().get("run_id")
     holdings = client.get("/holdings").json()
     row = next(h for h in holdings if h["code"] == "600000")
     assert abs(float(row["quantity"]) - 150) < 1e-6
+    history = client.get("/broker-reconcile/history")
+    assert history.status_code == 200, history.text
+    items = history.json()["items"]
+    kinds = [x["kind"] for x in items]
+    assert "preview" in kinds
+    assert "apply" in kinds
+    apply_row = next(x for x in items if x["kind"] == "apply")
+    assert apply_row["applied_count"] == 1
+    assert "600000" in (apply_row.get("codes") or "")
 
 
 def test_evening_brief_and_flow_suggest(client, app_module):
@@ -123,3 +139,60 @@ def test_evening_brief_and_flow_suggest(client, app_module):
     assert data["count"] >= 1
     assert data["drafts"][0]["flow_type"] == "投入"
     assert abs(data["drafts"][0]["amount"] - 50000) < 1e-6
+
+
+def test_audit_bank_vs_portfolio_match_and_gap():
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    conn.execute(
+        "CREATE TABLE cash_flows (id INTEGER PRIMARY KEY, date TEXT, flow_type TEXT, amount REAL, remark TEXT)"
+    )
+    conn.execute(
+        "CREATE TABLE portfolio_cash_flows (id INTEGER PRIMARY KEY, date TEXT, flow_type TEXT, amount REAL, remark TEXT)"
+    )
+    conn.executemany(
+        "INSERT INTO cash_flows (date, flow_type, amount, remark) VALUES (?,?,?,?)",
+        [
+            ("2026-06-01", "银证转入", 50000, "工资"),
+            ("2026-06-10", "银证转出", -2000, "取现"),
+            ("2026-06-15", "银证转入", 8000, "未配对"),
+        ],
+    )
+    conn.executemany(
+        "INSERT INTO portfolio_cash_flows (date, flow_type, amount, remark) VALUES (?,?,?,?)",
+        [
+            ("2026-06-01", "投入", 50000, "工资"),
+            ("2026-06-10", "取出", 2000, "取现"),
+            ("2026-06-20", "投入", 3000, "组合多记"),
+        ],
+    )
+    result = audit_bank_vs_portfolio_flows(conn, start_date="2026-06-01", end_date="2026-06-30")
+    assert result["matched_count"] == 2
+    assert result["unmatched_bank_count"] == 1
+    assert result["unmatched_portfolio_count"] == 1
+    assert abs(result["in_gap"] - 5000) < 1e-6
+    assert abs(result["out_gap"]) < 1e-6
+    assert result["ok"] is False
+    assert result["unmatched_bank"][0]["amount"] == 8000
+    conn.close()
+
+
+def test_cash_audit_endpoint(client, app_module):
+    conn = sqlite3.connect(app_module.DB_PATH)
+    conn.execute(
+        "INSERT INTO cash_flows (date, account, flow_type, amount, balance_before, balance_after, remark) VALUES (?,?,?,?,?,?,?)",
+        ("2026-06-01", "华泰证券", "银证转入", 10000, 0, 10000, "工资"),
+    )
+    conn.execute(
+        "INSERT INTO portfolio_cash_flows (date, flow_type, amount, source, remark) VALUES (?,?,?,?,?)",
+        ("2026-06-01", "投入", 10000, "银证", "工资"),
+    )
+    conn.commit()
+    conn.close()
+    resp = client.get("/broker-reconcile/cash-audit?start_date=2026-06-01&end_date=2026-06-30")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["matched_count"] == 1
+    assert body["ok"] is True
+    assert abs(body["bank_in"] - 10000) < 1e-6
+    assert abs(body["portfolio_in"] - 10000) < 1e-6

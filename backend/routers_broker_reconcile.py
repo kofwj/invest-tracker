@@ -11,13 +11,25 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 try:
-    from .broker_reconcile import compare_holdings, parse_broker_upload
+    from .broker_reconcile import (
+        audit_bank_vs_portfolio_flows,
+        compare_holdings,
+        list_broker_reconcile_runs,
+        parse_broker_upload,
+        save_broker_reconcile_run,
+    )
     from .csv_utils import create_safety_backup, read_upload_bytes_limited
     from .database import db_session, local_today_iso
     from .holding_calculator import infer_category, recalc_holdings, validate_holding_history
     from .portfolio_totals import compute_portfolio_totals
 except ImportError:
-    from broker_reconcile import compare_holdings, parse_broker_upload
+    from broker_reconcile import (
+        audit_bank_vs_portfolio_flows,
+        compare_holdings,
+        list_broker_reconcile_runs,
+        parse_broker_upload,
+        save_broker_reconcile_run,
+    )
     from csv_utils import create_safety_backup, read_upload_bytes_limited
     from database import db_session, local_today_iso
     from holding_calculator import infer_category, recalc_holdings, validate_holding_history
@@ -86,6 +98,12 @@ async def broker_reconcile_preview(
     result["parse"] = parse_meta
     result["filename"] = file.filename
     result["broker_cash_input"] = cash_val
+    with db_session() as conn:
+        run_id = save_broker_reconcile_run(
+            conn, kind="preview", result=result, filename=file.filename or ""
+        )
+        conn.commit()
+    result["run_id"] = run_id
     return result
 
 
@@ -150,10 +168,34 @@ def broker_reconcile_apply(body: BrokerApplyBody):
         as_of = (body.as_of_date or "").strip() or local_today_iso()
         recheck = _build_preview(body.broker_rows, as_of, broker_cash=body.broker_cash)
 
+    history_src = recheck or {"as_of_date": body.as_of_date, "summary_text": f"应用 {len(applied)} 条校正"}
+    with db_session() as hist_conn:
+        run_id = save_broker_reconcile_run(
+            hist_conn,
+            kind="apply",
+            result=history_src,
+            applied_count=len(applied),
+            codes=applied,
+        )
+        hist_conn.commit()
+
     return {
         "status": "success",
         "applied_count": len(applied),
         "codes": applied,
         "backup": backup_path,
         "recheck": recheck,
+        "run_id": run_id,
     }
+
+
+@router.get("/broker-reconcile/history")
+def broker_reconcile_history(limit: int = 20):
+    with db_session(row_factory=sqlite3.Row) as conn:
+        return {"items": list_broker_reconcile_runs(conn, limit=limit)}
+
+
+@router.get("/broker-reconcile/cash-audit")
+def broker_cash_audit(start_date: Optional[str] = None, end_date: Optional[str] = None):
+    with db_session(row_factory=sqlite3.Row) as conn:
+        return audit_bank_vs_portfolio_flows(conn, start_date=start_date, end_date=end_date)

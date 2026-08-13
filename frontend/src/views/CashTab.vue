@@ -158,6 +158,51 @@
         </el-table-column>
       </el-table>
     </el-card>
+
+    <el-card shadow="never" class="ops-card">
+      <template #header>
+        <div class="ops-card-head">
+          <div>
+            <div class="ops-section-title">银证 vs 组合投入勾稽</div>
+            <div class="ops-hint">银证转入应对组合投入，银证转出应对组合取出；按同日同额配对（容差 0.05）</div>
+          </div>
+          <el-button size="small" @click="fetchCashAudit">刷新勾稽</el-button>
+        </div>
+      </template>
+      <el-alert
+        v-if="cashAudit"
+        :title="cashAudit.summary_text"
+        :type="cashAudit.ok ? 'success' : 'warning'"
+        show-icon
+        :closable="false"
+        style="margin-bottom: 12px"
+      />
+      <el-empty v-else description="打开本页或查询流水后会自动勾稽" />
+      <el-row v-if="cashAudit" :gutter="16" style="margin-bottom: 12px">
+        <el-col :span="6"><el-statistic title="银证转入" :value="cashAudit.bank_in || 0" :precision="2" prefix="¥" /></el-col>
+        <el-col :span="6"><el-statistic title="组合投入" :value="cashAudit.portfolio_in || 0" :precision="2" prefix="¥" /></el-col>
+        <el-col :span="6"><el-statistic title="银证转出" :value="Math.abs(cashAudit.bank_out || 0)" :precision="2" prefix="¥" /></el-col>
+        <el-col :span="6"><el-statistic title="组合取出" :value="Math.abs(cashAudit.portfolio_out || 0)" :precision="2" prefix="¥" /></el-col>
+      </el-row>
+      <div v-if="cashAudit?.unmatched_bank?.length" class="ops-hint" style="margin-bottom: 8px">未配对银证 {{ cashAudit.unmatched_bank_count }} 笔</div>
+      <el-table v-if="cashAudit?.unmatched_bank?.length" :data="cashAudit.unmatched_bank" stripe size="small" style="width: 100%; margin-bottom: 12px">
+        <el-table-column prop="date" label="日期" width="110" />
+        <el-table-column prop="flow_type" label="类型" width="100" />
+        <el-table-column label="金额" width="130" align="right">
+          <template #default="s"><span class="num-cell">{{ formatMoney(s.row.amount, 2, true) }}</span></template>
+        </el-table-column>
+        <el-table-column prop="remark" label="备注" show-overflow-tooltip />
+      </el-table>
+      <div v-if="cashAudit?.unmatched_portfolio?.length" class="ops-hint" style="margin-bottom: 8px">未配对组合流水 {{ cashAudit.unmatched_portfolio_count }} 笔</div>
+      <el-table v-if="cashAudit?.unmatched_portfolio?.length" :data="cashAudit.unmatched_portfolio" stripe size="small" style="width: 100%">
+        <el-table-column prop="date" label="日期" width="110" />
+        <el-table-column prop="flow_type" label="类型" width="100" />
+        <el-table-column label="金额" width="130" align="right">
+          <template #default="s"><span class="num-cell">{{ formatMoney(s.row.amount, 2, true) }}</span></template>
+        </el-table-column>
+        <el-table-column prop="remark" label="备注" show-overflow-tooltip />
+      </el-table>
+    </el-card>
   </PageShell>
 </template>
 
@@ -166,10 +211,10 @@ import PageShell from '../components/PageShell.vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 const {
   dashboard, feeSettings, feeAccounts, activeFeeAccount, newFeeAccountName, feeCategories,
-  cashForm, cashFlows, cashFlowForm, cashFlowQuery, cashFlowSummary,
+  cashForm, cashFlows, cashFlowForm, cashFlowQuery, cashFlowSummary, cashAudit,
   saveFeeSettings, resetFeeSettings, addFeeAccount, removeFeeAccount, onActiveFeeAccountChange,
   updateCash, queryCashFlows, resetCashFlowQuery, addCashFlow, openCashFlowEditDialog, deleteCashFlow,
-  cashFlowTagType, formatMoney,
+  cashFlowTagType, formatMoney, fetchCashAudit,
 } = useAppCtx();
 </script>
 

@@ -411,3 +411,177 @@ def compare_holdings(
             + (f"；{cash_cmp['text']}" if cash_cmp else "")
         ),
     }
+
+
+def ensure_broker_reconcile_history_table(conn) -> None:
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS broker_reconcile_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            kind TEXT NOT NULL,
+            as_of_date TEXT,
+            filename TEXT,
+            broker_count INTEGER DEFAULT 0,
+            app_count INTEGER DEFAULT 0,
+            matched_count INTEGER DEFAULT 0,
+            diff_count INTEGER DEFAULT 0,
+            applied_count INTEGER DEFAULT 0,
+            cash_status TEXT,
+            cash_diff REAL,
+            summary_text TEXT,
+            codes TEXT
+        )"""
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_broker_reconcile_runs_created ON broker_reconcile_runs(created_at DESC)"
+    )
+
+
+def save_broker_reconcile_run(
+    conn,
+    *,
+    kind: str,
+    result: Optional[Dict[str, Any]] = None,
+    filename: str = "",
+    applied_count: int = 0,
+    codes: Optional[List[str]] = None,
+) -> int:
+    ensure_broker_reconcile_history_table(conn)
+    result = result or {}
+    cash = result.get("cash") or {}
+    code_list = codes or [str(d.get("code") or "") for d in (result.get("diffs") or []) if d.get("code")]
+    cur = conn.execute(
+        """INSERT INTO broker_reconcile_runs
+           (kind, as_of_date, filename, broker_count, app_count, matched_count, diff_count,
+            applied_count, cash_status, cash_diff, summary_text, codes)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            str(kind or "preview"),
+            result.get("as_of_date"),
+            filename or "",
+            int(result.get("broker_count") or 0),
+            int(result.get("app_count") or 0),
+            int(result.get("matched_count") or 0),
+            int(result.get("diff_count") or 0),
+            int(applied_count or 0),
+            cash.get("status"),
+            cash.get("diff"),
+            result.get("summary_text") or "",
+            ",".join([c for c in code_list if c]),
+        ),
+    )
+    return int(cur.lastrowid)
+
+
+def list_broker_reconcile_runs(conn, limit: int = 20) -> List[Dict[str, Any]]:
+    ensure_broker_reconcile_history_table(conn)
+    limit = max(1, min(int(limit or 20), 100))
+    rows = conn.execute(
+        "SELECT * FROM broker_reconcile_runs ORDER BY id DESC LIMIT ?",
+        (limit,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def _signed_amount(flow_type: str, amount: float) -> float:
+    amt = float(amount or 0)
+    if flow_type == "银证转入" or flow_type == "投入":
+        return abs(amt)
+    if flow_type == "银证转出" or flow_type == "取出":
+        return -abs(amt)
+    return amt
+
+
+def audit_bank_vs_portfolio_flows(conn, start_date: Optional[str] = None, end_date: Optional[str] = None) -> Dict[str, Any]:
+    """勾稽系统银证流水 vs 组合投入/取出。
+
+    按日期+金额配对（容差 0.05）。银证转入应对组合投入，银证转出应对组合取出。
+    """
+    bank_q = "SELECT id, date, flow_type, amount, remark FROM cash_flows WHERE flow_type IN ('银证转入', '银证转出')"
+    port_q = "SELECT id, date, flow_type, amount, remark FROM portfolio_cash_flows WHERE flow_type IN ('投入', '取出')"
+    params: List[str] = []
+    if start_date:
+        bank_q += " AND date >= ?"
+        port_q += " AND date >= ?"
+        params.append(start_date)
+    if end_date:
+        bank_q += " AND date <= ?"
+        port_q += " AND date <= ?"
+        params.append(end_date)
+    bank_q += " ORDER BY date, id"
+    port_q += " ORDER BY date, id"
+    try:
+        bank_rows = [dict(r) for r in conn.execute(bank_q, params).fetchall()]
+    except Exception:
+        bank_rows = []
+    try:
+        port_rows = [dict(r) for r in conn.execute(port_q, params).fetchall()]
+    except Exception:
+        port_rows = []
+
+    bank_items = [
+        {
+            "id": r["id"],
+            "date": str(r.get("date") or ""),
+            "flow_type": r.get("flow_type"),
+            "amount": _signed_amount(r.get("flow_type"), r.get("amount")),
+            "remark": r.get("remark") or "",
+        }
+        for r in bank_rows
+    ]
+    port_items = [
+        {
+            "id": r["id"],
+            "date": str(r.get("date") or ""),
+            "flow_type": r.get("flow_type"),
+            "amount": _signed_amount(r.get("flow_type"), r.get("amount")),
+            "remark": r.get("remark") or "",
+        }
+        for r in port_rows
+    ]
+
+    used_port = set()
+    matches = []
+    unmatched_bank = []
+    for b in bank_items:
+        hit = None
+        for p in port_items:
+            if p["id"] in used_port:
+                continue
+            same_dir = (b["amount"] > 0 and p["amount"] > 0) or (b["amount"] < 0 and p["amount"] < 0)
+            if b["date"] == p["date"] and same_dir and abs(abs(b["amount"]) - abs(p["amount"])) <= 0.05:
+                hit = p
+                break
+        if hit:
+            used_port.add(hit["id"])
+            matches.append({"bank": b, "portfolio": hit, "gap": round(abs(b["amount"]) - abs(hit["amount"]), 2)})
+        else:
+            unmatched_bank.append(b)
+    unmatched_portfolio = [p for p in port_items if p["id"] not in used_port]
+
+    bank_in = sum(x["amount"] for x in bank_items if x["amount"] > 0)
+    bank_out = sum(x["amount"] for x in bank_items if x["amount"] < 0)
+    port_in = sum(x["amount"] for x in port_items if x["amount"] > 0)
+    port_out = sum(x["amount"] for x in port_items if x["amount"] < 0)
+    return {
+        "start_date": start_date,
+        "end_date": end_date,
+        "bank_in": round(bank_in, 2),
+        "bank_out": round(bank_out, 2),
+        "portfolio_in": round(port_in, 2),
+        "portfolio_out": round(port_out, 2),
+        "in_gap": round(bank_in - port_in, 2),
+        "out_gap": round(bank_out - port_out, 2),
+        "matched_count": len(matches),
+        "unmatched_bank_count": len(unmatched_bank),
+        "unmatched_portfolio_count": len(unmatched_portfolio),
+        "matches": matches[:100],
+        "unmatched_bank": unmatched_bank[:50],
+        "unmatched_portfolio": unmatched_portfolio[:50],
+        "ok": abs(bank_in - port_in) <= 0.05 and abs(bank_out - port_out) <= 0.05,
+        "summary_text": (
+            f"银证转入 {bank_in:,.2f} / 组合投入 {port_in:,.2f}（差 {bank_in - port_in:+,.2f}）；"
+            f"银证转出 {abs(bank_out):,.2f} / 组合取出 {abs(port_out):,.2f}（差 {bank_out - port_out:+,.2f}）；"
+            f"配对 {len(matches)} 笔，未配对银证 {len(unmatched_bank)} / 组合 {len(unmatched_portfolio)}"
+        ),
+    }
