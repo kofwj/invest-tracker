@@ -1,67 +1,106 @@
 # Invest Tracker · 真仓账本
 
-> 更新：2026-07-26  
-> 个人真仓投资账本：持仓、交易、现金/存款、日快照、收益与纪律。  
-> **不模拟、不自动下单**；草稿确认后才入账。  
-> 变更明细见 [CHANGELOG.md](CHANGELOG.md)。
+个人真仓记账：持仓、交易、银证现金、存款、日快照、收益与纪律。  
+**不模拟、不自动下单**。草稿确认后才入账。
+
+变更按日见 [CHANGELOG.md](CHANGELOG.md)。VPS 步骤见 [docs/deploy-vps.md](docs/deploy-vps.md)。
 
 ---
 
-## 它是什么
+## 它做什么
 
-本地 / VPS 可跑的 **真仓账本**，用来：
+本地或 VPS 上一份自己的账：
 
-- 记清楚：买了什么、现金多少、存款何时到期
-- 看清楚：今天赚亏粗估、对大盘强弱、仓位是否偏了
-- 管得住：纪律破线、再平衡草稿、价格预警、多通道短通知
+- **记清楚**：买了什么、证券现金多少、存款何时到期
+- **对得上**：券商持仓 CSV/Excel 对账；银证流水 vs 组合投入/取出勾稽
+- **看得懂**：今日贡献粗估、对大盘强弱、仓位是否偏离目标
+- **管得住**：纪律破线、再平衡草稿、价格预警、短通知
 
-**不是** 量化回测平台，也不是自动交易。
-
----
-
-## 页面结构（顶栏四大组）
-
-| 组 | 页 | 做什么 |
-|----|----|--------|
-| **总览** | 今日总览 | 总资产 / 当日参考 / 浮盈 / 现金存款；**近一周资产曲线**；持仓预览与状态 |
-| **日常** | 持仓明细 | 当前仓、家底卡、近一年收益、UZI 本地分析入口 |
-| | 交易录入/管理 | 买卖/分红/草稿确认入账 |
-| | 银行存款 | 到期分布、年/到期前/整期利息 |
-| **分析** | 今天该看 | 左 12 项关键指标；右 **今日看点** + 指数 + 持仓贡献；自选与价格预警 |
-| | 收益分析 | 主结论 + 贡献（**债基 / REITs / 权益** 分桶）+ 时间线 |
-| | 结构与目标 | 右栏一键三套目标尺子；配置诊断主结论+偏离；同质化/流动性/情景；纪律与草稿 |
-| **设置** | 消息推送 | 通道开关、事件路由、**页面可配密钥**（库优先于 `.env`）、试推与日志 |
-| | 证券账户 | 费率 + 现金校准 + 银证流水 + 与组合投入勾稽 |
-| | 数据备份 | 备份 / 恢复 / 上传 |
-
-旧路由仍可跳转：`/market` → 今天该看；`/discipline` → 结构与目标；`/maintenance` → 消息推送。  
-隐藏页（书签可进）：资产快照、券商对账（预览/应用会留历史，应用前确认数量与成本）。
-
-金额打码仅 `?mask=1`（或 `?screenshot=1`）。
+**不是** 量化回测，也不是自动交易，更不会替你把银证转入写成组合投入。
 
 ---
 
-## 近期更新（2026-07）
+## 页面
 
-| 方向 | 要点 |
+顶栏四组。默认进 **今日总览**。
+
+| 组 | 页 | 路径 | 做什么 |
+|----|----|------|--------|
+| 总览 | 今日总览 | `/` | 总资产、浮盈、现金存款、近一周曲线、持仓预览 |
+| 日常 | 持仓明细 | `/holdings` | 当前仓、家底、近一年收益、持仓校正 |
+| | 交易录入/管理 | `/transactions` | 买卖/分红/草稿确认入账 |
+| | 银行存款 | `/deposits` | 到期分布；年 / 到期前 / 整期利息 |
+| 分析 | 今天该看 | `/decision` | 关键指标、今日看点、指数、持仓贡献、预警 |
+| | 收益分析 | `/performance` | 整户总账、贡献分桶、时间线、组合投入/取出 |
+| | 结构与目标 | `/allocation` | 目标尺子、配置诊断、纪律与再平衡草稿 |
+| | K 线查询 | `/klines` | 日 K、均线解读、基本面、股东/分红 |
+| 设置 | 消息推送 | `/ops/notify` | 通道密钥（库优先于 `.env`）、事件路由、试推 |
+| | 证券账户 | `/cash` | 多账户费率、现金校准、银证流水、**银证勾稽** |
+| | 数据备份 | `/ops/backup` | 备份 / 下载 / 恢复 / 上传 |
+
+书签可进、导航里不单独成组：
+
+| 页 | 路径 | 说明 |
+|----|------|------|
+| 券商对账 | `/broker` | 上传券商持仓表 → 差异 → 确认后写入持仓校正；预览/应用会留历史 |
+| 资产快照 | `/snapshots` | 日终总资产曲线；可手录实盘总资产做误差对账 |
+
+旧地址仍跳转：`/market` → 今天该看；`/discipline` → 结构与目标；`/maintenance` → 消息推送。
+
+金额打码：`?mask=1` 或 `?screenshot=1`。主题：白天 / 夜间 / 跟随系统。
+
+---
+
+## 核心口径
+
+三套数字本来就不会相等。对华泰等「累计盈亏」，优先看全周期。
+
+| 口径 | 算法 | 用在哪 |
+|------|------|--------|
+| 持仓浮盈 | `(现价 − 普通成本) × 数量 + 累计分红` | 当前仓 |
+| 全周期盈亏 | `(现价 − 摊薄成本) × 数量` | 接近券商累计盈亏 |
+| 整户总账 | `总资产 − 组合外部净投入` | 收益分析；依赖组合资金流水 |
+| 今日贡献 | `涨跌% × 市值` | 盘中参考，**不入账** |
+
+### 交易怎么动账
+
+| 方向 | 持仓 | 证券现金 |
+|------|------|----------|
+| 买入 | +数量 | −金额 − 费 |
+| 卖出 | −数量 | +金额 − 费 |
+| 分红 | 不变 | +现金 |
+| 分红再投资 | +份额 | 不变（金额记累计分红） |
+| 申购待确认 | 不进正式持仓 | −现金 |
+
+费率在「证券账户」按账户、按品种设；录入时只是估算，**以券商成交单为准**。
+
+### 两套现金流水
+
+| 流水 | 记什么 | 在哪维护 |
+|------|--------|----------|
+| 银证流水 `cash_flows` | 银证转入/转出、现金校准 | 证券账户 |
+| 组合流水 `portfolio_cash_flows` | 投入 / 取出（金额为正） | 收益分析 |
+
+银证转入 **不会** 自动生成组合投入。收益分析有建议草稿；证券账户页会按 **同日、同额、同方向** 勾稽（容差 0.05），只标差、不入账。
+
+### 券商对账
+
+1. 券商 App 导出持仓 CSV / Excel（识别「证券代码 / 数量 / 成本价」等列）
+2. 可选填券商证券现金
+3. 上传预览差异；勾选后确认框会列出将改写的数量与成本
+4. 写入「持仓校正」（先自动备份，再重扫）
+
+每次预览和应用各留一条历史（schema v13 `broker_reconcile_runs`）。
+
+### 存款利息
+
+单利、365 天。
+
+| 字段 | 含义 |
 |------|------|
-| 导航 | 顶栏四组 + 二级 pill；默认进 **今日总览**；去掉侧栏与口号 |
-| 总览 | 右上改为 **近一周资产曲线**；主题跟随系统/白天/夜间，不再硬锁黑底 |
-| 今天该看 | 决策+市场合并；看点置右上；关键指标补到 12 卡（对大盘、仓位、最强最弱等） |
-| 结构与目标 | 配置+纪律合并；`/allocation/story` 政策同源诊断；扇形图防叠字；夜间字色跟主题 |
-| 收益 | 大类拆成 **债基 / REITs / 权益**；主结论加粗；夜间可读 |
-| 设置 | 「维护」改名；推送密钥可在页面填（不回填明文）；证券账户归设置组 |
-| 视觉 | 克制青绿主色；MetricCard 统一；日夜 token；表格只做对齐密度 |
-
-完整按日记录见 [CHANGELOG.md](CHANGELOG.md)。
-
----
-
-## 技术栈
-
-- 后端：FastAPI + SQLite（`schema` 版本迁移）
-- 前端：Vite + Vue 3 + Element Plus + ECharts + vue-router
-- 部署：Docker Compose（前端 Nginx，后端 Uvicorn）
+| 预计年利息 | 本金 × 年利率 |
+| 到期前利息 | 本金 × 利率 × 剩余天数 / 365；已到期为 0 |
+| 整期利息 | 起存日 → 到期日；缺起存日显示 — |
 
 ---
 
@@ -70,125 +109,102 @@
 ### Docker（推荐）
 
 ```bash
-cd invest-tracker
-cp .env.example .env   # 按需改密码等
+cp .env.example .env
 docker compose up -d --build
 ```
 
-- 前端：http://localhost:8080  
-- API：http://localhost:8000  
-- 健康：http://localhost:8000/api/health  
+| | 地址 |
+|--|------|
+| 前端 | http://localhost:8080 |
+| API | http://localhost:8000 |
+| 健康检查 | http://localhost:8000/api/health |
 
 ```bash
 make up / make down / make logs / make test / make check
 ```
 
+开发 Compose 会给后端装测试依赖（`INSTALL_DEV=true`），所以 `make test` 能直接跑 pytest。
+
 ### 本机开发
 
 ```bash
-# 后端（含测试依赖）
 python3 -m venv venv && source venv/bin/activate
 pip install -r backend/requirements-dev.txt
 PYTHONPATH=backend python backend/main.py
+```
 
-# 前端（另开终端）
+```bash
 cd frontend && npm install && npm run dev
 ```
 
-后端测试：
+---
+
+## 测试与 CI
 
 ```bash
-PYTHONPATH=backend /usr/bin/python3 -m pytest tests/ -q
-# 当前约 152 passed
+# 后端
+PYTHONPATH=backend python3 -m pytest tests/ -q
+
+# 前端单测 + 生产构建
+cd frontend && npm test && npm run build
 ```
 
-前端单测：
+GitHub Actions（`main` / `deploy/vps` / PR）：
 
-```bash
-cd frontend && npm test
-# vitest（utils / K线均线解读等纯逻辑）
-```
+- 后端：ruff `F,E9` + pytest
+- 前端：vitest + `npm run build` + `npm audit --omit=dev`
 
 ---
 
-## VPS 生产
+## 生产部署
 
-生产配置在分支 **`deploy/vps`**，步骤见 [docs/deploy-vps.md](docs/deploy-vps.md)。
-
-更新常见流程：
+`main` 是源码真相；每次推 `main` 后 **fast-forward** `deploy/vps`。VPS 只跟 `deploy/vps`，不要在该分支上独自提交。
 
 ```bash
 git pull origin deploy/vps
-docker compose -f docker-compose.prod.yml up -d --build
+./scripts/deploy_vps.sh
+# 或：docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-浏览器硬刷新。公网务必设 `INVEST_TRACKER_PASSWORD` 和/或 GitHub OAuth（见 `.env.example`）。
+完整清单、HTTPS、GitHub OAuth、Cloudflare Tunnel： [docs/deploy-vps.md](docs/deploy-vps.md)。
 
----
+公网至少做一件：
 
-## 核心口径（对账用）
+- 设 `INVEST_TRACKER_PASSWORD`（应用内门锁），和/或
+- 走 Caddy → oauth2-proxy GitHub 登录（只放行一个 GitHub 用户）
 
-| 口径 | 含义 |
-|------|------|
-| 持仓浮盈 | (现价 − 普通成本) × 数量 + 累计分红 → **当前仓** |
-| 全周期盈亏 | (现价 − 摊薄成本) × 数量 → 接近券商「累计盈亏」 |
-| 整户总账 | 总资产 − 组合外部净投入 → 收益分析页，依赖组合资金流水 |
-| 今日贡献粗估 | 涨跌% × 市值 → **不入账**，只作盘中参考 |
+生产建议再设：
 
-三套数字本来就不会相等；对华泰等累计，优先看全周期。
+```env
+CRON_API_TOKEN=          # python3 -c 'import secrets; print(secrets.token_hex(24))'
+CORS_ALLOW_ORIGINS=https://your-domain
+```
 
-### 存款利息
+未配 cron token 时，定时脚本仍会回退 `docker exec` / 登录 HTTP，旧部署不会立刻断。
 
-| 字段 | 含义 |
-|------|------|
-| 预计年利息 | 本金 × 年利率（再放满一年） |
-| 到期前利息 | 本金 × 利率 × 剩余天数 / 365；已到期为 0 |
-| 整期利息 | 起存日→到期日；缺起存日显示 — |
+### 定时任务
 
-单利、365 天。
+`scripts/cron_sync_prices.sh` 优先打 `POST /cron/*`（头 `X-Cron-Token`）。  
+登录 Bearer **不能** 调 `/cron/*`；cron token **不能** 调用户接口。
 
-### 常用交易方向
+```cron
+20 15 * * 1-5 /path/to/invest-tracker/scripts/cron_sync_prices.sh >> /path/to/invest-tracker/backups/cron_sync_prices.log 2>&1
+40 16 * * 1-5 /path/to/invest-tracker/scripts/cron_sync_prices.sh --snapshot --check-alerts >> /path/to/invest-tracker/backups/cron_sync_prices.log 2>&1
+15 2  * * *   /path/to/invest-tracker/scripts/backup_daily.sh >> /path/to/invest-tracker/backups/backup_daily.log 2>&1
+```
 
-| 方向 | 持仓 | 证券现金 |
-|------|------|----------|
-| 买入 | +数量 | −金额−费 |
-| 卖出 | −数量 | +金额−费 |
-| 分红 | 不变 | +现金 |
-| 分红再投资 | +份额 | 不变（金额记累计分红） |
-| 申购待确认 | 不进正式持仓 | −现金 |
-
-**银证转账不会自动生成「组合投入」流水**；需要时在收益分析用建议草稿。证券账户页会按同日同额勾稽银证转入/转出与组合投入/取出，标出未配对差额。
+常用开关：`--snapshot`、`--check-alerts`、`--notify-alerts`、`--notify-events`、`--force-snapshot`。  
+配好 token 后，手动试跑日志里应出现 `cron-http sync ok`。
 
 ---
 
 ## 消息推送
 
-与 Hermes 长报告分开：本系统只发 **短通知**（飞书 / 钉钉 / 企微 / Telegram）。
+只发短通知（飞书 / 钉钉 / 企微 / Telegram），和 Hermes 长报告分开。
 
-- **优先**在网页「设置 → 消息推送」填密钥（存库，不回填明文；留空=不改，勾清除=删库值）
-- `.env` 仍可作服务器兜底（见 `.env.example`）
-- 事件：价格预警、晚间简报、存款到期、纪律破线、运维、试推
+优先在 **设置 → 消息推送** 填密钥（存库，不回填明文；留空=不改，勾清除=删库值）。`.env` 的 `NOTIFY_*` 只作服务器兜底。
 
----
-
-## 项目结构（精简）
-
-```text
-invest-tracker/
-  backend/           # FastAPI：schema / dashboard / market / performance / notify / routers_*
-  frontend/src/
-    views/           # Overview / Decision / Performance / Allocation / Holdings …
-    modules/         # tabNav / market / discipline / snapshots …
-    components/      # PageShell / MetricCard / AppHeader / AppDialogs
-    charts/          # ECharts（跟主题 token）
-  tests/             # pytest
-  scripts/           # check / backup / restore / cron 价同步
-  docs/deploy-vps.md
-  docker-compose.yml
-  docker-compose.prod.yml
-  data/              # SQLite，不入库
-  backups/           # 备份，不入库
-```
+事件：价格预警、晚间简报、存款到期、纪律破线、运维、试推。
 
 ---
 
@@ -196,43 +212,64 @@ invest-tracker/
 
 ```bash
 bash scripts/privacy_check.sh
-python3 scripts/backup_db.py
+python3 scripts/backup_db.py --label manual
 python3 scripts/restore_db.py backups/你的备份.db
 ```
 
-- `data/`、`backups/`、`.env` 不进 Git  
-- 可用 `DB_PATH`、`BACKUP_DIR`、`APP_TIMEZONE`、`CORS_ALLOW_ORIGINS` 覆盖  
-- 公网：设密码门锁和/或 OAuth；生产 CORS 写死域名  
+- `data/`、`backups/`、`.env` 不进 Git
+- 可用 `DB_PATH`、`BACKUP_DIR`、`APP_TIMEZONE`、`CORS_ALLOW_ORIGINS` 覆盖
+- 库 schema 版本见 `backend/schema.py`（当前 **v13**）；启动时自动迁移
+- 上传上限：普通 CSV 20MB，券商 Excel 50MB；导出 CSV 会清洗公式注入前缀
 
-隐藏界面金额：`?mask=1`。
+---
+
+## 仓库结构
+
+```text
+invest-tracker/
+  backend/                 FastAPI + SQLite
+    schema.py              版本迁移（当前 v13）
+    routers_*.py           HTTP
+    routers_cron.py        /cron/* ，独立 token
+    broker_reconcile.py    券商对账 + 银证勾稽
+  frontend/src/
+    views/                 各页
+    modules/               业务逻辑（非组件）
+    components/            PageShell / MetricCard / 顶栏 / 弹窗
+  tests/                   pytest
+  frontend/tests/          vitest
+  scripts/                 部署 / 备份 / cron / 隐私检查
+  docs/deploy-vps.md
+  docker-compose.yml       本地
+  docker-compose.prod.yml  VPS
+  .github/workflows/ci.yml
+  data/  backups/          运行时，不入库
+```
 
 ---
 
 ## 常见问题
 
-**页面空白 / 弹窗无反应**  
-硬刷新；确认前端已 rebuild。弹窗依赖 `appCtx` 提供的 **dialog state**（不只 open 函数）。
-
-**总览一直黑**  
-顶栏主题切「白天 / 跟随系统」；新版本默认跟 token，仅夜间加深。
+**页面空白 / 弹窗没反应**  
+硬刷新。确认前端已 rebuild。弹窗依赖 `appCtx` 里的 dialog state，不只是 open 函数。
 
 **数字对不上券商**  
-先看口径表；全周期 ≠ 持仓浮盈 ≠ 整户总账。
+先看口径表。全周期 ≠ 持仓浮盈 ≠ 整户总账。持仓对不上就走 `/broker`；银证和组合投入对不上看证券账户页勾稽。
 
-**backend unhealthy**  
-
-```bash
-curl http://localhost:8000/api/health
-```
-
-**本地 pytest** 请用系统 Python：
+**backend unhealthy**
 
 ```bash
-PYTHONPATH=backend /usr/bin/python3 -m pytest tests/ -q
+curl -fsS http://localhost:8000/api/health
 ```
+
+**本地 pytest 环境不对**  
+用装了依赖的解释器，或走 `make test`（容器内）。
+
+**公网 CORS / 定时同步失败**  
+生产把 `CORS_ALLOW_ORIGINS` 写成域名。cron 配 `CRON_API_TOKEN` 后看日志是否 `cron-http sync ok`。
 
 ---
 
-## 许可证与用途
+## 许可证
 
-个人真仓记账工具。公开仓库前请跑隐私检查，并确认无真实持仓/密钥。
+个人真仓记账工具。公开仓库前请跑 `scripts/privacy_check.sh`，确认没有真实持仓、备份和密钥。
