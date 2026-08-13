@@ -109,6 +109,14 @@ else
 fi
 
 echo
+echo "== 3c. Cron API token =="
+if [ -n "${CRON_API_TOKEN:-}" ]; then
+  ok "已配置 CRON_API_TOKEN（cron_sync_prices.sh 走 HTTP /cron/*）"
+else
+  warn "未配置 CRON_API_TOKEN：定时脚本会回退 docker exec / 登录 HTTP（建议生成 secrets.token_hex(24) 写入 .env）"
+fi
+
+echo
 echo "== 4. 健康检查 / API =="
 if curl -fsS --max-time 8 "${BASE}/api/health" >/tmp/invest-health.$$ 2>/dev/null; then
   ok "GET ${BASE}/api/health -> $(cat /tmp/invest-health.$$)"

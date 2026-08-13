@@ -11,6 +11,7 @@ from fastapi import Header, HTTPException, APIRouter, Request
 from pydantic import BaseModel
 
 PASSWORD_ENV_VAR = "INVEST_TRACKER_PASSWORD"
+CRON_TOKEN_ENV_VAR = "CRON_API_TOKEN"
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
@@ -152,6 +153,23 @@ def require_auth(authorization: str = Header(None)):
 
     if not token or not verify_token(token):
         raise HTTPException(status_code=401, detail="Authentication required")
+
+
+def get_cron_token() -> str:
+    return os.environ.get(CRON_TOKEN_ENV_VAR, "").strip()
+
+
+def require_cron_token(x_cron_token: Optional[str] = Header(None, alias="X-Cron-Token")):
+    """Cron-only auth: X-Cron-Token header, independent from login password."""
+    expected = get_cron_token()
+    if not expected:
+        raise HTTPException(status_code=503, detail="Cron token not configured")
+    provided = str(x_cron_token or "").strip()
+    exp_b = expected.encode("utf-8")
+    got_b = provided.encode("utf-8")
+    if len(got_b) == len(exp_b) and hmac.compare_digest(got_b, exp_b):
+        return
+    raise HTTPException(status_code=401, detail="Invalid cron token")
 
 
 @router.post("/login")

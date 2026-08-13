@@ -58,6 +58,7 @@ test -f backend/discipline.py
 test -f backend/routers_discipline.py
 test -f backend/notify.py
 test -f backend/routers_notify.py
+test -f backend/routers_cron.py
 test -f frontend/src/modules/discipline.js
 test -f frontend/src/views/DisciplineTab.vue
 grep -q 'type="module" src="/src/main.js"' frontend/index.html
@@ -193,6 +194,11 @@ required_routes = {
     "/holding-corrections",
     "/sync-prices",
     "/dividends/scan",
+    "/cron/sync-prices",
+    "/cron/snapshot",
+    "/cron/check-alerts",
+    "/cron/notify-events",
+    "/cron/trading-day",
 }
 routes = {getattr(route, "path", "") for route in module.app.routes}
 missing = sorted(required_routes - routes)

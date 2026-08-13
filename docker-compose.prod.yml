@@ -9,6 +9,7 @@ services:
       APP_TIMEZONE: ${APP_TIMEZONE:-Asia/Shanghai}
       DB_PATH: ${DB_PATH:-/app/data/invest.db}
       INVEST_TRACKER_PASSWORD: ${INVEST_TRACKER_PASSWORD:-}
+      CRON_API_TOKEN: ${CRON_API_TOKEN:-}
     volumes:
       - ./data:/app/data
       - ./backups:/app/backups

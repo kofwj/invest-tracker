@@ -69,6 +69,7 @@ def clear_backend_module_cache():
         'portfolio_helpers',
         'notify',
         'routers_notify',
+        'routers_cron',
         'kline_cache',
         'routers_klines',
     ]

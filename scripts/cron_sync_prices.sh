@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # VPS 定时同步最新价（可选快照 + 预警检查）。
-# 优先：docker compose exec 直接调后端实现（绕过密码门与 OAuth）。
-# 回退：Python urllib 登录后 POST（避免 shell 拼接 Authorization 头被环境脱敏）。
+# 优先：HTTP /cron/* + X-Cron-Token（与容器内部函数解耦）。
+# 回退 1：docker compose exec 直接调后端实现（旧部署未配 token）。
+# 回退 2：Python urllib 登录后 POST。
 #
 # 建议 crontab（交易日 15:20 / 16:40 各一次）：
 #   20 15 * * 1-5 /home/kofwj/invest-tracker/scripts/cron_sync_prices.sh >> /home/kofwj/invest-tracker/backups/cron_sync_prices.log 2>&1
@@ -44,6 +45,7 @@ Usage: cron_sync_prices.sh [--snapshot] [--check-alerts] [--notify-alerts] [--no
   CRON_NOTIFY_ALERTS=1   等价于总是 --notify-alerts
   CRON_NOTIFY_EVENTS=1   等价于总是 --notify-events
   CRON_FORCE_SNAPSHOT=1  等价于 --force-snapshot
+  CRON_API_TOKEN         走 /cron/* HTTP 路径（推荐）
   ALERT_COOLDOWN_MINUTES 预警冷却分钟（默认读 settings / 240）
 EOF
       exit 0
@@ -70,6 +72,34 @@ fi
 
 FRONTEND_PORT="${FRONTEND_PORT:-8080}"
 export CRON_API_BASE="${CRON_API_BASE:-http://127.0.0.1:${FRONTEND_PORT}/api}"
+export CRON_API_TOKEN="${CRON_API_TOKEN:-}"
+
+cron_http() {
+  # GET or POST a /cron/* path with X-Cron-Token. Prints body on success.
+  local method="$1" path="$2" body="${3:-}"
+  if [ -z "${CRON_API_TOKEN}" ]; then
+    return 1
+  fi
+  python3 - "$method" "$path" "$body" <<'PY'
+import json, os, sys, urllib.error, urllib.request
+method, path, body = sys.argv[1], sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else ""
+base = os.environ.get("CRON_API_BASE", "http://127.0.0.1:8080/api").rstrip("/")
+token = os.environ.get("CRON_API_TOKEN", "").strip()
+headers = {"Accept": "application/json", "X-Cron-Token": token}
+data = None
+if method.upper() == "POST":
+    headers["Content-Type"] = "application/json"
+    data = (body or "{}").encode("utf-8")
+req = urllib.request.Request(base + path, data=data, headers=headers, method=method.upper())
+try:
+    with urllib.request.urlopen(req, timeout=180) as resp:
+        print(resp.read().decode("utf-8", errors="replace"))
+except urllib.error.HTTPError as e:
+    detail = e.read().decode("utf-8", errors="replace")
+    print(detail, file=sys.stderr)
+    sys.exit(e.code if 400 <= e.code < 600 else 1)
+PY
+}
 
 run_via_docker() {
   if ! command -v docker >/dev/null 2>&1; then
@@ -150,6 +180,17 @@ run_via_curl() {
 should_write_snapshot() {
   if [ "$FORCE_SNAPSHOT" = "1" ]; then
     return 0
+  fi
+  if [ -n "${CRON_API_TOKEN}" ]; then
+    local out
+    if out="$(cron_http GET /cron/trading-day)"; then
+      if echo "$out" | python3 -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get("is_trading_day") else 1)' 2>/dev/null; then
+        return 0
+      else
+        echo "[$(ts)] skip snapshot: non-trading day ($out)"
+        return 1
+      fi
+    fi
   fi
   if docker compose -f "$COMPOSE_FILE" ps --status running --services 2>/dev/null | grep -qx backend; then
     local out
@@ -271,20 +312,24 @@ run_alerts_curl() {
 }
 
 SYNC_OUT=""
-if SYNC_OUT="$(run_via_docker 2>&1)"; then
+if [ -n "${CRON_API_TOKEN}" ] && SYNC_OUT="$(cron_http POST /cron/sync-prices)"; then
+  echo "[$(ts)] cron-http sync ok: ${SYNC_OUT}"
+elif SYNC_OUT="$(run_via_docker 2>&1)"; then
   echo "[$(ts)] docker sync ok: ${SYNC_OUT}"
 else
-  echo "[$(ts)] docker sync unavailable/fail, try HTTP… (${SYNC_OUT})" >&2
+  echo "[$(ts)] docker sync unavailable/fail, try login HTTP… (${SYNC_OUT})" >&2
   SYNC_OUT="$(run_via_curl)"
   echo "[$(ts)] HTTP sync ok: ${SYNC_OUT}"
 fi
 
 if [ "$WITH_SNAPSHOT" = "1" ]; then
   if should_write_snapshot; then
-    if SNAP_OUT="$(run_snapshot_docker 2>&1)"; then
+    if [ -n "${CRON_API_TOKEN}" ] && SNAP_OUT="$(cron_http POST /cron/snapshot)"; then
+      echo "[$(ts)] cron-http snapshot ok: ${SNAP_OUT}"
+    elif SNAP_OUT="$(run_snapshot_docker 2>&1)"; then
       echo "[$(ts)] docker snapshot ok: ${SNAP_OUT}"
     else
-      echo "[$(ts)] docker snapshot unavailable/fail, try HTTP… (${SNAP_OUT})" >&2
+      echo "[$(ts)] docker snapshot unavailable/fail, try login HTTP… (${SNAP_OUT})" >&2
       SNAP_OUT="$(run_snapshot_curl)"
       echo "[$(ts)] HTTP snapshot ok: ${SNAP_OUT}"
     fi
@@ -292,17 +337,29 @@ if [ "$WITH_SNAPSHOT" = "1" ]; then
 fi
 
 if [ "$WITH_ALERTS" = "1" ]; then
-  if ALERT_OUT="$(run_alerts_docker "$ALERTS_NOTIFY" 2>&1)"; then
+  ALERT_BODY='{"notify":false}'
+  if [ "$ALERTS_NOTIFY" = "1" ]; then
+    if [ -n "${FEISHU_ALERT_WEBHOOK:-}" ]; then
+      ALERT_BODY="$(python3 -c 'import json,os; print(json.dumps({"notify":True,"webhook":os.environ.get("FEISHU_ALERT_WEBHOOK","")}))')"
+    else
+      ALERT_BODY='{"notify":true}'
+    fi
+  fi
+  if [ -n "${CRON_API_TOKEN}" ] && ALERT_OUT="$(cron_http POST /cron/check-alerts "$ALERT_BODY")"; then
+    echo "[$(ts)] cron-http alerts ok: ${ALERT_OUT}"
+  elif ALERT_OUT="$(run_alerts_docker "$ALERTS_NOTIFY" 2>&1)"; then
     echo "[$(ts)] docker alerts ok: ${ALERT_OUT}"
   else
-    echo "[$(ts)] docker alerts unavailable/fail, try HTTP… (${ALERT_OUT})" >&2
+    echo "[$(ts)] docker alerts unavailable/fail, try login HTTP… (${ALERT_OUT})" >&2
     ALERT_OUT="$(run_alerts_curl "$ALERTS_NOTIFY")"
     echo "[$(ts)] HTTP alerts ok: ${ALERT_OUT}"
   fi
 fi
 
 if [ "$WITH_NOTIFY_EVENTS" = "1" ]; then
-  if NOTIFY_OUT="$(
+  if [ -n "${CRON_API_TOKEN}" ] && NOTIFY_OUT="$(cron_http POST /cron/notify-events '{"deposit":true,"discipline":true,"force":false}')"; then
+    echo "[$(ts)] cron-http notify-events ok: ${NOTIFY_OUT}"
+  elif NOTIFY_OUT="$(
     docker compose -f "$COMPOSE_FILE" exec -T backend python - <<'PY'
 from database import open_db
 from notify import run_scheduled_events

@@ -11,7 +11,7 @@ if CURRENT_DIR not in sys.path:
     sys.path.append(CURRENT_DIR)
 
 try:
-    from .auth import require_auth, router as auth_router
+    from .auth import require_auth, require_cron_token, router as auth_router
     from .cash import set_setting  # noqa: F401  (module-level API used by tests)
     from .database import (
         APP_CONFIG,
@@ -34,12 +34,13 @@ try:
     from .routers_discipline import router as discipline_router
     from .routers_allocation import router as allocation_router
     from .routers_broker_reconcile import router as broker_reconcile_router
+    from .routers_cron import router as cron_router
     from .routers_notify import router as notify_router
     from .routers_snapshots import router as snapshots_router
     from .routers_transactions import router as transactions_router
     from .schema import initialize_database, run_startup_migrations  # noqa: F401  (initialize_database is loaded by tests as module attr)
 except ImportError:  # Allows tests to load this file directly via importlib.
-    from auth import require_auth, router as auth_router
+    from auth import require_auth, require_cron_token, router as auth_router
     from cash import set_setting  # noqa: F401  (module-level API used by tests)
     from database import (
         APP_CONFIG,
@@ -62,6 +63,7 @@ except ImportError:  # Allows tests to load this file directly via importlib.
     from routers_discipline import router as discipline_router
     from routers_allocation import router as allocation_router
     from routers_broker_reconcile import router as broker_reconcile_router
+    from routers_cron import router as cron_router
     from routers_notify import router as notify_router
     from routers_snapshots import router as snapshots_router
     from routers_transactions import router as transactions_router
@@ -116,6 +118,7 @@ app.include_router(discipline_router, dependencies=[Depends(require_auth)])
 app.include_router(allocation_router, dependencies=[Depends(require_auth)])
 app.include_router(broker_reconcile_router, dependencies=[Depends(require_auth)])
 app.include_router(notify_router, dependencies=[Depends(require_auth)])
+app.include_router(cron_router, dependencies=[Depends(require_cron_token)])
 
 
 def check_database_health():
