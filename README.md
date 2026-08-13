@@ -86,9 +86,9 @@ make up / make down / make logs / make test / make check
 ### 本机开发
 
 ```bash
-# 后端
+# 后端（含测试依赖）
 python3 -m venv venv && source venv/bin/activate
-pip install -r backend/requirements.txt
+pip install -r backend/requirements-dev.txt
 PYTHONPATH=backend python backend/main.py
 
 # 前端（另开终端）
@@ -99,7 +99,14 @@ cd frontend && npm install && npm run dev
 
 ```bash
 PYTHONPATH=backend /usr/bin/python3 -m pytest tests/ -q
-# 当前约 76 passed
+# 当前约 152 passed
+```
+
+前端单测：
+
+```bash
+cd frontend && npm test
+# vitest（utils / K线均线解读等纯逻辑）
 ```
 
 ---

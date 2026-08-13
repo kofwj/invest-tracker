@@ -4,6 +4,7 @@ import AutoImport from 'unplugin-auto-import/vite';
 import Components from 'unplugin-vue-components/vite';
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers';
 
+// 单测配置在 vitest.config.js（jsdom 环境，独立于本构建配置）。
 export default defineConfig({
   plugins: [
     vue(),
