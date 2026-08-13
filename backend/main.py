@@ -12,15 +12,14 @@ if CURRENT_DIR not in sys.path:
 
 try:
     from .auth import require_auth, router as auth_router
-    from .cash import set_setting
+    from .cash import set_setting  # noqa: F401  (module-level API used by tests)
     from .database import (
         APP_CONFIG,
         DB_PATH,
-        LOCAL_TZ,
         check_database_health as _check_database_health,
-        fetch_all_as_dicts,
-        get_db_connection,
-        local_today_iso,
+        fetch_all_as_dicts,  # noqa: F401  (module-level API used by tests)
+        get_db_connection,   # noqa: F401  (module-level API used by tests)
+        local_today_iso,     # noqa: F401  (module-level API used by tests)
     )
     from .routers_cash import router as cash_router
     from .routers_dashboard import router as dashboard_router
@@ -38,18 +37,17 @@ try:
     from .routers_notify import router as notify_router
     from .routers_snapshots import router as snapshots_router
     from .routers_transactions import router as transactions_router
-    from .schema import ensure_app_schema, ensure_core_tables, initialize_database, run_startup_migrations
+    from .schema import initialize_database, run_startup_migrations  # noqa: F401  (initialize_database is loaded by tests as module attr)
 except ImportError:  # Allows tests to load this file directly via importlib.
     from auth import require_auth, router as auth_router
-    from cash import set_setting
+    from cash import set_setting  # noqa: F401  (module-level API used by tests)
     from database import (
         APP_CONFIG,
         DB_PATH,
-        LOCAL_TZ,
         check_database_health as _check_database_health,
-        fetch_all_as_dicts,
-        get_db_connection,
-        local_today_iso,
+        fetch_all_as_dicts,  # noqa: F401  (module-level API used by tests)
+        get_db_connection,   # noqa: F401  (module-level API used by tests)
+        local_today_iso,     # noqa: F401  (module-level API used by tests)
     )
     from routers_cash import router as cash_router
     from routers_dashboard import router as dashboard_router
@@ -67,7 +65,7 @@ except ImportError:  # Allows tests to load this file directly via importlib.
     from routers_notify import router as notify_router
     from routers_snapshots import router as snapshots_router
     from routers_transactions import router as transactions_router
-    from schema import ensure_app_schema, ensure_core_tables, initialize_database, run_startup_migrations
+    from schema import initialize_database, run_startup_migrations  # noqa: F401  (initialize_database is loaded by tests as module attr)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

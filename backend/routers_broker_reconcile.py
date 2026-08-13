@@ -12,13 +12,13 @@ from pydantic import BaseModel, Field
 
 try:
     from .broker_reconcile import compare_holdings, parse_broker_upload
-    from .csv_utils import create_safety_backup
+    from .csv_utils import create_safety_backup, read_upload_bytes_limited
     from .database import db_session, local_today_iso
     from .holding_calculator import infer_category, recalc_holdings, validate_holding_history
     from .portfolio_totals import compute_portfolio_totals
 except ImportError:
     from broker_reconcile import compare_holdings, parse_broker_upload
-    from csv_utils import create_safety_backup
+    from csv_utils import create_safety_backup, read_upload_bytes_limited
     from database import db_session, local_today_iso
     from holding_calculator import infer_category, recalc_holdings, validate_holding_history
     from portfolio_totals import compute_portfolio_totals
@@ -69,7 +69,7 @@ async def broker_reconcile_preview(
     as_of_date: Optional[str] = Form(None),
     broker_cash: Optional[str] = Form(None),
 ):
-    raw = await file.read()
+    raw = await read_upload_bytes_limited(file, max_bytes=50 * 1024 * 1024)
     if not raw:
         raise HTTPException(status_code=400, detail="上传文件为空")
     broker_rows, parse_meta = parse_broker_upload(raw, filename=file.filename or "")

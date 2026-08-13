@@ -4,7 +4,20 @@ New code should import from:
 - holding_calculator.py for transaction/category/holding recalculation logic
 - price_sync.py for latest price/NAV fetching
 - return_sync.py for trailing return calculations
+
+This module is a deliberate re-export facade (see __all__).
 """
+
+__all__ = [
+    "ALLOWED_DIRECTIONS",
+    "current_holding_quantity",
+    "infer_category",
+    "latest_holding_corrections",
+    "normalized_transaction_cash",
+    "recalc_holdings",
+    "validate_holding_history",
+    "validate_transaction_payload",
+]
 try:
     from .holding_calculator import (
         ALLOWED_DIRECTIONS,

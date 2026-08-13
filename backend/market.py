@@ -13,8 +13,6 @@ import sqlite3
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
-import requests
-
 try:
     from .database import LOCAL_TZ
     from .portfolio_totals import compute_portfolio_totals
@@ -761,7 +759,6 @@ def notify_feishu_alerts(triggered: List[Dict[str, Any]], webhook: Optional[str]
         text = build_price_alert_text(triggered)
         if webhook:
             # legacy: force only this feishu webhook via temporary env-less path
-            import os
             import requests
 
             payload = {"msg_type": "text", "content": {"text": f"【invest-tracker 价格预警】\n{text}"}}

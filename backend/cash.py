@@ -1,8 +1,6 @@
 import math
 import sqlite3
 
-from datetime import date as dt_date
-
 try:
     from .holdings import normalized_transaction_cash
 except ImportError:

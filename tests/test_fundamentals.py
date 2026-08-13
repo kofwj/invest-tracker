@@ -343,7 +343,37 @@ def test_top_holders_multiperiod(monkeypatch):
     assert north["kind"] == "north"
     assert north["pct"] == 3.20
     assert north["change"] == -0.04
+    assert north["prev_date"] == "2026-03-31"
     # 明骏环比 15.35 - 16.11 = -0.76
     assert hs[0]["change"] == -0.76
+    assert hs[0]["prev_date"] == "2026-04-28"
     # 唯一有股东总数的记录是 2026-04-28(北向)，最新期无 → 取最新期值
     assert h["holder_count"] is None
+
+def test_top_holders_change_spans_missing_period(monkeypatch):
+    """中间某期比例 NaN 时，环比会跨期，prev_date 必须如实标注基准披露期。"""
+    import pandas as pd
+
+    rows = [
+        {"编号": "1", "股东名称": "某机构", "持股比例": 9.0, "股本性质": "流通A股",
+         "截至日期": "2026-06-30"},
+        # 2026-03-31 这期该股东比例 NaN → 环比需跳过
+        {"编号": "1", "股东名称": "某机构", "持股比例": None, "股本性质": "流通A股",
+         "截至日期": "2026-03-31"},
+        {"编号": "1", "股东名称": "某机构", "持股比例": 7.5, "股本性质": "流通A股",
+         "截至日期": "2025-12-31"},
+    ]
+
+    class _FakeAk:
+        @staticmethod
+        def stock_main_stock_holder(stock=None, **kw):
+            return pd.DataFrame(rows)
+
+    mod = _load_company_extras_with_fake_akshare(monkeypatch, _FakeAk)
+    h = mod._fetch_top_holders("600000")
+    hs = h["holders"]
+    assert len(hs) == 1
+    assert hs[0]["pct"] == 9.0
+    assert hs[0]["date"] == "2026-06-30"
+    assert hs[0]["change"] == 1.5        # 9.0 - 7.5，跨过 03-31 NaN 期
+    assert hs[0]["prev_date"] == "2025-12-31"  # 如实标注：比较的是 12-31 期

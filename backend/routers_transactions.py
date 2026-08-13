@@ -6,7 +6,7 @@ from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel
 
 try:
-    from .database import db_session, local_today_iso, open_db
+    from .database import db_session, local_today_iso
     from .csv_utils import (
         TRANSACTION_CSV_COLUMNS,
         TRANSACTION_HEADER_ALIASES,
@@ -16,11 +16,12 @@ try:
         normalize_csv_row,
         normalize_date_string,
         parse_float,
+        read_upload_bytes_limited,
         read_upload_csv,
     )
-    from .holdings import ALLOWED_DIRECTIONS, infer_category, recalc_holdings, validate_holding_history, validate_transaction_payload
+    from .holdings import infer_category, recalc_holdings, validate_holding_history, validate_transaction_payload
 except ImportError:
-    from database import db_session, local_today_iso, open_db
+    from database import db_session, local_today_iso
     from csv_utils import (
         TRANSACTION_CSV_COLUMNS,
         TRANSACTION_HEADER_ALIASES,
@@ -30,9 +31,10 @@ except ImportError:
         normalize_csv_row,
         normalize_date_string,
         parse_float,
+        read_upload_bytes_limited,
         read_upload_csv,
     )
-    from holdings import ALLOWED_DIRECTIONS, infer_category, recalc_holdings, validate_holding_history, validate_transaction_payload
+    from holdings import infer_category, recalc_holdings, validate_holding_history, validate_transaction_payload
 
 router = APIRouter()
 
@@ -143,7 +145,7 @@ def export_transactions(
 async def import_transactions(file: UploadFile = File(...)):
     if not file.filename or not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="目前仅支持 CSV 文件")
-    raw_rows = read_upload_csv(await file.read())
+    raw_rows = read_upload_csv(await read_upload_bytes_limited(file))
     if not raw_rows:
         raise HTTPException(status_code=400, detail="CSV为空")
     backup_path = create_import_backup("before_import_transactions")

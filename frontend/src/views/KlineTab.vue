@@ -101,7 +101,8 @@
             <span class="cx-holder-name" :title="h.name">{{ h.name }}</span>
             <span class="cx-holder-kind" :class="'k-' + h.kind">{{ holderKindText(h.kind) }}</span>
             <span class="cx-holder-pct">{{ h.pct != null ? h.pct + '%' : '—' }}</span>
-            <span v-if="h.change != null" class="cx-holder-delta" :class="{ up: h.change > 0, down: h.change < 0, flat: h.change === 0 }">
+            <span v-if="h.change != null" class="cx-holder-delta" :class="{ up: h.change > 0, down: h.change < 0, flat: h.change === 0 }"
+              :title="h.prev_date ? ('环比比较：' + h.prev_date + ' → ' + (h.date || '本期') + ' 披露' ) : (h.date ? ('环比基准：' + h.date + ' 披露') : '环比基准：上期披露')">
               {{ h.change > 0 ? '▲' : h.change < 0 ? '▼' : '—' }}<em>{{ h.change !== 0 ? Math.abs(h.change).toFixed(2) : '持平' }}</em>
             </span>
             <span v-else class="cx-holder-delta muted">新进</span>

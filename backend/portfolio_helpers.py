@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
@@ -181,9 +180,9 @@ def send_evening_brief(conn, *, webhook: Optional[str] = None, notify: bool = Tr
     if notify:
         try:
             try:
-                from .notify import notify_evening_brief, dispatch
+                from .notify import notify_evening_brief
             except ImportError:
-                from notify import notify_evening_brief, dispatch
+                from notify import notify_evening_brief
 
             text = brief.get("text") or "（空简报）"
             if webhook:

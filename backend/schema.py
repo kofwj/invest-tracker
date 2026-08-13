@@ -4,7 +4,7 @@ import sqlite3
 try:
     from .cash import ensure_cash_base, set_setting
     from .database import open_db
-    from .discipline import ensure_discipline_tables, set_policy
+    from .discipline import ensure_discipline_tables
     from .holdings import ensure_holding_return_columns
     from .kline_cache import ensure_kline_cache_table
     from .market import ensure_alert_tables
@@ -13,7 +13,7 @@ try:
 except ImportError:
     from cash import ensure_cash_base, set_setting
     from database import open_db
-    from discipline import ensure_discipline_tables, set_policy
+    from discipline import ensure_discipline_tables
     from holdings import ensure_holding_return_columns
     from kline_cache import ensure_kline_cache_table
     from market import ensure_alert_tables

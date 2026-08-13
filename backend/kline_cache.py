@@ -7,8 +7,8 @@ from __future__ import annotations
 import json as pyjson
 import logging
 import urllib.request
-from datetime import date as dt_date, datetime, timedelta
-from typing import List, Optional, Tuple
+from datetime import date as dt_date, datetime
+from typing import List
 
 import sqlite3
 

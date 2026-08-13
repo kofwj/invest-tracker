@@ -9,9 +9,9 @@ from fastapi import HTTPException
 from fastapi.responses import Response
 
 try:
-    from .database import BACKUP_DIR, DB_PATH, LOCAL_TZ, db_session
+    from .database import BACKUP_DIR, LOCAL_TZ, db_session
 except ImportError:
-    from database import BACKUP_DIR, DB_PATH, LOCAL_TZ, db_session
+    from database import BACKUP_DIR, LOCAL_TZ, db_session
 
 
 TRANSACTION_CSV_COLUMNS = ["date", "account", "code", "name", "category", "direction", "quantity", "price", "amount", "fee", "remark"]
@@ -44,11 +44,20 @@ DEPOSIT_HEADER_ALIASES = {
 }
 
 
+def _csv_sanitize_cell(value):
+    """CSV 公式注入防护：文本以 = + - @ 开头（或含制表/回车）时加单引号前缀，
+    防止 Excel/WPS 打开导出文件时把它当公式执行。数字/布尔原样返回。"""
+    if isinstance(value, str):
+        if value and (value[0] in "=+-@" or "\t" in value or "\r" in value):
+            return "'" + value
+    return value
+
+
 def csv_response(filename: str, headers, rows):
     out = io.StringIO()
     writer = csv.writer(out)
     writer.writerow(headers)
-    writer.writerows(rows)
+    writer.writerows([[_csv_sanitize_cell(c) for c in row] for row in rows])
     content = "\ufeff" + out.getvalue()
     return Response(
         content=content,
@@ -93,6 +102,35 @@ def read_upload_csv(content: bytes):
     dialect = csv.Sniffer().sniff(sample) if sample.strip() else csv.excel
     reader = csv.DictReader(io.StringIO(text), dialect=dialect)
     return list(reader)
+
+
+MAX_CSV_UPLOAD_BYTES = int(os.environ.get("MAX_CSV_UPLOAD_BYTES", str(20 * 1024 * 1024)))  # 20MB default
+
+
+async def read_upload_bytes_limited(upload_file, max_bytes=None) -> bytes:
+    """Read an UploadFile fully but cap total size to guard against memory DoS.
+
+    Raises HTTPException(413) if the payload exceeds max_bytes.
+    """
+    from fastapi import HTTPException
+
+    if max_bytes is None:
+        max_bytes = MAX_CSV_UPLOAD_BYTES
+
+    chunks = []
+    total = 0
+    while True:
+        chunk = await upload_file.read(1024 * 1024)  # 1MB chunks
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > max_bytes:
+            raise HTTPException(
+                status_code=413,
+                detail=f"上传文件超过大小限制（最大 {max_bytes // (1024 * 1024)}MB）",
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 def _safe_backup_label(label: str):

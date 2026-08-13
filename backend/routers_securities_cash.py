@@ -1,6 +1,5 @@
 import math
 import sqlite3
-from datetime import date as dt_date
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel

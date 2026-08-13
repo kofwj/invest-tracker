@@ -453,7 +453,6 @@ def build_performance_story(conn, start_date=None, end_date=None):
     """人话绩效故事。支持时间范围时重点说「本期」。"""
     summary = build_performance_summary(conn, start_date, end_date)
     contrib = build_performance_contribution(conn)
-    timeline = build_performance_timeline(conn, start_date, end_date)
 
     has_flows = int(summary.get("flow_count") or 0) > 0
     total_gain = float(summary.get("total_gain") or 0)
@@ -678,7 +677,6 @@ def compute_underwater(timeline_rows):
 # ==================== 扩展专业指标（滚动、恢复、Calmar、Sortino、现金拖累、Benchmark、简单Brinson） ====================
 
 from datetime import datetime as dt, timedelta
-import math
 
 def _parse_date(d):
     if isinstance(d, str):

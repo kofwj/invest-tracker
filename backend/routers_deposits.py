@@ -1,4 +1,3 @@
-from datetime import date as dt_date
 import math
 import sqlite3
 from typing import Optional
@@ -17,6 +16,7 @@ try:
         normalize_csv_row,
         normalize_date_string,
         parse_float,
+        read_upload_bytes_limited,
         read_upload_csv,
     )
 except ImportError:
@@ -30,6 +30,7 @@ except ImportError:
         normalize_csv_row,
         normalize_date_string,
         parse_float,
+        read_upload_bytes_limited,
         read_upload_csv,
     )
 
@@ -178,7 +179,7 @@ def export_deposits():
 async def import_deposits(file: UploadFile = File(...)):
     if not (file.filename or "").lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="目前仅支持 CSV 文件")
-    raw_rows = read_upload_csv(await file.read())
+    raw_rows = read_upload_csv(await read_upload_bytes_limited(file))
     if not raw_rows:
         raise HTTPException(status_code=400, detail="CSV为空")
     backup_path = create_import_backup("before_import_deposits")

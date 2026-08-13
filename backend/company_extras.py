@@ -24,8 +24,9 @@ def _fetch_top_holders(code: str, limit: int = 10):
       - 最新一期 = 截至日期最大的那组，即当前十大股东
       - 北向(香港中央结算)最新一期比例常为 NaN，取最近一期已披露的有效值补上
       - 环比 = 该股东最近两个已披露有效比例的差（上披露期 → 本期）
-    返回 {holders:[{name,pct,type,kind,date,date_label,change}], holder_count}。
+    返回 {holders:[{name,pct,type,kind,date,date_label,change,prev_date}], holder_count}。
     change 单位与 pct 相同（百分比点），None 表示无从比较（只披露一期）。
+    prev_date = 环比基准的披露日期（当中间期比例 NaN 时会跨期，用 prev_date 如实标注比较期）。
     """
     c = str(code or "").strip()
     if not c:
@@ -86,6 +87,7 @@ def _fetch_top_holders(code: str, limit: int = 10):
             pct = valid[0][0] if valid else None
             date = valid[0][1] if valid else latest_date
             prev_pct = valid[1][0] if len(valid) > 1 else None
+            prev_date = valid[1][1] if len(valid) > 1 else None
             change = None
             if pct is not None and prev_pct is not None:
                 change = round(pct - prev_pct, 2)
@@ -95,6 +97,8 @@ def _fetch_top_holders(code: str, limit: int = 10):
                 "type": tail or "",
                 "kind": kind,
                 "date": str(date),
+                # 环比基准的披露日期（change 不为 None 时表示 this 与 prev 的比值）
+                "prev_date": str(prev_date) if prev_date is not None else None,
                 "change": change,
             })
         # 股东户数取最新一期的值

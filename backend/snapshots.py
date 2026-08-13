@@ -1,5 +1,4 @@
 import logging
-import sqlite3
 from datetime import date as dt_date, datetime
 from typing import Optional
 

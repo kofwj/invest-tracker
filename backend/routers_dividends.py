@@ -1,7 +1,7 @@
 import logging
 import math
 from datetime import date as dt_date
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
@@ -14,6 +14,7 @@ try:
         normalize_csv_row,
         normalize_date_string,
         parse_float,
+        read_upload_bytes_limited,
         read_upload_csv,
     )
     from .database import db_session, local_today_iso
@@ -31,6 +32,7 @@ except ImportError:
         normalize_csv_row,
         normalize_date_string,
         parse_float,
+        read_upload_bytes_limited,
         read_upload_csv,
     )
     from database import db_session, local_today_iso
@@ -139,12 +141,12 @@ def download_dividend_template():
 
 
 @router.post("/dividends/import")
-def import_dividends(file: UploadFile = File(...)):
+async def import_dividends(file: UploadFile = File(...)):
     """从CSV导入手工分红（direction 固定为'分红'，qty/price=0）。"""
     if not (file and file.filename and file.filename.lower().endswith(".csv")):
         raise HTTPException(status_code=400, detail="请上传 .csv 文件")
 
-    content = file.file.read()
+    content = await read_upload_bytes_limited(file)
     backup_path = create_import_backup("before_import_dividends")
 
     rows = read_upload_csv(content)

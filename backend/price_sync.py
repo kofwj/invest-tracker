@@ -2,7 +2,7 @@ import os
 import threading
 import time
 import logging
-from typing import Dict, Optional
+from typing import Dict
 
 import requests
 
