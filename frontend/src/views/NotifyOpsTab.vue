@@ -98,6 +98,17 @@
       <el-form label-position="top" class="cred-form">
         <el-row :gutter="16">
           <el-col :xs="24" :md="12">
+            <el-form-item label="飞书模式">
+              <el-radio-group v-model="feishuMode" size="small">
+                <el-radio-button label="webhook">Webhook</el-radio-button>
+                <el-radio-button label="app">自建应用</el-radio-button>
+              </el-radio-group>
+              <div class="cred-meta">
+                <span>选了自建应用就忽略 Webhook</span>
+              </div>
+            </el-form-item>
+          </el-col>
+          <el-col v-if="feishuMode === 'webhook'" :xs="24" :md="12">
             <el-form-item :label="fieldLabel('feishu_webhook')">
               <el-input
                 v-model="notifyChannelDraft.feishu_webhook"
@@ -113,6 +124,54 @@
               </div>
             </el-form-item>
           </el-col>
+          <template v-else>
+            <el-col :xs="24" :md="12">
+              <el-form-item :label="fieldLabel('feishu_app_id')">
+                <el-input
+                  v-model="notifyChannelDraft.feishu_app_id"
+                  type="password"
+                  show-password
+                  clearable
+                  placeholder="例如 cli_xxx"
+                  :disabled="notifyChannelClear.feishu_app_id"
+                />
+                <div class="cred-meta">
+                  <el-checkbox v-model="notifyChannelClear.feishu_app_id">清除已存</el-checkbox>
+                  <span v-if="flagOf('feishu_app_id')" class="cred-flag">库里已有</span>
+                </div>
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :md="12">
+              <el-form-item :label="fieldLabel('feishu_app_secret')">
+                <el-input
+                  v-model="notifyChannelDraft.feishu_app_secret"
+                  type="password"
+                  show-password
+                  clearable
+                  placeholder="应用密钥"
+                  :disabled="notifyChannelClear.feishu_app_secret"
+                />
+                <div class="cred-meta">
+                  <el-checkbox v-model="notifyChannelClear.feishu_app_secret">清除已存</el-checkbox>
+                  <span v-if="flagOf('feishu_app_secret')" class="cred-flag">库里已有</span>
+                </div>
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :md="12">
+              <el-form-item :label="fieldLabel('feishu_open_id')">
+                <el-input
+                  v-model="notifyChannelDraft.feishu_open_id"
+                  clearable
+                  placeholder="自己/群的 Open ID（开放平台获取）"
+                  :disabled="notifyChannelClear.feishu_open_id"
+                />
+                <div class="cred-meta">
+                  <el-checkbox v-model="notifyChannelClear.feishu_open_id">清除已存</el-checkbox>
+                  <span v-if="flagOf('feishu_open_id')" class="cred-flag">库里已有</span>
+                </div>
+              </el-form-item>
+            </el-col>
+          </template>
           <el-col :xs="24" :md="12">
             <el-form-item :label="fieldLabel('wecom_webhook')">
               <el-input
@@ -305,6 +364,9 @@ const EVENT_LABEL = {
 
 const FIELD_LABEL = {
   feishu_webhook: '飞书 Webhook',
+  feishu_app_id: '飞书自建应用 App ID',
+  feishu_app_secret: '飞书自建应用 App Secret',
+  feishu_open_id: '飞书接收人 Open ID',
   dingtalk_webhook: '钉钉 Webhook',
   dingtalk_secret: '钉钉加签 Secret',
   wecom_webhook: '企业微信 Webhook',
@@ -355,6 +417,13 @@ function fieldLabel(key) {
 function flagOf(key) {
   return !!(notifyStatus.value?.credential_flags && notifyStatus.value.credential_flags[key]);
 }
+
+// 飞书模式：有 app_id 就用自建应用，否则 Webhook
+const feishuMode = computed(() => {
+  const cur = notifyStatus.value?.channels?.feishu;
+  if (cur && cur.mode === 'app') return 'app';
+  return 'webhook';
+});
 </script>
 
 <style scoped>

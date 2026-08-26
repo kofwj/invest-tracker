@@ -43,6 +43,9 @@ NOTIFY_TEMPLATE_KEY = "notify_template"  # short | medium
 NOTIFY_CHANNEL_CREDS_KEY = "notify_channel_credentials"
 CHANNEL_CRED_FIELDS = (
     "feishu_webhook",
+    "feishu_app_id",
+    "feishu_app_secret",
+    "feishu_open_id",
     "dingtalk_webhook",
     "dingtalk_secret",
     "wecom_webhook",
@@ -129,10 +132,81 @@ def _load_channel_creds(conn=None) -> Dict[str, str]:
     return out
 
 
+def _feishu_app_for(db: Dict[str, str]) -> Dict[str, str]:
+    """Feishu self-built app credentials (app_id + app_secret + receiver open_id)."""
+    return {
+        "app_id": db.get("feishu_app_id") or _env("NOTIFY_FEISHU_APP_ID"),
+        "app_secret": db.get("feishu_app_secret") or _env("NOTIFY_FEISHU_APP_SECRET"),
+        "open_id": db.get("feishu_open_id") or _env("NOTIFY_FEISHU_OPEN_ID"),
+    }
+
+
+FETCH_TOKEN_URL = "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal"
+SEND_MSG_URL = "https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=open_id"
+_token_cache: Dict[str, str] = {}
+_token_cache_at: float = 0.0
+
+
+def _feishu_tenant_token(app_id: str, app_secret: str, timeout: int = 8) -> str:
+    """Get (and cache) a Feishu tenant_access_token from app_id/app_secret."""
+    global _token_cache_at, _token_cache
+    now = time.time()
+    if _token_cache and now - _token_cache_at < 5400:  # 90min cache, token lives ~2h
+        return _token_cache
+    import requests
+
+    res = requests.post(
+        FETCH_TOKEN_URL,
+        json={"app_id": app_id, "app_secret": app_secret},
+        timeout=timeout,
+    )
+    data = res.json()
+    code = data.get("code")
+    if code not in (0, "0", None) or not data.get("tenant_access_token"):
+        raise ValueError(f"飞书换取 token 失败({res.status_code}): {str(data.get('msg') or data)[:200]}")
+    _token_cache = str(data["tenant_access_token"])
+    _token_cache_at = now
+    return _token_cache
+
+
+def _send_feishu_app(app: Dict[str, str], text: str, timeout: int = 10) -> Tuple[bool, Optional[int], str]:
+    """Send via self-built app (app_id/app_secret/open_id) through the IM message API."""
+    if not (app.get("app_id") and app.get("app_secret") and app.get("open_id")):
+        return False, None, "not_configured"
+    try:
+        token = _feishu_tenant_token(app["app_id"], app["app_secret"])
+    except Exception as exc:
+        return False, None, str(exc)
+    try:
+        import requests
+
+        payload = {
+            "receive_id": app["open_id"],
+            "msg_type": "text",
+            "content": json.dumps({"text": text}, ensure_ascii=False),
+        }
+        res = requests.post(
+            SEND_MSG_URL,
+            json=payload,
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=timeout,
+        )
+        data = res.json()
+        code = data.get("code")
+        ok = code in (0, "0", None)
+        reason = None if ok else str(data.get("msg") or res.text or "")[:200]
+        return ok, res.status_code, reason or ""
+    except Exception as exc:
+        return False, None, str(exc)
+
+
 def channel_config(conn=None) -> Dict[str, Dict[str, Any]]:
     """Return channel readiness. DB settings override .env; secrets stay internal."""
     db = _load_channel_creds(conn)
     feishu = db.get("feishu_webhook") or _env("NOTIFY_FEISHU_WEBHOOK") or _env("FEISHU_ALERT_WEBHOOK")
+    feishu_app = _feishu_app_for(db)
+    feishu_configured = bool(feishu) or bool(feishu_app["app_id"] and feishu_app["app_secret"] and feishu_app["open_id"])
+    feishu_mode = "app" if (feishu_app["app_id"] and feishu_app["app_secret"] and feishu_app["open_id"]) else "webhook"
     dingtalk = db.get("dingtalk_webhook") or _env("NOTIFY_DINGTALK_WEBHOOK")
     dingtalk_secret = db.get("dingtalk_secret") or _env("NOTIFY_DINGTALK_SECRET")
     wecom = db.get("wecom_webhook") or _env("NOTIFY_WECOM_WEBHOOK")
@@ -141,10 +215,12 @@ def channel_config(conn=None) -> Dict[str, Dict[str, Any]]:
 
     return {
         "feishu": {
-            "configured": bool(feishu),
-            "hint": _mask_secret(feishu),
+            "configured": feishu_configured,
+            "hint": _mask_secret(feishu_app["app_id"] or feishu),
             "webhook": feishu,
-            "source": "db" if db.get("feishu_webhook") else ("env" if feishu else ""),
+            "app": feishu_app if feishu_mode == "app" else {},
+            "mode": feishu_mode if feishu_configured else "",
+            "source": "db" if (db.get("feishu_webhook") or db.get("feishu_app_id")) else ("env" if feishu_configured else ""),
         },
         "dingtalk": {
             "configured": bool(dingtalk),
@@ -383,7 +459,10 @@ def send_to_channel(channel: str, text: str, cfg: Optional[Dict] = None, conn=No
     if channel == "feishu":
         webhook = ch.get("webhook") or ""
         if not webhook:
-            return {"channel": channel, "ok": False, "reason": "not_configured"}
+            # 自建应用：app_id + app_secret + open_id
+            app = ch.get("app") if isinstance(ch.get("app"), dict) else {}
+            ok, code, reason = _send_feishu_app(app, text)
+            return {"channel": channel, "ok": ok, "status_code": code, "reason": reason or None}
         ok, code, reason = _post_json(
             webhook,
             {"msg_type": "text", "content": {"text": text}},

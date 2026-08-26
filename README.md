@@ -204,6 +204,8 @@ CORS_ALLOW_ORIGINS=https://your-domain
 
 优先在 **设置 → 消息推送** 填密钥（存库，不回填明文；留空=不改，勾清除=删库值）。`.env` 的 `NOTIFY_*` 只作服务器兜底。
 
+飞书支持两种：**Webhook**（机器人）或 **自建应用**（app_id + app_secret + 接收人 open_id，走消息 API）。配了自建应用就忽略 Webhook。
+
 事件：价格预警、晚间简报、存款到期、纪律破线、运维、试推。
 
 ---

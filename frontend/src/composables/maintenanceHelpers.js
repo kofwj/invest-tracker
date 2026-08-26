@@ -29,6 +29,9 @@ export function createMaintenanceHelpers({
     // 通道密钥草稿：空=不改；有值=覆盖；clearFlags 为 true 时传空串清除
     const notifyChannelDraft = ref({
         feishu_webhook: '',
+        feishu_app_id: '',
+        feishu_app_secret: '',
+        feishu_open_id: '',
         dingtalk_webhook: '',
         dingtalk_secret: '',
         wecom_webhook: '',
@@ -37,6 +40,9 @@ export function createMaintenanceHelpers({
     });
     const notifyChannelClear = ref({
         feishu_webhook: false,
+        feishu_app_id: false,
+        feishu_app_secret: false,
+        feishu_open_id: false,
         dingtalk_webhook: false,
         dingtalk_secret: false,
         wecom_webhook: false,
@@ -46,6 +52,9 @@ export function createMaintenanceHelpers({
 
     const emptyChannelDraft = () => ({
         feishu_webhook: '',
+        feishu_app_id: '',
+        feishu_app_secret: '',
+        feishu_open_id: '',
         dingtalk_webhook: '',
         dingtalk_secret: '',
         wecom_webhook: '',
@@ -55,6 +64,9 @@ export function createMaintenanceHelpers({
 
     const emptyChannelClear = () => ({
         feishu_webhook: false,
+        feishu_app_id: false,
+        feishu_app_secret: false,
+        feishu_open_id: false,
         dingtalk_webhook: false,
         dingtalk_secret: false,
         wecom_webhook: false,
@@ -95,6 +107,9 @@ export function createMaintenanceHelpers({
         const clear = notifyChannelClear.value || {};
         const fields = [
             'feishu_webhook',
+            'feishu_app_id',
+            'feishu_app_secret',
+            'feishu_open_id',
             'dingtalk_webhook',
             'dingtalk_secret',
             'wecom_webhook',

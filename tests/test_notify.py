@@ -200,6 +200,84 @@ def test_channel_credentials_ui_override_env(client, app_module, monkeypatch):
     assert clear.json()["credential_flags"]["feishu_webhook"] is False
 
 
+def test_feishu_app_mode_configures_and_posts_via_api(app_module, monkeypatch):
+    import notify as notify_mod  # reset token cache to keep token call count deterministic
+    notify_mod._token_cache = {}
+    notify_mod._token_cache_at = 0.0
+    from notify import dispatch
+
+    monkeypatch.setenv("NOTIFY_ENABLED", "1")
+    for k in ("NOTIFY_FEISHU_WEBHOOK", "FEISHU_ALERT_WEBHOOK"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("NOTIFY_FEISHU_APP_ID", "cli_test")
+    monkeypatch.setenv("NOTIFY_FEISHU_APP_SECRET", "secret_test")
+    monkeypatch.setenv("NOTIFY_FEISHU_OPEN_ID", "ou_test")
+    monkeypatch.delenv("NOTIFY_TELEGRAM_BOT_TOKEN", raising=False)
+    monkeypatch.delenv("NOTIFY_TELEGRAM_CHAT_ID", raising=False)
+    monkeypatch.delenv("NOTIFY_DINGTALK_WEBHOOK", raising=False)
+    monkeypatch.delenv("NOTIFY_WECOM_WEBHOOK", raising=False)
+
+    # status（API 面向前端）反映 app 模式，且不回填 secret
+    from notify import notify_status
+    st = notify_status()
+    assert st["channels"]["feishu"]["configured"] is True
+    assert "secret_test" not in str(st)
+    # 内部 config 才带 secret，仅供发送逻辑用
+    from notify import channel_config
+    cfg = channel_config()
+    assert cfg["feishu"]["mode"] == "app"
+
+    # 模拟 token + 消息两步；token 仅调一次（有缓存）
+    class TokenResp:
+        status_code = 200
+        text = "token"
+        def json(self):
+            return {"code": 0, "tenant_access_token": "t-token"}
+    class MsgResp:
+        status_code = 200
+        text = "msg"
+        def json(self):
+            return {"code": 0}
+
+    def fake_post(url, *args, **kwargs):
+        if "tenant_access_token/internal" in url:
+            return TokenResp()
+        assert "im/v1/messages" in url
+        assert kwargs["headers"]["Authorization"] == "Bearer t-token"
+        # 不泄露 secret
+        assert "secret_test" not in str(kwargs["json"])
+        return MsgResp()
+
+    with patch("requests.post", side_effect=fake_post) as mock_post:
+        _send = __import__("notify")._send_feishu_app
+        ok, code, reason = _send(
+            {"app_id": "cli_test", "app_secret": "secret_test", "open_id": "ou_test"}, "你好"
+        )
+        assert ok is True
+        assert mock_post.called
+        # token + messages 两步
+        assert mock_post.call_count == 2
+
+        with app_module.get_db_connection(app_module.DB_PATH) as conn:
+            result = dispatch(
+                "body", title="试推", event="test", channels=["feishu"], conn=conn, force=True
+            )
+            conn.commit()
+    assert result["sent"] is True
+
+
+def test_feishu_app_requires_all_three_fields():
+    from notify import _send_feishu_app
+    ok, code, reason = _send_feishu_app({}, "hi")
+    assert ok is False
+    assert reason == "not_configured"
+    ok2, _, reason2 = _send_feishu_app(
+        {"app_id": "a", "app_secret": "b", "open_id": ""}, "hi"
+    )
+    assert ok2 is False
+    assert reason2 == "not_configured"
+
+
 def test_channel_credentials_db_beats_env(app_module, monkeypatch):
     from notify import channel_config, save_channel_credentials
 
