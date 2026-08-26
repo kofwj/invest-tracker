@@ -336,7 +336,7 @@
 <script setup>
 import PageShell from '../components/PageShell.vue';
 import MetricCard from '../components/MetricCard.vue';
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 
 const {
@@ -419,11 +419,13 @@ function flagOf(key) {
 }
 
 // 飞书模式：有 app_id 就用自建应用，否则 Webhook
-const feishuMode = computed(() => {
-  const cur = notifyStatus.value?.channels?.feishu;
-  if (cur && cur.mode === 'app') return 'app';
-  return 'webhook';
-});
+// 飞书模式：本地可写选择器，初始跟随当前已存配置。
+const feishuMode = ref('webhook');
+watch(
+  () => notifyStatus.value?.channels?.feishu?.mode,
+  (m) => { feishuMode.value = m === 'app' ? 'app' : 'webhook'; },
+  { immediate: true },
+);
 </script>
 
 <style scoped>
