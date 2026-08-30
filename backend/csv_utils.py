@@ -96,10 +96,34 @@ def normalize_csv_row(raw_row, aliases):
     return row
 
 
+def validate_date_params(start_date=None, end_date=None):
+    """Normalize optional YYYY-MM-DD query params; 400 on anything else.
+
+    Raw params go straight into SQL string comparison, so non-ISO inputs
+    like "2025/1/1" would silently return wrong/empty filter results.
+    """
+    try:
+        if start_date:
+            start_date = normalize_date_string(start_date)
+        if end_date:
+            end_date = normalize_date_string(end_date)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return start_date, end_date
+
+
 def read_upload_csv(content: bytes):
     text = content.decode("utf-8-sig", errors="ignore")
     sample = text[:2048]
-    dialect = csv.Sniffer().sniff(sample) if sample.strip() else csv.excel
+    if not sample.strip():
+        return []
+    try:
+        dialect = csv.Sniffer().sniff(sample)
+    except csv.Error:
+        # Sniffer cannot determine the delimiter on single-column or odd
+        # samples; fall back to the excel dialect so callers surface
+        # row-level 4xx errors instead of a 500.
+        dialect = csv.excel
     reader = csv.DictReader(io.StringIO(text), dialect=dialect)
     return list(reader)
 

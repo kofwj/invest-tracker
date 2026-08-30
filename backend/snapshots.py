@@ -25,6 +25,10 @@ def ensure_snapshot_columns(conn):
 
 
 def ensure_portfolio_cash_flows_table(conn):
+    # created_at is written explicitly by the app (app-local time); the
+    # DEFAULT only remains as a safety net and must not depend on the
+    # container OS timezone (old default datetime('now','localtime') drifted
+    # 8h from APP_TIMEZONE on UTC containers).
     conn.execute("""CREATE TABLE IF NOT EXISTS portfolio_cash_flows (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         date TEXT NOT NULL,
@@ -32,7 +36,7 @@ def ensure_portfolio_cash_flows_table(conn):
         amount REAL NOT NULL,
         source TEXT,
         remark TEXT,
-        created_at DATETIME DEFAULT (datetime('now','localtime'))
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )""")
 
 

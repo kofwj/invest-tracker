@@ -33,7 +33,11 @@ def get_fee_settings():
 def update_fee_settings(data: FeeSettingsUpdate):
     with db_session() as conn:
         normalized = normalize_fee_settings({
-            "accounts": data.accounts or [],
+            # Pass accounts through as-is (may be None): normalize_fee_settings
+            # derives accounts from settings keys when accounts is omitted.
+            # `or []` here would flip "omitted" into "explicitly empty" and
+            # silently reset every custom per-account fee rule.
+            "accounts": data.accounts,
             "active_account": data.active_account,
             "settings": data.settings,
         })

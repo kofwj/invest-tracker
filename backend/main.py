@@ -13,6 +13,7 @@ if CURRENT_DIR not in sys.path:
 try:
     from .auth import require_auth, require_cron_token, router as auth_router
     from .cash import set_setting  # noqa: F401  (module-level API used by tests)
+    from .version import APP_VERSION
     from .database import (
         APP_CONFIG,
         DB_PATH,
@@ -42,6 +43,7 @@ try:
 except ImportError:  # Allows tests to load this file directly via importlib.
     from auth import require_auth, require_cron_token, router as auth_router
     from cash import set_setting  # noqa: F401  (module-level API used by tests)
+    from version import APP_VERSION
     from database import (
         APP_CONFIG,
         DB_PATH,
@@ -133,6 +135,7 @@ def health_payload():
         "status": status,
         "database": db_status,
         "timezone": str(APP_CONFIG.local_timezone),
+        "version": APP_VERSION,
     }
 
 

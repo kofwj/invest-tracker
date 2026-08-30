@@ -1,4 +1,3 @@
-import time
 
 import auth as auth_mod
 

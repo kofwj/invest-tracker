@@ -103,7 +103,9 @@ export function createHoldingCorrectionHelpers({
                 await fetchData();
             }
         } catch (e) {
-            // user cancelled or error already handled by confirm
+            // ElMessageBox 取消不算错误；真正的 API 失败必须提示，不能静默吞掉
+            if (e === 'cancel' || e === 'close') return;
+            ElMessage.error(e?.response?.data?.detail || '删除持仓校正失败');
         }
     };
 

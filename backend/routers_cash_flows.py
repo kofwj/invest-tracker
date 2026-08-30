@@ -7,9 +7,11 @@ from pydantic import BaseModel
 
 try:
     from .cash import DEFAULT_ACCOUNT, calculated_securities_cash, normalize_cash_flow_amount, set_setting
+    from .csv_utils import validate_date_params
     from .database import db_session
 except ImportError:
     from cash import DEFAULT_ACCOUNT, calculated_securities_cash, normalize_cash_flow_amount, set_setting
+    from csv_utils import validate_date_params
     from database import db_session
 
 router = APIRouter()
@@ -38,6 +40,7 @@ def list_cash_flows(
     account: Optional[str] = None,
     flow_type: Optional[str] = None,
 ):
+    start_date, end_date = validate_date_params(start_date, end_date)
     with db_session(row_factory=sqlite3.Row) as conn:
         query = "SELECT * FROM cash_flows WHERE 1=1"
         params = []

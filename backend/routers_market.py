@@ -92,7 +92,10 @@ def market_summary():
 @router.get("/market/trading-day")
 def market_trading_day(date: Optional[str] = None):
     with db_session(row_factory=sqlite3.Row) as conn:
-        return trading_day_status(date, conn=conn)
+        try:
+            return trading_day_status(date, conn=conn)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/market/watchlist")
@@ -193,7 +196,7 @@ def export_alert_events(
 def post_clear_alert_events(body: ClearEventsBody = ClearEventsBody()):
     with db_session(row_factory=sqlite3.Row) as conn:
         if body.clear_all:
-            deleted = clear_alert_events(conn)
+            deleted = clear_alert_events(conn, allow_all=True)
         else:
             if not (body.code or body.start_date or body.end_date):
                 raise HTTPException(

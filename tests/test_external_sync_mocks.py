@@ -9,7 +9,6 @@
 注意：conftest.app_module 会 reload 整个 backend 模块链并指向 tmp DB，故 backend 模块一律
 在函数内 import，确保拿到的是 reload 后的实例、patch 到对的模块对象。
 """
-import sqlite3
 from unittest import mock
 
 import pytest

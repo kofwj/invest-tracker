@@ -115,6 +115,17 @@ assert 'lifetime_profit' in Path('backend/snapshots.py').read_text(encoding='utf
 assert 'is_a_share_trading_day' in Path('backend/trading_calendar.py').read_text(encoding='utf-8'), 'trading calendar missing'
 PY
 
+echo "==> Linting backend/tests with ruff"
+# 规则集见 ruff.toml：只开 F（未使用导入/未定义名）+ E9（语法错误）。
+# 默认规则集里的 UP（如 Union → X | Y）会破坏 Python 3.9 兼容，不要全量开启。
+if command -v ruff >/dev/null 2>&1; then
+  ruff check backend tests
+elif "$python_bin" -m ruff --version >/dev/null 2>&1; then
+  "$python_bin" -m ruff check backend tests
+else
+  echo "ruff not found; skipping lint (pip install ruff to enable)"
+fi
+
 echo "==> Checking frontend build"
 if command -v npm >/dev/null 2>&1; then
   npm --prefix frontend run build

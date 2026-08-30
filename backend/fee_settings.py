@@ -40,7 +40,9 @@ def normalize_category_settings(raw=None):
 def normalize_fee_settings(raw=None):
     if isinstance(raw, dict) and isinstance(raw.get("settings"), dict):
         explicit_accounts = "accounts" in raw and raw.get("accounts") is not None
-        accounts = [str(a).strip() for a in raw.get("accounts", []) if str(a).strip()]
+        # `raw.get("accounts", [])` returns None when the key exists but is
+        # explicitly null, which would crash the comprehension below.
+        accounts = [str(a).strip() for a in (raw.get("accounts") or []) if str(a).strip()]
         if not explicit_accounts:
             accounts = [str(a).strip() for a in raw.get("settings", {}).keys() if str(a).strip()]
         accounts = list(dict.fromkeys(accounts))

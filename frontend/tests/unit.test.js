@@ -94,6 +94,15 @@ describe('holdingLifetimeProfit (全周期盈亏)', () => {
   it('rate null when net investment not positive', () => {
     expect(holdingLifetimeProfitRate({ quantity: 1000, diluted_cost: 0, last_price: 18 })).toBeNull();
   });
+  it('rate falls back to avg_cost when diluted_cost is null (与 holdingLifetimeProfit 口径一致)', () => {
+    const row = { quantity: 500, avg_cost: 8, diluted_cost: null, last_price: 10 };
+    // 净投入按 avg_cost 回退：profit 1000 / net 4000 * 100 = 25
+    expect(holdingLifetimeProfitRate(row)).toBeCloseTo(25);
+  });
+  it('rate falls back to avg_cost when diluted_cost missing key', () => {
+    const row = { quantity: 200, avg_cost: 5, last_price: 7 };
+    expect(holdingLifetimeProfitRate(row)).toBeCloseTo(40);
+  });
 });
 
 describe('analyzeKlineTrend (均线解读)', () => {

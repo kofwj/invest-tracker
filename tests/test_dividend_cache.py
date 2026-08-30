@@ -1,4 +1,3 @@
-import time
 
 import dividend_sync as ds
 

@@ -1,5 +1,3 @@
-import pytest
-from fastapi.testclient import TestClient
 
 def test_auth_status_disabled_by_default(client, monkeypatch):
     monkeypatch.setenv("INVEST_TRACKER_PASSWORD", "")

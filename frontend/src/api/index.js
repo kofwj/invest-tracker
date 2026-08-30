@@ -28,6 +28,7 @@ axios.interceptors.response.use(
 );
 
 const api = {
+    getHealth: () => axios.get(API + '/health'),
     getAuthStatus: () => axios.get(API + '/auth/status'),
     login: (password) => axios.post(API + '/login', { password }),
     getDashboard: () => axios.get(API + '/dashboard'),

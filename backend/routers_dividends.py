@@ -4,7 +4,7 @@ from datetime import date as dt_date
 from typing import List, Optional
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 try:
     from .csv_utils import (
@@ -95,7 +95,14 @@ def scan_dividends(payload: DividendScanRequest = DividendScanRequest()):
 def scan_dividends_get(lookback_days: int = DEFAULT_LOOKBACK_DAYS, codes: Optional[str] = None):
     """已弃用：请用 POST /dividends/scan。GET 仍可用，避免误依赖为唯一入口。"""
     code_list = [c.strip() for c in (codes or "").split(",") if c.strip()] or None
-    return scan_dividends(DividendScanRequest(lookback_days=lookback_days, codes=code_list))
+    try:
+        payload = DividendScanRequest(lookback_days=lookback_days, codes=code_list)
+    except ValidationError as e:
+        # Query params bypass pydantic model validation, so re-run it here and
+        # return 422 instead of an unhandled ValidationError → 500.
+        first = e.errors()[0] if e.errors() else {}
+        raise HTTPException(status_code=422, detail=f"参数校验失败: {first.get('msg') or str(e)}")
+    return scan_dividends(payload)
 
 
 @router.post("/dividends/confirm")
@@ -167,7 +174,7 @@ async def import_dividends(file: UploadFile = File(...)):
 
     try:
         with db_session(row_factory=sqlite3.Row) as conn:
-            for idx, raw in enumerate(rows):
+            for idx, raw in enumerate(rows, start=2):  # idx = 文件行号（含表头，第1行）
                 try:
                     row = normalize_csv_row(raw, aliases)
                     if not row.get("date") or not row.get("code"):
@@ -200,7 +207,7 @@ async def import_dividends(file: UploadFile = File(...)):
                     affected_codes.add(code)
                     success += 1
                 except Exception as e:
-                    errors.append({"row": idx + 1, "error": str(e)})
+                    errors.append({"row": idx, "error": str(e)})
 
             if success > 0:
                 recalc_holdings(conn, codes=list(affected_codes) if affected_codes else None)

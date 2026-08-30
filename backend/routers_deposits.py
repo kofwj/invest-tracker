@@ -194,15 +194,16 @@ async def import_deposits(file: UploadFile = File(...)):
                     if not bank_name:
                         raise ValueError("银行名称不能为空")
                     amount = parse_float(row.get("amount"), 0.0)
+                    if not math.isfinite(amount):
+                        # "nan" passes `<= 0`; sqlite would store it as NULL and
+                        # the deposit would silently vanish from totals.
+                        raise ValueError("金额必须是有限数字")
                     if amount <= 0:
                         raise ValueError("金额必须大于0")
-                    interest_rate = (
-                        parse_float(row.get("interest_rate"), 0.0)
-                        if row.get("interest_rate") != ""
-                        else None
-                    )
-                    if interest_rate is not None and interest_rate < 0:
-                        raise ValueError("利率不能为负")
+                    raw_rate = row.get("interest_rate")
+                    interest_rate = parse_float(raw_rate, 0.0) if raw_rate not in (None, "") else None
+                    if interest_rate is not None and (not math.isfinite(interest_rate) or interest_rate < 0):
+                        raise ValueError("利率必须是不小于0的有限数字")
                     start_date = normalize_date_string(row.get("start_date"), required=False) or None
                     due_date = normalize_date_string(row.get("due_date"), required=False) or None
                     if start_date and due_date and start_date > due_date:

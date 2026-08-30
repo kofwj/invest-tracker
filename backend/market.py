@@ -157,8 +157,13 @@ def clear_alert_events(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     before_id: Optional[int] = None,
+    allow_all: bool = False,
 ) -> int:
-    """Delete matching alert events. Returns deleted row count."""
+    """Delete matching alert events. Returns deleted row count.
+
+    Without any filter this would wipe the whole table, so a filter (or an
+    explicit allow_all from the route's clear-all branch) is required.
+    """
     ensure_alert_tables(conn)
     code = str(code or "").strip()
     start_date = str(start_date or "").strip()[:10] or None
@@ -178,8 +183,8 @@ def clear_alert_events(
         clauses.append("id <= ?")
         params.append(int(before_id))
     if not clauses:
-        # safety: require at least one filter OR explicit clear-all via before_id=0 hack not allowed
-        # allow clear-all when caller passes end_date far future via API flag clear_all
+        if not allow_all:
+            raise ValueError("clear_alert_events 需要至少一个过滤条件（code/start_date/end_date/before_id）或显式 allow_all")
         cur = conn.execute("DELETE FROM alert_events")
         return int(cur.rowcount or 0)
     where = " AND ".join(clauses)

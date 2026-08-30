@@ -21,6 +21,18 @@ def _local_today() -> dt_date:
     return dt_date.today()
 
 
+def one_year_before(end: dt_date) -> dt_date:
+    """Same calendar date one year earlier; Feb 29 falls back to Feb 28.
+
+    date(2028, 2, 29).replace(year=2027) raises ValueError, which used to
+    crash the whole trailing-return sync on leap days.
+    """
+    try:
+        return end.replace(year=end.year - 1)
+    except ValueError:
+        return end.replace(year=end.year - 1, month=2, day=28)
+
+
 def ensure_holding_return_columns(conn):
     """Add cached trailing-return columns for holdings if missing."""
     cols = [row[1] for row in conn.execute("PRAGMA table_info(holdings)").fetchall()]
@@ -102,7 +114,7 @@ def calculate_trailing_return_1y(code: str, current_price: float = None):
 
     c = str(code or "").strip().lower()
     end = _local_today()
-    start = end.replace(year=end.year - 1)
+    start = one_year_before(end)
     try:
         if c.startswith("f"):
             fund_code = c.replace("f", "")

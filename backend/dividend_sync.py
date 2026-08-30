@@ -18,7 +18,6 @@ from __future__ import annotations
 import logging
 import math
 import re
-import sqlite3
 import time
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
@@ -27,10 +26,16 @@ import requests
 
 try:
     from .database import LOCAL_TZ, local_today_iso
-    from .holding_calculator import infer_category, latest_holding_corrections
+    from .holding_calculator import (
+        holding_quantity_as_of as _holding_quantity_as_of_impl,
+        infer_category,
+    )
 except ImportError:
     from database import LOCAL_TZ, local_today_iso
-    from holding_calculator import infer_category, latest_holding_corrections
+    from holding_calculator import (
+        holding_quantity_as_of as _holding_quantity_as_of_impl,
+        infer_category,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -149,45 +154,18 @@ def parse_date_value(raw: Any) -> Optional[date]:
 
 
 def holding_quantity_as_of(conn, code: str, as_of: date) -> float:
-    """Holding quantity on as_of date (inclusive), using correction anchors when present."""
+    """Holding quantity on as_of date (inclusive), using correction anchors when present.
+
+    Delegates to holding_calculator.holding_quantity_as_of so correction-anchor
+    semantics stay consistent with the transaction-edit path: when several
+    corrections exist for a code, that implementation falls back to the most
+    recent correction with date <= as_of, which this local copy previously
+    did not do.
+    """
     code = normalize_code(code)
     if not code or as_of is None:
         return 0.0
-    as_of_s = as_of.isoformat()
-    corrections = latest_holding_corrections(conn)
-    correction = corrections.get(code)
-    qty = 0.0
-    anchor = None
-    if correction:
-        c_date = str(correction.get("date") or "")
-        if c_date and c_date <= as_of_s:
-            qty = float(correction.get("actual_quantity") or 0)
-            anchor = c_date
-
-    rows = conn.execute(
-        """
-        SELECT date, direction, quantity
-        FROM transactions
-        WHERE code = ? AND TRIM(code) != ''
-        ORDER BY date, id
-        """,
-        (code,),
-    ).fetchall()
-    for t in rows:
-        direction = t["direction"] if isinstance(t, sqlite3.Row) else t[1]
-        t_date = str((t["date"] if isinstance(t, sqlite3.Row) else t[0]) or "")
-        t_qty = float((t["quantity"] if isinstance(t, sqlite3.Row) else t[2]) or 0)
-        if direction in ("申购待确认", "待确认申购"):
-            continue
-        if t_date > as_of_s:
-            continue
-        if anchor is not None and t_date <= anchor:
-            continue
-        if direction in ("买入", "分红再投资"):
-            qty += t_qty
-        elif direction == "卖出":
-            qty = max(0.0, qty - t_qty)
-    return float(qty)
+    return float(_holding_quantity_as_of_impl(conn, code, as_of_date=as_of))
 
 
 def _date_window(center: date, days: int = DATE_MATCH_WINDOW_DAYS) -> Tuple[str, str]:
@@ -648,6 +626,15 @@ def confirm_dividend_drafts(
                 continue
             if event_date is None:
                 errors.append({"code": code, "draft_key": draft_key, "reason": "缺少分红日期"})
+                continue
+            today = datetime.now(LOCAL_TZ).date() if LOCAL_TZ is not None else date.today()
+            if event_date > today:
+                # Other transaction write paths reject future dates; honoring
+                # a future ex-dividend date here would inflate cash and
+                # total_dividend before the payout actually lands.
+                errors.append(
+                    {"code": code, "draft_key": draft_key, "reason": "分红日期不能晚于今天（未来除息请到账后再确认）"}
+                )
                 continue
             if not math.isfinite(amount) or not math.isfinite(fee):
                 errors.append({"code": code, "draft_key": draft_key, "reason": "金额和手续费必须是有限数字"})

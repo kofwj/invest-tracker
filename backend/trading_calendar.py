@@ -134,7 +134,14 @@ def trading_day_status(
     *,
     conn=None,
 ) -> dict:
-    d = _to_date(value) or _local_today()
+    explicit = value is not None and str(value).strip() != ""
+    d = _to_date(value)
+    if d is None:
+        if explicit:
+            # An explicitly-provided but unparseable date used to fall back
+            # to "today" silently; cron scripts would then act on a wrong day.
+            raise ValueError(f"日期格式应为 YYYY-MM-DD：{value}")
+        d = _local_today()
     iso = d.isoformat()
     trading = is_a_share_trading_day(d, conn=conn)
     reason = "trading"

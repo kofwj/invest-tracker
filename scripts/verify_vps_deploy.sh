@@ -6,6 +6,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+python_bin="${PYTHON_BIN:-python3}"
+
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 PASS=0
 FAIL=0
@@ -118,12 +120,19 @@ fi
 
 echo
 echo "== 4. 健康检查 / API =="
-if curl -fsS --max-time 8 "${BASE}/api/health" >/tmp/invest-health.$$ 2>/dev/null; then
-  ok "GET ${BASE}/api/health -> $(cat /tmp/invest-health.$$)"
+HEALTH_FILE="/tmp/invest-health.$$"
+if curl -fsS --max-time 8 "${BASE}/api/health" >"${HEALTH_FILE}" 2>/dev/null; then
+  ok "GET ${BASE}/api/health -> $(cat "${HEALTH_FILE}")"
+  DEPLOYED_VERSION="$("$python_bin" -c "import json,sys; print(json.load(open('${HEALTH_FILE}')).get('version',''))" 2>/dev/null || true)"
+  if [ -n "${DEPLOYED_VERSION}" ]; then
+    ok "线上版本 v${DEPLOYED_VERSION}"
+  else
+    warn "health 响应缺少 version 字段（旧镜像？重新 build 后应出现）"
+  fi
 else
   bad "健康检查失败：${BASE}/api/health"
 fi
-rm -f /tmp/invest-health.$$
+rm -f "${HEALTH_FILE}"
 
 AUTH_JSON="$(curl -fsS --max-time 8 "${BASE}/api/auth/status" 2>/dev/null || true)"
 if [ -n "$AUTH_JSON" ]; then

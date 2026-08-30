@@ -6,7 +6,7 @@
       </div>
       <div class="header-brand-text">
         <h2>Invest Tracker</h2>
-        <div class="header-subtitle">真仓账本</div>
+        <div class="header-subtitle">真仓账本{{ versionSuffix }}</div>
       </div>
     </button>
 
@@ -54,10 +54,11 @@
 </template>
 
 <script setup>
-import { computed } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { LogOut, Monitor, Moon, Radar, RefreshCw, Sun, Wallet } from 'lucide-vue-next';
 import { useAppCtx } from '../composables/useAppCtx.js';
 import { tabLabel } from '../modules/tabNav.js';
+import api from '../api/index.js';
 
 const {
   authEnabled,
@@ -76,6 +77,16 @@ const {
 } = useAppCtx();
 
 const activeTabLabel = computed(() => tabLabel(activeTab?.value ?? activeTab));
+
+// 版本号从 /api/health 拉取（backend/version.py 是唯一来源）；失败静默不展示
+const appVersion = ref('');
+onMounted(async () => {
+  try {
+    const res = await api.getHealth();
+    appVersion.value = String(res.data?.version || '');
+  } catch { /* 装饰信息，不报错 */ }
+});
+const versionSuffix = computed(() => (appVersion.value ? ` v${appVersion.value}` : ''));
 
 function onGroupClick(gid) {
   const hit = (tabGroups || []).find((x) => x.id === gid);

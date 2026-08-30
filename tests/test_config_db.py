@@ -36,7 +36,6 @@ def test_database_initialization_records_schema_version(app_module):
 
 def test_migrate_v12_focus_generalizes(app_module):
     import json
-    import sqlite3
 
     with app_module.get_db_connection(app_module.DB_PATH) as conn:
         # 全新库(无持仓)运行迁移 -> 不注入

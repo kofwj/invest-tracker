@@ -19,9 +19,24 @@ logger = logging.getLogger(__name__)
 LOGIN_MAX_FAILURES = int(os.environ.get("LOGIN_MAX_FAILURES", "5"))
 LOGIN_WINDOW_SECONDS = int(os.environ.get("LOGIN_WINDOW_SECONDS", "600"))  # 10 min
 LOGIN_LOCK_SECONDS = int(os.environ.get("LOGIN_LOCK_SECONDS", "900"))  # 15 min
+# Max tracked IPs in the throttle state; protects against unbounded memory
+# growth when clients send forged per-request X-Forwarded-For values.
+LOGIN_MAX_TRACKED_IPS = int(os.environ.get("LOGIN_MAX_TRACKED_IPS", "1000"))
 _fail_lock = threading.Lock()
 _fail_events: Dict[str, Deque[float]] = defaultdict(deque)
 _lock_until: Dict[str, float] = {}
+
+
+def _trust_proxy_headers() -> bool:
+    """Only honor X-Forwarded-For/X-Real-IP when explicitly enabled.
+
+    Default is off: those headers are client-controlled and, if trusted
+    blindly, let an attacker get a fresh throttle bucket per forged IP
+    (unlimited password brute force) while growing the throttle state.
+    Set TRUST_PROXY_HEADERS=1 when deployed behind a proxy that overwrites
+    the header (e.g. nginx setting X-Real-IP).
+    """
+    return os.environ.get("TRUST_PROXY_HEADERS", "").strip().lower() in ("1", "true", "yes", "on")
 
 
 class LoginRequest(BaseModel):
@@ -80,13 +95,14 @@ def verify_token(token: str) -> bool:
 def client_ip(request: Optional[Request]) -> str:
     if request is None:
         return "unknown"
-    xff = request.headers.get("x-forwarded-for") or request.headers.get("X-Forwarded-For")
-    if xff:
-        # left-most is original client when behind Caddy/CF
-        return xff.split(",")[0].strip() or "unknown"
-    real_ip = request.headers.get("x-real-ip") or request.headers.get("X-Real-IP")
-    if real_ip:
-        return real_ip.strip()
+    if _trust_proxy_headers():
+        xff = request.headers.get("x-forwarded-for")
+        if xff:
+            # left-most is original client when behind Caddy/CF
+            return xff.split(",")[0].strip() or "unknown"
+        real_ip = request.headers.get("x-real-ip")
+        if real_ip:
+            return real_ip.strip()
     if request.client and request.client.host:
         return request.client.host
     return "unknown"
@@ -101,6 +117,27 @@ def _prune_failures(ip: str, now: float) -> None:
         q.popleft()
     if not q:
         _fail_events.pop(ip, None)
+
+
+def _enforce_tracked_ip_cap(now: float) -> None:
+    """Keep throttle dicts bounded even under forged-IP floods."""
+    if len(_fail_events) <= LOGIN_MAX_TRACKED_IPS and len(_lock_until) <= LOGIN_MAX_TRACKED_IPS:
+        return
+    cutoff = now - LOGIN_WINDOW_SECONDS
+    for ip in list(_fail_events.keys()):
+        q = _fail_events[ip]
+        while q and q[0] < cutoff:
+            q.popleft()
+        if not q:
+            _fail_events.pop(ip, None)
+    for ip in list(_lock_until.keys()):
+        if now >= _lock_until.get(ip, 0.0):
+            _lock_until.pop(ip, None)
+    # Still over the cap (flood of fresh failures): drop the oldest entries.
+    while len(_fail_events) > LOGIN_MAX_TRACKED_IPS:
+        _fail_events.pop(next(iter(_fail_events)), None)
+    while len(_lock_until) > LOGIN_MAX_TRACKED_IPS:
+        _lock_until.pop(next(iter(_lock_until)), None)
 
 
 def is_login_locked(ip: str) -> bool:
@@ -125,6 +162,9 @@ def register_login_failure(ip: str) -> None:
             _lock_until[ip] = now + LOGIN_LOCK_SECONDS
             q.clear()
             logger.warning("login locked for ip=%s for %ss", ip, LOGIN_LOCK_SECONDS)
+        # Enforce the cap after recording so the invariant
+        # len(_fail_events) <= LOGIN_MAX_TRACKED_IPS holds after every call.
+        _enforce_tracked_ip_cap(now)
 
 
 def clear_login_failures(ip: str) -> None:

@@ -1,10 +1,67 @@
 # 更新日志
 
 格式大致遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)。  
-版本未打 tag 时按日期记录；生产部署以分支 `deploy/vps` 为准。
+版本号单一来源 `backend/version.py`；发布流程：改那里 → 本文件记版本 → `git tag vX.Y.Z`。生产部署以分支 `deploy/vps` 为准。
 
 ---
 
+## [1.0.0] — 2026-08-31 — 首个带版本号的正式发布
+
+首个正式版本，包含 `backend/version.py` 版本号体系（`/api/health` 与前端页头展示），并合并以下三次 2026-08-30 代码审查批次修复：
+
+- 批次一（5 项：行情缓存 secid 隔离、闰年 2/29、交易 code trim、费率设置缺省 accounts、登录限速默认不信伪造 XFF)
+- 批次二（中等优先级 11 项：分红未来日期、CSV Sniffer、日期参数 400、交易/存款导入校验、飞书 token 缓存按凭证、时区、防误清空等）
+- 静态 lint 接入 `check.sh`（ruff F+E9）+ 存量清理 13 处
+
+---
+
+## [2026-08-30] — 代码审查批次修复（5 项）
+
+### 修复
+- **行情缓存按 secid 隔离**（`price_sync.py`）：原缓存 key 只是不带 `f` 的裸代码，上证指数 `000001`（secid `1.000001`）与平安银行 `000001`（secid `0.000001`）互相串价，且 `/sync-prices` 会把指数点位持久化写进 `holdings.last_price`。现改为按解析后的 secid 存取，并顺手清理过期缓存条目
+- **闰年 2/29 近一年收益同步崩溃**（`return_sync.py`）：`end.replace(year=end.year - 1)` 在 2 月 29 日抛 `ValueError` → 接口 500。提取 `one_year_before()`，闰日回退到 2/28
+- **交易 code 强制 trim + 非空**（`routers_transactions.py`）：带空白的 code 会导致"现金已扣、持仓不变"的账实分离（重算按 strip 后精确匹配）。`TransactionBase` 拒绝空白 code，`TransactionUpdate` 空白视为不改
+- **费率设置缺省 accounts 不再静默重置**（`routers_fee_settings.py` + `fee_settings.py`）：PUT 不传 accounts 时从 settings keys 推导账户；顺带修复 `accounts: null` 时迭代 None 崩溃
+- **登录限速默认不信任伪造 X-Forwarded-For**（`auth.py`）：原先客户端可换假 IP 无限获取新失败额度（密码爆破 + 内存无限增长）。现在默认用真实来源 IP；部署在可信反代后可设 `TRUST_PROXY_HEADERS=1` 恢复旧语义；限流状态加 `LOGIN_MAX_TRACKED_IPS`（默认 1000）容量上限
+
+### 测试
+- 新增 `tests/test_bugfix_regressions_20260830.py`（11 个回归测试），全套 174 个测试通过
+
+---
+
+## [2026-08-30] — 代码审查批次修复（第二批，中等优先级）
+
+### 修复
+- **确认分红拒绝未来日期**（`dividend_sync.py`）：原先提前确认未来除息的分红会立即虚增现金和累计分红，与其它交易写入路径"日期不能晚于今天"的约束矛盾
+- **CSV Sniffer 崩溃 → 400**（`csv_utils.py`）：单列/无分隔符 CSV 让 `Sniffer.sniff` 抛 `csv.Error` 导致导入接口 500，现在回退 excel 方言走行级报错
+- **交易/流水日期参数校验**（`routers_transactions.py` + `routers_cash_flows.py`）：`2025/1/1` 这类非 ISO 日期原先静默给出错误过滤结果（含导出 CSV），现在返回 400
+- **交易日接口非法日期 → 400**（`trading_calendar.py` + `routers_market.py` + `routers_cron.py`）：原先非法日期静默按"今天"计算，cron 传错日期会拿到错误结论；未传日期仍默认今天
+- **存款导入校验补齐**（`routers_deposits.py`）：金额 `nan` 原先溜过校验被 sqlite 存成 NULL、这笔存款从总资产凭空消失，现在行级报错；缺"年利率"列时利率落 NULL（未填）而不是误写成 0.0
+- **分红导入报错行号修正**（`routers_dividends.py`）：行号改为文件真实行号（含表头），与交易/存款导入一致；`GET /dividends/scan` 非法 `lookback_days` 返回 422 而不是 500
+- **历史持仓口径统一**（`dividend_sync.py`）：删除本地 `holding_quantity_as_of` 副本，委托 `holding_calculator` 实现——多条持仓校正记录时两处不再算出不同的登记日份额（分红估算金额错）
+- **飞书 token 缓存按凭证区分**（`notify.py`）：更换 app_id/app_secret 后不再最长 90 分钟沿用旧应用 token；缓存 key 含 secret 摘要，凭证一变即失效
+- **组合流水 created_at 时区**（`snapshots.py` + `routers_performance.py`）：显式写入应用本地时间（`APP_TIMEZONE`），不再依赖容器 OS 时区（UTC 容器上原先慢 8 小时）
+- **`clear_alert_events` 防误清空**（`market.py`）：无过滤条件时抛 ValueError 而不是清空全表；"清空全部"由路由层显式 `allow_all=True` 触发
+- **前端两处小问题**（`utils/index.js` + `modules/holdingCorrections.js`）：`holdingLifetimeProfitRate` 在 `diluted_cost` 为空时回退 `avg_cost`（与 `holdingLifetimeProfit` 口径一致，不再导致收益率直接不显示）；删除持仓校正失败不再被静默吞掉
+
+### 测试
+- 回归测试增至 22 个（第二批追加 11 个），后端 185 个 + 前端 24 个测试全部通过
+
+---
+
+## [2026-08-30] — 静态 lint 接入 check.sh
+
+### 内容
+- `scripts/check.sh` 新增 ruff lint 步骤（`ruff check backend tests`，未安装则跳过），此前脚本只有结构/冒烟检查、无任何静态 lint
+- 新增 `ruff.toml` 固定最小安全规则集 `F + E9`（未使用导入、未定义名、语法错误）。**刻意不开默认风格规则**：本地测试跑 Python 3.9，默认集里的 UP007（`Union` → `X | Y`）一旦被 `--fix` 应用会破坏 3.9 兼容
+- 清理存量 lint 残留 13 处（12 个未使用导入 + 1 个未使用局部变量，均在既有测试文件；`ruff --fix` 自动修复 + 1 处手工删除），后端源码在 F/E9 下零告警
+- 测试回归：修复+精简后全套 185 后端 + 24 前端测试通过
+
+---
+
+## [2026-08-13] — 飞书支持自建应用推送
+
+### 内容
 ## [2026-08-13] — 飞书支持自建应用推送
 
 ### 内容

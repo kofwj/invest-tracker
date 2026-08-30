@@ -1,4 +1,3 @@
-import io
 import math
 import sqlite3
 from pathlib import Path
@@ -105,11 +104,10 @@ def test_discipline_draft_update_rejects_duplicate_open_side(client):
     created = client.post("/discipline/drafts", json={"actions": actions})
     assert created.status_code == 200, created.text
     drafts = client.get("/discipline/drafts").json()
-    buy = next(d for d in drafts if d["side"] == "buy")
     sell = next(d for d in drafts if d["side"] == "sell")
     response = client.put(f"/discipline/drafts/{sell['id']}", json={"side": "buy"})
     assert response.status_code == 400
-    assert client.get(f"/discipline/drafts").status_code == 200
+    assert client.get("/discipline/drafts").status_code == 200
 
 
 def test_discipline_draft_rejects_invalid_date(client):

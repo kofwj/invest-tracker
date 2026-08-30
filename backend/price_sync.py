@@ -9,8 +9,11 @@ import requests
 logger = logging.getLogger(__name__)
 
 # Short in-process cache to cut Eastmoney chatter (summary + alerts in same minute).
+# Keyed by the resolved Eastmoney secid (e.g. "1.000001" for the SSE index,
+# "0.000001" for the stock 000001) so the same numeric code fetched under
+# different secids never cross-contaminates quotes.
 _QUOTE_CACHE_LOCK = threading.Lock()
-_QUOTE_CACHE: Dict[str, dict] = {}  # code -> {quote, ts}
+_QUOTE_CACHE: Dict[str, dict] = {}  # secid -> {quote, ts}
 _CACHE_TTL = max(0, int(os.environ.get("MARKET_QUOTE_CACHE_SECONDS", "120")))
 
 
@@ -28,12 +31,12 @@ def eastmoney_sec_id(code: str) -> str:
     return f"0.{c}"
 
 
-def _cache_get(codes, now: float) -> Dict[str, dict]:
+def _cache_get(keys, now: float) -> Dict[str, dict]:
     if _CACHE_TTL <= 0:
         return {}
     out = {}
     with _QUOTE_CACHE_LOCK:
-        for c in codes:
+        for c in keys:
             entry = _QUOTE_CACHE.get(c)
             if not entry:
                 continue
@@ -48,6 +51,11 @@ def _cache_put(quotes: dict, now: float) -> None:
     with _QUOTE_CACHE_LOCK:
         for code, q in quotes.items():
             _QUOTE_CACHE[code] = {"quote": dict(q), "ts": now}
+        # Opportunistic cleanup: drop expired entries so the cache cannot
+        # grow without bound over long uptimes.
+        expired = [k for k, e in _QUOTE_CACHE.items() if now - e["ts"] > _CACHE_TTL]
+        for k in expired:
+            _QUOTE_CACHE.pop(k, None)
 
 
 def fetch_eastmoney_quotes(codes, secid_map=None, *, use_cache: bool = True):
@@ -55,6 +63,10 @@ def fetch_eastmoney_quotes(codes, secid_map=None, *, use_cache: bool = True):
 
     Returns {code: {price, change_pct, name, prev_close?}} for successful rows.
     secid_map: optional {code: "1.000300"} overrides eastmoney_sec_id for indices.
+
+    The cache is keyed by the resolved secid, so an index quote (secid
+    "1.000001") and a stock quote with the same numeric code (secid
+    "0.000001") are stored and looked up independently.
     """
     secid_map = secid_map or {}
     numeric_codes = []
@@ -70,17 +82,24 @@ def fetch_eastmoney_quotes(codes, secid_map=None, *, use_cache: bool = True):
     if not numeric_codes:
         return {}
 
+    # Resolve the final secid per code up front; cache entries are per-secid.
+    resolved_secids = {c: (secid_map.get(c) or eastmoney_sec_id(c)) for c in numeric_codes}
+
     now = time.time()
     quotes = {}
     if use_cache:
-        quotes.update(_cache_get(numeric_codes, now))
+        cached = _cache_get([resolved_secids[c] for c in numeric_codes], now)
+        for c in numeric_codes:
+            entry = cached.get(resolved_secids[c])
+            if entry:
+                quotes[c] = entry
     missing = [c for c in numeric_codes if c not in quotes]
     if not missing:
         return quotes
 
     for i in range(0, len(missing), 40):
         batch = missing[i : i + 40]
-        secids = ",".join(secid_map.get(c) or eastmoney_sec_id(c) for c in batch)
+        secids = ",".join(resolved_secids[c] for c in batch)
         url = "https://push2delay.eastmoney.com/api/qt/ulist.np/get"
         params = {
             "fltt": "2",
@@ -130,7 +149,9 @@ def fetch_eastmoney_quotes(codes, secid_map=None, *, use_cache: bool = True):
                 "prev_close": prev_close,
             }
         quotes.update(batch_quotes)
-        _cache_put(batch_quotes, now)
+        # Cache under the resolved secid so quotes for the same numeric code
+        # fetched under different secids (index vs stock) stay separate.
+        _cache_put({resolved_secids[c]: q for c, q in batch_quotes.items() if c in resolved_secids}, now)
         no_return = [c for c in missing if c not in batch_quotes]
         if no_return:
             logger.warning("东方财富未返回报价的标的: %s", ", ".join(no_return))

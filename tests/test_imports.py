@@ -27,7 +27,6 @@ def test_import_bad_csv_reports_row_error(client):
 
 def test_import_oversized_csv_rejected_413(client, monkeypatch):
     """超大 CSV 上传必须被 413 拒绝（防内存 DoS 的大小上限）。"""
-    import sys
 
     import csv_utils  # top-level module copy loaded by conftest
 

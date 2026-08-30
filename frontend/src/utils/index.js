@@ -92,7 +92,11 @@ const holdingFloatProfitRate = (row) => {
 
 const holdingLifetimeProfitRate = (row) => {
     const qty = Number(row?.quantity || 0);
-    const diluted = Number(row?.diluted_cost || 0);
+    // 摊薄成本缺省时回退普通成本，与 holdingLifetimeProfit 的口径一致
+    const dilutedRaw = row?.diluted_cost;
+    const diluted = (dilutedRaw === null || dilutedRaw === undefined || dilutedRaw === '')
+        ? Number(row?.avg_cost || 0)
+        : Number(dilutedRaw);
     const net = diluted * qty;
     // 净投入为 0 或负（回本后仍持仓）时不展示比率
     if (!(net > 0)) return null;

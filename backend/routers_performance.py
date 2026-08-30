@@ -91,11 +91,12 @@ def add_portfolio_cash_flow(flow: PortfolioCashFlowBase):
     if flow.date > datetime.now(LOCAL_TZ).date():
         raise HTTPException(status_code=400, detail="组合流水日期不能晚于今天")
     flow_type, amount = normalize_portfolio_cash_flow(flow.flow_type, flow.amount)
+    now_local = datetime.now(LOCAL_TZ).replace(tzinfo=None)
     with db_session() as conn:
         ensure_portfolio_cash_flows_table(conn)
         conn.execute(
-            "INSERT INTO portfolio_cash_flows (date, flow_type, amount, source, remark) VALUES (?,?,?,?,?)",
-            (flow.date.isoformat(), flow_type, amount, flow.source, flow.remark),
+            "INSERT INTO portfolio_cash_flows (date, flow_type, amount, source, remark, created_at) VALUES (?,?,?,?,?,?)",
+            (flow.date.isoformat(), flow_type, amount, flow.source, flow.remark, now_local),
         )
         conn.commit()
     return {"status": "success", "flow_type": flow_type, "amount": amount}

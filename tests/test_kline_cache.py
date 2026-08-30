@@ -64,7 +64,7 @@ def test_kline_cache_table_created_on_migration(tmp_db):
 def test_upsert_klines_idempotent(tmp_db):
     """同一批重复 upsert 不应产生重复行。"""
     db_module, _ = tmp_db
-    from kline_cache import ensure_kline_cache_table, upsert_klines
+    from kline_cache import upsert_klines
     with db_module.open_db() as conn:
         rows = [
             {"date": "2026-07-01", "open": 10, "high": 11, "low": 9, "close": 10.5, "volume": 1000, "amount": 10000},
@@ -84,7 +84,7 @@ def test_sync_kline_for_code_skips_recent(tmp_db, monkeypatch):
     """updated_at 是今天时 force=False 不应发网络请求。"""
     db_module, _ = tmp_db
     import kline_cache
-    from kline_cache import ensure_kline_cache_table, upsert_klines
+    from kline_cache import upsert_klines
 
     called = {"n": 0}
     monkeypatch.setattr(kline_cache, "fetch_tencent_kline_ohlc", lambda code, count=420: (called.__setitem__("n", called["n"] + 1), [])[1])
@@ -106,7 +106,7 @@ def test_sync_kline_for_code_skips_recent(tmp_db, monkeypatch):
 def test_get_cached_klines_returns_ascending(tmp_db):
     """get_cached_klines 应按日期升序返回。"""
     db_module, _ = tmp_db
-    from kline_cache import ensure_kline_cache_table, upsert_klines, get_cached_klines
+    from kline_cache import upsert_klines, get_cached_klines
     with db_module.open_db() as conn:
         upsert_klines(conn, "000001", [
             {"date": "2026-07-01", "open": 1, "high": 1, "low": 1, "close": 1, "volume": 0, "amount": 0},

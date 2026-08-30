@@ -9,7 +9,7 @@ from __future__ import annotations
 import sqlite3
 from typing import Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 try:
@@ -51,7 +51,10 @@ def cron_sync_prices():
 @router.get("/cron/trading-day")
 def cron_trading_day(date: Optional[str] = None):
     with db_session(row_factory=sqlite3.Row) as conn:
-        return trading_day_status(date or None, conn=conn)
+        try:
+            return trading_day_status(date or None, conn=conn)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/cron/snapshot")

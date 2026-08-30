@@ -3,7 +3,7 @@ from datetime import date as dt_date
 from typing import Optional
 
 from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 try:
     from .database import db_session, local_today_iso
@@ -18,6 +18,7 @@ try:
         parse_float,
         read_upload_bytes_limited,
         read_upload_csv,
+        validate_date_params,
     )
     from .holdings import infer_category, recalc_holdings, validate_holding_history, validate_transaction_payload
 except ImportError:
@@ -33,6 +34,7 @@ except ImportError:
         parse_float,
         read_upload_bytes_limited,
         read_upload_csv,
+        validate_date_params,
     )
     from holdings import infer_category, recalc_holdings, validate_holding_history, validate_transaction_payload
 
@@ -54,6 +56,17 @@ class TransactionBase(BaseModel):
     fee: float = 0.0
     remark: Optional[str] = None
 
+    @field_validator("code")
+    @classmethod
+    def normalize_code(cls, v):
+        # Holding recalc matches codes by exact equality after strip; an
+        # untrimmed code (" 600028") would deduct cash but never update
+        # holdings, silently splitting the ledger.
+        code = str(v or "").strip()
+        if not code:
+            raise ValueError("证券代码不能为空")
+        return code
+
 
 class TransactionUpdate(BaseModel):
     date: Optional[dt_date] = None
@@ -67,6 +80,13 @@ class TransactionUpdate(BaseModel):
     amount: Optional[float] = None
     fee: Optional[float] = None
     remark: Optional[str] = None
+
+    @field_validator("code")
+    @classmethod
+    def normalize_code(cls, v):
+        code = str(v or "").strip()
+        # Blank/whitespace-only code means "no change" in a partial update.
+        return code or None
 
 
 def ensure_transaction_columns(conn):
@@ -129,6 +149,7 @@ def export_transactions(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
 ):
+    start_date, end_date = validate_date_params(start_date, end_date)
     with db_session(row_factory=sqlite3.Row) as conn:
         where_sql, params = build_transaction_where(code, name, direction, start_date, end_date)
         rows = conn.execute(f"""
@@ -224,6 +245,7 @@ def list_transactions(
     page_size: int = Query(100, ge=1, le=1000),
     legacy: bool = False,
 ):
+    start_date, end_date = validate_date_params(start_date, end_date)
     with db_session(row_factory=sqlite3.Row) as conn:
         ensure_transaction_columns(conn)
         where_sql, params = build_transaction_where(code, name, direction, start_date, end_date)

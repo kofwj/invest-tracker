@@ -143,15 +143,27 @@ def _feishu_app_for(db: Dict[str, str]) -> Dict[str, str]:
 
 FETCH_TOKEN_URL = "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal"
 SEND_MSG_URL = "https://open.feishu.cn/open-apis/im/v1/messages?receive_id_type=open_id"
-_token_cache: Dict[str, str] = {}
+# Cached per credential pair: changing app_id/app_secret in settings used to
+# keep serving the old app's token for up to 90 minutes.
+_token_cache: str = ""
+_token_cache_key: str = ""
 _token_cache_at: float = 0.0
+
+
+def reset_feishu_token_cache() -> None:
+    """Test/ops helper."""
+    global _token_cache, _token_cache_key, _token_cache_at
+    _token_cache = ""
+    _token_cache_key = ""
+    _token_cache_at = 0.0
 
 
 def _feishu_tenant_token(app_id: str, app_secret: str, timeout: int = 8) -> str:
     """Get (and cache) a Feishu tenant_access_token from app_id/app_secret."""
-    global _token_cache_at, _token_cache
+    global _token_cache_at, _token_cache, _token_cache_key
     now = time.time()
-    if _token_cache and now - _token_cache_at < 5400:  # 90min cache, token lives ~2h
+    key = f"{app_id}|{hashlib.sha256(app_secret.encode('utf-8')).hexdigest()[:12]}"
+    if _token_cache and _token_cache_key == key and now - _token_cache_at < 5400:  # 90min cache, token lives ~2h
         return _token_cache
     import requests
 
@@ -165,6 +177,7 @@ def _feishu_tenant_token(app_id: str, app_secret: str, timeout: int = 8) -> str:
     if code not in (0, "0", None) or not data.get("tenant_access_token"):
         raise ValueError(f"飞书换取 token 失败({res.status_code}): {str(data.get('msg') or data)[:200]}")
     _token_cache = str(data["tenant_access_token"])
+    _token_cache_key = key
     _token_cache_at = now
     return _token_cache
 
