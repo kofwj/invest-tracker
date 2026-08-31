@@ -108,7 +108,7 @@
       </el-table-column>
       <el-table-column label="预计年化" width="88" align="right" header-align="right">
         <template #default="scope">
-          <el-button link class="num-cell" title="点击修改预期年化收益" @click="openExpectedReturnDialog(scope.row)">{{ scope.row.expected_return == null ? '—' : Number(scope.row.expected_return).toFixed(1) + '%' }}</el-button>
+          <el-button link class="num-cell" title="点击修改预期年化收益" @click.stop="openExpectedReturnDialog(scope.row)">{{ scope.row.expected_return == null ? '—' : Number(scope.row.expected_return).toFixed(1) + '%' }}</el-button>
         </template>
       </el-table-column>
       <el-table-column label="近一年" width="88" align="right" header-align="right">
@@ -127,7 +127,7 @@
       </el-table-column>
       <el-table-column label="操作" width="90" align="center" header-align="center" fixed="right">
         <template #default="scope">
-          <el-button type="warning" link @click="openHoldingCorrectionDialog(scope.row)">校正</el-button>
+          <el-button type="warning" link @click.stop="openHoldingCorrectionDialog(scope.row)">校正</el-button>
         </template>
       </el-table-column>
     </el-table>
