@@ -108,7 +108,7 @@
       </el-table-column>
       <el-table-column label="预计年化" width="88" align="right" header-align="right">
         <template #default="scope">
-          <span class="num-cell">{{ scope.row.expected_return == null ? '—' : Number(scope.row.expected_return).toFixed(1) + '%' }}</span>
+          <el-button link class="num-cell" title="点击修改预期年化收益" @click="openExpectedReturnDialog(scope.row)">{{ scope.row.expected_return == null ? '—' : Number(scope.row.expected_return).toFixed(1) + '%' }}</el-button>
         </template>
       </el-table-column>
       <el-table-column label="近一年" width="88" align="right" header-align="right">
@@ -125,125 +125,20 @@
           </el-tooltip>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="220" align="center" header-align="center" fixed="right">
+      <el-table-column label="操作" width="90" align="center" header-align="center" fixed="right">
         <template #default="scope">
-          <div class="holdings-ops" @click.stop>
-            <el-button type="primary" link @click="openExpectedReturnDialog(scope.row)">年化</el-button>
-            <el-button type="warning" link @click="openHoldingCorrectionDialog(scope.row)">校正</el-button>
-            <el-button type="info" link @click="openHoldingCorrectionHistory(scope.row)">记录</el-button>
-            <el-button type="success" link @click="openLocalUzi(scope.row)">UZI</el-button>
-            <el-button type="primary" link @click="openKlineDialog(scope.row)">K线</el-button>
-          </div>
+          <el-button type="warning" link @click="openHoldingCorrectionDialog(scope.row)">校正</el-button>
         </template>
       </el-table-column>
     </el-table>
 
-    <!-- UZI 弹窗放在持仓页本地，避免跨组件 provide 状态不同步 -->
-    <el-dialog
-      v-model="uziDialog.visible"
-      title="UZI 深度分析提示"
-      width="860px"
-      top="6vh"
-      append-to-body
-      destroy-on-close
-    >
-      <div v-if="uziDialog.row">
-        <el-alert
-          title="只读分析：不改持仓、不下单、不自动入账。复制提示词后，在本机 Hermes 粘贴执行 UZI-Skill。"
-          type="warning"
-          show-icon
-          :closable="false"
-          style="margin-bottom:12px;"
-        />
-
-        <div style="margin-bottom:10px; color:var(--app-muted);">
-          <strong>{{ uziDialog.row.name }}</strong> ({{ uziDialog.row.code }})
-          <span style="margin-left:12px;">深度：</span>
-          <el-radio-group v-model="uziDialog.depth" size="small" style="margin-left:6px;" @change="rebuildUziPrompt">
-            <el-radio-button value="lite">lite</el-radio-button>
-            <el-radio-button value="medium">medium（推荐）</el-radio-button>
-            <el-radio-button value="deep">deep</el-radio-button>
-          </el-radio-group>
-        </div>
-
-        <div style="margin-bottom:10px;">
-          <div style="font-size:13px; color:var(--app-muted); margin-bottom:6px;">问题模板（点一下换侧重点）</div>
-          <el-space wrap>
-            <el-button
-              v-for="t in uziTemplates"
-              :key="t.key"
-              size="small"
-              :type="uziDialog.focus === t.key ? 'primary' : 'default'"
-              @click="applyFocus(t.key)"
-            >{{ t.label }}</el-button>
-          </el-space>
-        </div>
-
-        <el-input
-          v-model="uziDialog.prompt"
-          type="textarea"
-          :rows="11"
-          readonly
-          style="font-family: monospace; font-size: 13px;"
-        />
-
-        <div style="margin-top:12px;">
-          <div style="font-size:13px; color:var(--app-muted); margin-bottom:6px;">
-            分析备忘（只存在本机浏览器，不进真仓）
-          </div>
-          <el-input
-            v-model="uziDialog.note"
-            type="textarea"
-            :rows="3"
-            placeholder="可粘贴 Hermes/UZI 结论摘要或报告路径，方便下次对照"
-          />
-          <div style="margin-top:6px;">
-            <el-button size="small" type="primary" plain @click="saveNote">保存备忘</el-button>
-            <span style="margin-left:8px; font-size:12px; color:var(--app-muted);">换电脑/清缓存会丢，重要结论请另存</span>
-          </div>
-        </div>
-      </div>
-
-      <template #footer>
-        <el-button @click="uziDialog.visible = false">关闭</el-button>
-        <el-button type="primary" @click="copyLocalUziPrompt">复制提示词</el-button>
-      </template>
-    </el-dialog>
-
-    <!-- K线弹窗 -->
-    <el-dialog
-      v-model="klineDialog.visible"
-      :title="`${klineDialog.name} (${klineDialog.code}) 日K线`"
-      width="860px"
-      top="6vh"
-      append-to-body
-      destroy-on-close
-      @opened="renderKline"
-    >
-      <div class="kline-toolbar">
-        <el-radio-group v-model="klineDialog.days" size="small" @change="loadKline">
-          <el-radio-button :value="60">60日</el-radio-button>
-          <el-radio-button :value="120">120日</el-radio-button>
-          <el-radio-button :value="250">250日</el-radio-button>
-        </el-radio-group>
-        <el-button size="small" type="primary" plain :loading="klineDialog.loading" @click="refreshKline">
-          刷新K线（拉取最新）
-        </el-button>
-        <span v-if="klineDialog.error" class="kline-error">{{ klineDialog.error }}</span>
-      </div>
-      <div ref="klineRef" class="kline-chart" v-loading="klineDialog.loading"></div>
-    </el-dialog>
   </PageShell>
 </template>
 
 <script setup>
 import PageShell from '../components/PageShell.vue';
-import { reactive, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import { useAppCtx } from '../composables/useAppCtx.js';
-import { createUziAnalysisHelper, UZI_FOCUS_TEMPLATES } from '../modules/uziAnalysis.js';
-import { renderKlineChartView } from '../charts/index.js';
-import api from '../api/index.js';
 import HomeDashboard from '../components/HomeDashboard.vue';
 
 const {
@@ -252,7 +147,6 @@ const {
   showTransactions,
   openExpectedReturnDialog,
   openHoldingCorrectionDialog,
-  openHoldingCorrectionHistory,
   formatMoney,
   formatPercent,
   holdingFloatProfit,
@@ -264,153 +158,9 @@ const {
   goTab,
 } = useAppCtx();
 
-const { buildUziPrompt, loadUziNote, saveUziNote } = createUziAnalysisHelper({ dashboard, formatMoney });
-const uziTemplates = UZI_FOCUS_TEMPLATES;
-
-const uziDialog = reactive({
-  visible: false,
-  row: null,
-  depth: 'medium',
-  focus: 'default',
-  prompt: '',
-  note: '',
-});
-
-function rebuildUziPrompt() {
-  if (!uziDialog.row) return;
-  try {
-    uziDialog.prompt = buildUziPrompt(uziDialog.row, uziDialog.depth, uziDialog.focus) || '';
-  } catch (e) {
-    console.warn('[UZI] rebuild prompt failed', e);
-  }
-}
-
-function openLocalUzi(row) {
-  try {
-    const code = String(row?.code ?? '').trim();
-    if (!row || !code) {
-      ElMessage.warning('该持仓缺少代码，无法生成 UZI 提示词');
-      return;
-    }
-    const safeRow = { ...row, code };
-    uziDialog.row = safeRow;
-    uziDialog.depth = 'medium';
-    uziDialog.focus = 'default';
-    uziDialog.note = loadUziNote(code) || '';
-    rebuildUziPrompt();
-    if (!uziDialog.prompt) {
-      uziDialog.prompt = `请使用 UZI-Skill 分析 ${safeRow.name || ''} (${code})，深度 medium。`;
-    }
-    uziDialog.visible = true;
-  } catch (e) {
-    console.error('[UZI] open failed', e);
-    ElMessage.error('打开 UZI 分析失败，请看控制台');
-  }
-}
-
-function applyFocus(key) {
-  uziDialog.focus = key || 'default';
-  rebuildUziPrompt();
-}
-
-function saveNote() {
-  if (!uziDialog.row?.code) return;
-  const ok = saveUziNote(uziDialog.row.code, uziDialog.note);
-  if (ok) {
-    ElMessage.success('备忘已保存到本机浏览器');
-    rebuildUziPrompt();
-  } else {
-    ElMessage.warning('保存失败（可能浏览器禁用了本地存储）');
-  }
-}
-
-async function copyLocalUziPrompt() {
-  const t = uziDialog.prompt || '';
-  if (!t) {
-    ElMessage.warning('提示词为空');
-    return;
-  }
-  try {
-    await navigator.clipboard.writeText(t);
-    ElMessage.success('提示词已复制，可直接粘贴到本地 Hermes 执行');
-  } catch (e) {
-    ElMessage.warning('自动复制失败，请手动全选复制提示词');
-  }
-}
-
-// ---- K线 ----
-const klineRef = ref(null);
-const klineDialog = reactive({
-  visible: false,
-  code: '',
-  name: '',
-  days: 120,
-  loading: false,
-  error: '',
-  rows: [],
-});
-
-function openKlineDialog(row) {
-  const code = String(row?.code ?? '').trim();
-  if (!code) {
-    ElMessage.warning('该持仓缺少代码');
-    return;
-  }
-  klineDialog.code = code;
-  klineDialog.name = row?.name || code;
-  klineDialog.days = 120;
-  klineDialog.loading = false;
-  klineDialog.error = '';
-  klineDialog.rows = [];
-  klineDialog.visible = true;
-}
-
-async function loadKline() {
-  if (!klineDialog.code) return;
-  klineDialog.loading = true;
-  klineDialog.error = '';
-  try {
-    const res = await api.getKlines(klineDialog.code, klineDialog.days);
-    klineDialog.rows = res.data?.rows || [];
-    if (!klineDialog.rows.length) {
-      klineDialog.error = '本地无缓存，点"刷新K线"拉取';
-    }
-    renderKline();
-  } catch (e) {
-    klineDialog.error = '加载失败：' + (e?.response?.data?.detail || e?.message || '未知错误');
-  } finally {
-    klineDialog.loading = false;
-  }
-}
-
-async function refreshKline() {
-  if (!klineDialog.code) return;
-  klineDialog.loading = true;
-  klineDialog.error = '';
-  try {
-    await api.syncKlines({ code: klineDialog.code, force: true });
-    await loadKline();
-    ElMessage.success('K线已刷新');
-  } catch (e) {
-    klineDialog.loading = false;
-    klineDialog.error = '同步失败：' + (e?.response?.data?.detail || e?.message || '网络错误');
-  }
-}
-
-function renderKline() {
-  if (!klineRef.value) return;
-  renderKlineChartView(klineRef.value, klineDialog.rows);
-}
 </script>
 
 <style scoped>
-.holdings-ops {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px 4px;
-  justify-content: center;
-  align-items: center;
-}
 .holdings-toolbar {
   display: flex;
   align-items: flex-start;
@@ -422,20 +172,5 @@ function renderKline() {
   flex: 1;
   min-width: 240px;
   margin: 0 !important;
-}
-.kline-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-  flex-wrap: wrap;
-}
-.kline-chart {
-  width: 100%;
-  height: 420px;
-}
-.kline-error {
-  color: var(--app-down, #d64545);
-  font-size: 13px;
 }
 </style>

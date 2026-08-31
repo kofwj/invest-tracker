@@ -273,8 +273,6 @@ const app = createApp({
             todayLocalIso,
         });
 
-        // UZI 弹窗已迁至 HoldingsTab 本地（openLocalUzi），不再走 appCtx
-
         const {
             submitTrans,
             resetForm,
