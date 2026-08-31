@@ -43,6 +43,8 @@ services:
       - --client-id=${GITHUB_OAUTH_CLIENT_ID:-replace-with-github-oauth-client-id}
       - --client-secret=${GITHUB_OAUTH_CLIENT_SECRET:-replace-with-github-oauth-client-secret}
       - --redirect-url=https://${APP_DOMAIN:-invest.example.com}/oauth2/callback
+      # 签名/回跳用绝对 URL（如 rd=https://域名/api/...）时必须放行域名，否则登录后/未带会话的 API 请求被拒 → 浏览器报 Network Error
+      - --whitelist-domain=${APP_DOMAIN:-invest.example.com}
       - --github-user=${GITHUB_OAUTH_ALLOWED_USER:-your-github-username}
       - --email-domain=*
       - --upstream=static://202
