@@ -422,6 +422,7 @@ def recalc_holdings(conn, codes=None):
             if s["quantity"] == 0:
                 s["cost"] = 0.0
                 s["net_invested"] = 0.0
+                s["dividend"] = 0.0
         elif t["direction"] == "分红":
             s["dividend"] += cash_amount
             s["net_invested"] -= cash_amount

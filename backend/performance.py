@@ -152,19 +152,27 @@ def build_performance_summary(conn, start_date=None, end_date=None):
             period_gain = total_assets - period_start_assets - period_net
             period_gain_pct = (period_gain / period_start_assets * 100)
         else:
-            # 无快照：退化为「当前 − 本期净投入」
+            # 无快照：退化为「当前 − 本期净投入」，以净投入为收益率基
             period_gain = total_assets - period_net
-            period_gain_pct = (period_gain / (total_assets - period_net) * 100) if (total_assets - period_net) else 0
+            period_gain_pct = (period_gain / period_net * 100) if period_net > 0 else 0
 
     # ===== 专业扩展指标计算 =====
     snap_assets_full = []
+    snap_dates = []
     try:
         snap_rows = conn.execute("SELECT date, total_assets FROM daily_snapshots ORDER BY date ASC").fetchall()
         snap_assets_full = [float(s["total_assets"] or 0) for s in snap_rows]
+        snap_dates = [str(s["date"]) for s in snap_rows]
     except Exception as e:
         logger.warning("读取快照序列失败: %s", e)
 
-    twr_val, twr_status = calculate_twr(snap_assets_full) if snap_assets_full else (None, "无快照")
+    flows_by_date = {}
+    for f in all_flows:
+        d = str(f["date"])[:10]
+        sign = 1.0 if f["flow_type"] == "投入" else (-1.0 if f["flow_type"] == "取出" else 0.0)
+        flows_by_date[d] = flows_by_date.get(d, 0.0) + sign * float(f["amount"] or 0)
+
+    twr_val, twr_status = calculate_twr(snap_assets_full, dates=snap_dates, flows_by_date=flows_by_date) if snap_assets_full else (None, "无快照")
     sharpe_val = None
     if snap_assets_full and len(snap_assets_full) >= 4:
         rets_for_sharpe = _simple_returns_from_assets(snap_assets_full)
@@ -577,11 +585,28 @@ def _simple_returns_from_assets(assets_list):
     return rets
 
 
-def calculate_twr(assets_series):
-    """时间加权收益率（TWR）：几何链乘 (1+r) - 1。核心是剥离你现金流投得准不准。"""
+def calculate_twr(assets_series, dates=None, flows_by_date=None):
+    """时间加权收益率（TWR）：按日剥离外部现金流后几何链乘 (1+r)-1。
+
+    每日回报 r_t = (V_t - V_{t-1} - F_t) / V_{t-1}，F_t 为落在区间
+    (date_{t-1}, date_t] 的净投入（投入-取出）。剥离现金流后纯存钱不再被误报为收益。
+    """
     if not assets_series or len(assets_series) < 2:
         return None, "数据不足"
-    rets = _simple_returns_from_assets([a for a in assets_series if a is not None])
+    flows = flows_by_date or {}
+    dates = dates or []
+    rets = []
+    for i in range(1, len(assets_series)):
+        prev = assets_series[i - 1]
+        curr = assets_series[i]
+        if prev is None or prev <= 0:
+            continue
+        f = 0.0
+        if dates and i < len(dates):
+            lo = str(dates[i - 1])[:10]
+            hi = str(dates[i])[:10]
+            f = sum(float(v) for d, v in flows.items() if lo < str(d)[:10] <= hi)
+        rets.append((float(curr or 0) - prev - f) / prev)
     if not rets:
         return None, "无有效回报"
     growth = 1.0

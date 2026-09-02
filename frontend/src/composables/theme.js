@@ -1,4 +1,4 @@
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, ref } from 'vue';
 
 const STORAGE_KEY = 'invest_tracker_theme';
 const MODES = ['system', 'light', 'dark'];
@@ -94,11 +94,4 @@ export function createThemeController() {
     teardownThemeListeners,
     applyTheme,
   };
-}
-
-/** Optional helper if a component wants local lifecycle binding. */
-export function useThemeLifecycle(controller) {
-  onMounted(() => controller.setupThemeListeners());
-  onUnmounted(() => controller.teardownThemeListeners());
-  return controller;
 }

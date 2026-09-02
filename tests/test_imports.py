@@ -61,4 +61,5 @@ def test_csv_export_sanitizes_formula_cells(client):
     content = resp.content.decode('utf-8-sig')
     rows = list(csv.reader(io.StringIO(content)))
     names = [r[3] for r in rows[1:]]
-    assert all(not n.startswith('=') and n.startswith("'=") for n in names)
+    assert names, '导出应至少包含一条交易记录，空列表会让下面的断言恒真'
+    assert all(n.startswith("'=") for n in names)

@@ -442,7 +442,57 @@ def _dingtalk_signed_url(webhook: str, secret: str) -> str:
     return f"{webhook}{sep}timestamp={timestamp}&sign={sign}"
 
 
+def validate_webhook_url(url: str) -> Optional[str]:
+    """SSRF 防护：Webhook 仅允许 http/https，且主机不能解析到内网/环回/链路本地/保留地址。
+
+    返回错误信息字符串（不可用），可用则返回 None。
+    """
+    if not url:
+        return "webhook 未配置"
+    try:
+        parsed = urllib.parse.urlparse(str(url).strip())
+    except Exception:
+        return "webhook URL 无法解析"
+    if parsed.scheme not in ("http", "https"):
+        return "webhook 只允许 http/https"
+    host = parsed.hostname
+    if not host:
+        return "webhook 缺少主机名"
+    import ipaddress
+    import socket
+
+    def _blocked(ip: str) -> bool:
+        try:
+            addr = ipaddress.ip_address(ip)
+        except ValueError:
+            return False
+        # 只拦真正的 SSRF 攻击面：内网/环回/链路本地(169.254 元数据)/未指定地址。
+        # 不用 is_reserved：会误伤 198.18/15 等 benchmark/文档段（测试环境 DNS sinkhole 常见）。
+        return addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_unspecified
+
+    # 字面 IP：直接判定（无需 DNS）
+    try:
+        if _blocked(host):
+            return f"webhook 主机指向受限地址 {host}"
+        ipaddress.ip_address(host)
+        return None
+    except ValueError:
+        pass  # 域名，走 DNS
+    try:
+        infos = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
+    except Exception:
+        # 无法解析 → 连接会自然失败，不构成 SSRF；放行避免离线环境下误伤合法地址
+        return None
+    for info in infos:
+        if _blocked(info[4][0]):
+            return f"webhook 主机指向受限地址 {info[4][0]}"
+    return None
+
+
 def _post_json(url: str, payload: dict, timeout: int = 10) -> Tuple[bool, Optional[int], str]:
+    err = validate_webhook_url(url)
+    if err:
+        return False, None, err
     try:
         import requests
 

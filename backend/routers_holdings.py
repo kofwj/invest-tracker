@@ -277,7 +277,7 @@ def _sync_prices_impl(backup: bool = False):
             _sync_klines(conn2, force=False)
             conn2.commit()
     except Exception as kline_exc:
-        logger.debug("kline incremental sync after price sync failed: %s", kline_exc)
+        logger.warning("kline incremental sync after price sync failed: %s", kline_exc, exc_info=True)
     return {
         "status": "success",
         "updated": updated,

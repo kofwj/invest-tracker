@@ -41,6 +41,12 @@ def restore_db(backup: Path, db: Path) -> None:
     tmp = db.with_suffix(db.suffix + ".restore_tmp")
     shutil.copy2(str(backup), str(tmp))
     tmp.replace(db)
+    # 旧库的 -wal/-shm 残留与替换后的新库校验和不匹配，会让 SQLite 报
+    # "database disk image is malformed"；替换后必须清掉这两个 sidecar。
+    for suffix in ("-wal", "-shm"):
+        sidecar = Path(str(db) + suffix)
+        if sidecar.exists():
+            sidecar.unlink()
     check_sqlite(db)
     print(f"restored: {db} <- {backup}")
 

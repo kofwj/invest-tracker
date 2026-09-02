@@ -6,7 +6,7 @@ services:
       args:
         INSTALL_DEV: "true"
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     environment:
       APP_TIMEZONE: Asia/Shanghai
       INVEST_TRACKER_PASSWORD: ${INVEST_TRACKER_PASSWORD:-}
@@ -27,7 +27,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "8080:80"
+      - "127.0.0.1:8080:80"
     depends_on:
       backend:
         condition: service_healthy

@@ -10,6 +10,11 @@ services:
       DB_PATH: ${DB_PATH:-/app/data/invest.db}
       INVEST_TRACKER_PASSWORD: ${INVEST_TRACKER_PASSWORD:-}
       CRON_API_TOKEN: ${CRON_API_TOKEN:-}
+      ENV: production
+      # 未设置时生产默认关闭跨域（同源反代不受影响）；跨域请显式填域名
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-}
+      # 代理（Caddy/oauth2-proxy）会覆盖 X-Forwarded-For，信任以恢复按客户端限流
+      TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-1}
     volumes:
       - ./data:/app/data
       - ./backups:/app/backups

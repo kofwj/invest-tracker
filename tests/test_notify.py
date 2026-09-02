@@ -36,7 +36,7 @@ def test_dispatch_posts_to_feishu(app_module, monkeypatch):
     from notify import dispatch
 
     monkeypatch.setenv("NOTIFY_ENABLED", "1")
-    monkeypatch.setenv("NOTIFY_FEISHU_WEBHOOK", "https://example.com/feishu")
+    monkeypatch.setenv("NOTIFY_FEISHU_WEBHOOK", "https://93.184.216.34/feishu")
     monkeypatch.delenv("FEISHU_ALERT_WEBHOOK", raising=False)
     monkeypatch.delenv("NOTIFY_TELEGRAM_BOT_TOKEN", raising=False)
     monkeypatch.delenv("NOTIFY_TELEGRAM_CHAT_ID", raising=False)
@@ -64,7 +64,7 @@ def test_dispatch_posts_to_feishu(app_module, monkeypatch):
         assert result["sent"] is True
         assert mock_post.called
         args, kwargs = mock_post.call_args
-        assert "example.com/feishu" in args[0]
+        assert "93.184.216.34/feishu" in args[0]
         assert kwargs["json"]["msg_type"] == "text"
 
 

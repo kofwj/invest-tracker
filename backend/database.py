@@ -1,4 +1,5 @@
 import os
+import socket
 import sqlite3
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -43,6 +44,11 @@ APP_CONFIG = load_config()
 DB_PATH = APP_CONFIG.db_path
 LOCAL_TZ = APP_CONFIG.local_timezone
 BACKUP_DIR = APP_CONFIG.backup_dir
+
+# akshare 多数 fetcher 内部 requests 不带 timeout，几个挂住的 socket 就能拖垮 uvicorn
+# 线程池（FastAPI 默认 40 线程）。设全局 socket 默认超时兜底——应用与 cron docker exec
+# 都导入本模块，等价于给所有未显式设 timeout 的网络调用加护栏。
+socket.setdefaulttimeout(float(os.environ.get("NET_TIMEOUT_SECONDS", "20")))
 
 
 def local_today_iso() -> str:

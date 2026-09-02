@@ -83,18 +83,21 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Investment Tracker API", lifespan=lifespan)
 
-_cors_origins = os.environ.get("CORS_ALLOW_ORIGINS", "*")
-if _cors_origins.strip() == "*":
-    _allow_origins = ["*"]
-    if os.environ.get("INVEST_TRACKER_PASSWORD") or os.environ.get("ENV", "").lower() in (
-        "prod",
-        "production",
-    ):
-        logging.getLogger(__name__).warning(
-            "CORS_ALLOW_ORIGINS=* with auth/prod — 生产建议设为具体域名，例如 https://asset.anemy.org"
+_cors_origins = (os.environ.get("CORS_ALLOW_ORIGINS") or "").strip()
+_is_prod = os.environ.get("ENV", "").lower() in ("prod", "production")
+if _cors_origins and _cors_origins != "*":
+    _allow_origins = [o.strip() for o in _cors_origins.split(",") if o.strip()]
+elif _is_prod or os.environ.get("INVEST_TRACKER_PASSWORD"):
+    # 生产/开启鉴权时不再悄悄 fallback 成 *：未显式配置则关同跨域（同源反代不受影响）
+    _allow_origins = []
+    if not _cors_origins:
+        logger.warning(
+            "CORS_ALLOW_ORIGINS 未设置，已默认关闭跨域；同源(反代)请求不受影响。"
+            "如需跨域请显式设置，例如 https://%s",
+            os.environ.get("APP_DOMAIN", "your-domain.com"),
         )
 else:
-    _allow_origins = [o.strip() for o in _cors_origins.split(",") if o.strip()]
+    _allow_origins = ["*"]
 
 app.add_middleware(
     CORSMiddleware,

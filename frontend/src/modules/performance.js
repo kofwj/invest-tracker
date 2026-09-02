@@ -138,8 +138,9 @@ const createPerformanceModule = ({
     const perfSecondaryCards = computed(() => {
         const s = perfSummary.value;
         if (!s) return [];
+        const flowReady = Number(s.flow_count || 0) > 0;
         const floatSum = Number(s.current_unrealized_profit || 0) + Number(s.total_dividend_income || 0);
-        return [
+        const cards = [
             {
                 label: '当前仓浮盈+分红',
                 plain: '现在还拿着的东西赚多少',
@@ -346,15 +347,6 @@ const createPerformanceModule = ({
         return {};
     };
 
-    const renderPerfChart = async () => {
-        const { renderPerfTimelineChartView, waitForChartDom } = await import('../charts/index.js');
-        if (!perfTimeline.value?.length) return;
-        const ready = await waitForChartDom(['perfTimelineChart']);
-        if (!ready) return;
-        await new Promise((r) => requestAnimationFrame(() => r()));
-        renderPerfTimelineChartView(perfTimeline.value);
-    };
-
     async function fetchPerformance() {
         perfLoading.value = true;
         try {
@@ -373,7 +365,6 @@ const createPerformanceModule = ({
             perfFlows.value = flR.data;
             perfStory.value = stR.data;
             perfWindows.value = winR.data || [];
-            nextTick(renderPerfChart);
         } catch (e) {
             console.error('fetchPerformance', e);
             showSyncNotice('获取收益分析失败：' + (e?.response?.data?.detail || e?.message || '未知错误'), 'error');
@@ -462,7 +453,6 @@ const createPerformanceModule = ({
         perfContributionHeadline,
         perfContributionMix,
         contributionBarStyle,
-        renderPerfChart,
         fetchPerformance,
         setPerfTimelineRange,
         addPerfFlow,

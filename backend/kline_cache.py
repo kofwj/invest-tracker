@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json as pyjson
 import logging
+import math
 import urllib.request
 from datetime import date as dt_date, datetime
 from typing import List
@@ -48,6 +49,15 @@ def _market_prefix(code: str) -> str:
     return "sh" if c.startswith(("5", "6", "9")) else "sz"
 
 
+def _fnum(v, default=0.0):
+    """float 且只放行有限值：NaN/Inf/空串统一回退 default，避免写库和 JSON 序列化出非法值。"""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return default
+    return f if math.isfinite(f) else default
+
+
 def _tencent_symbol(code: str) -> str:
     c = str(code or "").strip().lower().replace("f", "")
     return _market_prefix(c) + c
@@ -74,12 +84,12 @@ def fetch_tencent_kline_ohlc(code: str, count: int = 420) -> List[dict]:
         try:
             out.append({
                 "date": str(r[0]),
-                "open": float(r[1]),
-                "close": float(r[2]),
-                "high": float(r[3]),
-                "low": float(r[4]),
-                "volume": float(r[5]) if len(r) > 5 and r[5] else 0.0,
-                "amount": float(r[6]) if len(r) > 6 and r[6] else 0.0,
+                "open": _fnum(r[1]),
+                "close": _fnum(r[2]),
+                "high": _fnum(r[3]),
+                "low": _fnum(r[4]),
+                "volume": _fnum(r[5]) if len(r) > 5 else 0.0,
+                "amount": _fnum(r[6]) if len(r) > 6 else 0.0,
             })
         except (IndexError, ValueError, TypeError) as exc:
             logger.debug("skip kline row for %s: %s", code, exc)
@@ -102,12 +112,12 @@ def fetch_eastmoney_kline_ohlc(code: str, count: int = 420) -> List[dict]:
             try:
                 out.append({
                     "date": str(row["日期"]),
-                    "open": float(row["开盘"]),
-                    "close": float(row["收盘"]),
-                    "high": float(row["最高"]),
-                    "low": float(row["最低"]),
-                    "volume": float(row.get("成交量", 0) or 0),
-                    "amount": float(row.get("成交额", 0) or 0),
+                    "open": _fnum(row["开盘"]),
+                    "close": _fnum(row["收盘"]),
+                    "high": _fnum(row["最高"]),
+                    "low": _fnum(row["最低"]),
+                    "volume": _fnum(row.get("成交量", 0)),
+                    "amount": _fnum(row.get("成交额", 0)),
                 })
             except (KeyError, ValueError, TypeError):
                 continue
@@ -146,9 +156,9 @@ def upsert_klines(conn, code: str, rows: List[dict]) -> int:
                     open=excluded.open, high=excluded.high, low=excluded.low,
                     close=excluded.close, volume=excluded.volume, amount=excluded.amount,
                     updated_at=excluded.updated_at""",
-            (code, d, float(r.get("open") or 0), float(r.get("high") or 0),
-             float(r.get("low") or 0), float(r.get("close") or 0),
-             float(r.get("volume") or 0), float(r.get("amount") or 0), now),
+            (code, d, _fnum(r.get("open")), _fnum(r.get("high")),
+             _fnum(r.get("low")), _fnum(r.get("close")),
+             _fnum(r.get("volume")), _fnum(r.get("amount")), now),
         )
         cnt += 1
     return cnt

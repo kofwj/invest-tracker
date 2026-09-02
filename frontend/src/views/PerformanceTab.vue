@@ -225,7 +225,7 @@
 <script setup>
 import PageShell from '../components/PageShell.vue';
 import MetricCard from '../components/MetricCard.vue';
-import { ref, watch, computed } from 'vue';
+import { ref, computed } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 
 const {
@@ -247,7 +247,6 @@ const {
 const perfFlowSuggestions = ref([]);
 const perfSuggestLoading = ref(false);
 const perfFlowEditId = ref(null);
-const catTrendMode = ref('value');
 
 const latestCategoryAlloc = computed(() => {
   const rows = perfContribution.value || [];
@@ -332,29 +331,6 @@ const onLoadFlowSuggest = async () => {
     perfSuggestLoading.value = false;
   }
 };
-
-
-async function renderCategoryTrend() {
-  if (!perfTimeline.value || perfTimeline.value.length < 1) return;
-  try {
-    const { renderCategoryTrendChartView, waitForChartDom } = await import('../charts/index.js');
-    const ready = await waitForChartDom(['categoryTrendChart'], { timeoutMs: 1500 });
-    if (!ready) return;
-    await new Promise((r) => requestAnimationFrame(() => r()));
-    renderCategoryTrendChartView(perfTimeline.value, catTrendMode.value);
-  } catch (e) {
-    // ignore if chart lib not ready
-  }
-}
-
-// Auto-render category trend chart when timeline data is (re)loaded
-watch(perfTimeline, () => {
-  if (perfTimeline.value && perfTimeline.value.length >= 1) {
-    requestAnimationFrame(() => {
-      try { renderCategoryTrend(); } catch (_) {}
-    });
-  }
-}, { deep: true });
 
 const onContribRowClick = (row) => {
   if (!row?.code) return;

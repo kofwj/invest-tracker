@@ -84,6 +84,14 @@ def _match_field(header: str) -> Optional[str]:
     return None
 
 
+_DILUTED_COST_ALIASES = {"摊薄成本", "保本价"}
+
+
+def _is_diluted_cost_header(header: Any) -> bool:
+    h = _norm_header(str(header or ""))
+    return h in {_norm_header(a) for a in _DILUTED_COST_ALIASES}
+
+
 def _parse_number(val: Any) -> Optional[float]:
     if val is None:
         return None
@@ -164,6 +172,13 @@ def _rows_from_matrix(matrix: List[List[Any]]) -> Tuple[List[Dict[str, Any]], Di
             "headers_seen": [str(x) for x in rows_raw[header_idx]] if rows_raw else [],
         }
 
+    cost_is_diluted = False
+    cost_col = field_index.get("avg_cost")
+    if cost_col is not None and header_idx < len(rows_raw):
+        header_cells = rows_raw[header_idx]
+        if cost_col < len(header_cells):
+            cost_is_diluted = _is_diluted_cost_header(header_cells[cost_col])
+
     parsed: List[Dict[str, Any]] = []
     for row in rows_raw[header_idx + 1 :]:
         if not row:
@@ -194,6 +209,9 @@ def _rows_from_matrix(matrix: List[List[Any]]) -> Tuple[List[Dict[str, Any]], Di
                 qty = mv / px
         if qty is None or qty < 0:
             continue
+        # 券商「摊薄成本/保本价」已扣累计分红：还原为未摊薄成本，避免下游再扣一次分红
+        if cost_is_diluted and avg is not None and div is not None and qty > 0:
+            avg = avg + div / qty
         parsed.append(
             {
                 "code": code,
@@ -202,12 +220,14 @@ def _rows_from_matrix(matrix: List[List[Any]]) -> Tuple[List[Dict[str, Any]], Di
                 "avg_cost": round(float(avg), 6) if avg is not None else None,
                 "total_dividend": round(float(div), 4) if div is not None else None,
                 "category": cat or None,
+                "cost_is_diluted": cost_is_diluted,
             }
         )
 
     return parsed, {
         "header_row": header_idx,
         "mapped_fields": sorted(field_index.keys()),
+        "cost_is_diluted": cost_is_diluted,
         "row_count": len(parsed),
     }
 
@@ -372,7 +392,13 @@ def compare_holdings(
         if b is not None:
             actual_qty = b_qty
             actual_cost = float(b_cost) if b_cost is not None else (float(a_cost) if a_cost is not None else 0.0)
-            actual_div = float(b_div) if b_div is not None else (float(a_div) if a_div is not None else 0.0)
+            if b_div is not None:
+                actual_div = float(b_div)
+            elif b.get("cost_is_diluted"):
+                # 摊薄成本已扣分红，券商未给分红列不得回填系统分红（否则双重扣减）
+                actual_div = 0.0
+            else:
+                actual_div = float(a_div) if a_div is not None else 0.0
         else:
             actual_qty = 0.0
             actual_cost = float(a_cost) if a_cost is not None else 0.0

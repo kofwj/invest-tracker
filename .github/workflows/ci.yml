@@ -25,9 +25,10 @@ jobs:
       - name: Ruff lint (F / E9 — 实际 bug 与语法)
         run: ruff check . --select F,E9
       - name: Pytest
+        # 测试在仓库根目录 tests/，且需 backend 在 sys.path 上（test_broker_reconcile 等直接 import 后端模块）
+        working-directory: .
         env:
-          # akshare 等外部数据源在测试中均被 mock，不需要网络
-          PYTHONPATH: .
+          PYTHONPATH: backend
         run: python -m pytest tests/ -q
 
   frontend:

@@ -647,18 +647,17 @@ const analyzeKlineTrend = (rows) => {
     if (cur >= ma20) { pos = 'above'; posText = `价在20日线上方，偏离 ${Math.abs(dev20).toFixed(1)}%`; }
     else { pos = 'below'; posText = `价在20日线下方，偏离 ${Math.abs(dev20).toFixed(1)}%`; }
 
-    // 3) 金叉/死叉：最近一次 MA5 与 MA10 交叉
-    const ma5s = [], ma10s = [];
-    for (let i = 0; i < closes.length; i++) {
-        if (i >= 4) ma5s.push(closes.slice(i - 4, i + 1).reduce((a, b) => a + b, 0) / 5);
-        if (i >= 9) ma10s.push(closes.slice(i - 9, i + 1).reduce((a, b) => a + b, 0) / 10);
-    }
+    // 3) 金叉/死叉：最近一次 MA5 与 MA10 交叉（按同一收盘日对齐，反向扫描）
     let cross = null;
-    for (let i = ma10s.length - 1; i > 0; i--) {
-        const prevDiff = ma5s[i - 1] - ma10s[i - 1];
-        const curDiff = ma5s[i] - ma10s[i];
+    for (let i = closes.length - 1; i >= 10; i--) {
+        const ma5Prev = closes.slice(i - 5, i).reduce((a, b) => a + b, 0) / 5;
+        const ma10Prev = closes.slice(i - 10, i).reduce((a, b) => a + b, 0) / 10;
+        const ma5Cur = closes.slice(i - 4, i + 1).reduce((a, b) => a + b, 0) / 5;
+        const ma10Cur = closes.slice(i - 9, i + 1).reduce((a, b) => a + b, 0) / 10;
+        const prevDiff = ma5Prev - ma10Prev;
+        const curDiff = ma5Cur - ma10Cur;
         if ((prevDiff <= 0 && curDiff > 0) || (prevDiff >= 0 && curDiff < 0)) {
-            cross = { type: curDiff > 0 ? 'gold' : 'death', daysAgo: ma10s.length - 1 - i + 1 };
+            cross = { type: curDiff > 0 ? 'gold' : 'death', daysAgo: closes.length - 1 - i };
             break;
         }
     }

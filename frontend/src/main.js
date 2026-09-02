@@ -452,7 +452,6 @@ const app = createApp({
             perfContributionHeadline,
             perfContributionMix,
             contributionBarStyle,
-            renderPerfChart,
             fetchPerformance,
             setPerfTimelineRange,
             addPerfFlow,

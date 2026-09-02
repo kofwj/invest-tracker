@@ -401,6 +401,7 @@ def _holding_price_map(conn) -> Dict[str, Dict[str, Any]]:
         try:
             live = fetch_eastmoney_quotes(codes)
         except Exception:
+            logger.warning("批量拉取持仓行情失败", exc_info=True)
             live = {}
     out = {}
     for h in holdings:
@@ -569,6 +570,7 @@ def build_market_summary(conn) -> Dict[str, Any]:
                 secid_map=secid_map or None,
             )
         except Exception:
+            logger.warning("拉取自选行情失败", exc_info=True)
             wq = {}
         for w in watchlist:
             code = w["code"]
@@ -716,6 +718,7 @@ def _resolve_price(
                 q.get("prev_close"),
             )
     except Exception:
+        logger.warning("拉取 %s 行情失败", code, exc_info=True)
         pass
     return None, rule.get("name") or code, None, None
 
@@ -757,13 +760,16 @@ def notify_feishu_alerts(triggered: List[Dict[str, Any]], webhook: Optional[str]
         return {"sent": False, "reason": "no_triggers", "results": []}
     try:
         try:
-            from .notify import dispatch, build_price_alert_text
+            from .notify import dispatch, build_price_alert_text, validate_webhook_url
         except ImportError:
-            from notify import dispatch, build_price_alert_text
+            from notify import dispatch, build_price_alert_text, validate_webhook_url
 
         text = build_price_alert_text(triggered)
         if webhook:
             # legacy: force only this feishu webhook via temporary env-less path
+            err = validate_webhook_url(webhook)
+            if err:
+                return {"sent": False, "reason": err, "count": len(triggered), "results": []}
             import requests
 
             payload = {"msg_type": "text", "content": {"text": f"【invest-tracker 价格预警】\n{text}"}}
@@ -828,7 +834,7 @@ def check_alerts(
                 extra = fetch_eastmoney_quotes([code], secid_map={code: secid} if secid else None)
                 index_map.update(extra)
             except Exception:
-                pass
+                logger.warning("拉取指数 %s 行情失败", code, exc_info=True)
 
     holding_map = _holding_price_map(conn)
     triggered = []
