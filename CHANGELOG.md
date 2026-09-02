@@ -5,6 +5,30 @@
 
 ---
 
+## [1.0.2] — 2026-09-02 — 审计修复批（财务计算/数据安全/CI）
+
+修复第三方审计发现的 15 项问题（P0 财务 4 条 + P1 数据/安全/前端/CI），后端测试从 179 增至 198 个全绿，前端 24 个单测与构建通过。
+
+- **期间收益率无快照时不再恒 100%**（`performance.py`）：退化的分母从「当前−净投入」改为净投入，无起点快照时也能算出合理分段收益率
+- **TWR 真正剥离现金流**（`performance.py`）：`calculate_twr` 按日扣减净投入后再几何链乘，纯存钱不再被报成 +1000% 收益
+- **清仓后分红不再泄漏到重建仓**（`holding_calculator.py`）：清仓归零时同步重置累计分红，下一轮建仓的 `total_dividend` 不再虚高
+- **券商「摊薄成本」不再被当未摊薄成本双扣分红**（`broker_reconcile.py`）：`摊薄成本/保本价` 在解析阶段按 `摊薄 + 分红÷数量` 还原为未摊薄成本；券商未给分红列时不回填系统分红，终止终身盈利虚高
+- **K 线写入路径 NaN 兜底**（`kline_cache.py`）：`_fnum` 过滤 NaN/Inf/空值，不再产出非法 JSON
+- **akshare 无超时兜底**（`database.py`）：导入时 `socket.setdefaulttimeout(20)`，几个挂住的 socket 不再拖垮 uvicorn 线程池
+- **恢复备份清理 WAL 残留**（`scripts/restore_db.py`）：替换 DB 后删除 `-wal/-shm`，避免 `database disk image is malformed`
+- **生产 CORS 不再恒 `*`**（`main.py` + `docker-compose.prod.yml`）：生产/开启鉴权且未显式配置时默认关闭跨域；prod compose 补传 `ENV`/`CORS_ALLOW_ORIGINS`
+- **`make up` 不再暴露未鉴权读写 API**（`docker-compose.yml`）：dev 前后端绑定 `127.0.0.1`
+- **登录限流恢复按客户端 IP**（`docker-compose.prod.yml` + `.env.example`）：`TRUST_PROXY_HEADERS=1` 写入生产配置，一人输错密码不再锁全站
+- **webhook SSRF 防护**（`notify.py` + `market.py`）：仅允许 http/https 且拒绝内网/环回/链路本地/未指定地址，堵住 `169.254.169.254` 元数据回显
+- **CI 后端测试真正跑起来**（`.github/workflows/ci.yml`）：原 `working-directory: backend` + `tests/` 路径不存在（179 个测试从未执行），改仓库根 + `PYTHONPATH=backend`
+- **前端 MA5/MA10 金叉死叉对齐**（`charts/index.js`）：两数组起点差 5 根 K 线导致交叉判断错位，现按同一收盘日对齐反向扫描
+- **修复「距目标收益缺口」卡**（`modules/performance.js`）：原为引用未定义变量的死代码，改为真正渲染目标缺口卡
+- **删除死 DOM 轮询**（`performance.js`/`PerformanceTab.vue`）：两处图表轮询不存在的 DOM 空转 2.5s，随死代码一并清理
+- **错误吞噬收紧**（`market.py`/`routers_holdings.py`）：同步失败从 `pass`/`debug` 改为 `warning + exc_info`，生产可见
+- **回归测试**：新增 `tests/test_audit_regressions_fifth_pass.py`（P0 四条 8 例）、`test_audit_regressions_sixth_pass.py`（NaN/SSRF/超时 4 例）
+
+---
+
 ## [1.0.1] — 2026-08-31 — oauth2 回跳域名修复 + 持仓操作列整理
 
 - **登录回跳域名放行**（`docker-compose.prod.yml`）：oauth2-proxy 缺 `--whitelist-domain`，未带会话的 `/api` 请求被 302 到登录页但绝对 URL 回跳被拒 → 浏览器「Network Error」、页面像卡死；现在 `APP_DOMAIN` 放行，登录后能正确跳回
