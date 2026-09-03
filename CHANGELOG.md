@@ -5,6 +5,20 @@
 
 ---
 
+## [1.0.3] — 2026-09-03 — 审计复核批（期间收益口径/目标缺口单位/Sharpe 口径/CI 兼容）
+
+第三方复核指出 v1.0.2 的 4 项遗留问题，全部修复，后端测试 205 个全绿。
+
+- **期间收益「无快照 + 本期前已有资金」不再捏数**（`performance.py`）：旧逻辑 `total_assets − period_net` 混合全周期资产与本期间净投入，可报出 +4900% 的假收益；现仅在「全部本金在本期」时才用净投入作基，否则返回 `None` 由前端回退全周期口径
+- **「距目标收益缺口」单位修正**（`performance.py`）：`target_return_pct` 从 0.04（小数）改为 4.0（百分数），前端直接拼 `%` 不再显示 0.04%
+- **Sharpe 与 TWR 统一现金流剥离口径**（`performance.py`）：日收益序列从朴素连续资产比改为 `_daily_returns`（按日扣净投入），一笔大额转入不再同时虚增均值与波动
+- **TWR 现金流归并从 O(n·m) 降到 O(n log m)**（`performance.py`）：`{date: 净流入}` 压成前缀和 + `bisect` 区间求和
+- **CI 路由测试兼容 FastAPI 0.138+**（`tests/test_fundamentals.py`）：新版 `_IncludedRouter` 不再把 `include_router` 路由平铺进 `app.routes`，测试改为递归展开 `original_router`
+- **前端本期/累计标签回退**（`modules/performance.js`）：`isPeriod` 在 `period_gain == null` 时整组回退全周期口径，避免「本期」标签配全周期数字
+- **回归测试**：新增 `tests/test_audit_regressions_seventh_pass.py`（期间收益 None/百分数/日收益剥离 8 例）
+
+---
+
 ## [1.0.2] — 2026-09-02 — 审计修复批（财务计算/数据安全/CI）
 
 修复第三方审计发现的 15 项问题（P0 财务 4 条 + P1 数据/安全/前端/CI），后端测试从 179 增至 198 个全绿，前端 24 个单测与构建通过。

@@ -1,5 +1,6 @@
-from datetime import datetime
+import bisect
 import logging
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -151,10 +152,14 @@ def build_performance_summary(conn, start_date=None, end_date=None):
         if period_start_assets and period_start_assets > 0:
             period_gain = total_assets - period_start_assets - period_net
             period_gain_pct = (period_gain / period_start_assets * 100)
-        else:
-            # 无快照：退化为「当前 − 本期净投入」，以净投入为收益率基
+        elif period_net > 0 and period_net >= net_contribution:
+            # 无起点快照，但本期之前没有在册资金 → 本金全部来自本期净投入，可安全以其为收益率基
             period_gain = total_assets - period_net
-            period_gain_pct = (period_gain / period_net * 100) if period_net > 0 else 0
+            period_gain_pct = (period_gain / period_net * 100)
+        else:
+            # 有本期之前的资金却无基准快照 → 期间收益不可知，不捏数字，交回全周期口径
+            period_gain = None
+            period_gain_pct = None
 
     # ===== 专业扩展指标计算 =====
     snap_assets_full = []
@@ -175,7 +180,8 @@ def build_performance_summary(conn, start_date=None, end_date=None):
     twr_val, twr_status = calculate_twr(snap_assets_full, dates=snap_dates, flows_by_date=flows_by_date) if snap_assets_full else (None, "无快照")
     sharpe_val = None
     if snap_assets_full and len(snap_assets_full) >= 4:
-        rets_for_sharpe = _simple_returns_from_assets(snap_assets_full)
+        # 与 TWR 同一口径：日收益需剥离存取款，否则一次转入会同时虚增均值与波动
+        rets_for_sharpe = _daily_returns(snap_assets_full, dates=snap_dates, flows_by_date=flows_by_date)
         sharpe_val = calculate_sharpe(rets_for_sharpe)
 
     monthly = None
@@ -228,7 +234,8 @@ def build_performance_summary(conn, start_date=None, end_date=None):
         "total_out": round(total_out, 2),
 
         # 距目标收益缺口（约 4% 净投入年化）
-        "target_return_pct": round(TARGET_ANNUAL_PCT, 2),
+        # 前端直接拼 "%"，这里必须给百分数（4.0）而不是小数（0.04）
+        "target_return_pct": round(TARGET_ANNUAL_PCT * 100, 2),
         "target_income": round(net_contribution * TARGET_ANNUAL_PCT, 2),
         "target_gap": round(net_contribution * TARGET_ANNUAL_PCT - total_gain, 2),
         "target_gap_pct": round((net_contribution * TARGET_ANNUAL_PCT - total_gain) / net_contribution * 100, 2) if net_contribution > 0 else None,
@@ -244,8 +251,8 @@ def build_performance_summary(conn, start_date=None, end_date=None):
 
         "period_start_date": period_start_date,
         "period_net_contribution": round(period_net, 2),
-        "period_gain": round(period_gain, 2),
-        "period_gain_pct": round(period_gain_pct, 4),
+        "period_gain": round(period_gain, 2) if period_gain is not None else None,
+        "period_gain_pct": round(period_gain_pct, 4) if period_gain_pct is not None else None,
         "period_start_assets": round(period_start_assets, 2) if period_start_assets else None,
 
         # 扩展专业指标
@@ -473,7 +480,8 @@ def build_performance_story(conn, start_date=None, end_date=None):
     xirr = summary.get("xirr")
     assets = float(summary.get("total_assets") or 0)
 
-    use_period = bool(start_date)
+    # 无起点快照时 period_gain 为 None（期间收益不可知），此时按全周期口径叙述
+    use_period = bool(start_date) and summary.get("period_gain") is not None
     pg = float(summary.get("period_gain") or total_gain)
     pp = float(summary.get("period_gain_pct") or (summary.get("total_gain_pct") or 0))
 
@@ -574,26 +582,34 @@ def build_performance_story(conn, start_date=None, end_date=None):
 
 # ==================== 专业指标扩展（TWR、Sharpe、月度、现金流影响、underwater 等） ====================
 
-def _simple_returns_from_assets(assets_list):
-    """从连续总资产序列计算简单回报"""
-    rets = []
-    for i in range(1, len(assets_list)):
-        prev = assets_list[i-1]
-        curr = assets_list[i]
-        if prev and prev > 0:
-            rets.append((curr - prev) / prev)
-    return rets
+def _flow_prefix_sums(flows_by_date):
+    """把 {date: 净流入} 压成 (升序日期, 前缀和)，供二分求任意日期区间的净现金流。"""
+    items = sorted((str(d)[:10], float(v or 0.0)) for d, v in (flows_by_date or {}).items())
+    dates = [d for d, _ in items]
+    cum = [0.0]
+    for _, v in items:
+        cum.append(cum[-1] + v)
+    return dates, cum
 
 
-def calculate_twr(assets_series, dates=None, flows_by_date=None):
-    """时间加权收益率（TWR）：按日剥离外部现金流后几何链乘 (1+r)-1。
+def _flows_between(f_dates, f_cum, lo, hi):
+    """落在 (lo, hi] 区间内的净现金流（投入为正、取出为负）。"""
+    if not f_dates:
+        return 0.0
+    left = bisect.bisect_right(f_dates, lo)
+    right = bisect.bisect_right(f_dates, hi)
+    return f_cum[right] - f_cum[left]
 
-    每日回报 r_t = (V_t - V_{t-1} - F_t) / V_{t-1}，F_t 为落在区间
-    (date_{t-1}, date_t] 的净投入（投入-取出）。剥离现金流后纯存钱不再被误报为收益。
+
+def _daily_returns(assets_series, dates=None, flows_by_date=None):
+    """按日剥离外部现金流后的简单收益序列：r_t = (V_t − V_{t−1} − F_t) / V_{t−1}。
+
+    F_t 为落在 (date_{t−1}, date_t] 的净投入。TWR 与 Sharpe 共用这一口径：
+    存取款不是投资损益，必须从日收益里剔除，否则一次大额转入会被当成行情暴涨。
     """
     if not assets_series or len(assets_series) < 2:
-        return None, "数据不足"
-    flows = flows_by_date or {}
+        return []
+    f_dates, f_cum = _flow_prefix_sums(flows_by_date)
     dates = dates or []
     rets = []
     for i in range(1, len(assets_series)):
@@ -603,10 +619,19 @@ def calculate_twr(assets_series, dates=None, flows_by_date=None):
             continue
         f = 0.0
         if dates and i < len(dates):
-            lo = str(dates[i - 1])[:10]
-            hi = str(dates[i])[:10]
-            f = sum(float(v) for d, v in flows.items() if lo < str(d)[:10] <= hi)
+            f = _flows_between(f_dates, f_cum, str(dates[i - 1])[:10], str(dates[i])[:10])
         rets.append((float(curr or 0) - prev - f) / prev)
+    return rets
+
+
+def calculate_twr(assets_series, dates=None, flows_by_date=None):
+    """时间加权收益率（TWR）：按日剥离外部现金流后几何链乘 (1+r)-1。
+
+    剥离现金流后，纯存钱不再被误报为收益。
+    """
+    if not assets_series or len(assets_series) < 2:
+        return None, "数据不足"
+    rets = _daily_returns(assets_series, dates=dates, flows_by_date=flows_by_date)
     if not rets:
         return None, "无有效回报"
     growth = 1.0

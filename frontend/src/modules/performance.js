@@ -94,8 +94,10 @@ const createPerformanceModule = ({
         if (!s) return [];
         const flowReady = Number(s.flow_count || 0) > 0;
 
-        // 优先用“本期”数据（时间范围改变时）
-        const isPeriod = !!s.period_start_date;
+        // 优先用“本期”数据（时间范围改变时）。
+        // 后端在无起点快照且本期之前已有资金时返回 null（期间收益不可知），
+        // 此时必须整组回退到全周期口径，否则会出现「本期」标签配全周期数字。
+        const isPeriod = !!s.period_start_date && s.period_gain != null;
         const mainGain = isPeriod ? (s.period_gain ?? s.total_gain) : s.total_gain;
         const mainGainPct = isPeriod ? (s.period_gain_pct ?? s.total_gain_pct) : s.total_gain_pct;
         const mainNet = isPeriod ? (s.period_net_contribution ?? s.net_contribution) : s.net_contribution;

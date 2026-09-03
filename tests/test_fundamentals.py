@@ -11,11 +11,32 @@ def _load_fundamentals_with_fake_akshare(monkeypatch, fake_ak):
     return importlib.import_module("fundamentals")
 
 
+def _iter_route_paths(routes):
+    """展开 app.routes 里所有路由路径。
+
+    FastAPI 新版（0.138+ 的 _IncludedRouter）不再把 include_router 的路由平铺进
+    app.routes，而是包一层 original_router，此时顶层 route.path 为空字符串。
+    这里递归展开，兼容新旧两种结构。
+    """
+    for r in routes:
+        inner_router = getattr(r, "original_router", None)
+        if inner_router is not None:
+            yield from _iter_route_paths(inner_router.routes)
+            continue
+        nested = getattr(r, "routes", None)
+        if nested:
+            yield from _iter_route_paths(nested)
+            continue
+        path = getattr(r, "path", None)
+        if path:
+            yield path
+
+
 def test_fundamentals_route_registered(app_module):
     """ /analysis/{code} 应挂载在 app 上（auth 已配置则直接能用）。"""
-    app = app_module.app
-    found = any(getattr(r, "path", "") == "/analysis/{code}" for r in app.routes)
-    assert found, "未找到 /analysis/{code} 路由"
+    target = "/analysis/{code}"
+    paths = set(_iter_route_paths(app_module.app.routes))
+    assert target in paths, f"未找到 {target} 路由，现有: {sorted(paths)}"
 
 
 def test_fundamental_check_degrades_when_akshare_raises(monkeypatch):
