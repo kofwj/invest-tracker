@@ -760,21 +760,17 @@ def notify_feishu_alerts(triggered: List[Dict[str, Any]], webhook: Optional[str]
         return {"sent": False, "reason": "no_triggers", "results": []}
     try:
         try:
-            from .notify import dispatch, build_price_alert_text, validate_webhook_url
+            from .notify import dispatch, build_price_alert_text, post_webhook_response
         except ImportError:
-            from notify import dispatch, build_price_alert_text, validate_webhook_url
+            from notify import dispatch, build_price_alert_text, post_webhook_response
 
         text = build_price_alert_text(triggered)
         if webhook:
             # legacy: force only this feishu webhook via temporary env-less path
-            err = validate_webhook_url(webhook)
-            if err:
-                return {"sent": False, "reason": err, "count": len(triggered), "results": []}
-            import requests
-
             payload = {"msg_type": "text", "content": {"text": f"【invest-tracker 价格预警】\n{text}"}}
             try:
-                res = requests.post(webhook, json=payload, timeout=10)
+                # 校验与建连一步完成，避免攻击者可控 DNS 在两步之间换答案绕过 SSRF 校验
+                res = post_webhook_response(webhook, payload, timeout=10)
                 ok = 200 <= res.status_code < 300
                 return {
                     "sent": ok,

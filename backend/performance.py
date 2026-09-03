@@ -162,11 +162,26 @@ def build_performance_summary(conn, start_date=None, end_date=None):
             period_gain_pct = None
 
     # ===== 专业扩展指标计算 =====
-    snap_assets_full = []
+    # 快照序列需跟随时间筛选：TWR/Sharpe 应与 rolling/benchmark 一样按所选期间计算，
+    # 否则选「近一年」时它们仍返回开仓至今，和同页其它指标口径打架。
+    # 流水不必另行过滤：_daily_returns 只取相邻快照日之间的区间，区间外的流水天然被排除。
+    snap_assets = []
     snap_dates = []
     try:
-        snap_rows = conn.execute("SELECT date, total_assets FROM daily_snapshots ORDER BY date ASC").fetchall()
-        snap_assets_full = [float(s["total_assets"] or 0) for s in snap_rows]
+        snap_sql = "SELECT date, total_assets FROM daily_snapshots"
+        snap_conds = []
+        snap_params = []
+        if start_date:
+            snap_conds.append("date >= ?")
+            snap_params.append(start_date)
+        if end_date:
+            snap_conds.append("date <= ?")
+            snap_params.append(end_date)
+        if snap_conds:
+            snap_sql += " WHERE " + " AND ".join(snap_conds)
+        snap_sql += " ORDER BY date ASC"
+        snap_rows = conn.execute(snap_sql, snap_params).fetchall()
+        snap_assets = [float(s["total_assets"] or 0) for s in snap_rows]
         snap_dates = [str(s["date"]) for s in snap_rows]
     except Exception as e:
         logger.warning("读取快照序列失败: %s", e)
@@ -177,11 +192,11 @@ def build_performance_summary(conn, start_date=None, end_date=None):
         sign = 1.0 if f["flow_type"] == "投入" else (-1.0 if f["flow_type"] == "取出" else 0.0)
         flows_by_date[d] = flows_by_date.get(d, 0.0) + sign * float(f["amount"] or 0)
 
-    twr_val, twr_status = calculate_twr(snap_assets_full, dates=snap_dates, flows_by_date=flows_by_date) if snap_assets_full else (None, "无快照")
+    twr_val, twr_status = calculate_twr(snap_assets, dates=snap_dates, flows_by_date=flows_by_date) if snap_assets else (None, "无快照")
     sharpe_val = None
-    if snap_assets_full and len(snap_assets_full) >= 4:
+    if snap_assets and len(snap_assets) >= 4:
         # 与 TWR 同一口径：日收益需剥离存取款，否则一次转入会同时虚增均值与波动
-        rets_for_sharpe = _daily_returns(snap_assets_full, dates=snap_dates, flows_by_date=flows_by_date)
+        rets_for_sharpe = _daily_returns(snap_assets, dates=snap_dates, flows_by_date=flows_by_date)
         sharpe_val = calculate_sharpe(rets_for_sharpe)
 
     monthly = None

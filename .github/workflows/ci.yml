@@ -23,7 +23,10 @@ jobs:
           pip install -r requirements-dev.txt
           pip install ruff
       - name: Ruff lint (F / E9 — 实际 bug 与语法)
-        run: ruff check . --select F,E9
+        # tests/ 在仓库根：若沿用 job 的 working-directory=backend 就永远扫不到它，
+        # F821（f-string 里误用变量）这类只在断言失败时才炸的问题会一直潜伏。
+        working-directory: .
+        run: ruff check backend tests --select F,E9
       - name: Pytest
         # 测试在仓库根目录 tests/，且需 backend 在 sys.path 上（test_broker_reconcile 等直接 import 后端模块）
         working-directory: .

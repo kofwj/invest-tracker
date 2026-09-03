@@ -7,11 +7,13 @@ Events: price_alert, evening_brief, deposit_due, discipline, ops, test.
 from __future__ import annotations
 
 import base64
+import contextlib
 import hashlib
 import hmac
 import json
 import logging
 import os
+import threading
 import time
 import urllib.parse
 from datetime import date, datetime, timedelta
@@ -442,61 +444,140 @@ def _dingtalk_signed_url(webhook: str, secret: str) -> str:
     return f"{webhook}{sep}timestamp={timestamp}&sign={sign}"
 
 
-def validate_webhook_url(url: str) -> Optional[str]:
-    """SSRF 防护：Webhook 仅允许 http/https，且主机不能解析到内网/环回/链路本地/保留地址。
+def _is_blocked_ip(ip: str) -> bool:
+    import ipaddress
 
-    返回错误信息字符串（不可用），可用则返回 None。
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    # 只拦真正的 SSRF 攻击面：内网/环回/链路本地(169.254 元数据)/未指定地址。
+    # 不用 is_reserved：会误伤 198.18/15 等 benchmark/文档段（测试环境 DNS sinkhole 常见）。
+    return addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_unspecified
+
+
+def resolve_webhook_ip(url: str) -> Tuple[Optional[str], Optional[str]]:
+    """校验 webhook，并给出应当实际建连的 IP。
+
+    返回 (ip, error)，两者语义独立：
+      - error 非空   → 校验不通过，禁止发送；
+      - ip 非空      → 已通过校验、且必须被钉死的目标地址；
+      - 两者都为空   → 域名暂时解析不出，放行（连接会自然失败，不构成 SSRF，
+                       也避免离线环境误伤合法地址）；此时无从钉死，退化为普通请求。
     """
     if not url:
-        return "webhook 未配置"
+        return None, "webhook 未配置"
     try:
         parsed = urllib.parse.urlparse(str(url).strip())
     except Exception:
-        return "webhook URL 无法解析"
+        return None, "webhook URL 无法解析"
     if parsed.scheme not in ("http", "https"):
-        return "webhook 只允许 http/https"
+        return None, "webhook 只允许 http/https"
     host = parsed.hostname
     if not host:
-        return "webhook 缺少主机名"
+        return None, "webhook 缺少主机名"
+
     import ipaddress
     import socket
 
-    def _blocked(ip: str) -> bool:
-        try:
-            addr = ipaddress.ip_address(ip)
-        except ValueError:
-            return False
-        # 只拦真正的 SSRF 攻击面：内网/环回/链路本地(169.254 元数据)/未指定地址。
-        # 不用 is_reserved：会误伤 198.18/15 等 benchmark/文档段（测试环境 DNS sinkhole 常见）。
-        return addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_unspecified
-
-    # 字面 IP：直接判定（无需 DNS）
+    # 字面 IP：直接判定，且不存在「重解析」问题
     try:
-        if _blocked(host):
-            return f"webhook 主机指向受限地址 {host}"
         ipaddress.ip_address(host)
-        return None
     except ValueError:
         pass  # 域名，走 DNS
+    else:
+        if _is_blocked_ip(host):
+            return None, f"webhook 主机指向受限地址 {host}"
+        return host, None
+
     try:
-        infos = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
+        infos = socket.getaddrinfo(
+            host,
+            parsed.port or (443 if parsed.scheme == "https" else 80),
+            proto=socket.IPPROTO_TCP,
+        )
     except Exception:
         # 无法解析 → 连接会自然失败，不构成 SSRF；放行避免离线环境下误伤合法地址
-        return None
+        return None, None
     for info in infos:
-        if _blocked(info[4][0]):
-            return f"webhook 主机指向受限地址 {info[4][0]}"
-    return None
+        ip = info[4][0]
+        if _is_blocked_ip(ip):
+            return None, f"webhook 主机指向受限地址 {ip}"
+    if not infos:
+        return None, None
+    return infos[0][4][0], None
+
+
+def validate_webhook_url(url: str) -> Optional[str]:
+    """SSRF 防护：Webhook 仅允许 http/https，且主机不能解析到内网/环回/链路本地/未指定地址。
+
+    返回错误信息字符串（不可用），可用则返回 None。
+    """
+    _, err = resolve_webhook_ip(url)
+    return err
+
+
+# 钉死建连地址时必须串行：urllib3 的 create_connection 是进程级的，并发发送会互相干扰
+_WEBHOOK_PIN_LOCK = threading.Lock()
+
+
+@contextlib.contextmanager
+def _pinned_webhook_dns(hostname: str, ip: Optional[str]):
+    """把 hostname 的建连目标临时固定为已校验的 ip。
+
+    校验与发请求是两步：requests 在第二步才解析域名，攻击者可控的 DNS 可以在两步之间
+    返回不同结果（DNS rebinding），让前置校验形同虚设。这里在 socket 层替换建连地址，
+    而 TLS 的 SNI 与 HTTP 的 Host 头仍用原始主机名，因此不影响 HTTPS 证书校验。
+    """
+    if not ip or not hostname:
+        yield
+        return
+    try:
+        import urllib3.util.connection as _ul_conn
+    except Exception:
+        # requests 的传递依赖拿不到时，退化为不钉死（校验仍然生效）
+        yield
+        return
+
+    original = _ul_conn.create_connection
+
+    def _create_connection(address, *args, **kwargs):
+        if address and address[0] == hostname:
+            address = (ip, address[1])
+        return original(address, *args, **kwargs)
+
+    with _WEBHOOK_PIN_LOCK:
+        _ul_conn.create_connection = _create_connection
+        try:
+            yield
+        finally:
+            _ul_conn.create_connection = original
+
+
+def post_webhook_response(url: str, payload: dict, timeout: int = 10, headers: Optional[dict] = None):
+    """校验与发送合为一步：保证「校验通过的那个 IP」就是「实际建连的 IP」。
+
+    返回 requests.Response；校验不通过时抛 ValueError。
+    """
+    import requests
+
+    pinned_ip, err = resolve_webhook_ip(url)
+    if err:
+        raise ValueError(err)
+    host = urllib.parse.urlparse(str(url).strip()).hostname or ""
+    with _pinned_webhook_dns(host, pinned_ip):
+        return requests.post(url, json=payload, timeout=timeout, headers=headers)
 
 
 def _post_json(url: str, payload: dict, timeout: int = 10) -> Tuple[bool, Optional[int], str]:
-    err = validate_webhook_url(url)
-    if err:
-        return False, None, err
     try:
-        import requests
-
-        res = requests.post(url, json=payload, timeout=timeout)
+        # 校验与建连在同一步完成：校验通过的那个 IP 就是实际连出去的 IP，
+        # 否则攻击者可控 DNS 可在两步之间换答案（rebinding）。
+        res = post_webhook_response(url, payload, timeout=timeout)
+    except Exception as exc:
+        # 校验不通过也是 ValueError，与其它网络错误一样作为失败原因返回
+        return False, None, str(exc)
+    try:
         ok = 200 <= res.status_code < 300
         # some bots return 200 with errcode != 0
         try:

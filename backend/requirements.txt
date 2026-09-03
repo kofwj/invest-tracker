@@ -6,3 +6,7 @@ akshare>=1.16,<2.0
 pydantic>=2.7,<3.0
 python-multipart>=0.0.9,<1.0
 requests>=2.31,<3.0
+# notify 直接 import urllib3（把 webhook 的建连地址钉死在校验通过的 IP 上，防 DNS rebinding），
+# 此前只是 requests 的传递依赖。akshare 声明 urllib3>=1.25.8、requests 声明 >=1.21.1,<3，
+# 这里取交集内的 2.x：钉死逻辑已在 urllib3 2.7 上验证。
+urllib3>=2.0,<3.0

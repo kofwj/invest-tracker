@@ -5,6 +5,18 @@
 
 ---
 
+## [1.0.4] — 2026-09-04 — 审计收尾批（CI 覆盖率/TWR 时间筛选/SSRF 收口）
+
+上一轮复核遗留的 3 项收尾全部完成，后端测试 209 个全绿，前端 24 个单测与构建通过。
+
+- **CI 的 ruff 覆盖 tests/**（`.github/workflows/ci.yml`）：原 `ruff check .` 在 `working-directory: backend` 下执行，仓库根目录的 `tests/` 从未被扫描；改为在仓库根执行 `ruff check backend tests`。补充审查时正是靠它抓到测试里的 F821（`f"...{code}..."` 里 `{code}` 被当表达式，断言失败时会抛 NameError 掩盖真实原因）
+- **TWR/Sharpe 接入时间筛选**（`performance.py`）：快照序列原先无条件取全量，选「近一年」时 TWR/Sharpe 仍返回开仓至今，与同页已受筛选的 rolling/benchmark 口径打架；现按 `start_date`/`end_date` 拼 WHERE 条件。流水无需另行过滤——`_daily_returns` 只取相邻快照日之间的区间，区间外流水天然排除
+- **webhook SSRF 收口 DNS rebinding**（`notify.py` + `market.py`）：原「先解析校验 → `requests.post` 再解析一次」存在窗口，攻击者可控 DNS 可在两步之间换答案让校验形同虚设。新增 `resolve_webhook_ip` 返回已校验 IP，`_pinned_webhook_dns` 在建连层把地址钉死（TLS 的 SNI 与 HTTP 的 Host 仍用原始主机名，不影响 HTTPS 证书校验），并用锁串行化避免并发发送互相干扰；`_post_json` 与 `market.py` 的 cron 预警均改为一次 `post_webhook_response` 完成校验+发送
+- **显式声明 urllib3 依赖**（`backend/requirements.txt`）：钉死逻辑直接 `import urllib3`，此前只作为 requests 的传递依赖存在；锁 `urllib3>=2.0,<3.0`（akshare 声明 `>=1.25.8`、requests 声明 `>=1.21.1,<3`，已用 `pip --dry-run --ignore-installed` 验证干净环境解析到 2.7.0 无冲突）
+- **回归测试**：`tests/test_audit_regressions_seventh_pass.py` 增至 11 例，新增 TWR/Sharpe 时间筛选（3 例）与 DNS rebinding（2 例，含阳性对照——先证明不钉死时攻击确实能打到内网服务，再证明钉死后打不到，避免测试空跑）
+
+---
+
 ## [1.0.3] — 2026-09-03 — 审计复核批（期间收益口径/目标缺口单位/Sharpe 口径/CI 兼容）
 
 第三方复核指出 v1.0.2 的 4 项遗留问题，全部修复，后端测试 205 个全绿。
