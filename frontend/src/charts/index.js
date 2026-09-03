@@ -27,7 +27,6 @@ let allocationChart = null;
 let categoryChart = null;
 let snapshotTrendChart = null;
 let snapshotStructureChart = null;
-let perfTimelineChart = null;
 let overviewWeekChart = null;
 
 /** 从 CSS token 读色；ECharts 不吃 var()，必须解析成实际色值 */
@@ -266,66 +265,6 @@ const renderAllocationChartsView = (macroAllocationAnalysis = [], allocationAnal
     return true;
 };
 
-const renderPerfTimelineChartView = (perfTimeline = []) => {
-    const el = document.getElementById('perfTimelineChart');
-    if (!el || !perfTimeline.length) return false;
-    if (perfTimelineChart) {
-        try { perfTimelineChart.dispose(); } catch (_) { /* ignore */ }
-        perfTimelineChart = null;
-    }
-    perfTimelineChart = echarts.init(el);
-    const t = readTheme();
-    const data = perfTimeline;
-    perfTimelineChart.setOption({
-        color: [t.primary, t.muted, t.warn],
-        tooltip: baseTooltip(t, { trigger: 'axis' }),
-        legend: {
-            data: ['总资产', '净投入', '总收益'],
-            top: 0,
-            textStyle: { color: t.muted, fontSize: 11 },
-        },
-        grid: { left: 60, right: 30, top: 40, bottom: 30 },
-        xAxis: {
-            type: 'category',
-            data: data.map((d) => d.date),
-            axisLabel: { color: t.muted },
-            axisLine: { lineStyle: { color: t.border } },
-        },
-        yAxis: {
-            type: 'value',
-            axisLabel: { color: t.muted, formatter: (v) => `${(v / 10000).toFixed(0)}万` },
-            splitLine: { lineStyle: { color: t.border, type: 'dashed' } },
-        },
-        series: [
-            {
-                name: '总资产',
-                type: 'line',
-                data: data.map((d) => d.total_assets),
-                smooth: true,
-                lineStyle: { width: 2 },
-                itemStyle: { color: t.primary },
-            },
-            {
-                name: '净投入',
-                type: 'line',
-                data: data.map((d) => d.net_contribution),
-                smooth: true,
-                lineStyle: { width: 2, type: 'dashed' },
-                itemStyle: { color: t.muted },
-            },
-            {
-                name: '总收益',
-                type: 'line',
-                data: data.map((d) => d.total_gain),
-                smooth: true,
-                lineStyle: { width: 1.5 },
-                itemStyle: { color: t.warn },
-            },
-        ],
-    }, true);
-    try { perfTimelineChart.resize(); } catch (_) { /* ignore */ }
-    return true;
-};
 
 /** 总览右上：近半月总资产曲线（单线 + 面积，Y 轴贴合波动） */
 const renderOverviewWeekChartView = (rows = []) => {
@@ -480,7 +419,6 @@ const resizeAllCharts = () => {
         categoryChart,
         snapshotTrendChart,
         snapshotStructureChart,
-        perfTimelineChart,
         overviewWeekChart,
     ].forEach((c) => {
         try {
@@ -708,106 +646,9 @@ const ensureChartResizeListener = () => {
 ensureChartResizeListener();
 
 
-/** 大类资产走势：债基 / REITs / 权益 
- * mode: 'value'（绝对市值） | 'pct'（相对占比，堆叠100%）
- */
-const renderCategoryTrendChartView = (rows = [], mode = 'value') => {
-    const el = document.getElementById('categoryTrendChart');
-    if (!el) return false;
-    if (categoryTrendChart) {
-        try { categoryTrendChart.dispose(); } catch (_) {}
-        categoryTrendChart = null;
-    }
-    if (!rows || !rows.length) {
-        categoryTrendChart = echarts.init(el);
-        categoryTrendChart.setOption({
-            title: { text: '暂无大类快照数据', left: 'center', top: 'middle', textStyle: { color: '#999', fontSize: 12 } },
-        });
-        return categoryTrendChart;
-    }
-    const t = readTheme();
-    const sorted = [...rows].sort((a, b) => String(a.date).localeCompare(String(b.date)));
-    const dates = sorted.map(r => r.date);
-
-    const rawEquity = sorted.map(r => Number(r.equity_mv || 0));
-    const rawBond = sorted.map(r => Number(r.bond_mv || 0));
-    const rawReit = sorted.map(r => Number(r.reit_mv || 0));
-
-    let equity, bond, reit;
-    let yFormatter, yAxisMax;
-    let isPct = mode === 'pct';
-
-    if (isPct) {
-        equity = []; bond = []; reit = [];
-        sorted.forEach((r, i) => {
-            const tot = rawEquity[i] + rawBond[i] + rawReit[i] || 1;
-            equity.push((rawEquity[i] / tot * 100));
-            bond.push((rawBond[i] / tot * 100));
-            reit.push((rawReit[i] / tot * 100));
-        });
-        yFormatter = v => v.toFixed(0) + '%';
-        yAxisMax = 100;
-    } else {
-        equity = rawEquity; bond = rawBond; reit = rawReit;
-        yFormatter = v => (Number(v)/10000).toFixed(0) + '万';
-        yAxisMax = null;
-    }
-
-    categoryTrendChart = echarts.init(el);
-    categoryTrendChart.setOption({
-        backgroundColor: t.surface,
-        animation: false,
-        tooltip: {
-            trigger: 'axis',
-            backgroundColor: t.surface,
-            borderColor: t.border,
-            textStyle: { color: t.text },
-            formatter: (params) => {
-                let res = params[0].axisValue + '<br/>';
-                params.forEach(p => {
-                    const idx = p.dataIndex;
-                    const val = isPct ? p.value.toFixed(1) + '%' : formatMoney(p.value);
-                    res += `${p.marker} ${p.seriesName}: ${val}<br/>`;
-                });
-                return res;
-            }
-        },
-        legend: {
-            data: ['权益', '债基', 'REITs'],
-            textStyle: { color: t.muted, fontSize: 11 },
-            top: 0,
-        },
-        grid: { left: 50, right: 20, top: 30, bottom: 25, containLabel: true },
-        xAxis: {
-            type: 'category',
-            data: dates,
-            axisLabel: { color: t.muted, fontSize: 10, formatter: d => (d || '').slice(5) },
-            axisLine: { lineStyle: { color: t.border } },
-        },
-        yAxis: {
-            type: 'value',
-            min: 0,
-            max: yAxisMax,
-            axisLabel: { color: t.muted, fontSize: 10, formatter: yFormatter },
-            splitLine: { lineStyle: { color: t.border } },
-        },
-        series: [
-            { name: '权益', type: 'line', data: equity, smooth: true, stack: isPct ? 'total' : null, lineStyle: { width: 1.6, color: t.up || '#3b82f6' }, areaStyle: { opacity: isPct ? 0.65 : 0.12 } },
-            { name: '债基', type: 'line', data: bond, smooth: true, stack: isPct ? 'total' : null, lineStyle: { width: 1.6, color: '#f59e0b' }, areaStyle: { opacity: isPct ? 0.65 : 0.12 } },
-            { name: 'REITs', type: 'line', data: reit, smooth: true, stack: isPct ? 'total' : null, lineStyle: { width: 1.6, color: '#10b981' }, areaStyle: { opacity: isPct ? 0.65 : 0.12 } },
-        ],
-    });
-    try { categoryTrendChart.resize(); } catch (_) {}
-    return categoryTrendChart;
-};
-
-let categoryTrendChart = null;
-
 export {
     renderSnapshotChartsView,
     renderAllocationChartsView,
-    renderPerfTimelineChartView,
-    renderCategoryTrendChartView,
     renderOverviewWeekChartView,
     renderKlineChartView,
     analyzeKlineTrend,
@@ -819,8 +660,6 @@ export {
 export default {
     renderSnapshotChartsView,
     renderAllocationChartsView,
-    renderPerfTimelineChartView,
-    renderCategoryTrendChartView,
     renderOverviewWeekChartView,
     renderKlineChartView,
     waitForChartDom,
