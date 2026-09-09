@@ -1,7 +1,6 @@
 <template>
   <PageShell
     title="数据备份"
-    subtitle="数据库备份、下载和恢复。恢复前会自动再备份当前库。"
   >
     <template #actions>
       <el-space wrap>
@@ -22,7 +21,6 @@
       <MetricCard
         label="数据库"
         :value="maintenanceStatus.db_exists ? '正常' : '未找到'"
-        :sub="dbSizeText"
         :tone="maintenanceStatus.db_exists ? 'ok' : 'warn'"
         main
         :title="dbSizeText"
@@ -30,19 +28,16 @@
       <MetricCard
         label="备份数量"
         :value="String(backupCount)"
-        sub="服务器本地文件"
         :tone="backupCount ? 'ok' : 'warn'"
       />
       <MetricCard
         label="最近备份"
         :value="latestBackupShort"
-        :sub="latestBackupText"
         :title="String(maintenanceStatus.latest_backup || latestBackupText || '')"
       />
       <MetricCard
         label="建议"
         value="先下本地"
-        sub="操作前创建并下载一份"
       />
     </div>
 

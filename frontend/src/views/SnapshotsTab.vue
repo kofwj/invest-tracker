@@ -1,7 +1,6 @@
 <template>
   <PageShell
     title="资产快照"
-    subtitle="看总资产、投资仓位、现金缓冲和区间变化，不只是一张快照流水表。"
   >
     <template #actions>
 
@@ -88,7 +87,6 @@
                             :key="m.key"
                             :label="m.label"
                             :value="m.value"
-                            :sub="m.sub"
                             :color="m.color"
                             :main="idx === 0"
                         />

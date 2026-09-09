@@ -1,7 +1,6 @@
 <template>
   <PageShell
     title="今天该看"
-    subtitle="左栏关键数字，右栏先看结论再下钻。只读观察，不改真账。"
   >
     <template #actions>
       <el-tag v-if="marketUpdatedAt" size="small" type="info">更新 {{ marketUpdatedAt }}</el-tag>
@@ -22,7 +21,6 @@
           <MetricCard
             label="今日贡献粗估"
             :value="formatMoney(signals.today_contrib_estimate || 0, 2, true)"
-            sub="现价涨跌% × 市值，非记账"
             :tone="Number(signals.today_contrib_estimate || 0) >= 0 ? 'up' : 'down'"
             main
             :title="formatMoney(signals.today_contrib_estimate || 0, 2, true)"
@@ -30,69 +28,58 @@
           <MetricCard
             label="组合涨跌粗估"
             :value="pctText(signals.portfolio_change_pct_estimate)"
-            :sub="`投资市值 ${formatMoney(signals.total_market_value || 0)}`"
             :tone="toneFromNum(signals.portfolio_change_pct_estimate)"
           />
           <MetricCard
             label="vs 沪深300"
             :value="vsHs300Text"
-            :sub="vsHs300Sub"
             :tone="toneFromNum(vsHs300Diff)"
           />
           <MetricCard
             label="vs 中证A500"
             :value="vsA500Text"
-            :sub="vsA500Sub"
             :tone="toneFromNum(vsA500Diff)"
           />
           <MetricCard
             label="总资产"
             :value="formatMoney(totalAssetsNow)"
-            :sub="`浮盈 ${formatMoney(signals.total_profit || 0, 2, true)}`"
             :title="formatMoney(totalAssetsNow)"
           />
           <MetricCard
             label="权益仓位"
             :value="equityPctText"
-            :sub="`目标 ${targetEquityText} · 防御 ${defensivePctText}`"
             :tone="equityTone"
           />
           <MetricCard
             label="纪律破线"
             :value="String(breachCount)"
-            :sub="summaryText || '暂无纪律摘要'"
             :tone="breachCount ? 'warn' : 'ok'"
           />
           <MetricCard
             label="存款 30 天内到期"
             :value="`${dueSoonCount} 笔`"
-            :sub="`金额 ${formatMoney(dueSoonAmount)}`"
             :tone="dueSoonCount ? 'warn' : ''"
           />
           <MetricCard
             label="今日最强"
             :value="topMoverName"
-            :sub="topMoverSub"
             :tone="toneFromNum(topMover?.day_contrib ?? topMover?.change_pct)"
             :title="topMoverTitle"
           />
           <MetricCard
             label="今日最弱"
             :value="bottomMoverName"
-            :sub="bottomMoverSub"
             :tone="toneFromNum(bottomMover?.day_contrib ?? bottomMover?.change_pct)"
             :title="bottomMoverTitle"
           />
           <MetricCard
             label="启用预警"
             :value="`${enabledAlertCount} 条`"
-            :sub="`规则共 ${alertRuleCount} · 自选 ${watchlistCount}`"
             :tone="enabledAlertCount ? 'ok' : 'muted'"
           />
           <MetricCard
             label="指数情绪"
             :value="indexBreadthText"
-            :sub="indexBreadthSub"
             :tone="indexBreadthTone"
           />
         </div>

@@ -1,7 +1,6 @@
 <template>
   <PageShell
     title="券商对账单"
-    subtitle="上传券商持仓 CSV/Excel，对照本系统差异；勾选后写入「持仓校正」（自动备份，并自动重扫）。"
   >
 <el-alert
       title="怎么用"

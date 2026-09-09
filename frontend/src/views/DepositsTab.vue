@@ -1,7 +1,6 @@
 <template>
   <PageShell
     title="银行存款"
-    subtitle="展示存款总额、加权利率、预计利息、到期分布和银行集中度。"
   >
     <template #actions>
       <el-space wrap>
@@ -27,7 +26,6 @@
       <MetricCard
         label="存款总额"
         :value="formatMoney(depositSummary.total)"
-        :sub="`占总资产 ${pct(depositSummary.total, dashboard.total_assets)}`"
         main
         :title="formatMoney(depositSummary.total)"
       />
@@ -36,30 +34,24 @@
       <MetricCard
         label="加权平均利率"
         :value="`${Number(depositSummary.weightedRate || 0).toFixed(2)}%`"
-        sub="按金额加权"
         color="var(--app-primary)"
         :title="`${Number(depositSummary.weightedRate || 0).toFixed(2)}%`"
       />
       <MetricCard
         label="预计年利息"
         :value="formatMoney(depositSummary.annualInterest)"
-        sub="若按当前利率放满一年"
         color="var(--app-warn)"
         :title="formatMoney(depositSummary.annualInterest)"
       />
       <MetricCard
         label="到期前预计利息"
         :value="formatMoney(depositSummary.remainingInterest)"
-        sub="按剩余天数合计（单利/365）"
         color="var(--app-down)"
         :title="formatMoney(depositSummary.remainingInterest)"
       />
       <MetricCard
         label="下一笔到期"
         :value="depositSummary.nextDue ? depositSummary.nextDue.due_date : '—'"
-        :sub="depositSummary.nextDue
-          ? `${depositSummary.nextDue.bank_name} ${formatMoney(depositSummary.nextDue.amount)}，${depositSummary.nextDue.daysLeft}天`
-          : '暂无到期日'"
         :title="depositSummary.nextDue ? `${depositSummary.nextDue.bank_name} ${formatMoney(depositSummary.nextDue.amount)}` : ''"
       />
     </div>

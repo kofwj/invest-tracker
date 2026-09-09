@@ -1,7 +1,6 @@
 <template>
   <PageShell
     title="持仓明细"
-    subtitle="当前仓盈亏与全周期盈亏分开看；近一年是标的自身涨跌，不是账户持有收益。"
   >
     <template #actions>
       <el-button type="warning" plain :loading="trailingSyncing" @click="syncTrailingReturns">

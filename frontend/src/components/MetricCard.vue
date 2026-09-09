@@ -1,15 +1,11 @@
 <template>
   <div class="ledger-metric" :class="rootClass">
-    <div v-if="plain" class="ledger-metric-plain">{{ plain }}</div>
     <div v-if="label || $slots.icon" class="ledger-metric-label">
       <slot name="icon" />
       <span v-if="label">{{ label }}</span>
     </div>
     <div class="ledger-metric-value" :class="valueClass" :style="valueStyle" :title="title || (value != null ? String(value) : undefined)">
       <slot>{{ value }}</slot>
-    </div>
-    <div v-if="sub || $slots.sub" class="ledger-metric-sub" :title="typeof sub === 'string' ? sub : undefined">
-      <slot name="sub">{{ sub }}</slot>
     </div>
   </div>
 </template>
@@ -20,9 +16,6 @@ import { computed } from 'vue';
 const props = defineProps({
   label: { type: String, default: '' },
   value: { type: [String, Number], default: '' },
-  sub: { type: String, default: '' },
-  /** 人话标题（收益分析主卡） */
-  plain: { type: String, default: '' },
   /** 主卡加宽/强调 */
   main: { type: Boolean, default: false },
   /** 次卡弱样式 */

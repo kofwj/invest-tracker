@@ -1,7 +1,6 @@
 <template>
   <PageShell
     title="交易录入 / 管理"
-    subtitle="真仓纪律：草稿确认后才入账。支持筛选、编辑、导入导出。"
   >
                 <el-card header="新增交易记录">
                     <el-form :model="transForm" label-width="100px">

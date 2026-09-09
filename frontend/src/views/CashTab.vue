@@ -1,7 +1,6 @@
 <template>
   <PageShell
     title="证券账户"
-    subtitle="账户费率、证券现金校准、银证流水。交易录入会按这里的账户与费率估算手续费。"
   >
     <template #actions>
       <el-space wrap>

@@ -1,7 +1,6 @@
 <template>
   <PageShell
     title="结构与目标"
-    subtitle="左栏结构诊断，右栏改目标尺子与纪律。改参数只提醒，不自动买卖。"
   >
     <template #actions>
       <el-tag type="info" effect="plain">总资产 {{ formatMoney(dashboard.total_assets) }}</el-tag>
@@ -14,7 +13,6 @@
       <MetricCard
         label="权益资产占比"
         :value="`${Number(displayEquityPct).toFixed(1)}%`"
-        :sub="`权益金额 ${formatMoney(displayEquityAmount)} · 目标 ${fmtPct(targets.equity_pct)}`"
         :tone="equityTone"
         main
         :title="`${Number(displayEquityPct).toFixed(1)}%`"
@@ -22,20 +20,17 @@
       <MetricCard
         label="防守占比"
         :value="`${Number(displayDefensivePct).toFixed(1)}%`"
-        :sub="`固收+存款等 ${formatMoney(displayDefensiveAmount)}`"
         color="var(--app-primary)"
         :title="`${Number(displayDefensivePct).toFixed(1)}%`"
       />
       <MetricCard
         label="组合预计年化"
         :value="`${Number(portfolioExpectedReturn || 0).toFixed(2)}%`"
-        sub="按各资产预计收益加权"
         color="var(--app-warn)"
       />
       <MetricCard
         label="需关注问题"
         :value="String(issueWarnCount)"
-        :sub="story?.discipline_summary || summaryText || '暂无纪律摘要'"
         :tone="issueWarnCount ? 'warn' : 'ok'"
       />
     </div>

@@ -4,7 +4,6 @@
       <div class="page-shell-heading">
         <slot name="heading">
           <h3 v-if="title" class="page-shell-title">{{ title }}</h3>
-          <div v-if="subtitle" class="page-shell-subtitle">{{ subtitle }}</div>
         </slot>
       </div>
       <div v-if="$slots.actions" class="page-shell-actions">
@@ -22,7 +21,6 @@ import { computed, useSlots } from 'vue';
 
 const props = defineProps({
   title: { type: String, default: '' },
-  subtitle: { type: String, default: '' },
   /** 无外边距，给特殊页用 */
   flush: { type: Boolean, default: false },
   /** 更紧的页头 */
@@ -30,5 +28,5 @@ const props = defineProps({
 });
 
 const slots = useSlots();
-const showHeader = computed(() => !!(props.title || props.subtitle || slots.heading || slots.actions));
+const showHeader = computed(() => !!(props.title || slots.heading || slots.actions));
 </script>

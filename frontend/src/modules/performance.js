@@ -46,48 +46,6 @@ const createPerformanceModule = ({
         return 'info';
     });
 
-    const perfGuideSteps = computed(() => ([
-        {
-            step: '1',
-            title: '先看整户赚没赚',
-            text: '重点看「净投入」和「整户总收益」。这是全组合账，不是单只股票。',
-        },
-        {
-            step: '2',
-            title: '再看谁在贡献收益',
-            text: '贡献表默认按「当前仓浮盈 + 分红」；「全周期」接近券商累计，可切换排序。',
-        },
-        {
-            step: '3',
-            title: '需要年化时再录流水',
-            text: 'XIRR / 准确净投入，依赖「组合资金流水」（外部投入/取出）。买卖、银证转账不要记这里。',
-        },
-    ]));
-
-    const perfLensRows = computed(() => ([
-        {
-            name: '整户总账',
-            where: '本页主卡「累计总收益」',
-            meaning: '当前总资产 − 累计净投入',
-            goodFor: '回答：整锅钱相对额外投入，到底赚了多少',
-            notFor: '不对应华泰某只票的累计盈亏',
-        },
-        {
-            name: '当前仓贡献',
-            where: '本页贡献表',
-            meaning: '(现价 − 普通成本)×数量 + 分红',
-            goodFor: '回答：现在还拿着的仓，谁在帮你赚钱',
-            notFor: '不含历史卖出已实现；通常小于券商累计盈亏',
-        },
-        {
-            name: '接近券商累计',
-            where: '持仓明细 / 本页「全周期」',
-            meaning: '(现价 − 摊薄成本)×数量',
-            goodFor: '和券商 App 累计盈亏对账',
-            notFor: '不要和「当前仓贡献」混加',
-        },
-    ]));
-
     /** 普通人核心 3 张卡 + 辅助 */
     const perfPrimaryCards = computed(() => {
         const s = perfSummary.value;
@@ -107,28 +65,18 @@ const createPerformanceModule = ({
         const cards = [
             {
                 label: '现在总资产',
-                plain: '你现在一共有多少钱',
                 value: formatMoney(s.total_assets),
-                sub: '市值 + 现金 + 存款 + 在途',
                 color: 'var(--app-text)',
                 main: true,
             },
             {
                 label: isPeriod ? '本期净投入' : '累计净投入',
-                plain: isPeriod ? '这段时间又投/取了多少' : '你总共还净投了多少',
                 value: flowReady ? formatMoney(mainNet) : '待录入',
-                sub: flowReady
-                    ? (isPeriod ? '期间投入减取出' : `投入 ${formatMoney(s.total_in)} − 取出 ${formatMoney(s.total_out)}`)
-                    : '建议录「投入/取出」',
                 color: flowReady ? 'var(--app-text)' : 'var(--app-warn)',
             },
             {
                 label: isPeriod ? '这段时间赚/亏' : '累计总收益',
-                plain: isPeriod ? '选的时间段里赚了多少' : '整户一共赚了多少',
                 value: flowReady ? formatMoney(mainGain) : '待录入',
-                sub: flowReady
-                    ? `相对净投入 ${Number(mainGainPct || 0).toFixed(1)}%`
-                    : '总资产 − 净投入',
                 color: flowReady ? gainColor : 'var(--app-warn)',
                 main: true,
             },
@@ -145,16 +93,12 @@ const createPerformanceModule = ({
         const cards = [
             {
                 label: '当前仓浮盈+分红',
-                plain: '现在还拿着的东西赚多少',
                 value: formatMoney(floatSum),
-                sub: `浮盈 ${formatMoney(s.current_unrealized_profit)} + 分红`,
                 color: floatSum >= 0 ? 'var(--app-up)' : 'var(--app-down)',
             },
             {
                 label: '今年以来',
-                plain: 'YTD',
                 value: formatMoney(s.ytd_gain),
-                sub: `${Number(s.ytd_gain_pct || 0).toFixed(1)}%`,
                 color: s.ytd_gain >= 0 ? 'var(--app-up)' : 'var(--app-down)',
             },
         ];
@@ -163,11 +107,7 @@ const createPerformanceModule = ({
         if (flowReady && s.target_gap != null) {
             cards.push({
                 label: '距目标收益缺口',
-                plain: `离约 ${s.target_return_pct ?? 4}% 目标还差多少`,
                 value: formatMoney(s.target_gap, 2, true),
-                sub: s.target_gap >= 0
-                    ? `还差 ${formatMoney(s.target_gap)} 达到目标（目标收益约 ${formatMoney(s.target_income)}）`
-                    : `已超目标 ${formatMoney(-s.target_gap)}（目标收益约 ${formatMoney(s.target_income)}）`,
                 color: s.target_gap <= 0 ? 'var(--app-up)' : 'var(--app-down)',
             });
         }
@@ -445,8 +385,6 @@ const createPerformanceModule = ({
     return {
         hasPerfFlows,
         perfStoryToneType,
-        perfGuideSteps,
-        perfLensRows,
         perfPrimaryCards,
         perfSecondaryCards,
         perfCards,

@@ -1,7 +1,6 @@
 <template>
   <PageShell
     title="K线查询"
-    subtitle="输入任意 A 股代码（含 ETF）查询日 K 线。支持持仓外标的，本地缓存 + 腾讯/东方财富源。"
   >
     <template #actions>
       <el-button size="small" @click="syncAllHoldings" :loading="loading">同步全部持仓 K 线</el-button>

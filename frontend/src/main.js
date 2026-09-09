@@ -442,8 +442,6 @@ const app = createApp({
         const {
             hasPerfFlows,
             perfStoryToneType,
-            perfGuideSteps,
-            perfLensRows,
             perfPrimaryCards,
             perfSecondaryCards,
             perfCards,
@@ -719,7 +717,7 @@ const app = createApp({
             openExpectedReturnDialog, saveExpectedReturn, openHoldingCorrectionDialog, saveHoldingCorrection, openHoldingCorrectionHistory, deleteHoldingCorrection,
             expectedReturnDialog, holdingCorrectionDialog, holdingCorrectionHistoryDialog,
             formatMoney, formatPercent, pct, holdingFloatProfit, holdingLifetimeProfit, holdingFloatProfitRate, holdingLifetimeProfitRate,
-            perfSummary, perfTimeline, perfContribution, perfFlows, perfStory, perfLoading, perfFlowForm, hasPerfFlows, perfStoryToneType, perfGuideSteps, perfLensRows, perfPrimaryCards, perfSecondaryCards, perfCards, perfCategoryBars,
+            perfSummary, perfTimeline, perfContribution, perfFlows, perfStory, perfLoading, perfFlowForm, hasPerfFlows, perfStoryToneType, perfPrimaryCards, perfSecondaryCards, perfCards, perfCategoryBars,
             displayedPerfContribution, perfContributionFilter, perfContributionSort, perfContributionHeadline, perfContributionMix, perfTimelineRange,
             fetchPerformance, setPerfTimelineRange, addPerfFlow, updatePerfFlow, deletePerfFlow, loadPerfFlowSuggestions, applyPerfFlowSuggestion, contributionBarStyle, fetchMaintenance, createDbBackup, downloadBackup, restoreBackup, deleteBackup, restoreUploadedBackup,
             perfRiskMetrics, perfContributionSummary, perfWindowCards, selectPerfWindow,

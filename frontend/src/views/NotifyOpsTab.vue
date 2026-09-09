@@ -1,7 +1,6 @@
 <template>
   <PageShell
     title="消息推送"
-    subtitle="飞书 / 钉钉 / 企微 / Telegram 可在本页填写；.env 仍可作兜底。独立于 Hermes 长报告。"
   >
     <template #actions>
       <el-space wrap>
@@ -15,25 +14,21 @@
       <MetricCard
         label="总开关"
         :value="notifyOn ? '已开启' : '已关闭'"
-        :sub="notifyOn ? '会按事件推送' : '全部事件暂停'"
         :tone="notifyOn ? 'ok' : 'warn'"
         main
       />
       <MetricCard
         label="已配置通道"
         :value="`${configuredCount} / ${channelRows.length}`"
-        :sub="configuredNames || '还没配通道'"
         :tone="configuredCount ? 'ok' : 'warn'"
       />
       <MetricCard
         label="正文模板"
         :value="templateLabel"
-        sub="短=摘要 · 中=稍详"
       />
       <MetricCard
         label="同事件冷却"
         :value="`${Number(notifyStatus.cooldown_minutes || 0)} 分`"
-        sub="防重复刷屏"
       />
     </div>
 

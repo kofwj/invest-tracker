@@ -1,7 +1,6 @@
 <template>
   <PageShell
     title="收益分析"
-    subtitle="先看整户赚没赚，再看谁贡献。数字和券商对不上时，多半是口径不同。"
   >
     <template #actions>
         <el-tag :type="perfSummary?.xirr_status === 'ok' ? 'success' : (hasPerfFlows ? 'info' : 'warning')" size="small">
@@ -38,7 +37,7 @@
       show-icon
       :closable="false"
       class="perf-flow-alert"
-      title="外部资金流水还没录：净投入、整户总收益、年化只当参考。点下方可跳到录入区，或从银证生成建议。"
+      title="外部资金流水未录入"
     >
       <template #default>
         <div style="margin-top:6px;">
@@ -62,10 +61,8 @@
       <MetricCard
         v-for="m in perfPrimaryCards"
         :key="m.label"
-        :plain="m.plain"
         :label="m.label"
         :value="m.value"
-        :sub="m.sub"
         :color="m.color"
         :main="!!m.main"
         :title="m.value"
@@ -77,10 +74,8 @@
       <MetricCard
         v-for="m in perfSecondaryCards"
         :key="m.label"
-        :plain="m.plain"
         :label="m.label"
         :value="m.value"
-        :sub="m.sub"
         :color="m.color"
         secondary
         :title="m.value"
@@ -91,27 +86,24 @@
     <el-card shadow="never" style="margin-bottom: 14px;">
       <div style="margin-bottom:8px;">
         <div class="perf-contrib-title">风险一览</div>
-        <div class="perf-contrib-sub">最大回撤 = 历史最高点跌到最低点的跌幅。年化波动 = 平时上下抖多大。</div>
+        <div class="perf-contrib-sub">最大回撤 = 历史最高点到最低点的跌幅；年化波动 = 日常波动幅度。</div>
       </div>
 
       <div class="ledger-metrics cols-3" style="margin-bottom:8px;">
         <MetricCard
           label="最大回撤"
           :value="((perfRiskMetrics?.maxDrawdownPct) || 0) + '%'"
-          :sub="(perfRiskMetrics?.peakDate) && (perfRiskMetrics?.troughDate) ? (perfRiskMetrics.peakDate + ' → ' + perfRiskMetrics.troughDate) : '基于历史快照'"
           :tone="(perfRiskMetrics?.maxDrawdown || 0) > 0.05 ? 'down' : 'neutral'"
         />
         <MetricCard
           v-if="perfSummary?.underwater"
           label="当前离峰值"
           :value="(perfSummary.underwater.underwater_pct || 0) + '%'"
-          :sub="'峰值日 ' + (perfSummary.underwater.peak_date || '—')"
           :tone="(perfSummary.underwater.underwater_pct || 0) > 5 ? 'down' : 'neutral'"
         />
         <MetricCard
           label="年化波动"
           :value="(perfRiskMetrics?.approxVol) != null ? (perfRiskMetrics.approxVol) + '%' : '—'"
-          sub="平时上下抖多大幅度"
           :tone="(perfRiskMetrics?.approxVol || 0) > 15 ? 'down' : 'neutral'"
         />
       </div>
@@ -122,7 +114,7 @@
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px;flex-wrap:wrap;">
         <div>
           <div class="perf-section-title">组合资金流水（外部投入/取出）</div>
-          <div class="perf-contrib-sub">只记塞进组合或从组合提走的钱。买卖、银证互转不要记这里。</div>
+          <div class="perf-contrib-sub">仅记录组合外部投入/取出；买卖、银证互转不在此记录。</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           <el-button size="small" @click="onLoadFlowSuggest" :loading="perfSuggestLoading">从银证生成建议</el-button>
@@ -130,7 +122,7 @@
         </div>
       </div>
       <div v-if="perfFlowSuggestions.length" class="perf-suggest-box" style="margin-bottom:12px;">
-        <div class="perf-contrib-sub" style="margin-bottom:8px;">建议草稿（点「记入」才写入）</div>
+        <div class="perf-contrib-sub" style="margin-bottom:8px;">建议草稿</div>
         <el-table :data="perfFlowSuggestions" size="small" stripe>
           <el-table-column prop="date" label="日期" width="110" />
           <el-table-column prop="flow_type" label="类型" width="70" />
@@ -190,35 +182,6 @@
       </el-table>
     </el-card>
 
-    <!-- 口径折叠 -->
-    <el-collapse class="perf-help-collapse">
-      <el-collapse-item title="怎么看 / 口径说明（备查）" name="help">
-        <div class="perf-guide-grid" style="margin-bottom: 12px;">
-          <div class="perf-guide-card" v-for="item in perfGuideSteps" :key="item.step">
-            <div class="perf-guide-step">{{ item.step }}</div>
-            <div class="perf-guide-body">
-              <div class="perf-guide-title">{{ item.title }}</div>
-              <div class="perf-guide-text">{{ item.text }}</div>
-            </div>
-          </div>
-        </div>
-        <el-table :data="perfLensRows" size="small" class="perf-lens-table" style="width: 100%; margin-bottom: 12px;">
-          <el-table-column prop="name" label="口径" width="120" />
-          <el-table-column prop="where" label="在哪里看" min-width="160" />
-          <el-table-column prop="meaning" label="怎么算" min-width="200" />
-          <el-table-column prop="goodFor" label="适合回答" min-width="200" />
-          <el-table-column prop="notFor" label="不要拿它当" min-width="180" />
-        </el-table>
-        <el-descriptions :column="1" size="small" border>
-          <el-descriptions-item label="累计净投入">投入合计 − 取出合计（仅组合外部资金）</el-descriptions-item>
-          <el-descriptions-item label="累计总收益">当前总资产 − 累计净投入</el-descriptions-item>
-          <el-descriptions-item label="XIRR 年化">外部现金流 + 当前总资产的资金加权年化</el-descriptions-item>
-          <el-descriptions-item label="当前仓贡献">浮盈 + 分红；不含已卖出</el-descriptions-item>
-          <el-descriptions-item label="全周期盈亏">接近券商累计；分红已在摊薄成本中</el-descriptions-item>
-          <el-descriptions-item label="YTD">年初至今 = 当前总资产 − 年初快照 − 今年净投入变化</el-descriptions-item>
-        </el-descriptions>
-      </el-collapse-item>
-    </el-collapse>
   </PageShell>
 </template>
 
@@ -231,7 +194,7 @@ import { useAppCtx } from '../composables/useAppCtx.js';
 const {
   formatMoney, pct,
   perfSummary, perfTimeline, perfContribution, perfFlows, perfStory, perfLoading, perfFlowForm,
-  hasPerfFlows, perfStoryToneType, perfGuideSteps, perfLensRows,
+  hasPerfFlows, perfStoryToneType,
   perfPrimaryCards, perfSecondaryCards,
   fetchPerformance, addPerfFlow, updatePerfFlow, deletePerfFlow,
   loadPerfFlowSuggestions, applyPerfFlowSuggestion,
