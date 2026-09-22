@@ -73,6 +73,7 @@ const {
   tabGroups,
   tabGroup,
   activeTab,
+  goTab,
   refreshCurrentTab,
 } = useAppCtx();
 
