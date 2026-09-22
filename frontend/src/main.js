@@ -463,6 +463,12 @@ const app = createApp({
             // 时间轴收益尺
             perfWindowCards,
             selectPerfWindow,
+            // 每日收益
+            perfDailyRows,
+            perfDailyStats,
+            perfLatestSnapshotDate,
+            perfTodayWindow,
+            perfTodayStale,
         } = createPerformanceModule({
             perfSummary,
             perfTimeline,
@@ -669,6 +675,45 @@ const app = createApp({
             }
         });
 
+        /**
+         * 顶栏「刷新」= 刷新「当前页」。
+         *
+         * 以前顶栏刷新只调 fetchData（dashboard/holdings/deposits/现金/费率），
+         * 在「分析」组里点它，收益分析 / 今天该看 / 结构与目标的数据一个都没动，
+         * 页面上自然"刷新不出来"。
+         */
+        const refreshCurrentTab = async () => {
+            const tab = activeTab.value;
+            const jobs = [fetchData()];
+            if (tab === 'performance') jobs.push(fetchPerformance());
+            if (tab === 'decision') jobs.push(refreshMarket(), refreshDiscipline());
+            if (tab === 'allocation') {
+                jobs.push(
+                    fetchAllocationStory(),
+                    refreshDiscipline(),
+                    fetchDisciplineDrafts().then(() => nextTick(renderAllocationCharts)),
+                );
+            }
+            if (tab === 'snapshots') jobs.push(fetchSnapshots().then(() => nextTick(renderSnapshotCharts)));
+            if (tab === 'transactions') jobs.push(queryTransactions());
+            if (tab === 'cash') jobs.push(queryCashFlows());
+            if (tab === 'broker') jobs.push(fetchBrokerHistory());
+            if (tab === 'ops_notify' || tab === 'maintenance') jobs.push(fetchNotifyPanel());
+            if (tab === 'ops_backup') jobs.push(fetchMaintenance());
+
+            const results = await Promise.allSettled(jobs);
+            const failed = results.filter((r) => r.status === 'rejected');
+            if (failed.length) {
+                const detail = failed[0].reason?.response?.data?.detail
+                    || failed[0].reason?.message
+                    || '未知错误';
+                showSyncNotice(`刷新失败：${detail}`, 'error');
+            } else {
+                showSyncNotice('已刷新', 'success');
+            }
+            return { failed: failed.length };
+        };
+
         // Bootstrap + init extracted
         const { bootstrapAfterAuth: doBootstrap, setupOnMounted } = createAppInit({
             api,
@@ -721,6 +766,8 @@ const app = createApp({
             displayedPerfContribution, perfContributionFilter, perfContributionSort, perfContributionHeadline, perfContributionMix, perfTimelineRange,
             fetchPerformance, setPerfTimelineRange, addPerfFlow, updatePerfFlow, deletePerfFlow, loadPerfFlowSuggestions, applyPerfFlowSuggestion, contributionBarStyle, fetchMaintenance, createDbBackup, downloadBackup, restoreBackup, deleteBackup, restoreUploadedBackup,
             perfRiskMetrics, perfContributionSummary, perfWindowCards, selectPerfWindow,
+            perfDailyRows, perfDailyStats, perfLatestSnapshotDate, perfTodayWindow, perfTodayStale,
+            refreshCurrentTab,
             notifyStatus, notifyLogs, notifyLoading, notifyEventDraft, notifyChannelDraft, notifyChannelClear, fetchNotifyPanel, saveNotifyPanel, testNotifyPush, pushDepositDueNow, pushDisciplineNow,
             brokerResult, brokerLoading, brokerSelected, brokerAsOfDate, brokerCashInput, brokerHistory,
             statusLabel: brokerStatusLabel, statusType: brokerStatusType,

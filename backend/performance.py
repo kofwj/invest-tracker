@@ -19,6 +19,17 @@ def _local_today():
     return datetime.now(LOCAL_TZ).date()
 
 
+def _iso_date_diff(later_iso, earlier_iso):
+    """两个 ISO 日期相差的天数；任一侧解析失败时返回 None。"""
+    try:
+        return (
+            datetime.strptime(str(later_iso)[:10], "%Y-%m-%d")
+            - datetime.strptime(str(earlier_iso)[:10], "%Y-%m-%d")
+        ).days
+    except (TypeError, ValueError):
+        return None
+
+
 def _xnpv(rate, cashflows):
     if not cashflows:
         return None
@@ -319,7 +330,14 @@ def build_performance_windows(conn):
     def _window(key, label, start_iso):
         snap = _snap_at_or_after(start_iso)
         if not snap:
-            return {"key": key, "label": label, "start_date": None, "gain": None, "gain_pct": None}
+            return {
+                "key": key,
+                "label": label,
+                "start_date": None,
+                "gain": None,
+                "gain_pct": None,
+                "stale_days": None,
+            }
         start_assets = float(snap["total_assets"])
         # 净投入从快照日期算起：快照值已含其之前的投入
         net = _net_in_since(snap["date"])
@@ -334,9 +352,12 @@ def build_performance_windows(conn):
             "start_date": snap["date"],
             "gain": round(gain, 2) if gain is not None else None,
             "gain_pct": round(gain_pct, 2) if gain_pct is not None else None,
+            # 起点快照距今几天：>1 说明这个窗口的基准不是"昨天"，数字跨了更多天
+            "stale_days": _iso_date_diff(today_iso, snap["date"]),
         }
 
-    # 今天：起点 = 今天之前最近一次快照（盘中尚无今日快照，取其昨日收盘为基准）
+    # 今天：起点 = 今天之前最近一次快照（盘中尚无今日快照，取其昨日收盘为基准）。
+    # stale_days 让前端能说明基准日；基准过旧时不能把这个数当"今天的收益"宣传。
     today_snap = _snap_latest_before(today_iso)
     if today_snap and float(today_snap["total_assets"]) > 0:
         net = _net_in_since(today_snap["date"])
@@ -347,9 +368,17 @@ def build_performance_windows(conn):
             "start_date": today_snap["date"],
             "gain": round(g, 2),
             "gain_pct": round(g / float(today_snap["total_assets"]) * 100, 2),
+            "stale_days": _iso_date_diff(today_iso, today_snap["date"]),
         }
     else:
-        today_win = {"key": "today", "label": "今天", "start_date": None, "gain": None, "gain_pct": None}
+        today_win = {
+            "key": "today",
+            "label": "今天",
+            "start_date": None,
+            "gain": None,
+            "gain_pct": None,
+            "stale_days": None,
+        }
 
     # 开仓至今：无基准快照 → 当前总资产 − 累计净投入
     total_net = sum(
@@ -373,6 +402,8 @@ def build_performance_windows(conn):
             "start_date": None,
             "gain": round(all_gain, 2),
             "gain_pct": round(all_gain / total_net * 100, 2) if total_net > 0 else None,
+            # 开仓至今没有基准快照，"距今天数"无意义
+            "stale_days": None,
         },
     ]
 
@@ -394,10 +425,21 @@ def build_performance_timeline(conn, start_date=None, end_date=None):
     if not snapshots:
         return []
 
+    # 外部现金流前缀和：用来剥离 (prev_date, date] 区间内的净投入，
+    # 否则一次大额转入会被记成"当天赚了这么多"。
+    flows_by_date = {}
+    for f in all_flows:
+        d = str(f["date"])[:10]
+        amt = float(f["amount"] or 0)
+        flows_by_date[d] = flows_by_date.get(d, 0.0) + (amt if f["flow_type"] == "投入" else -amt)
+    f_dates, f_cum = _flow_prefix_sums(flows_by_date)
+
     result = []
     cumulative_in = 0.0
     cumulative_out = 0.0
     flow_idx = 0
+    prev_date = None
+    prev_assets = None
 
     for snap in snapshots:
         snap_date = snap["date"]
@@ -409,19 +451,39 @@ def build_performance_timeline(conn, start_date=None, end_date=None):
                 cumulative_out += f["amount"]
             flow_idx += 1
         net = cumulative_in - cumulative_out
+        assets = float(snap.get("total_assets") or 0)
+
+        # 逐日收益：V_t − V_{t−1} − 区间净投入（与 TWR 的 _daily_returns 同口径）。
+        # 快照不连续时 days_gap > 1，前端据此提示"这一格跨了 N 天"。
+        daily_change = None
+        daily_pct = None
+        days_gap = None
+        if prev_assets is not None and prev_assets > 0:
+            flow_in_gap = _flows_between(f_dates, f_cum, prev_date, snap_date)
+            raw_change = assets - prev_assets - flow_in_gap
+            daily_change = round(raw_change, 2)
+            daily_pct = round(raw_change / prev_assets * 100, 2)
+            days_gap = _iso_date_diff(snap_date, prev_date)
+
         result.append(
             {
                 "date": snap_date,
                 "total_assets": snap.get("total_assets", 0),
                 "net_contribution": round(net, 2),
-                "total_gain": round(snap.get("total_assets", 0) - net, 2),
+                "total_gain": round(assets - net, 2),
                 "equity_mv": snap.get("equity_mv", 0) or 0,
                 "bond_mv": snap.get("bond_mv", 0) or 0,
                 "reit_mv": snap.get("reit_mv", 0) or 0,
                 "securities_cash": snap.get("securities_cash", 0) or 0,
                 "bank_balance": snap.get("bank_balance", 0) or 0,
+                "prev_date": prev_date,
+                "daily_change": daily_change,
+                "daily_pct": daily_pct,
+                "days_gap": days_gap,
             }
         )
+        prev_date = snap_date
+        prev_assets = assets
 
     return result
 
@@ -774,7 +836,32 @@ def compute_rolling_returns(timeline):
             res[label] = None
     return res
 
+
+BENCH_CLOSE_CACHE = {}
+BENCH_CLOSE_TTL_SECONDS = 900.0
+
+
 def _fetch_bench_closes(code, min_date, max_date):
+    """带进程内 TTL 缓存的基准指数收盘价读取。
+
+    /performance/summary 每次刷新都会拉沪深300/国债/货币ETF 三条序列，
+    没有缓存时一次刷新就是 3 次外网请求 —— 慢，且外网抖动时整页刷不出来。
+    """
+    import time
+
+    cache_key = (str(code), str(min_date)[:10], str(max_date)[:10])
+    hit = BENCH_CLOSE_CACHE.get(cache_key)
+    if hit and (time.monotonic() - hit[0]) < BENCH_CLOSE_TTL_SECONDS:
+        return hit[1]
+
+    rows = _fetch_bench_closes_uncached(code, min_date, max_date)
+    # 只缓存拿到数据的结果；失败不缓存，下次刷新仍会重试
+    if rows:
+        BENCH_CLOSE_CACHE[cache_key] = (time.monotonic(), rows)
+    return rows
+
+
+def _fetch_bench_closes_uncached(code, min_date, max_date):
     try:
         from .kline_cache import fetch_tencent_kline_ohlc
     except ImportError:

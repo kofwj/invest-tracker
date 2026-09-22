@@ -8,6 +8,8 @@ import {
   holdingFloatProfitRate,
   holdingLifetimeProfit,
   holdingLifetimeProfitRate,
+  buildDailyPnlRows,
+  summarizeDailyPnl,
 } from '../src/utils/index.js';
 import { analyzeKlineTrend } from '../src/charts/index.js';
 
@@ -156,5 +158,62 @@ describe('analyzeKlineTrend (均线解读)', () => {
     expect(r.ma5).toBeGreaterThan(0);
     expect(r.ma20).toBeGreaterThan(0);
     expect(r.dev20).toBeTypeOf('number');
+  });
+});
+
+describe('buildDailyPnlRows', () => {
+  const timeline = [
+    { date: '2026-03-02', total_assets: 100000, daily_change: null, daily_pct: null, prev_date: null, days_gap: null },
+    { date: '2026-03-03', total_assets: 103000, daily_change: 3000, daily_pct: 3, prev_date: '2026-03-02', days_gap: 1 },
+    { date: '2026-03-06', total_assets: 101000, daily_change: -2000, daily_pct: -1.94, prev_date: '2026-03-03', days_gap: 3 },
+  ];
+
+  it('drops the first row (no previous day basis)', () => {
+    const rows = buildDailyPnlRows(timeline);
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => r.date)).toEqual(['2026-03-06', '2026-03-03']);
+  });
+
+  it('marks gap rows so the UI can say "this cell spans N days"', () => {
+    const rows = buildDailyPnlRows(timeline);
+    const gap = rows.find((r) => r.date === '2026-03-06');
+    expect(gap.isGap).toBe(true);
+    expect(gap.daysGap).toBe(3);
+    expect(rows.find((r) => r.date === '2026-03-03').isGap).toBe(false);
+  });
+
+  it('tolerates empty / malformed timelines', () => {
+    expect(buildDailyPnlRows()).toEqual([]);
+    expect(buildDailyPnlRows([{ date: 'x', daily_change: 'nope' }])).toEqual([]);
+  });
+});
+
+describe('summarizeDailyPnl', () => {
+  const rows = [
+    { date: '2026-03-06', change: -2000 },
+    { date: '2026-03-05', change: 500 },
+    { date: '2026-03-04', change: 0 },
+    { date: '2026-03-03', change: 3000 },
+  ];
+
+  it('sums only the requested window (newest first)', () => {
+    const s = summarizeDailyPnl(rows, 2);
+    expect(s.count).toBe(2);
+    expect(s.total).toBe(-1500);
+    expect(s.upDays).toBe(1);
+    expect(s.downDays).toBe(1);
+  });
+
+  it('finds best and worst day', () => {
+    const s = summarizeDailyPnl(rows, 0);
+    expect(s.best.date).toBe('2026-03-03');
+    expect(s.worst.date).toBe('2026-03-06');
+  });
+
+  it('returns zeroed summary when there is nothing to show', () => {
+    const s = summarizeDailyPnl([], 30);
+    expect(s.count).toBe(0);
+    expect(s.total).toBe(0);
+    expect(s.best).toBeNull();
   });
 });

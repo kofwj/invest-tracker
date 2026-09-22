@@ -1,5 +1,5 @@
 import api from '../api/index.js';
-import { formatMoney } from '../utils/index.js';
+import { buildDailyPnlRows, formatMoney, summarizeDailyPnl } from '../utils/index.js';
 import { computed } from 'vue';
 
 function shiftIsoDays(days) {
@@ -192,6 +192,9 @@ const createPerformanceModule = ({
             if (pct != null) tone = pct > 0 ? 'up' : (pct < 0 ? 'down' : 'neutral');
             else if (gain > 0) tone = 'up';
             else if (gain < 0) tone = 'down';
+            // staleDays：起点快照距今几天。"今天"这张卡的基准可能已经是几周前
+            // （快照没在跑），那时它衡量的根本不是"今天"，必须让前端能标出来。
+            const staleDays = w.stale_days == null ? null : Number(w.stale_days);
             return {
                 key: w.key,
                 label: w.label,
@@ -200,11 +203,36 @@ const createPerformanceModule = ({
                 active: w.key === active,
                 tone,
                 disabled: gain == null,
+                staleDays,
+                stale: staleDays != null && staleDays > 1,
+                baseDate: w.start_date || null,
             };
         });
     });
 
     const selectPerfWindow = (key) => setPerfTimelineRange(key);
+
+    // === 每日收益（逐日盈亏）===
+    /** 新的在前：[{date, prevDate, change, pct, assets, daysGap, isGap}] */
+    const perfDailyRows = computed(() => buildDailyPnlRows(perfTimeline.value));
+
+    /** 最新一条快照日期；没快照时为 null */
+    const perfLatestSnapshotDate = computed(() => {
+        const rows = perfTimeline.value || [];
+        return rows.length ? String(rows[rows.length - 1].date || '') : null;
+    });
+
+    /** 今天窗口：gain 的基准日与"距今几天" */
+    const perfTodayWindow = computed(
+        () => (perfWindows.value || []).find((w) => w.key === 'today') || null,
+    );
+
+    const perfTodayStale = computed(() => {
+        const w = perfTodayWindow.value;
+        return !!(w && w.stale_days != null && Number(w.stale_days) > 1);
+    });
+
+    const perfDailyStats = computed(() => summarizeDailyPnl(perfDailyRows.value, 30));
 
     // === 专业组合级指标（portfolio level，非个股）===
     // 从 timeline 计算最大回撤（peak to trough）
@@ -289,11 +317,20 @@ const createPerformanceModule = ({
         return {};
     };
 
+    // 同一时间只允许一份"同参数"的收益请求在飞：连点刷新/切页重复触发时复用同一
+    // 个 Promise，避免后到的响应覆盖先到的（表现为"刷新了但数字又跳回去"）。
+    const perfInFlight = new Map();
+
     async function fetchPerformance() {
         perfLoading.value = true;
-        try {
-            const q = timelineQuery();
-            const [sumR, tlR, ctR, flR, stR, winR] = await Promise.all([
+        const q = timelineQuery();
+        const key = JSON.stringify(q);
+        if (perfInFlight.has(key)) return perfInFlight.get(key);
+
+        const task = (async () => {
+            // 用 allSettled：以前是 Promise.all，六个接口里任何一个失败（外网抖动、
+            // 504、超时）都会整页不更新，只剩按钮转圈 —— 用户看到的"刷新不出来"。
+            const results = await Promise.allSettled([
                 api.performanceSummary(q),
                 api.performanceTimeline(q),
                 api.performanceContribution(),
@@ -301,16 +338,42 @@ const createPerformanceModule = ({
                 api.performanceStory(q),
                 api.performanceWindows(),
             ]);
-            perfSummary.value = sumR.data;
-            perfTimeline.value = tlR.data;
-            perfContribution.value = ctR.data;
-            perfFlows.value = flR.data;
-            perfStory.value = stR.data;
-            perfWindows.value = winR.data || [];
-        } catch (e) {
-            console.error('fetchPerformance', e);
-            showSyncNotice('获取收益分析失败：' + (e?.response?.data?.detail || e?.message || '未知错误'), 'error');
+            const [sumR, tlR, ctR, flR, stR, winR] = results;
+            if (sumR.status === 'fulfilled') perfSummary.value = sumR.value.data;
+            if (tlR.status === 'fulfilled') perfTimeline.value = tlR.value.data;
+            if (ctR.status === 'fulfilled') perfContribution.value = ctR.value.data;
+            if (flR.status === 'fulfilled') perfFlows.value = flR.value.data;
+            if (stR.status === 'fulfilled') perfStory.value = stR.value.data;
+            if (winR.status === 'fulfilled') perfWindows.value = winR.value.data || [];
+
+            const labels = ['收益汇总', '收益时间轴', '持仓贡献', '组合流水', '收益故事', '时间轴收益尺'];
+            const failed = results
+                .map((r, i) => (r.status === 'rejected' ? labels[i] : null))
+                .filter(Boolean);
+            if (failed.length) {
+                const firstErr = results.find((r) => r.status === 'rejected');
+                const detail = firstErr?.reason?.response?.data?.detail
+                    || firstErr?.reason?.message
+                    || '未知错误';
+                console.error('fetchPerformance', firstErr?.reason);
+                showSyncNotice(`收益分析部分刷新失败（${failed.join('、')}）：${detail}`, 'error');
+            } else {
+                showSyncNotice('收益分析已刷新', 'success');
+            }
+            return { failed: failed.length };
+        })()
+            // allSettled 之后理论上不会 reject；兜底保证调用方永远拿到结果而非异常
+            .catch((e) => {
+                console.error('fetchPerformance', e);
+                showSyncNotice('收益分析刷新失败：' + (e?.message || '未知错误'), 'error');
+                return { failed: 1 };
+            });
+
+        perfInFlight.set(key, task);
+        try {
+            return await task;
         } finally {
+            perfInFlight.delete(key);
             perfLoading.value = false;
         }
     }
@@ -406,6 +469,12 @@ const createPerformanceModule = ({
         // 时间轴收益尺
         perfWindowCards,
         selectPerfWindow,
+        // 每日收益
+        perfDailyRows,
+        perfDailyStats,
+        perfLatestSnapshotDate,
+        perfTodayWindow,
+        perfTodayStale,
     };
 };
 

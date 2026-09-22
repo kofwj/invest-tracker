@@ -4,6 +4,48 @@
 版本号单一来源 `backend/version.py`；发布流程：改那里 → 本文件记版本 → `git tag vX.Y.Z`。生产部署以分支 `deploy/vps` 为准。
 
 ---
+## [未发布] — 每日收益视图 + 分析页刷新修复
+
+用户反馈两件事：「看不到每天的收益情况」和「分析里面刷新数据的时候有时刷新不出来」。
+后端测试 215 个、前端 34 个单测与构建全绿。
+
+### 新增：每日收益
+
+- **`/performance/timeline` 补逐日盈亏**（`backend/performance.py`）：每行新增 `prev_date` / `daily_change` /
+  `daily_pct` / `days_gap`，口径与 TWR 内部的 `_daily_returns` 一致——`V_t − V_{t−1} − (prev, t] 区间净投入`，
+  一笔大额转入不会被记成「当天赚了这么多」。快照断档时 `days_gap > 1`，前端据此说明「这一格跨了 N 天」
+- **收益分析页新增「每日收益」卡片**（`views/PerformanceTab.vue` + `charts/index.js` + `utils/index.js`）：
+  近 30 天累计 / 涨跌天数 / 最好最差一天四张卡 + 逐日柱状图（红涨绿跌）+ 可滚动明细表，
+  支持近 30 天 / 近 90 天 / 全部切换
+- **「今天」不再拿旧快照冒充**：`/performance/windows` 每个窗口补 `stale_days`（起点快照距今几天），
+  基准不是「昨天」时卡片直接标注「基准 MM-DD（N 天前）」
+- **快照断供可见**：卡片显示最近一次快照日期；今天没快照时给「记录今日快照」按钮。
+  （逐日收益依赖每日快照，此前只靠 VPS crontab 调 `POST /cron/snapshot`，任务停了就只剩零星快照）
+
+### 修复：分析页刷新不出来
+
+- **顶栏「刷新」改为刷新当前页**（`main.js` + `AppHeader.vue`）：原先它只调 `fetchData`
+  （dashboard/holdings/deposits/现金/费率），在「分析」组里点它，收益分析 / 今天该看 / 结构与目标的数据
+  一个都没动。现在按 `activeTab` 追加当前页的刷新任务，并带防重入与失败提示
+- **收益分析刷新不再全或无**（`modules/performance.js`）：六个接口从 `Promise.all` 改为 `Promise.allSettled`，
+  逐个赋值；以前任一接口失败（外网抖动 / 504 / 超时）整页都不更新，只留按钮转圈。
+  提示会指名失败的接口；并加同参数 in-flight 去重，避免连点/切页时响应互相覆盖
+- **直接打开 /performance 不再是空白页**（`views/PerformanceTab.vue`）：该页原先只靠 `main.js` 的
+  `watch(activeTab)` 触发加载，书签直入或 F5 时 watch 不触发，页面一直空着；现在组件 `onMounted` 补一次首屏加载
+- **基准指数抓取加进程内 TTL 缓存**（`backend/performance.py`）：`/performance/summary` 每次刷新都对
+  沪深300/上证国债/货币ETF 各拉一次外网且无缓存；现缓存 15 分钟（失败不缓存），刷新明显变快也更抗抖动
+- **分析类接口加 45s 超时**（`api/index.js`）：原先无超时，外网卡住时按钮永久转圈
+- **nginx `/api/` 超时放宽到 180s**（`frontend/nginx.conf`）：默认 60s 会把逐个抓外网的同步类接口切断成 504
+
+### 测试
+
+- `tests/test_performance_daily.py`（7 例）：逐日盈亏、剔除投入/取出、断档 `days_gap`、空库、`stale_days`
+- `frontend/tests/performance-tab.render.test.js`（4 例，jsdom 真挂组件）：卡片与图表容器渲染、
+  空状态、基准过期标注、首屏自动加载
+- `frontend/tests/unit.test.js` 补 `buildDailyPnlRows` / `summarizeDailyPnl`（7 例）
+
+---
+
 
 ## [1.0.4] — 2026-09-04 — 审计收尾批（CI 覆盖率/TWR 时间筛选/SSRF 收口）
 

@@ -27,8 +27,76 @@
         <div class="perf-window-label">{{ w.label }}</div>
         <div class="perf-window-gain">{{ w.gain != null ? formatMoney(w.gain, 0, true) : '—' }}</div>
         <div class="perf-window-pct">{{ w.gainPct != null ? (w.gainPct >= 0 ? '+' : '') + w.gainPct.toFixed(1) + '%' : '无快照' }}</div>
+        <div v-if="w.stale" class="perf-window-stale">基准 {{ (w.baseDate || '').slice(5) }}（{{ w.staleDays }} 天前）</div>
       </div>
     </div>
+
+    <!-- 每日收益：逐日盈亏（已剔除转入/转出） -->
+    <el-card shadow="never" class="perf-daily-card">
+      <div class="perf-daily-head">
+        <div>
+          <div class="perf-section-title">每日收益</div>
+          <div class="perf-contrib-sub">按每日快照逐日计算，已剔除转入/转出；<span v-if="perfLatestSnapshotDate">最近一次快照 {{ perfLatestSnapshotDate }}</span><span v-else>还没有任何快照</span></div>
+        </div>
+        <div class="perf-daily-actions">
+          <el-radio-group v-model="dailyRange" size="small">
+            <el-radio-button :value="30">近30天</el-radio-button>
+            <el-radio-button :value="90">近90天</el-radio-button>
+            <el-radio-button :value="0">全部</el-radio-button>
+          </el-radio-group>
+          <el-button v-if="!todaySnapshotDone" size="small" :loading="dailySnapshotSaving" @click="onCreateTodaySnapshot">记录今日快照</el-button>
+        </div>
+      </div>
+
+      <el-alert
+        v-if="!perfDailyRows.length"
+        type="info"
+        show-icon
+        :closable="false"
+        title="还没有可比较的两天快照"
+        description="每日收益要连续两天的快照才算得出来。点上面的「记录今日快照」，或让服务器每天定时跑一次快照任务。"
+      />
+
+      <template v-else>
+        <div class="ledger-metrics cols-4" style="margin-bottom:10px;">
+          <MetricCard
+            label="近30天累计"
+            :value="formatMoney(perfDailyStats.total, 2, true)"
+            :tone="perfDailyStats.total >= 0 ? 'up' : 'down'"
+          />
+          <MetricCard label="涨 / 跌 天数" :value="`${perfDailyStats.upDays} / ${perfDailyStats.downDays}`" />
+          <MetricCard label="最好一天" :value="dailyBestText" tone="up" />
+          <MetricCard label="最差一天" :value="dailyWorstText" tone="down" />
+        </div>
+
+        <div id="dailyPnlChart" class="perf-daily-chart"></div>
+
+        <el-table :data="dailyTableRows" size="small" stripe max-height="320" style="margin-top:10px;">
+          <el-table-column prop="date" label="日期" width="120" />
+          <el-table-column label="当日盈亏" width="140" align="right">
+            <template #default="s">
+              <span :class="s.row.change >= 0 ? 'perf-up' : 'perf-down'">{{ formatMoney(s.row.change, 2, true) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="当日涨跌" width="110" align="right">
+            <template #default="s">
+              <span :class="s.row.change >= 0 ? 'perf-up' : 'perf-down'">
+                {{ s.row.pct != null ? (s.row.pct >= 0 ? '+' : '') + s.row.pct.toFixed(2) + '%' : '—' }}
+              </span>
+            </template>
+          </el-table-column>
+          <el-table-column label="期末总资产" align="right">
+            <template #default="s">{{ formatMoney(s.row.assets) }}</template>
+          </el-table-column>
+          <el-table-column label="间隔" width="90" align="center">
+            <template #default="s">
+              <el-tag v-if="s.row.isGap" size="small" type="warning">{{ s.row.daysGap }}天</el-tag>
+              <span v-else class="perf-contrib-sub">1天</span>
+            </template>
+          </el-table-column>
+        </el-table>
+      </template>
+    </el-card>
 
     <!-- 未录流水强提示 -->
     <el-alert
@@ -188,7 +256,7 @@
 <script setup>
 import PageShell from '../components/PageShell.vue';
 import MetricCard from '../components/MetricCard.vue';
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 
 const {
@@ -205,11 +273,64 @@ const {
   // 时间轴收益尺
   perfWindowCards,
   selectPerfWindow,
+  // 每日收益
+  perfDailyRows,
+  perfDailyStats,
+  perfLatestSnapshotDate,
+  todaySnapshotDone,
+  createSnapshot,
 } = useAppCtx();
 
 const perfFlowSuggestions = ref([]);
 const perfSuggestLoading = ref(false);
 const perfFlowEditId = ref(null);
+
+// === 每日收益 ===
+const dailyRange = ref(30);
+const dailySnapshotSaving = ref(false);
+
+/** 展示用：图表按日期升序，表格按日期降序 */
+const dailyRowsForRange = computed(() => {
+  const all = perfDailyRows.value || [];
+  return dailyRange.value > 0 ? all.slice(0, dailyRange.value) : all;
+});
+const dailyTableRows = computed(() => dailyRowsForRange.value);
+const dailyChartRows = computed(() => [...dailyRowsForRange.value].reverse());
+
+const dailyBestText = computed(() => {
+  const b = perfDailyStats.value.best;
+  return b ? `${b.date.slice(5)} ${formatMoney(b.change, 2, true)}` : '—';
+});
+const dailyWorstText = computed(() => {
+  const w = perfDailyStats.value.worst;
+  return w ? `${w.date.slice(5)} ${formatMoney(w.change, 2, true)}` : '—';
+});
+
+async function renderDailyChart() {
+  const { renderDailyPnlChartView, waitForChartDom } = await import('../charts/index.js');
+  // 卡片在"无快照"时是 v-else 分支，DOM 还没挂上就渲染会静默失败
+  await waitForChartDom(['dailyPnlChart']);
+  renderDailyPnlChartView(dailyChartRows.value);
+}
+
+async function onCreateTodaySnapshot() {
+  dailySnapshotSaving.value = true;
+  try {
+    await createSnapshot();
+    await fetchPerformance();
+  } finally {
+    dailySnapshotSaving.value = false;
+  }
+}
+
+// 直接打开 /performance（书签、F5）时，main.js 里按 tab 触发的加载不会跑，
+// 页面会一直是空的 —— 这里补一次首屏加载。
+onMounted(async () => {
+  if (!perfSummary.value) await fetchPerformance();
+  await renderDailyChart();
+});
+
+watch(dailyChartRows, () => { renderDailyChart(); });
 
 const latestCategoryAlloc = computed(() => {
   const rows = perfContribution.value || [];
@@ -307,6 +428,21 @@ const onContribRowClick = (row) => {
 
 <style scoped>
 .perf-flow-alert { margin-bottom: 14px; }
+
+/* 每日收益 */
+.perf-daily-card { margin-bottom: 14px; }
+.perf-daily-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.perf-daily-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.perf-daily-chart { width: 100%; height: 260px; }
+.perf-up { color: var(--app-up); font-variant-numeric: tabular-nums; }
+.perf-down { color: var(--app-down); font-variant-numeric: tabular-nums; }
 .perf-section-title {
   font-weight: 700;
   font-size: 16px;
@@ -382,4 +518,5 @@ const onContribRowClick = (row) => {
   .perf-window-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .perf-cat-row { grid-template-columns: 64px 1fr 90px; }
 }
+.perf-window-stale { font-size: 11px; color: var(--app-warn, #c98a2e); margin-top: 2px; }
 </style>

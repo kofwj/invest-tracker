@@ -28,6 +28,7 @@ let categoryChart = null;
 let snapshotTrendChart = null;
 let snapshotStructureChart = null;
 let overviewWeekChart = null;
+let dailyPnlChart = null;
 
 /** 从 CSS token 读色；ECharts 不吃 var()，必须解析成实际色值 */
 const cssVar = (name, fallback) => {
@@ -420,11 +421,76 @@ const resizeAllCharts = () => {
         snapshotTrendChart,
         snapshotStructureChart,
         overviewWeekChart,
+        dailyPnlChart,
     ].forEach((c) => {
         try {
             if (c && typeof c.resize === 'function') c.resize();
         } catch (_) { /* ignore */ }
     });
+};
+
+/**
+ * 渲染「每日收益」柱状图（逐日盈亏，已剔除外部转入/转出）。
+ * @param {Array<{date:string, change:number, pct:number|null, isGap?:boolean}>} rows 升序
+ */
+const renderDailyPnlChartView = (rows = []) => {
+    const dom = document.getElementById('dailyPnlChart');
+    if (!dom) return false;
+    dailyPnlChart = ensureChart(dailyPnlChart, 'dailyPnlChart');
+    if (!dailyPnlChart) return false;
+
+    const t = readTheme();
+    const data = Array.isArray(rows) ? rows : [];
+    if (!data.length) {
+        // 没数据时清空而不是留上一批柱子
+        dailyPnlChart.clear();
+        return true;
+    }
+
+    dailyPnlChart.setOption({
+        tooltip: baseTooltip(t, {
+            trigger: 'axis',
+            axisPointer: { type: 'shadow' },
+            formatter: (params) => {
+                const p = Array.isArray(params) ? params[0] : params;
+                if (!p) return '';
+                const row = data[p.dataIndex] || {};
+                const pctText = row.pct == null ? '' : `（${row.pct >= 0 ? '+' : ''}${Number(row.pct).toFixed(2)}%）`;
+                const gapText = row.isGap && row.daysGap ? `<br/>该格跨 ${row.daysGap} 天` : '';
+                return `${p.name}<br/>当日盈亏 ${formatMoney(row.change, 2, true)}${pctText}${gapText}`;
+            },
+        }),
+        grid: { left: 78, right: 24, top: 24, bottom: 44 },
+        xAxis: {
+            type: 'category',
+            data: data.map((r) => r.date),
+            axisLabel: {
+                color: t.muted,
+                formatter: (v) => String(v).slice(5),
+                hideOverlap: true,
+            },
+            axisLine: { lineStyle: { color: t.border } },
+        },
+        yAxis: {
+            type: 'value',
+            axisLabel: { color: t.muted, formatter: (v) => formatMoney(v, 0) },
+            splitLine: { lineStyle: { color: t.border, type: 'dashed' } },
+        },
+        series: [
+            {
+                name: '当日盈亏',
+                type: 'bar',
+                data: data.map((r) => ({
+                    value: r.change,
+                    // 红涨绿跌（A 股惯例，与 --app-up/--app-down 一致）
+                    itemStyle: { color: r.change >= 0 ? t.up : t.down },
+                })),
+                barMaxWidth: 18,
+            },
+        ],
+    }, true);
+    try { dailyPnlChart.resize(); } catch (_) { /* ignore */ }
+    return true;
 };
 
 let klineChart = null;
@@ -651,6 +717,7 @@ export {
     renderAllocationChartsView,
     renderOverviewWeekChartView,
     renderKlineChartView,
+    renderDailyPnlChartView,
     analyzeKlineTrend,
     waitForChartDom,
     resizeAllCharts,
@@ -662,6 +729,7 @@ export default {
     renderAllocationChartsView,
     renderOverviewWeekChartView,
     renderKlineChartView,
+    renderDailyPnlChartView,
     waitForChartDom,
     resizeAllCharts,
     readTheme,

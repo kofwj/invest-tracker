@@ -133,11 +133,61 @@ const apiErrorDetail = (e, fallback = '未知错误') => {
     return fallback;
 };
 
+/**
+ * 把 /performance/timeline 的逐日快照行整理成「每日收益」序列（新的在前）。
+ *
+ * 后端已按 (V_t − V_{t−1} − 区间净投入) 剥离外部现金流，这里只做展示整理：
+ * - 断档（days_gap > 1）保留原始间隔天数，前端要说明"这格跨了 N 天"
+ * - change 为 null 的行（第一条快照）直接丢掉，它不是一天的收益
+ */
+const buildDailyPnlRows = (timeline = []) => {
+    const rows = Array.isArray(timeline) ? timeline : [];
+    const out = [];
+    for (const r of rows) {
+        if (!r || r.daily_change == null) continue;
+        const change = Number(r.daily_change);
+        if (!Number.isFinite(change)) continue;
+        out.push({
+            date: String(r.date || ''),
+            prevDate: r.prev_date ? String(r.prev_date) : null,
+            change,
+            pct: r.daily_pct == null ? null : Number(r.daily_pct),
+            assets: Number(r.total_assets || 0),
+            daysGap: r.days_gap == null ? null : Number(r.days_gap),
+            isGap: Number(r.days_gap || 1) > 1,
+        });
+    }
+    return out.reverse();
+};
+
+/**
+ * 每日收益摘要：近 N 天累计 / 涨跌天数 / 最好最差一天。
+ * 传 0 或不传表示统计全部。
+ */
+const summarizeDailyPnl = (rows = [], days = 0) => {
+    const list = Array.isArray(rows) ? rows : [];
+    const slice = Number(days) > 0 ? list.slice(0, Number(days)) : list;
+    if (!slice.length) return { count: 0, total: 0, upDays: 0, downDays: 0, best: null, worst: null };
+    let total = 0;
+    let upDays = 0;
+    let downDays = 0;
+    let best = slice[0];
+    let worst = slice[0];
+    for (const r of slice) {
+        total += r.change;
+        if (r.change > 0) upDays += 1;
+        else if (r.change < 0) downDays += 1;
+        if (r.change > best.change) best = r;
+        if (r.change < worst.change) worst = r;
+    }
+    return { count: slice.length, total, upDays, downDays, best, worst };
+};
+
 Object.assign(window, {
     normalizeText, daysUntil, daysBetween, formatMoney, formatPercent, pct,
     inferCategoryByCode, holdingFloatProfit, holdingLifetimeProfit,
     holdingFloatProfitRate, holdingLifetimeProfitRate, todayLocalIso,
-    interestForDays, apiErrorDetail,
+    interestForDays, apiErrorDetail, buildDailyPnlRows, summarizeDailyPnl,
 });
 
 export {
@@ -155,4 +205,6 @@ export {
     todayLocalIso,
     interestForDays,
     apiErrorDetail,
+    buildDailyPnlRows,
+    summarizeDailyPnl,
 };

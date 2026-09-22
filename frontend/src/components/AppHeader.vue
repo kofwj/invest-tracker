@@ -36,8 +36,8 @@
         <Moon v-else :size="16" :stroke-width="2" />
         <span class="header-theme-label">{{ themeLabel }}</span>
       </button>
-      <button type="button" class="header-btn" @click="fetchData">
-        <RefreshCw :size="14" :stroke-width="2" />
+      <button type="button" class="header-btn" :disabled="refreshing" @click="onRefreshClick">
+        <RefreshCw :size="14" :stroke-width="2" :class="{ spin: refreshing }" />
         刷新
       </button>
       <button type="button" class="header-btn primary" :disabled="syncing" @click="syncPrices">
@@ -73,7 +73,7 @@ const {
   tabGroups,
   tabGroup,
   activeTab,
-  goTab,
+  refreshCurrentTab,
 } = useAppCtx();
 
 const activeTabLabel = computed(() => tabLabel(activeTab?.value ?? activeTab));
@@ -94,5 +94,19 @@ function onGroupClick(gid) {
   const current = activeTab?.value ?? activeTab;
   if (hit.tabs.includes(current)) return;
   goTab(hit.tabs[0]);
+}
+
+// 顶栏刷新按钮：防重入 + 刷新当前页（fetchData 单独刷新只覆盖基础数据，
+// 在「分析」页点它会看不到任何变化）。
+const refreshing = ref(false);
+async function onRefreshClick() {
+  if (refreshing.value) return;
+  refreshing.value = true;
+  try {
+    if (typeof refreshCurrentTab === 'function') await refreshCurrentTab();
+    else await fetchData();
+  } finally {
+    refreshing.value = false;
+  }
 }
 </script>

@@ -102,11 +102,13 @@ const api = {
     restoreUploadedBackup: (formData) => axios.post(API + '/maintenance/restore-upload', formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 180000 }),
     deleteBackup: (filename) => axios.delete(API + '/maintenance/backups/' + encodeURIComponent(filename)),
 
-    performanceSummary: (params = {}) => axios.get(API + '/performance/summary', { params }),
-    performanceWindows: () => axios.get(API + '/performance/windows'),
-    performanceTimeline: (params = {}) => axios.get(API + '/performance/timeline', { params }),
-    performanceContribution: () => axios.get(API + '/performance/contribution'),
-    performanceStory: (params = {}) => axios.get(API + '/performance/story', { params }),
+    // 分析类接口统一 45s 超时：/performance/summary 内部会算基准指数相对收益，
+    // 没有超时的话外网卡住会让按钮一直转圈（表现为"刷新不出来"）。
+    performanceSummary: (params = {}) => axios.get(API + '/performance/summary', { params, timeout: 45000 }),
+    performanceWindows: () => axios.get(API + '/performance/windows', { timeout: 45000 }),
+    performanceTimeline: (params = {}) => axios.get(API + '/performance/timeline', { params, timeout: 45000 }),
+    performanceContribution: () => axios.get(API + '/performance/contribution', { timeout: 45000 }),
+    performanceStory: (params = {}) => axios.get(API + '/performance/story', { params, timeout: 45000 }),
     allocationStory: () => axios.get(API + '/allocation/story', { timeout: 60000 }),
     listPortfolioCashFlows: (params = {}) => axios.get(API + '/portfolio-cash-flows', { params }),
     addPortfolioCashFlow: (payload) => axios.post(API + '/portfolio-cash-flows', payload),
