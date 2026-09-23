@@ -141,3 +141,33 @@ describe('页头不再和 tab 重复', () => {
     expect(bad, '页头标题交给 PageShell 里的隐藏 h1，不要再传 title prop').toEqual([]);
   });
 });
+
+/**
+ * 总览页指标栅格。
+ *
+ * 起因：`.overview-metrics` 原来写死 3 列、主卡 `grid-column: 1 / -1` 独占一整行，
+ * 而「今天」有 3 张卡、「资产与仓位」有 5 张 → 两段的行尾都会空出格子
+ * （今天空 1 格、资产空 2 格），主卡还占满 1240px 只放一个数字。
+ * 改成按段指定列数（4 轨 / 5 轨）后行行填满 —— 这三条不变量得钉住。
+ */
+describe('总览页指标栅格', () => {
+  const src = readFileSync(join(VIEWS_DIR, 'OverviewTab.vue'), 'utf-8');
+
+  it('列数按段指定，且够填满（今天 4 轨、资产 5 轨：主卡各占 2 轨）', () => {
+    expect(src, '「今天」段应为 4 轨（主卡 2 + 本月 + 今年）')
+      .toMatch(/\[data-section="today"\]\s+\.overview-metrics\s*\{[^}]*repeat\(4/);
+    expect(src, '「资产与仓位」段应为 5 轨（主卡 2 + 浮盈 + 现金 + 占比）')
+      .toMatch(/\[data-section="assets"\]\s+\.overview-metrics\s*\{[^}]*repeat\(5/);
+  });
+
+  it('每档断点用同特异性选择器覆盖，否则桌面规则会压住媒体查询', () => {
+    const mq = src.slice(src.indexOf('@media (max-width: 1100px)'));
+    expect(mq, '≤1100px 必须用 [data-section=…] 选择器').toContain('[data-section="today"] .overview-metrics');
+    expect(mq, '≤1100px 必须用 [data-section=…] 选择器').toContain('[data-section="assets"] .overview-metrics');
+  });
+
+  it('单列时主卡不跨列（跨 2 轨会在单列栅格里撑出一个隐式列）', () => {
+    const small = src.slice(src.indexOf('@media (max-width: 640px)'));
+    expect(small).toMatch(/\.ov-metric\.main\s*\{\s*grid-column:\s*auto/);
+  });
+});

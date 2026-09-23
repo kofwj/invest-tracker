@@ -7,7 +7,9 @@
  *
  * 覆盖：
  *  - 三段都在，且顺序固定（① 在今天盈亏之前，②③ 依次在后）；
- *  - 「今日盈亏」用 performance 模块的 perfTodayRow：为 null 时显示「—」+ 原因，不编数；
+ *  - 「今日盈亏」用 performance 模块的 perfTodayPnl：为 null 时显示「—」+ 原因，不编数；
+ *    注意**不能**用 perfTodayRow（那个在「今天已有正式快照」时返回 null，是给收益分析表补行用的）——
+ *    之前首页用错了它，导致每天快照一写、首页今日盈亏就永远是「—」。
  *  - 「当日参考」不在第一段，落在第二段并标出"盘中粗估，不入账"；
  *  - 待办：无待办显示「今天没有待办」，todaySnapshotDone === false 时出现「今日快照」条目且可跳转。
  *
@@ -86,6 +88,7 @@ const TODAY_ROW = {
   daysGap: 1,
   baseDate: '2026-03-06',
   stale: false,
+  closed: false, // 默认：盘中口径（还没收盘 / 还没写快照）
 };
 
 const flatDashboard = (extra = {}) => ({
@@ -121,7 +124,7 @@ function mountOverview(overrides = {}) {
     portfolioExpectedReturn: ref(5),
     resolvedTheme: ref('light'),
     perfSummary: ref({ total_assets: 101000, total_gain: 1000 }),
-    perfTodayRow: ref({ ...TODAY_ROW }),
+    perfTodayPnl: ref({ ...TODAY_ROW }),
     perfWindowCards: ref([
       { key: 'month', label: '本月', gain: 3200, gainPct: 3.2, tone: 'up', stale: false, baseDate: '2026-03-01' },
       { key: 'ytd', label: '今年', gain: -800, gainPct: -0.8, tone: 'down', stale: true, staleDays: 40, baseDate: '2026-01-02' },
@@ -182,8 +185,8 @@ describe('OverviewTab 固定三段', () => {
 });
 
 describe('OverviewTab 今日盈亏口径', () => {
-  it('perfTodayRow 为 null 时显示「—」并说明原因，不编数', async () => {
-    const { host, app } = mountOverview({ perfTodayRow: ref(null), todaySnapshotDone: ref(true) });
+  it('perfTodayPnl 为 null 时显示「—」并说明原因，不编数', async () => {
+    const { host, app } = mountOverview({ perfTodayPnl: ref(null), todaySnapshotDone: ref(true) });
     await flush();
 
     const today = section(host, 'today');
@@ -198,7 +201,7 @@ describe('OverviewTab 今日盈亏口径', () => {
   it('收益分析数据还没加载时说清是「未加载」，不拿盘中估算冒充今日盈亏', async () => {
     const { host, app } = mountOverview({
       perfSummary: ref(null),
-      perfTodayRow: ref(null),
+      perfTodayPnl: ref(null),
       perfWindowCards: ref([]),
     });
     await flush();
@@ -211,14 +214,30 @@ describe('OverviewTab 今日盈亏口径', () => {
     app.unmount();
   });
 
-  it('perfTodayRow 有值时显示金额与涨跌幅', async () => {
+  it('今天已有正式快照（已收盘）时照样显示数字——快照写完不能让首页变「—」', async () => {
+    const { host, app } = mountOverview({
+      perfTodayPnl: ref({ ...TODAY_ROW, closed: true }),
+      todaySnapshotDone: ref(true),
+      perfLatestSnapshotDate: ref('2026-03-07'),
+    });
+    await flush();
+
+    const card = section(host, 'today').querySelector('.ov-metric.main');
+    expect(card.querySelector('.ov-metric-value').textContent).toContain('1234.50');
+    expect(card.textContent).toContain('+1.23%');
+    expect(card.textContent).toContain('已收盘');
+    app.unmount();
+  });
+
+  it('perfTodayPnl 有值时显示金额与涨跌幅', async () => {
     const { host, app } = mountOverview();
     await flush();
 
     const card = section(host, 'today').querySelector('.ov-metric.main');
     expect(card.querySelector('.ov-metric-value').textContent).toContain('1234.50');
     expect(card.textContent).toContain('+1.23%');
-    expect(card.textContent).toContain('较上一快照 2026-03-06');
+    expect(card.textContent).toContain('盘中口径');
+    expect(card.textContent).toContain('2026-03-06'); // 说清基准是哪天
     app.unmount();
   });
 });

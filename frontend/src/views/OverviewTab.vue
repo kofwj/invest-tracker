@@ -289,9 +289,11 @@ const {
   allocationSummary,
   portfolioExpectedReturn,
   resolvedTheme,
-  // 收益分析模块的口径：总览第一段「今天 / 本月 / 今年」直接复用，避免两页算法不一致
+  // 收益分析模块的口径：总览第一段「今天 / 本月 / 今年」直接复用，避免两页算法不一致。
+  // 今日盈亏用 perfTodayPnl（今天已有正式快照时照样给数）；perfTodayRow 是给
+  // 收益分析的「每日收益」表补一行用的，那个今天有快照时会返回 null，首页不能用。
   perfSummary,
-  perfTodayRow,
+  perfTodayPnl,
   perfWindowCards,
   perfLatestSnapshotDate,
 } = useAppCtx();
@@ -304,8 +306,8 @@ const perfWindows = computed(() => {
   const list = unwrap(perfWindowCards);
   return Array.isArray(list) ? list : [];
 });
-/** performance 模块的「今天（未收盘）」行；null = 今天已有正式快照，或拿不到今日窗口（不估算） */
-const perfToday = computed(() => unwrap(perfTodayRow) || null);
+/** performance 模块的今日盈亏口径（perfTodayPnl）；null = 拿不到今日口径（不估算） */
+const perfToday = computed(() => unwrap(perfTodayPnl) || null);
 
 /** 收益分析模块有没有拉到过数据（区分「没数」和「没加载」） */
 const perfLoaded = computed(() => !!unwrap(perfSummary));
@@ -470,21 +472,19 @@ const todayPnlTitle = computed(() => {
 const todayPnlNote = computed(() => {
   const row = perfToday.value;
   if (row && row.change != null) {
-    if (row.daysGap != null && Number(row.daysGap) > 1 && row.baseDate) {
+    if (row.stale && row.daysGap != null && row.baseDate) {
       return `基准 ${row.baseDate}（跨 ${row.daysGap} 天，不一定是上一交易日）`;
     }
-    if (row.prevDate) return `较上一快照 ${row.prevDate}`;
-    return '未收盘，盘中口径';
+    if (row.closed) return row.prevDate ? `已收盘 · 较 ${row.prevDate}` : '已收盘 · 今日快照';
+    return row.baseDate ? `盘中口径 · 基准 ${row.baseDate}` : '未收盘，盘中口径';
   }
   // 没数时先说清是哪一种「没有」，别让用户以为是零
   if (!perfLoaded.value) return '收益数据未加载，进「收益分析」就有数';
   const latest = unwrap(perfLatestSnapshotDate);
   if (snapshotDone.value) {
-    return latest
-      ? `今日快照已记录（${latest}），逐日口径见收益分析`
-      : '今日快照已记录，逐日口径见收益分析';
+    return latest ? `今日快照已记录（${latest}）` : '今日快照已记录';
   }
-  return '拿不到今日窗口（快照断档），不估算';
+  return '拿不到今日口径（快照断档），不估算';
 });
 
 /** 待办：只收「需要你动手」的事，每条都能点着跳到对应页面 */
@@ -732,24 +732,36 @@ onMounted(() => {
   letter-spacing: -0.01em;
 }
 .ov-section-hint { font-size: 12px; color: var(--ov-text-4); }
+/* 卡片数各段不同（「今天」3 张、「资产与仓位」5 张），窗口宽度也一直在变，
+   所以用 auto-fit 让列数自适应 —— 原来写死 3 列 + 主卡独占一整行，
+   结果是两段的行尾都会空出格子（今天空 1 格、资产空 2 格），而且主卡占满
+   1240px 只放一个数字，纵向很浪费。 */
 .overview-metrics {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 12px;
 }
 .ov-metric {
-  padding: 16px;
+  padding: 14px 16px;
   border-radius: 12px;
   background: var(--ov-metric-bg);
   border: 1px solid var(--ov-border);
-  min-height: 108px;
+  min-height: 96px;
 }
+/* 列数按「这一段有几张卡」定，保证行行填满：
+   ① 今天 = 主卡(占 2 轨) + 本月 + 今年 = 4 轨
+   ② 资产与仓位 = 主卡(占 2 轨) + 浮盈 + 现金 + 占比 = 5 轨（参考卡单独整行） */
+[data-section="today"] .overview-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+[data-section="assets"] .overview-metrics { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+
 .ov-metric.main {
-  grid-column: 1 / -1;
+  /* 比同排宽一倍（视觉上仍是主角），但不再独占整行 */
+  grid-column: span 2;
   background: var(--ov-metric-main-bg);
 }
-/* 盘中参考：虚线 + 弱化，避免和账本口径混着看 */
+/* 盘中参考：虚线 + 弱化，避免和账本口径混着看；口径不同，单独占一行 */
 .ov-metric.ref {
+  grid-column: 1 / -1;
   border-style: dashed;
   background: color-mix(in srgb, var(--ov-chip-bg) 70%, transparent);
 }
@@ -1146,11 +1158,16 @@ onMounted(() => {
 @media (max-width: 1100px) {
   .overview-main,
   .overview-status { grid-template-columns: 1fr; }
-  .overview-metrics { grid-template-columns: 1fr 1fr; }
+  /* 必须用和上面同样的 [data-section=…] 选择器：否则特异性更低、覆盖不掉桌面规则 */
+  [data-section="today"] .overview-metrics,
+  [data-section="assets"] .overview-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ov-metric.main { grid-column: 1 / -1; }
 }
 @media (max-width: 640px) {
-  .overview-metrics { grid-template-columns: 1fr; }
+  [data-section="today"] .overview-metrics,
+  [data-section="assets"] .overview-metrics { grid-template-columns: 1fr; }
+  /* 单列时主卡不能再跨 2 轨，否则会撑出一个隐式列、整段错位 */
+  .ov-metric.main { grid-column: auto; }
   .overview-page { margin: 0; padding: 4px 0 12px; }
   .mix-chart { min-height: 132px; }
 }

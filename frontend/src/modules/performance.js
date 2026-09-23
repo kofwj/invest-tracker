@@ -224,23 +224,15 @@ const createPerformanceModule = ({
 
 
     /**
-     * 「今日（未收盘）」行。
-     *
-     * 快照是每天定时任务写一条，所以逐日列表天然只到昨天为止——用户打开收益分析
-     * 最想看的恰好是"今天赚了多少"。这里用 /performance/windows 的今天窗口补一行：
-     * 它的基准是昨天收盘快照，口径与逐日行一致（同样已剔除外部投入/取出）。
-     *
-     * 今天已经有快照时返回 null：那条正式快照就是今天这一行，不能再补一行重复的
-     * （16:40 定时任务跑完就会出现这种情况）。
+     * 「今日」的**实时口径**（来自 /performance/windows 的今天窗口）：基准是上一交易日收盘快照，
+     * 与逐日行口径一致（同样已剔除外部投入/取出）。今天还没收盘、或还没写快照时用它。
      */
-    const perfTodayRow = computed(() => {
-        const today = todayLocalIso();
-        if (perfLatestSnapshotDate.value === today) return null;
+    const todayWindowRow = computed(() => {
         const win = (perfWindows.value || []).find((x) => x && x.key === 'today');
         if (!win || win.gain == null) return null;
         const staleDays = win.stale_days == null ? null : Number(win.stale_days);
         return {
-            date: today,
+            date: todayLocalIso(),
             prevDate: win.start_date || null,
             change: Number(win.gain),
             pct: win.gain_pct == null ? null : Number(win.gain_pct),
@@ -252,6 +244,48 @@ const createPerformanceModule = ({
             stale: staleDays != null && staleDays > 1,
         };
     });
+
+    /** 今天是否已经有正式快照（timeline 里有今天这一行） */
+    const hasTodaySnapshot = computed(() => {
+        const today = todayLocalIso();
+        return (perfTimeline.value || []).some((r) => String(r?.date || '') === today);
+    });
+
+    /**
+     * 「今日盈亏」的统一口径 —— **首页与收益分析共用这一个**。
+     *
+     * 与 perfTodayRow 的区别就在这里：今天已经有正式快照时，它**照样给出数字**
+     * （直接用那条快照的当日变动，最准）。首页的今日盈亏本来就该显示今天的数字，
+     * 不能因为"16:40 已经写过快照"而变成「—」——
+     * 之前首页错用了 perfTodayRow，于是每天快照一写，首页今日盈亏就永远是「—」。
+     */
+    const perfTodayPnl = computed(() => {
+        const today = todayLocalIso();
+        const snap = (perfTimeline.value || []).find((r) => String(r?.date || '') === today);
+        if (snap && snap.daily_change != null) {
+            return {
+                date: today,
+                change: Number(snap.daily_change),
+                pct: snap.daily_pct == null ? null : Number(snap.daily_pct),
+                assets: Number(snap.total_assets || 0),
+                prevDate: snap.prev_date ? String(snap.prev_date) : null,
+                baseDate: snap.prev_date ? String(snap.prev_date) : null,
+                daysGap: snap.days_gap == null ? null : Number(snap.days_gap),
+                stale: Number(snap.days_gap || 1) > 1,
+                closed: true,
+            };
+        }
+        const live = todayWindowRow.value;
+        return live ? { ...live, closed: false } : null;
+    });
+
+    /**
+     * 「每日收益」表里补的那一行「今日（未收盘）」。
+     *
+     * 今天已经有正式快照时返回 null —— 表格里已经有今天这一行，不能再补一行重复的。
+     * （首页要用今天数字的话走 perfTodayPnl，不要用这个。）
+     */
+    const perfTodayRow = computed(() => (hasTodaySnapshot.value ? null : todayWindowRow.value));
     const perfDailyStats = computed(() => summarizeDailyPnl(perfDailyRows.value, 30));
 
     // === 专业组合级指标（portfolio level，非个股）===
@@ -501,6 +535,7 @@ const createPerformanceModule = ({
         perfDailyRows,
         perfDailyStats,
         perfLatestSnapshotDate,
+        perfTodayPnl,
         perfTodayRow,
     };
 };
