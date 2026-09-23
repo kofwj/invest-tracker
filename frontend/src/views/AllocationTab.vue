@@ -585,8 +585,7 @@ const {
 } = useAppCtx();
 
 // === 页面分三段（看现状 / 设目标 / 处理偏离）===
-// 这一页原来把 15 个卡片堆在一起，要滚很久才能找到想改的那块。现在按"看→设→调"分成三段。
-// 深链用 ?seg=target 直接落到某一段；刻意不引入 vue-router 依赖（测试里也不必挂路由）。
+// 按「看 → 设 → 调」分三段；深链用 ?seg=target 落到某段（不引入 vue-router）。
 const SEG_KEYS = ['overview', 'target', 'deviation'];
 
 function initialSeg() {
@@ -878,8 +877,7 @@ watch(
 </script>
 
 <style scoped>
-/* 原来是「当前结构 | 目标与纪律」两列并排；拆成三段 tab 之后每个 tab 里只剩一个 pane，
-   所以改成单列（否则内容会挤在左半屏、右边留一大片空）。 */
+/* 分段 tab 内只有一个 pane，用单列 */
 .merge-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

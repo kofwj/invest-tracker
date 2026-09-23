@@ -567,8 +567,6 @@ onMounted(() => {
   color: var(--app-muted);
   font-size: 12px;
 }
-/* gap 原来横竖都是 16px：标签→数值 和 数值→下一个标签 一样宽，
-   「行业 银行 法人 张某」看不出哪两个是一对。收紧配对、拉开组间距。 */
 .cx-kv {
   display: flex;
   flex-wrap: wrap;

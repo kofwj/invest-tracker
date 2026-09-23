@@ -173,16 +173,8 @@ describe('总览页指标栅格', () => {
 });
 
 /**
- * 模板 class 不许「有引用没定义」。
- *
- * 起因两条，都是构建不报错、宽屏下也不显眼的问题：
- *  1) `SnapshotPanel` 的人工对账结果区用了 .reconcile-grid / -result / -line / -label /
- *     -muted / -empty 六个 class，样式表里一条都没有 →
- *     被当成普通 div 挤成一行，标签和数字之间毫无分隔；
- *  2) `KlineDialog` 里的 .cx-k 是死标记（.cx-kv 有样式、它的标签没有）。
- * 这类问题只有肉眼在窄屏上盯才看得见，所以静态钉住：写了 class 就要么有定义、要么删掉。
- *
- * 只检查静态 class="…"：`:class` 绑定的名字来自数据，静态分析判不了。
+ * 模板 class 不许「有引用没定义」：写了 class 就要有样式定义，否则删掉。
+ * 只检查静态 class="…"；`:class` 绑定的名字来自数据，静态分析判不了。
  */
 describe('模板 class 不许「有引用没定义」', () => {
   it('src 下每个 <template> 里静态写的 class 都能在 styles.css 或某个 style 块里找到定义', () => {

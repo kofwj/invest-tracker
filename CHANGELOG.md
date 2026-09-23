@@ -4,130 +4,77 @@
 版本号单一来源 `backend/version.py`；发布流程：改那里 → 本文件记版本 → `git tag vX.Y.Z`。生产部署以分支 `deploy/vps` 为准。
 
 ---
-## [未发布 · 第十一轮] — 「收益与快照」重排：结论在前、明细在后
+## [未发布 · 第十一轮] — 「收益与快照」重排
 
-合并成一页后**没有重排过**，结果打开页面第一屏是「每日收益」表格，而一句话故事、核心指标、
-风险一览这些**结论类**内容被顶到了快照表下面。这一轮只做两件事：把区块按「先结论后明细」
-重排，以及删掉同一页里重复出现的数字。不动口径、不加功能。
+### 区块顺序（`views/PerformanceTab.vue`）
 
-### 重排后的区块顺序（`views/PerformanceTab.vue`）
+快照提醒 → 未录流水提示 → 一句话故事 → 核心 3 卡 → 收益尺 → 最近 7 个交易日 →
+每日收益 → 快照明细 → 辅助卡 → 风险一览 → 组合资金流水。
 
-1. 快照提醒（`SnapshotReminder`）
-2. 外部资金流水未录入的强提示（`el-alert`，含「去录流水 / 从银证生成建议」）
-3. 一句话故事
-4. 核心 3 卡（累计收益 / 持仓浮盈 / 年化）
-5. 收益尺（今天 / 本月 / 今年 / 近一年 / 开仓至今）
-6. 最近 7 个交易日（原「月度概览」，改名 + 删一张卡）
-7. 每日收益（柱状图 + 逐日表）
-8. 快照明细（`SnapshotPanel`）
-9. 辅助卡（距目标缺口 / 累计分红）
-10. 组合归因与风险（含风险一览）
-11. 组合资金流水
+只搬位置，区块内容未改。
 
-改动是纯搬移：这 11 个区块的内容一个没删没改。
+### 去掉重复的数字
 
-### 删掉同一页里重复的 3 个数字（都是实测确认的重复）
+- 辅助卡「今年以来」：`ytd_gain` 17086.02，与收益尺「今年」同值，删卡（`cols-2`）。
+- 月度卡「本月累计」：与收益尺「本月」同源，删卡（`cols-4` → `cols-3`），
+  标题改「最近 7 个交易日」，副文案指向收益尺。
+- 快照历史「总资产」列：与「每日收益」的「期末总资产」同值，删列，卡片内注明去处。
+- 核心 3 卡的累计总收益保留：收益尺是时间范围选择器，语义不同。
 
-- 月度卡的「本月累计」：与收益尺「本月」窗口**同源同值**。删卡，`cols-4` → `cols-3`，
-  标题改「最近 7 个交易日」，副文案改成「本月 / 今年看上方收益尺」。
-- 辅助卡的「今年以来」：实测 `ytd_gain = 17086.02`，与收益尺「今年」那张卡**完全同一个数**。
-  删卡后 `cols-2` 只剩「距目标缺口 / 累计分红」（都非空，不会留空格子）。
-- 快照历史表的「总资产」列：与「每日收益」表的「期末总资产」是同一份快照的同一个数。
-  删列，并在卡片里写明「当天总资产见上方『每日收益』的『期末总资产』」。
+### 补齐只有引用、没有定义的 class
 
-保留「核心 3 卡」的累计总收益：它虽然等于收益尺「开仓至今」，但收益尺是**时间范围选择器**
-（点一下整页口径跟着变），两者语义不同，删了会丢掉默认视图，所以在注释里写明为什么留。
-
-### 顺带修掉两个「有引用没定义」的 class（本页 + K 线弹窗）
-
-这两条都是排查本页排版时顺手量出来的：写个脚本扫 `src/**/*.vue` 的静态 `class="…"`，
-再和 `styles.css` + 各组件 `<style>` 里的选择器求差集，结果只有两处漏网：
-
-- `components/SnapshotPanel.vue` 的人工对账结果区用了 `.reconcile-grid / -result / -line /
-  -label / -muted / -empty` **六个 class，样式表里一条都没有** → 「实盘总资产 2926708.51
-  当日计算快照 … 误差 …」被当成普通 div 挤成一行，标签和数字之间毫无分隔。已补齐（含深色主题变量，
-  数值用 `tabular-nums`）—— 这一处是**真缺样式**。
-- `components/KlineDialog.vue` 的 `.cx-k` 是**死标记**（`.cx-kv` 有样式、它的标签没有），
-  已从模板里删掉；同时发现 `.cx-kv` 的 `gap` 横竖都是 16px，导致「标签→数值」和
-  「数值→下一个标签」一样宽，`行业 银行 法人 张某` 看不出哪两个是一对 —— 改成配对 6px、
-  组间 18px。另外 `<el-dialog class="kline-dialog">` 这个 class 也没有任何引用，一并删掉。
-
-把差集钉成用例（`layout-static` 的「模板 class 不许『有引用没定义』」）：它**能抓回归** ——
-删掉 `.reconcile-line` 的定义就会红，并直接报出 `components/SnapshotPanel.vue → .reconcile-line`。
+- `components/SnapshotPanel.vue` 人工对账结果区：`.reconcile-grid/-result/-line/-label/-muted/-empty`
+  六个 class 没有样式定义，已补齐。
+- `components/KlineDialog.vue`：删掉死标记 `.cx-k` 与 `<el-dialog class="kline-dialog">`；
+  `.cx-kv` 的间距改为配对 6px、组间 18px。
 
 ### 测试
 
-- `performance-snapshots-merged` 新增「区块顺序：结论在前、明细在后」：7 个锚点按 DOM 顺序
-  逐个 `compareDocumentPosition` 断言。**已证明能抓回归**：把「快照明细」挪回「每日收益」
-  之前，这条和既有的 DOM 顺序用例一起变红。
-- 快照历史的「总资产」列改为断言**列不存在**，同时断言同一行的「投资市值 / 银行余额 / 证券现金」
-  仍然渲染，且那天的总资产仍能在本页「每日收益」的「期末总资产」看到（**把列加回来就变红**）。
-- `monthly-card` 的「本月累计取收益尺窗口」改为「本月数字不再重复」：断言这张卡**不含**
-  「本月累计」、也不含 month 窗口的值，同时断言收益尺上「本月」仍在（**塞回那张卡就变红**）。
-- 前端 **169** 项（+2）；后端 259 项（未变）；`make check` 全绿。
+- `performance-snapshots-merged`：新增区块 DOM 顺序断言；快照历史「总资产」列改为断言不存在。
+- `monthly-card`：改为断言这张卡不含「本月累计」，收益尺上仍有「本月」。
+- `layout-static`：新增「模板 class 必须有样式定义」。
+- 前端 169 项、后端 259 项；`make check` 全绿。
 
 ---
 
 ## [未发布 · 第十轮] — 分析组收敛：5 页 → 3 页
 
-按批准的《分析组重新设计》计划执行批次 A/B/C，D1–D5 全按建议。
-目标是「一页只回答一个问题」，只做合并去重，**不加功能、不动任何数据口径**。
+目标：一页只回答一个问题。只做合并去重，不加功能、不动数据口径。
 
-### 批次 A：资产快照并入「收益与快照」
+### 资产快照并入「收益与快照」
 
-同一份 `daily_snapshots`（83 条）原本有两页各展示一半：`资产快照` 看逐日**绝对值**、
-`收益分析` 看逐日**变动**。现在合成一页「收益与快照」：
+- `views/SnapshotsTab.vue` → `components/SnapshotPanel.vue`（去掉 `PageShell` 外壳，
+  日期范围 / 记录今日快照 / 导出 / 压缩 内联到面板顶部）
+- 删掉「总资产趋势」图（同一份数据已有「每日收益」柱状图）；快照明细接在「每日收益」之后
+- `analysis` 组只留 `今天该看 / 收益与快照 / 结构与目标`；`performance` 标签改「收益与快照」
+- `/snapshots` 与旧 `?tab=snapshots` 重定向到它；概览页待办改为「去收益与快照」
 
-- `views/SnapshotsTab.vue` → **`components/SnapshotPanel.vue`**（组件化：去掉 `PageShell` 外壳，
-  日期范围 / 记录今日快照 / 导出 / 压缩 这几个工具条内联到面板顶部）
-- 按 D4 **删掉「总资产趋势」图**：同一份数据在这一页已经有「每日收益」柱状图，
-  `快照明细`（快照历史 / 区间变化 / 当前资产结构 / 人工对账）接在「每日收益」之后
-- 导航与路由：`analysis` 组只留 `今天该看 / 收益与快照 / 结构与目标`；
-  `performance` 标签改「收益与快照」；`/snapshots` 与旧 `?tab=snapshots` 重定向到它
-- 概览页待办「今日快照」的跳转与文案改为「去收益与快照」→ performance
+### K 线查询降级为持仓页弹窗
 
-### 批次 B：K 线查询降级为持仓页弹窗
+- `views/KlineTab.vue` → `components/KlineDialog.vue`：`el-dialog` + `code` prop，
+  打开即加载，关闭清态（`destroy-on-close` + 令牌作废在飞响应）；内容原样保留
+- 持仓明细页点标的名打开弹窗（不新增操作列按钮）；`/klines` 重定向到 `持仓明细`
 
-依据：`kline_cache` 的代码集合与持仓**完全一致**（8 只，没有一只是额外查过的股票），
-说明这一页从未被用于研究，而它是全站最依赖外网的一条链路。
+### 结构与目标「处理偏离」段排优先级
 
-- `views/KlineTab.vue` → **`components/KlineDialog.vue`**：`el-dialog` + `v-model` + `code` prop，
-  **打开即按传进来的代码加载**，关闭清态（`destroy-on-close` + 令牌作废在飞响应），
-  内容（K 线图/参数、走势解读、基本面体检、公司简报、前十大股东、历史分红）原样保留
-- 持仓明细页**点标的名**打开弹窗（不新增操作列按钮）
-- `/klines` 与旧 `?tab=klines` 重定向到 `持仓明细`
-
-### 批次 C：结构与目标「处理偏离」段排优先级
-
-实测这一页 10 个区块**都有内容**（`health` 9 条、`issues` 4 条、`scenarios` 3 条、`satellite` 有值），
-所以不删块，只在第三段内排序：**要动手的**（纪律检查 / 问题清单 / 再平衡建议）在前，
+第三段内排序：要动手的（纪律检查 / 问题清单 / 再平衡建议）在前，
 「细分类别明细」「纪律草稿」移到段尾并默认折叠。区块数不变。
+核对数据后确认：`持仓浮盈 / 全周期盈亏` 是语义不同的表格列，`help_notes` 前端未引用，
+所以这一页不删块。
 
-### 顺带修掉三处删图暴露的连带问题
+### 删图暴露的连带修复
 
-- `charts/index.js` 的 `renderSnapshotChartsView` 原来要求 `#snapshotTrendChart` 与
-  `#snapshotStructureChart` **同时存在**，否则整个函数 `return false` → 删掉趋势图后
-  「当前资产结构」饼图会跟着不画。改为两个容器各自独立判断
-- `modules/snapshots.js` 的 `waitForChartDom([...])` 去掉趋势图容器（否则每次白等 2.5s 超时）；
-  它监听的分支从 `activeTab === 'snapshots'` 改为 `'performance'`
-- `main.js`：进 `performance` 时同时拉 `fetchSnapshots()` 并渲染快照图表；
-  `refreshCurrentTab` 里已失效的 snapshots 分支并入 performance
-
-### 纠正我上一轮的两处误判（数据核对后推翻）
-
-出计划时我把两条"重复"说重了，这里更正：`持仓浮盈 / 全周期盈亏` 在其它页是**语义不同的表格列**
-（当前逐只 / 按类别汇总 / 逐日快照），不是重复展示；`help_notes`（后端 5 条）**前端根本没引用**。
-所以「结构与目标」不该删块 —— 已按此执行。
+- `charts/index.js` 的 `renderSnapshotChartsView` 原来要求趋势图与结构图容器同时存在，
+  否则直接 `return false`，「当前资产结构」饼图会跟着不画。改为两容器独立判断。
+- `modules/snapshots.js` 的 `waitForChartDom` 去掉趋势图容器；监听分支改 `activeTab === 'performance'`。
+- `main.js`：进 `performance` 时同时拉 `fetchSnapshots()` 并渲染快照图表。
 
 ### 测试
 
-- 前端 **167** 项（+10）：新增 `performance-snapshots-merged`（4）与 `kline-dialog`（3）；
-  `views-write-guards` 里挂旧 `SnapshotsTab` 的 4 个用例**改挂新组件、断言一条没删**（另补 8 条
-  结构断言钉住"趋势图已删"）；`nav-coverage` 里 snapshots 的断言改为
-  「重定向登记存在 + 重定向目标本身可达」；`pageshell-header` / `overview-sections` 同步改名与跳转目标
-- 后端 259 项（未变）；`make check` 全绿（含改过的 `check.sh` 断言：改为检查
-  `PerformanceTab.vue` 里含「快照明细」，而不是检查已不存在的 `SnapshotsTab.vue`）
-- `README.md` 的页面清单与「旧地址仍跳转」一并更新
+- 前端 167 项（+10）：新增 `performance-snapshots-merged`（4）、`kline-dialog`（3）；
+  `views-write-guards` 挂旧 `SnapshotsTab` 的 4 个用例改挂新组件；`nav-coverage` 的 snapshots
+  断言改为「重定向登记存在 + 目标可达」；`check.sh` 改为检查 `PerformanceTab.vue` 含「快照明细」。
+- 后端 259 项；`make check` 全绿；`README.md` 页面清单与旧地址跳转已更新。
 
 ---
 

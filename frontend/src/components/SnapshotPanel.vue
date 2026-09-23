@@ -1,8 +1,7 @@
 <template>
   <!--
-    本组件由「收益与快照」页（PerformanceTab.vue）渲染。
-    原「资产快照」页已在分析组收敛时并入该页：PageShell 外壳去掉（标题交给宿主的页头），
-    资产走势折线图按决策 D4 删除（与「每日收益」柱状图同源，重复）；只保留资产结构饼图。
+    由「收益与快照」页（PerformanceTab.vue）渲染，标题交给宿主页头。
+    只画资产结构饼图：「每日收益」已有同源的走势柱状图。
   -->
   <div class="snapshot-panel">
     <div class="snapshot-toolbar">
@@ -134,8 +133,7 @@
 
     <el-card shadow="never" header="快照历史记录">
       <div style="font-size:12.5px;color:var(--app-muted);margin-bottom:8px;">
-        逐日绝对值明细。当天总资产见上方「每日收益」的「期末总资产」——同一份快照，
-        这里不再重复一列。
+        逐日绝对值明细。当天总资产见上方「每日收益」的「期末总资产」。
       </div>
       <el-table :data="snapshots" stripe size="small" class="snapshot-table" style="width: 100%" empty-text="暂无快照记录" aria-label="快照历史记录">
         <el-table-column prop="date" label="日期" width="108" sortable align="left" header-align="left" fixed="left"></el-table-column>
@@ -264,9 +262,7 @@ async function onCompactSnapshots() {
 
 <style scoped>
 .snapshot-panel { display: block; }
-/* 人工对账结果区：.reconcile-grid / -result / -line / -label / -muted / -empty
-   这几个 class 之前只有模板在用，样式表里一条都没有 —— 「实盘总资产 / 当日计算快照 / 误差」
-   于是被当成普通 div 挤在一行、标签和数字之间没有分隔。这里补齐（含深色主题变量）。 */
+/* 人工对账结果区 */
 .reconcile-grid { margin-bottom: 4px; }
 .reconcile-result {
   display: grid;

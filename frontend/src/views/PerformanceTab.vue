@@ -68,7 +68,7 @@
       </div>
     </div>
 
-    <!-- 最近 7 个交易日汇总（本月 / 今年只在上方收益尺显示一处） -->
+    <!-- 最近 7 个交易日汇总 -->
     <el-card shadow="never" class="perf-month-card">
       <div class="perf-daily-head">
         <div>
@@ -184,7 +184,7 @@
       </template>
     </el-card>
 
-    <!-- 快照明细：原「资产快照」页（/snapshots）已在分析组 5→3 页收敛时并入本页 -->
+    <!-- 快照明细（原「资产快照」页） -->
     <div class="perf-section-title" style="margin-bottom: 12px;">快照明细</div>
     <SnapshotPanel />
 
@@ -348,14 +348,10 @@ const perfSuggestionApplying = ref(false);
 const dailyRange = ref(30);
 const dailySnapshotSaving = ref(false);
 
-// === 最近 7 个交易日汇总（本月 / 今年不在这里重复，见上方收益尺）===
+// === 最近 7 个交易日汇总 ===
 /**
- * 「最近 7 个交易日」取 perfDailyRows 的前 7 行。
- * 注意 perfDailyRows 只有"有快照的日子"，所以这是最近 7 个**有快照的**交易日，
- * 不是自然日；卡片副标题里也按这个口径说明，不要写成"最近 7 天"。
- * 「本月 / 今年」只在上方收益尺显示一处 —— 这里不再重复，避免同一个数在一页里出现两遍
- * （实测过：辅助卡的「今年以来」与收益尺「今年」都是 17086.02，月度卡的「本月累计」
- * 与收益尺「本月」同源）。
+ * 取 perfDailyRows 的前 7 行。它只包含有快照的日子，所以文案写「最近 7 个交易日」，
+ * 不写「最近 7 天」。「本月 / 今年」只在上方收益尺显示，这张卡不重复。
  */
 const recentTradingDays = 7;
 const recent7DailyStats = computed(() => summarizeDailyPnl(perfDailyRows.value || [], recentTradingDays));
