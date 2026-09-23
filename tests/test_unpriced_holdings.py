@@ -25,6 +25,20 @@ def _seed_holdings(app_module, rows):
         conn.close()
 
 
+def _set_price_sync_at(app_module, day_iso):
+    """测试造数据：模拟当天成功同步过一次价格（否则快照价格闸门会 409）。"""
+    conn = sqlite3.connect(app_module.DB_PATH)
+    try:
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES ('last_price_sync_at', ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (f"{day_iso} 15:20:00",),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def _fetch_snapshot(app_module, date_iso):
     conn = sqlite3.connect(app_module.DB_PATH)
     try:
@@ -129,6 +143,8 @@ def test_snapshot_records_and_refreshes_unpriced_count(client, app_module, monke
         ],
     )
 
+    _set_price_sync_at(app_module, "2026-09-22")
+
     first = client.post("/snapshots")
     assert first.status_code == 200
     assert first.json()["action"] == "created"
@@ -180,6 +196,8 @@ def test_timeline_exposes_unpriced_count(client, app_module, monkeypatch):
 
     monkeypatch.setattr(db, "local_today_iso", lambda: "2026-09-24")
     _seed_holdings(app_module, [("600301", 100, 8.0, 7.0, 0)])
+
+    _set_price_sync_at(app_module, "2026-09-24")
 
     res = client.post("/snapshots")
     assert res.status_code == 200

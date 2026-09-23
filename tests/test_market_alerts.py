@@ -246,6 +246,12 @@ def test_snapshot_stores_lifetime_profit(client, app_module, monkeypatch):
     )
     conn = sqlite3.connect(app_module.DB_PATH)
     conn.execute("UPDATE holdings SET last_price = 12 WHERE code = '600000'")
+    # 测试造数据补真实前提：当天成功同步过一次价格（否则快照价格闸门会 409）
+    conn.execute(
+        "INSERT INTO settings (key, value) VALUES ('last_price_sync_at', ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        ("2026-07-14 15:20:00",),
+    )
     conn.commit()
     conn.close()
 

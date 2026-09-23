@@ -19,16 +19,23 @@ const daysBetween = (startStr, endStr) => {
     return Math.round((end - start) / 86400000);
 };
 
+/**
+ * 固定千分位与小数点。
+ *
+ * 原来用 `toLocaleString(undefined, …)`，格式会随浏览器/系统语言变化（同一个 1234.5
+ * 在 zh-CN 下是 "1,234.5"、在 de-DE 下是 "1.234,5"）——页面数字、导出 CSV、截图和
+ * 单测断言都可能不一致。这里写死跟中文环境一致的分隔符。
+ */
+const groupThousands = (intPart) => intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
 const formatMoney = (value, digits = 2, showSign = false) => {
     if (value === null || value === undefined || value === '') return '—';
     const num = Number(value);
-    if (Number.isNaN(num)) return '—';
+    if (!Number.isFinite(num)) return '—';
     const sign = showSign && num > 0 ? '+' : (num < 0 ? '-' : '');
-    const absValue = Math.abs(num).toLocaleString(undefined, {
-        minimumFractionDigits: digits,
-        maximumFractionDigits: digits,
-    });
-    return `${sign}¥${absValue}`;
+    const [intPart, decPart] = Math.abs(num).toFixed(digits).split('.');
+    const grouped = groupThousands(intPart);
+    return `${sign}¥${decPart === undefined ? grouped : `${grouped}.${decPart}`}`;
 };
 
 const formatPercent = (value, digits = 2) => {

@@ -253,14 +253,24 @@ import sqlite3
 try:
     from database import db_session, local_today_iso
     from dashboard import build_dashboard
-    from snapshots import create_snapshot_record
+    from snapshots import create_snapshot_record, resolve_snapshot_price_state
 except Exception as e:
     print(json.dumps({"status": "error", "stage": "import_snapshot", "detail": str(e)}), file=sys.stderr)
     sys.exit(2)
 
 with db_session(row_factory=sqlite3.Row) as conn:
-    dash = build_dashboard(conn)
     today = local_today_iso()
+    # 与 /cron/snapshot 用同一套判据：最新价不是今天的就不写快照，
+    # 否则会沿用旧价算出的数字直接进每日收益（并污染 TWR/今年/收益尺）。
+    state = resolve_snapshot_price_state(conn, today)
+    if state["is_stale"]:
+        print(json.dumps({
+            "status": "skipped",
+            "reason": "price_stale",
+            "price_date": state["price_date"],
+        }, ensure_ascii=False, default=str))
+        sys.exit(0)
+    dash = build_dashboard(conn)
     snapshot_id, action = create_snapshot_record(conn, today, dash)
     conn.commit()
 print(json.dumps({

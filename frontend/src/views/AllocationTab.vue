@@ -376,8 +376,8 @@
         <el-table-column label="操作" width="200" align="center">
           <template #default="s">
             <el-button type="primary" link @click="openDraftEdit(s.row)">编辑</el-button>
-            <el-button type="primary" link @click="confirmDraft(s.row)">确认入账</el-button>
-            <el-button type="danger" link @click="deleteDraft(s.row)">删除</el-button>
+            <el-button type="primary" link :loading="draftBusy === 'confirm:' + s.row.id" :disabled="!!draftBusy" @click="onConfirmDraft(s.row)">确认入账</el-button>
+            <el-button type="danger" link :loading="draftBusy === 'delete:' + s.row.id" :disabled="!!draftBusy" @click="onDeleteDraft(s.row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -506,7 +506,7 @@
 <script setup>
 import PageShell from '../components/PageShell.vue';
 import MetricCard from '../components/MetricCard.vue';
-import { computed, onMounted, watch, nextTick } from 'vue';
+import { computed, onMounted, watch, nextTick, ref } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 
 const {
@@ -552,6 +552,23 @@ const {
   summaryText,
   resolvedTheme,
 } = useAppCtx();
+
+// 草稿的 确认入账/删除 都是写操作（模块里没有 in-flight 标志），这里包一层防连点：
+// 进行中同一行按钮转圈，其余行按钮禁用。
+const draftBusy = ref('');
+
+async function runDraftWrite(key, fn) {
+  if (draftBusy.value) return;
+  draftBusy.value = key;
+  try {
+    await fn();
+  } finally {
+    if (draftBusy.value === key) draftBusy.value = '';
+  }
+}
+
+const onConfirmDraft = (row) => runDraftWrite(`confirm:${row?.id}`, () => confirmDraft(row));
+const onDeleteDraft = (row) => runDraftWrite(`delete:${row?.id}`, () => deleteDraft(row));
 
 if (disciplinePolicy.value && !disciplinePolicy.value.targets) {
   disciplinePolicy.value.targets = { equity_pct: 45, fixed_income_pct: 30, deposit_pct: 25 };

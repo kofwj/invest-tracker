@@ -25,7 +25,7 @@ except ImportError:
     from snapshots import ensure_snapshot_columns, ensure_portfolio_cash_flows_table, ensure_reconcile_table
 
 
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 SCHEMA_VERSION_KEY = "schema_version"
 
 
@@ -319,6 +319,15 @@ def migrate_to_v14_query_indexes(conn):
     ensure_holding_correction_indexes(conn)
 
 
+def migrate_to_v15_snapshot_price_columns(conn):
+    """快照价格新鲜度两列：price_date（价格日期）+ price_stale（低置信标记）。
+
+    走 ensure_snapshot_columns 补列（幂等、不改已有数字），老库升级自动补；
+    历史快照这两列为 NULL / 0，读出来回落成"不标记"。
+    """
+    ensure_snapshot_columns(conn)
+
+
 MIGRATIONS = [
     (1, migrate_to_v1_core_compat),
     (2, migrate_to_v2_holdings_and_snapshots),
@@ -334,6 +343,7 @@ MIGRATIONS = [
     (12, migrate_to_v12_focus_defaults),
     (13, migrate_to_v13_broker_reconcile_history),
     (14, migrate_to_v14_query_indexes),
+    (15, migrate_to_v15_snapshot_price_columns),
 ]
 
 

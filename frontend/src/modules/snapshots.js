@@ -17,15 +17,25 @@ const createSnapshotsModule = ({
     fetchData,
     nextTick,
 }) => {
-    const createSnapshot = async () => {
+    /**
+     * 记录/更新今日快照。
+     *
+     * force=true 用于「最新价不是今天的」被后端 409 拦下后用户确认强制记录。
+     * 409 必须**继续往外抛**（不能像其它错误那样在这里吞掉）：上层 UI 要拿
+     * `e.response.data.detail` 弹确认框，确认后再带 force 重试。其它错误仍然
+     * 在这里提示，调用方无需处理。
+     */
+    const createSnapshot = async (force = false) => {
+        if (snapshotLoading.value) return;
         snapshotLoading.value = true;
         try {
-            const res = await api.createSnapshot();
+            const res = await api.createSnapshot(force);
             const action = res.data?.action === 'updated' ? '已更新今日快照' : '今日快照已记录';
             ElMessage.success(action);
             await fetchData();
             await fetchSnapshots();
         } catch (e) {
+            if (e?.response?.status === 409) throw e;
             const detail = e?.response?.data?.detail || e?.message || '记录失败';
             ElMessage.error(detail);
         } finally {

@@ -2,7 +2,7 @@ import sqlite3
 from datetime import date as dt_date, datetime
 from typing import Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 try:
@@ -10,13 +10,29 @@ try:
     from .database import LOCAL_TZ, db_session
     from .csv_utils import create_safety_backup, csv_response
     from .dashboard import build_dashboard
-    from .snapshots import create_snapshot_record, list_snapshots_rows, snapshots_summary_data, save_reconcile, latest_reconcile_with_gap
+    from .snapshots import (
+        create_snapshot_record,
+        latest_reconcile_with_gap,
+        list_snapshots_rows,
+        resolve_snapshot_price_state,
+        save_reconcile,
+        snapshots_summary_data,
+        stale_price_detail,
+    )
 except ImportError:
     import database as database_module
     from database import LOCAL_TZ, db_session
     from csv_utils import create_safety_backup, csv_response
     from dashboard import build_dashboard
-    from snapshots import create_snapshot_record, list_snapshots_rows, snapshots_summary_data, save_reconcile, latest_reconcile_with_gap
+    from snapshots import (
+        create_snapshot_record,
+        latest_reconcile_with_gap,
+        list_snapshots_rows,
+        resolve_snapshot_price_state,
+        save_reconcile,
+        snapshots_summary_data,
+        stale_price_detail,
+    )
 
 router = APIRouter()
 
@@ -39,13 +55,29 @@ class ReconcileSchema(BaseModel):
 
 
 @router.post("/snapshots")
-def create_snapshot():
+def create_snapshot(force: bool = False):
     with db_session(row_factory=sqlite3.Row) as conn:
         dash = build_dashboard(conn)
         today = database_module.local_today_iso()
+        # 价格闸门：最新价不是今天的 → 记下来的当日收益会失真（沿用旧价），
+        # 除非用户显式 force（此时照写，但落库 price_stale=1 + 旧价日期）。
+        price_state = resolve_snapshot_price_state(conn, today)
+        if price_state["needs_fresh_price"] and price_state["is_stale"] and not force:
+            raise HTTPException(
+                status_code=409, detail=stale_price_detail(price_state, today)
+            )
         snapshot_id, action = create_snapshot_record(conn, today, dash)
         conn.commit()
-    return {"status": "success", "action": action, "id": snapshot_id, "date": today, "snapshot": dash}
+    return {
+        "status": "success",
+        "action": action,
+        "id": snapshot_id,
+        "date": today,
+        "lifetime_profit": dash.get("lifetime_profit"),
+        "snapshot": dash,
+        "price_stale": int(price_state["is_stale"]),
+        "price_date": price_state["price_date"],
+    }
 
 
 @router.get("/snapshots")

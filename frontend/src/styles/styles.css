@@ -1013,6 +1013,23 @@ html.screenshot-mask .login-overlay *,
     background-color: color-mix(in srgb, var(--app-primary) 70%, #fff) !important;
 }
 
+/* 键盘可达性：登录按钮此前只有 outline:none，没有任何可见焦点态。
+   用 :focus-visible 而非 :focus，鼠标点击不会留下难看的框。 */
+.login-native-button:focus-visible {
+    outline: 3px solid color-mix(in srgb, #ffffff 70%, var(--app-primary)) !important;
+    outline-offset: 2px !important;
+}
+
+/* 顶栏 / 页内导航按钮同样只有 hover 态，键盘 Tab 过去完全看不到焦点在哪 */
+.header-brand:focus-visible,
+.header-nav-btn:focus-visible,
+.header-icon-btn:focus-visible,
+.header-btn:focus-visible,
+.page-nav-btn:focus-visible {
+    outline: 2px solid var(--app-primary);
+    outline-offset: 2px;
+}
+
 .login-native-button:active {
     background-color: #3a8ee6 !important;
 }

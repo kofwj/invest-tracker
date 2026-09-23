@@ -124,7 +124,8 @@ const api = {
     syncKlines: (payload = {}) => axios.post(API + '/klines/sync', payload, { timeout: 180000 }),
     fundamentalCheck: (code) => axios.get(API + '/analysis/' + encodeURIComponent(code), { timeout: 45000 }),
 
-    createSnapshot: () => axios.post(API + '/snapshots'),
+    // force=true 用于「最新价不是今天的」被 409 拦住后，用户确认强制记录
+    createSnapshot: (force = false) => axios.post(API + '/snapshots' + (force ? '?force=true' : '')),
     listSnapshots: (range = []) => {
         let url = API + '/snapshots';
         if (range && range.length === 2) url += `?start_date=${range[0]}&end_date=${range[1]}`;

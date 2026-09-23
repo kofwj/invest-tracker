@@ -10,7 +10,7 @@ import logging
 import math
 import sqlite3
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 try:
     from .csv_utils import create_safety_backup
@@ -394,25 +394,83 @@ def _is_defensive_holding(h: Dict[str, Any], policy: Dict[str, Any]) -> bool:
     return str(h.get("category") or "") in extra
 
 
-def _latest_account_for_code(conn, code: str, default: str = "华泰证券") -> str:
-    code = str(code or "").strip()
-    if not code:
-        return default
+def _latest_accounts_for_codes(
+    conn, codes: List[str], default: str = "华泰证券"
+) -> Dict[str, str]:
+    """一次查询取多个 code 的「最新账户」，避免每只持仓一条 SQL（N+1）。
+
+    语义与旧版逐只查询完全一致：只看 account 非空的交易，按 date DESC, id DESC
+    取第一行；查不到（或查询失败）时回落到 default。
+    """
+    wanted: List[str] = []
+    seen = set()
+    for c in codes or []:
+        s = str(c or "").strip()
+        if s and s not in seen:
+            seen.add(s)
+            wanted.append(s)
+    if not wanted:
+        return {}
+    placeholders = ",".join("?" for _ in wanted)
     try:
-        row = conn.execute(
-            """
-            SELECT account FROM transactions
-            WHERE code = ? AND account IS NOT NULL AND TRIM(account) != ''
-            ORDER BY date DESC, id DESC LIMIT 1
+        rows = conn.execute(
+            f"""
+            SELECT code, account FROM (
+                SELECT code, account,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY code ORDER BY date DESC, id DESC
+                       ) AS rn
+                FROM transactions
+                WHERE code IN ({placeholders})
+                  AND account IS NOT NULL AND TRIM(account) != ''
+            ) WHERE rn = 1
             """,
-            (code,),
-        ).fetchone()
+            tuple(wanted),
+        ).fetchall()
     except Exception:
+        # 极老版本 SQLite（<3.25，无窗口函数）退回逐 code 查询：结果与旧实现完全一致
+        return _latest_accounts_by_code_fallback(conn, wanted, default)
+    out: Dict[str, str] = {}
+    for r in rows:
+        code = r["code"] if isinstance(r, sqlite3.Row) else r[0]
+        acct = r["account"] if isinstance(r, sqlite3.Row) else r[1]
+        key = str(code or "").strip()
+        if not key:
+            continue
+        out[key] = str(acct or default).strip() or default
+    return out
+
+
+def _latest_account_for_code(conn, code: str, default: str = "华泰证券") -> str:
+    """单 code 便捷入口；内部走批量查询，保持原有回退语义。"""
+    key = str(code or "").strip()
+    if not key:
         return default
-    if not row:
-        return default
-    acct = row["account"] if isinstance(row, sqlite3.Row) else row[0]
-    return str(acct or default).strip() or default
+    return _latest_accounts_for_codes(conn, [key], default).get(key, default)
+
+
+def _latest_accounts_by_code_fallback(
+    conn, codes: List[str], default: str = "华泰证券"
+) -> Dict[str, str]:
+    """老 SQLite 兜底：逐 code 查最新账户（旧实现原样，仅作兼容路径）。"""
+    out: Dict[str, str] = {}
+    for code in codes:
+        try:
+            row = conn.execute(
+                """
+                SELECT account FROM transactions
+                WHERE code = ? AND account IS NOT NULL AND TRIM(account) != ''
+                ORDER BY date DESC, id DESC LIMIT 1
+                """,
+                (code,),
+            ).fetchone()
+        except Exception:
+            continue
+        if not row:
+            continue
+        acct = row["account"] if isinstance(row, sqlite3.Row) else row[0]
+        out[code] = str(acct or default).strip() or default
+    return out
 
 
 def _holding_rows(conn, policy: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
@@ -432,13 +490,26 @@ def _holding_rows(conn, policy: Optional[Dict[str, Any]] = None) -> List[Dict[st
         mv = qty * price
         h["market_value"] = mv
         h["macro"] = _macro_group(h.get("category") or "", policy)
-        h["account"] = _latest_account_for_code(conn, h.get("code") or "", pref_acct)
         out.append(h)
+    # 全部持仓的最新账户一次查出来（原来每只持仓一条 SELECT ... WHERE code=?）
+    accounts = _latest_accounts_for_codes(
+        conn, [h.get("code") or "" for h in out], pref_acct
+    )
+    for h in out:
+        h["account"] = accounts.get(str(h.get("code") or "").strip(), pref_acct)
     return out
 
 
 def build_discipline_report(conn) -> Dict[str, Any]:
     """Evaluate real portfolio against policy; return breaches + rebalance actions."""
+    report, _holdings = build_discipline_report_with_holdings(conn)
+    return report
+
+
+def build_discipline_report_with_holdings(conn) -> Tuple[
+    Dict[str, Any], List[Dict[str, Any]]
+]:
+    """build_discipline_report 的实现 + 顺带返回持仓行（供 allocation_story 复用，避免再查一次）。"""
     ensure_discipline_tables(conn)
     policy = get_policy(conn)
     totals = compute_portfolio_totals(conn)
@@ -840,7 +911,7 @@ def build_discipline_report(conn) -> Dict[str, Any]:
         f"默认优先加仓 {pref_name}（{pref_code}）；格力等可设个人上限。",
     ]
 
-    return {
+    report = {
         "policy": policy,
         "snapshot": {
             "total_assets": round(total_assets, 2),
@@ -870,6 +941,7 @@ def build_discipline_report(conn) -> Dict[str, Any]:
         "open_draft_count": open_draft_count,
         "generated_at": datetime.now(LOCAL_TZ).replace(tzinfo=None).isoformat(sep=" ", timespec="seconds"),
     }
+    return report, holdings
 
 
 def list_drafts(conn, status: Optional[str] = "draft") -> List[Dict[str, Any]]:

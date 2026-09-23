@@ -69,9 +69,9 @@
         <el-table-column prop="created_at" label="创建时间" width="180" />
         <el-table-column label="操作" width="220" align="center" header-align="center">
           <template #default="scope">
-            <el-button type="primary" link size="small" @click="downloadBackup(scope.row)">下载</el-button>
-            <el-button type="warning" link size="small" @click="restoreBackup(scope.row)">恢复</el-button>
-            <el-button type="danger" link size="small" @click="deleteBackup(scope.row)">删除</el-button>
+            <el-button type="primary" link size="small" :loading="backupBusy === 'download:' + scope.row.filename" :disabled="!!backupBusy" @click="onDownloadBackup(scope.row)">下载</el-button>
+            <el-button type="warning" link size="small" :loading="backupBusy === 'restore:' + scope.row.filename" :disabled="!!backupBusy" @click="onRestoreBackup(scope.row)">恢复</el-button>
+            <el-button type="danger" link size="small" :loading="backupBusy === 'delete:' + scope.row.filename" :disabled="!!backupBusy" @click="onDeleteBackup(scope.row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -82,13 +82,31 @@
 <script setup>
 import PageShell from '../components/PageShell.vue';
 import MetricCard from '../components/MetricCard.vue';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 
 const {
   maintenanceStatus, backups, maintenanceLoading, latestBackupText,
   fetchMaintenance, createDbBackup, downloadBackup, restoreBackup, deleteBackup, restoreUploadedBackup,
 } = useAppCtx();
+
+// 表格行上的 下载/恢复/删除 以前只靠 v-loading 遮罩，按钮本身可连点。
+// 这里用一个 in-flight 标志（`动作:文件名`）挡住，进行中整行三个按钮都禁用。
+const backupBusy = ref('');
+
+async function runBackupAction(key, fn) {
+  if (backupBusy.value) return;
+  backupBusy.value = key;
+  try {
+    await fn();
+  } finally {
+    if (backupBusy.value === key) backupBusy.value = '';
+  }
+}
+
+const onDownloadBackup = (row) => runBackupAction(`download:${row?.filename || ''}`, () => downloadBackup(row));
+const onRestoreBackup = (row) => runBackupAction(`restore:${row?.filename || ''}`, () => restoreBackup(row));
+const onDeleteBackup = (row) => runBackupAction(`delete:${row?.filename || ''}`, () => deleteBackup(row));
 
 const backupCount = computed(() => {
   const n = Number(maintenanceStatus.value?.backup_count || 0);

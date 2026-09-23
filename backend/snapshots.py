@@ -26,6 +26,12 @@ def ensure_snapshot_columns(conn):
     if "unpriced_count" not in cols:
         # 该日快照里 last_price 缺失（按 0 计市值）的持仓只数
         conn.execute("ALTER TABLE daily_snapshots ADD COLUMN unpriced_count INTEGER DEFAULT 0")
+    if "price_date" not in cols:
+        # 该快照所依据的价格日期（本地 YYYY-MM-DD），未知为 NULL
+        conn.execute("ALTER TABLE daily_snapshots ADD COLUMN price_date TEXT")
+    if "price_stale" not in cols:
+        # 1 表示记录时最新价不是当天的（低置信快照）
+        conn.execute("ALTER TABLE daily_snapshots ADD COLUMN price_stale INTEGER DEFAULT 0")
 
 
 def ensure_portfolio_cash_flows_table(conn):
@@ -129,18 +135,129 @@ def resolve_unpriced_count(conn, dashboard):
         return 0
 
 
+# settings 里记录「最近一次成功同步价」的时间键。
+# 不能只用 holdings.updated_at 判据：用户录一笔交易会触发 recalc_holdings
+# 刷新它，价格就"看起来是新的"。
+LAST_PRICE_SYNC_KEY = "last_price_sync_at"
+
+
+def _local_today_iso():
+    """本地"今天"；动态读 database 模块属性，测试 monkeypatch 才生效。"""
+    try:
+        from .database import local_today_iso
+    except ImportError:
+        from database import local_today_iso
+    return local_today_iso()
+
+
+def _normalize_timestamp(value):
+    """把库里各种时间写法规整成 'YYYY-MM-DD HH:MM:SS'；解析不了返回 None。"""
+    text = str(value or "").strip().replace("T", " ")
+    if not text:
+        return None
+    text = text[:19]
+    if len(text) == 10:
+        text += " 00:00:00"
+    try:
+        datetime.strptime(text, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return None
+    return text
+
+
+def count_holdings_needing_price(conn):
+    """需要行情价的持仓只数（只有 quantity > 0 才需要定价）。"""
+    try:
+        row = conn.execute("SELECT COUNT(*) AS cnt FROM holdings WHERE quantity > 0").fetchone()
+        if isinstance(row, sqlite3.Row):
+            return int(row["cnt"] or 0)
+        return int((row[0] if row else 0) or 0)
+    except (TypeError, ValueError, IndexError):
+        return 0
+
+
+def latest_price_sync_at(conn):
+    """最近一次成功同步价的时间（本地 naive 串），未知返回 None。
+
+    优先 settings.last_price_sync_at（价格同步专用，不会被录交易刷新）；
+    老库没有该键时回落到 MAX(holdings.updated_at) WHERE quantity > 0。
+    """
+    try:
+        row = conn.execute(
+            "SELECT value FROM settings WHERE key = ?", (LAST_PRICE_SYNC_KEY,)
+        ).fetchone()
+    except Exception:
+        row = None
+    if row is not None:
+        value = row["value"] if isinstance(row, sqlite3.Row) else row[0]
+        ts = _normalize_timestamp(value)
+        if ts:
+            return ts
+    try:
+        row2 = conn.execute(
+            "SELECT MAX(updated_at) AS latest FROM holdings "
+            "WHERE quantity > 0 AND updated_at IS NOT NULL"
+        ).fetchone()
+    except Exception:
+        return None
+    if row2 is None:
+        return None
+    latest = row2["latest"] if isinstance(row2, sqlite3.Row) else row2[0]
+    return _normalize_timestamp(latest)
+
+
+def resolve_snapshot_price_state(conn, today_iso=None):
+    """/snapshots 与 /cron/snapshot 共用的价格新鲜度判据。
+
+    - needs_fresh_price：存在 quantity > 0 的持仓才需要行情价；没有任何需定价
+      持仓（例如只存银行存款）时一律放行，否则这类用户永远记不了快照。
+    - price_date：最近一次成功同步价的本地日期；从未同步过为 None。
+    - is_stale：price_date != 今天（从未同步过也算 stale）；无需定价时恒为 False。
+    """
+    sync_at = latest_price_sync_at(conn)
+    price_date = sync_at[:10] if sync_at else None
+    needs = count_holdings_needing_price(conn) > 0
+    today = str(today_iso or _local_today_iso() or "")[:10]
+    return {
+        "needs_fresh_price": needs,
+        "price_date": price_date,
+        "is_stale": bool(needs and price_date != today),
+        "last_price_sync_at": sync_at,
+    }
+
+
+def stale_price_detail(price_state, today_iso=None):
+    """价格不新鲜时的中文提示（含基准日期），给人看。"""
+    if not isinstance(price_state, dict):
+        price_state = {}
+    price_date = price_state.get("price_date")
+    if price_date:
+        head = f"最新价还是 {price_date} 的"
+    elif today_iso:
+        head = f"最新价还没有成功同步过（{today_iso} 取不到当日价）"
+    else:
+        head = "最新价还没有成功同步过（基准日期未知）"
+    return f"{head}，现在记录会让这天的收益失真（快照值会沿用旧价）。先点「同步价」，或用 force=true 强制记录"
+
+
 def create_snapshot_record(conn, today_iso, dashboard):
     ensure_snapshot_columns(conn)
     now = datetime.now(LOCAL_TZ).replace(tzinfo=None)
     lifetime = dashboard.get("lifetime_profit", 0)
     unpriced_count = resolve_unpriced_count(conn, dashboard)
+    # 价格新鲜度用共享判据（不要从 dashboard 的 price_stale/updated_at 猜）：
+    # force 记录时这里自然落成 price_stale=1 + 旧价日期。
+    price_state = resolve_snapshot_price_state(conn, today_iso)
+    price_date = price_state["price_date"]
+    price_stale = 1 if price_state["is_stale"] else 0
     existing = conn.execute("SELECT id FROM daily_snapshots WHERE date = ?", (today_iso,)).fetchone()
     if existing:
         conn.execute("""
             UPDATE daily_snapshots
             SET total_assets = ?, total_market_value = ?, bank_balance = ?, securities_cash = ?,
                 pending_purchase = ?, total_profit = ?, lifetime_profit = ?, holdings_count = ?,
-                equity_mv = ?, bond_mv = ?, reit_mv = ?, created_at = ?, unpriced_count = ?
+                equity_mv = ?, bond_mv = ?, reit_mv = ?, created_at = ?, unpriced_count = ?,
+                price_date = ?, price_stale = ?
             WHERE date = ?
         """, (
             dashboard['total_assets'],
@@ -156,6 +273,8 @@ def create_snapshot_record(conn, today_iso, dashboard):
             (dashboard.get("category_market_value") or {}).get("REITs", 0),
             now,
             unpriced_count,
+            price_date,
+            price_stale,
             today_iso,
         ))
         return existing['id'], 'updated'
@@ -164,8 +283,8 @@ def create_snapshot_record(conn, today_iso, dashboard):
         INSERT INTO daily_snapshots
         (date, total_assets, total_market_value, bank_balance, securities_cash, pending_purchase,
          total_profit, lifetime_profit, holdings_count, equity_mv, bond_mv, reit_mv, created_at,
-         unpriced_count)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         unpriced_count, price_date, price_stale)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         today_iso,
         dashboard['total_assets'],
@@ -181,6 +300,8 @@ def create_snapshot_record(conn, today_iso, dashboard):
         (dashboard.get("category_market_value") or {}).get("REITs", 0),
         now,
         unpriced_count,
+        price_date,
+        price_stale,
     ))
     snapshot_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
     return snapshot_id, 'created'

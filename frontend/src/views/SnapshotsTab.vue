@@ -14,9 +14,9 @@
                                 @change="fetchSnapshots"
                                 style="width: 300px"
                             ></el-date-picker>
-                            <el-button type="primary" @click="createSnapshot" :loading="snapshotLoading">记录/更新今日快照</el-button>
+                            <el-button type="primary" @click="onCreateSnapshot" :loading="snapshotLoading">记录/更新今日快照</el-button>
                             <el-button @click="exportSnapshots">导出快照</el-button>
-                            <el-button type="warning" plain @click="compactSnapshots">压缩历史快照</el-button>
+                            <el-button type="warning" plain :loading="compacting" @click="onCompactSnapshots">压缩历史快照</el-button>
                         
     </template>
 <el-alert
@@ -206,6 +206,26 @@
 <script setup>
 import PageShell from '../components/PageShell.vue';
 import MetricCard from '../components/MetricCard.vue';
+import { ref } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 const { snapshots, snapshotRange, snapshotMetrics, snapshotChangeRows, snapshotInsights, snapshotSummary, snapshotLoading, reconcileData, reconcileForm, reconcileSaving, createSnapshot, fetchSnapshots, exportSnapshots, compactSnapshots, saveReconcile, formatMoney, pct } = useAppCtx();
+
+// 写操作防连点。快照用模块里现成的 snapshotLoading（模块内的 createSnapshot 会把它置位），
+// 压缩快照模块里没有标志，本页用一个本地 ref。
+const compacting = ref(false);
+
+async function onCreateSnapshot() {
+  if (snapshotLoading?.value) return;
+  await createSnapshot();
+}
+
+async function onCompactSnapshots() {
+  if (compacting.value) return;
+  compacting.value = true;
+  try {
+    await compactSnapshots();
+  } finally {
+    compacting.value = false;
+  }
+}
 </script>

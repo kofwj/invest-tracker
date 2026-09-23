@@ -7,12 +7,14 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 try:
+    from .cash import set_setting
     from .csv_utils import create_safety_backup
     from .database import LOCAL_TZ, db_session
     from .holding_calculator import infer_category, recalc_holdings, validate_holding_history
     from .return_sync import calculate_trailing_return_1y, ensure_holding_return_columns
     from .price_sync import fetch_eastmoney_prices, fetch_open_fund_nav
 except ImportError:
+    from cash import set_setting
     from csv_utils import create_safety_backup
     from database import LOCAL_TZ, db_session
     from holding_calculator import infer_category, recalc_holdings, validate_holding_history
@@ -294,12 +296,15 @@ def _sync_prices_impl(backup: bool = False):
             failed.append({"code": code, "name": row["name"], "reason": str(e)})
 
     # 阶段 3（短写事务）：批量落库。价格没变的标的也刷新 updated_at（与旧实现一致）。
+    # 只要至少抓到一只价格就记 last_price_sync_at（本地时间、与 holdings.updated_at
+    # 同格式），供快照价格闸门判断"最新价是不是今天的"；全部失败不写，保持旧值。
     if pending:
         with db_session() as conn:
             conn.executemany(
                 "UPDATE holdings SET last_price = ?, updated_at = ? WHERE code = ?",
                 pending,
             )
+            set_setting(conn, "last_price_sync_at", now.strftime("%Y-%m-%d %H:%M:%S"))
             conn.commit()
 
     # 顺手增量同步日K缓存（失败不影响同步价结果）。

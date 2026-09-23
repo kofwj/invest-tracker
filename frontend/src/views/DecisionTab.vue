@@ -330,7 +330,7 @@
             />
             <el-button size="small" :loading="alertEventsLoading" @click="fetchAlertEvents">刷新</el-button>
             <el-button size="small" @click="exportAlertEvents">导出</el-button>
-            <el-button size="small" type="danger" plain @click="clearAlertEvents">清空</el-button>
+            <el-button size="small" type="danger" plain :loading="alertClearing" @click="onClearAlertEvents">清空</el-button>
           </div>
         </div>
       </template>
@@ -389,7 +389,7 @@
 <script setup>
 import PageShell from '../components/PageShell.vue';
 import MetricCard from '../components/MetricCard.vue';
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 
 const {
@@ -653,6 +653,19 @@ async function refreshDecision() {
     typeof refreshMarket === 'function' ? refreshMarket() : Promise.resolve(),
     typeof refreshDiscipline === 'function' ? refreshDiscipline() : Promise.resolve(),
   ]);
+}
+
+// 清空预警历史是 DELETE，模块里没有 in-flight 标志，本页包一层防连点。
+const alertClearing = ref(false);
+
+async function onClearAlertEvents() {
+  if (alertClearing.value) return;
+  alertClearing.value = true;
+  try {
+    await clearAlertEvents();
+  } finally {
+    alertClearing.value = false;
+  }
 }
 
 onMounted(() => {

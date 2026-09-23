@@ -94,6 +94,19 @@
               <span v-else class="perf-contrib-sub">1天</span>
             </template>
           </el-table-column>
+          <el-table-column label="价格" width="180" align="center">
+            <template #default="s">
+              <el-tooltip
+                v-if="s.row.priceStale"
+                :content="`这天的快照按 ${s.row.priceDate || '早先'} 的价格计算，不是当天价`"
+                placement="top"
+              >
+                <el-tag size="small" type="warning">价格未更新</el-tag>
+              </el-tooltip>
+              <el-tag v-if="s.row.unpricedCount" size="small" type="info">缺价 {{ s.row.unpricedCount }} 只</el-tag>
+              <span v-if="!s.row.priceStale && !s.row.unpricedCount" class="perf-contrib-sub">—</span>
+            </template>
+          </el-table-column>
         </el-table>
       </template>
     </el-card>
@@ -225,7 +238,7 @@
           <el-input v-model="perfFlowForm.remark" style="width:120px;" />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="savePerfFlow">{{ perfFlowEditId ? '保存' : '新增' }}</el-button>
+          <el-button type="primary" :loading="perfFlowSaving" @click="onSavePerfFlow">{{ perfFlowEditId ? '保存' : '新增' }}</el-button>
           <el-button v-if="perfFlowEditId" @click="cancelPerfFlowEdit">取消</el-button>
         </el-form-item>
       </el-form>
@@ -257,6 +270,7 @@
 import PageShell from '../components/PageShell.vue';
 import MetricCard from '../components/MetricCard.vue';
 import { ref, computed, onMounted, watch } from 'vue';
+import { ElMessageBox } from 'element-plus';
 import { useAppCtx } from '../composables/useAppCtx.js';
 
 const {
@@ -284,6 +298,7 @@ const {
 const perfFlowSuggestions = ref([]);
 const perfSuggestLoading = ref(false);
 const perfFlowEditId = ref(null);
+const perfFlowSaving = ref(false);
 
 // === 每日收益 ===
 const dailyRange = ref(30);
@@ -294,7 +309,24 @@ const dailyRowsForRange = computed(() => {
   const all = perfDailyRows.value || [];
   return dailyRange.value > 0 ? all.slice(0, dailyRange.value) : all;
 });
-const dailyTableRows = computed(() => dailyRowsForRange.value);
+// timeline 里每行的价格新鲜度（后端新增字段 price_stale / price_date / unpriced_count）。
+// buildDailyPnlRows 不搬这几个字段（utils 不在本任务范围），所以按日期在这里补上。
+const priceFlagsByDate = computed(() => {
+  const map = {};
+  for (const r of perfTimeline.value || []) {
+    if (!r) continue;
+    map[String(r.date || '')] = {
+      priceStale: Number(r.price_stale || 0) === 1 || r.price_stale === true,
+      priceDate: r.price_date || null,
+      unpricedCount: r.unpriced_count == null ? 0 : Number(r.unpriced_count),
+    };
+  }
+  return map;
+});
+const dailyTableRows = computed(() => dailyRowsForRange.value.map((row) => ({
+  ...row,
+  ...(priceFlagsByDate.value[String(row.date)] || {}),
+})));
 const dailyChartRows = computed(() => [...dailyRowsForRange.value].reverse());
 
 const dailyBestText = computed(() => {
@@ -312,12 +344,45 @@ async function renderDailyChart() {
   await waitForChartDom(['dailyPnlChart']);
   renderDailyPnlChartView(dailyChartRows.value);
 }
+/**
+ * 记录今日快照。
+ * 后端闸门：最新价不是今天的 → 409，detail 里带基准日期；用户确认后带 force 重记一次。
+ * createSnapshot(force) 由 appCtx 提供（api 层的签名由他人负责）。
+ */
+async function postTodaySnapshot(force) {
+  try {
+    return await createSnapshot(force);
+  } catch (e) {
+    if (e?.response?.status !== 409) throw e;
+    const detail = e?.response?.data?.detail || '最新价不是今天的价格，确认后仍要记录今天的快照吗？';
+    try {
+      await ElMessageBox.confirm(detail, '价格未更新', {
+        type: 'warning',
+        confirmButtonText: '仍要记录',
+        cancelButtonText: '取消',
+      });
+    } catch (confirmErr) {
+      if (confirmErr === 'cancel' || confirmErr === 'close') return undefined;
+      throw confirmErr;
+    }
+    try {
+      // 还没支持 force 的实现会再抛一次 409：这里不再弹第二次确认，错误提示交给模块
+      return await createSnapshot(true);
+    } catch (retryErr) {
+      console.error('createSnapshot(force)', retryErr);
+      return undefined;
+    }
+  }
+}
 
 async function onCreateTodaySnapshot() {
+  if (dailySnapshotSaving.value) return;
   dailySnapshotSaving.value = true;
   try {
-    await createSnapshot();
+    await postTodaySnapshot(false);
     await fetchPerformance();
+  } catch (e) {
+    console.error('记录今日快照失败', e);
   } finally {
     dailySnapshotSaving.value = false;
   }
@@ -404,6 +469,18 @@ const savePerfFlow = async () => {
     await addPerfFlow();
   }
 };
+
+// 防连点：保存/新增走同一个按钮，模块里只有 addPerfFlow 有内部标志（且不可见），
+// updatePerfFlow 没有 —— 这里统一用本页的 ref 挡住。
+async function onSavePerfFlow() {
+  if (perfFlowSaving.value) return;
+  perfFlowSaving.value = true;
+  try {
+    await savePerfFlow();
+  } finally {
+    perfFlowSaving.value = false;
+  }
+}
 
 const onLoadFlowSuggest = async () => {
   perfSuggestLoading.value = true;

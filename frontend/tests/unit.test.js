@@ -217,3 +217,27 @@ describe('summarizeDailyPnl', () => {
     expect(s.best).toBeNull();
   });
 });
+describe('formatMoney 的确定性（不随浏览器语言变化）', () => {
+  it('always groups thousands with a comma', () => {
+    expect(formatMoney(1234567.891)).toBe('¥1,234,567.89');
+    expect(formatMoney(1000)).toBe('¥1,000.00');
+    expect(formatMoney(999)).toBe('¥999.00');
+    expect(formatMoney(-1234567.8, 1)).toBe('-¥1,234,567.8');
+  });
+
+  it('keeps the decimal point as a dot', () => {
+    expect(formatMoney(0.5)).toBe('¥0.50');
+    expect(formatMoney(-0.05, 2)).toBe('-¥0.05');
+  });
+
+  it('respects digits, including 0', () => {
+    expect(formatMoney(1234.56, 0)).toBe('¥1,235');
+    expect(formatMoney(1234.4, 0)).toBe('¥1,234');
+  });
+
+  it('shows a dash for non-finite numbers instead of ¥∞', () => {
+    expect(formatMoney(Infinity)).toBe('—');
+    expect(formatMoney(-Infinity)).toBe('—');
+    expect(formatMoney(NaN)).toBe('—');
+  });
+});

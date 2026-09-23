@@ -18,7 +18,7 @@ try:
     from .market import check_alerts
     from .notify import run_scheduled_events
     from .routers_holdings import _sync_prices_impl
-    from .snapshots import create_snapshot_record
+    from .snapshots import create_snapshot_record, resolve_snapshot_price_state
     from .trading_calendar import trading_day_status
 except ImportError:
     from dashboard import build_dashboard
@@ -26,7 +26,7 @@ except ImportError:
     from market import check_alerts
     from notify import run_scheduled_events
     from routers_holdings import _sync_prices_impl
-    from snapshots import create_snapshot_record
+    from snapshots import create_snapshot_record, resolve_snapshot_price_state
     from trading_calendar import trading_day_status
 
 router = APIRouter()
@@ -62,6 +62,16 @@ def cron_snapshot():
     with db_session(row_factory=sqlite3.Row) as conn:
         dash = build_dashboard(conn)
         today = local_today_iso()
+        # 价格闸门：最新价不是今天的 → 不写库（cron 只把响应 JSON 打进日志，
+        # 所以返回 200 + skipped 而不是抛异常，避免 cron 侧误报失败）。
+        price_state = resolve_snapshot_price_state(conn, today)
+        if price_state["needs_fresh_price"] and price_state["is_stale"]:
+            conn.commit()  # 保留 build_dashboard 的既有副作用（如现金基准），不写快照行
+            return {
+                "status": "skipped",
+                "reason": "price_stale",
+                "price_date": price_state["price_date"],
+            }
         snapshot_id, action = create_snapshot_record(conn, today, dash)
         conn.commit()
     return {

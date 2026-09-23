@@ -13,10 +13,10 @@ from typing import Any, Dict, List, Optional, Tuple
 
 try:
     from .database import LOCAL_TZ, local_today_iso
-    from .discipline import _holding_rows, build_discipline_report, get_policy
+    from .discipline import build_discipline_report_with_holdings, get_policy
 except ImportError:
     from database import LOCAL_TZ, local_today_iso
-    from discipline import _holding_rows, build_discipline_report, get_policy
+    from discipline import build_discipline_report_with_holdings, get_policy
 
 # Fine-category concentration warn threshold (single module constant; not policy yet).
 CATEGORY_CONCENTRATION_WARN_PCT = 35.0
@@ -580,7 +580,8 @@ def _build_focus_checks(
 
 def build_allocation_story(conn) -> Dict[str, Any]:
     """Human-readable allocation diagnosis; all figures from tools, not guesses."""
-    report = build_discipline_report(conn)
+    # 一次拿到报告 + 持仓行：原来 609 行又查了一遍 holdings，等于把 N+1 跑两次
+    report, holdings = build_discipline_report_with_holdings(conn)
     policy = report.get("policy") or get_policy(conn)
     policy_slice = _policy_slice(policy)
     snapshot = dict(report.get("snapshot") or {})
@@ -606,7 +607,6 @@ def build_allocation_story(conn) -> Dict[str, Any]:
         "deposit_amount": round(total_assets * gap_dep / 100.0, 2) if total_assets else 0.0,
     }
 
-    holdings = _holding_rows(conn, policy)
     concentration = _build_concentration(holdings, total_assets)
     health = _build_health(snapshot, policy, concentration.get("max_category"))
     issues = _issues_from_breaches_and_plans(

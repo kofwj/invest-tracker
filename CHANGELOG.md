@@ -4,6 +4,84 @@
 版本号单一来源 `backend/version.py`；发布流程：改那里 → 本文件记版本 → `git tag vX.Y.Z`。生产部署以分支 `deploy/vps` 为准。
 
 ---
+## [未发布 · 第三轮] — 快照价格闸门 + 依赖锁定 + 体验加固
+
+### 新增：快照价格新鲜度闸门（防止错误的当日收益被记进历史）
+
+每日 16:40 的 cron 会用当前 `holdings.last_price` 写当天快照。价格同步（15:20 / 16:40 两次）
+会失败——生产上 2026-09-22 16:40 那次 8/10 只标的取不到价（那天侥幸没事，因为 15:20 成功过）。
+如果某天**两次都失败**，快照就会沿用前一天的价：当日收益显示成约 0，而且这个错数字会一路
+污染 TWR / Sharpe / 今年 / 时间轴收益尺。
+
+- `settings.last_price_sync_at`：价格同步**至少成功抓到一只**时写入（全部失败不写）。
+  不能只靠 `holdings.updated_at`——用户录一笔交易触发的 `recalc_holdings` 会刷新它，
+  从而"看起来价格是新的"。
+- `daily_snapshots` 新增 `price_date`（该快照依据的价格日期）与 `price_stale`（低置信标记），
+  走 schema v15 迁移自动补到老库，**历史快照数字与标记都不变**（已验证：82 条真实快照全部
+  `price_stale=0`）。
+- `POST /snapshots` 在价格陈旧时返回 **409**，`detail` 里带基准日期；带 `force=true` 可强制
+  记录并标记低置信。前端弹确认框，用户确认后自动带 force 重试。
+- `POST /cron/snapshot` 价格陈旧时**不写库**，返回 `{"status":"skipped","reason":"price_stale"}`。
+- cron 脚本里第三条写快照的路径（容器内直接 `create_snapshot_record`）也补上了同一判据，
+  三条路径行为一致。
+- 「每日收益」表格新增「价格」列：`price_stale` 的天显示「价格未更新」标签（hover 显示依据
+  的日期），`unpriced_count > 0` 显示「缺价 N 只」。
+- 没有任何 `quantity > 0` 持仓的用户一律放行（否则只存银行存款的用户永远记不了快照）。
+
+**已知边界**：判据是"当天有没有一次同步完全成功"。若某天 15:20 全成功、16:40 全失败，仍算
+新鲜（用的就是 15:20 的收盘价，这是对的）；若两次都只成功一部分（例如 8/10 失败但 2 只货基
+成功），仍会放行——那一档只有 `unpriced_count`（价格为 0/NULL）能标记，部分失败不会被标记。
+
+### 优化：依赖锁定 + 消除 N+1
+
+- `backend/requirements.txt` 的 9 个直接依赖从区间约束改为 `==` 精确锁定（版本取自生产容器
+  实际在跑的那一套：`akshare==1.18.97` / `fastapi==0.141.1` / `pandas==2.3.3` …），
+  `requirements-dev.txt` 同样锁定，另加可选的 `backend/requirements.lock.txt`（直接+传递全量
+  快照，未接进 Dockerfile）。此前每次 `up -d --build` 都可能悄悄装上更新的 pandas / akshare——
+  对一个算财务数字的应用是真实风险。已在服务器上用 `python:3.11-slim` 实装验证：43 条与期望
+  逐条一致、无依赖冲突。
+- discipline 的 N+1 查询：`_holding_rows` 原来对每只持仓单独查一次"最新账户"，改为一次
+  `ROW_NUMBER()` 窗口查询（含 SQLite < 3.25 的逐条回退），`build_allocation_story` 复用
+  已有持仓行不再二次查询。实测 8 只持仓：`build_discipline_report` 总 SQL 21→14、
+  `FROM transactions … WHERE code` 8→1；`build_allocation_story` 31→15、同类查询 16→1，
+  返回 payload 与改动前深度相等。
+
+### 加固：写操作防连点 + 键盘可达性 + 金额格式确定性
+
+- 6 个页面里会改数据的按钮补上 loading / 防连点（费率保存与恢复、现金校准、新增流水、
+  压缩快照、记录今日快照、清空预警历史、备份下载/恢复/删除、流水保存、草稿确认与删除），
+  能复用模块里已有 in-flight 标志的优先复用。
+- 键盘可达性：登录按钮此前是 `outline: none` 且没有任何可见焦点态，键盘用户完全看不到焦点；
+  顶栏/页内导航按钮同样只有 hover 态。补 `:focus-visible` 轮廓（鼠标点击不会留框）。
+- `formatMoney` 原先用 `toLocaleString(undefined, …)`，格式随浏览器语言变化（同一个 1234.5
+  在 zh-CN 下是 `1,234.5`、de-DE 下是 `1.234,5`），页面数字/导出 CSV/截图/单测都可能不一致；
+  改为固定千分位与小数点，并对非有限数字返回 `—` 而不是 `¥∞`。
+
+### 调查后未采纳：Element Plus 首屏瘦身
+
+审计认为首屏 181KB gzip（element-plus）是 barrel 导入造成的。实测证伪：把 17 个文件里的
+`import { ElMessage } from 'element-plus'` 全部去掉改由 `AutoImport` 注入，**产物字节完全相同**
+（557,965 与 CSS hash 都不变），说明 Rolldown 本来就把 barrel tree-shake 干净了。又试了三种
+分块方案（`AppDialogs` 异步化 / 去掉 element-plus 的 `manualChunks` 分组 / 完全交给 Rollup）：
+
+- 现状：首屏 287.0 KB gzip，dist 总量 1,880 KB，首屏 7 个请求
+- `AppDialogs` 异步化（保留分组）：288.0 KB gzip，1,880 KB，7 个请求
+- 去掉分组（落进 vendor）：288.1 KB gzip，1,880 KB，7 个请求
+- 完全交给 Rollup：283.8 KB gzip，1,948 KB，22 个请求（chunk 名退化成 `css-*.js`）
+
+即：这 181KB 是**真实被引用的组件代码**（el-table / el-date-picker / el-upload / el-dialog 等），
+不是打包问题。三种方案最好也只省 3KB 且代价明显，故全部回退，保持代码简单。真要大幅降低只能
+减少首屏引用的组件。
+
+### 测试
+
+后端 230 项（+9：快照价格闸门）；前端 69 项（+13：写操作防连点与 409→force 流程、金额格式）。
+闸门在**生产真实数据副本**上端到端验证：陈旧→409 / force→落库 `price_stale=1` 且
+`price_date` 为旧日期 / 新鲜→200 且 `price_stale=0` / cron 陈旧→`skipped` 且今天无行写入 /
+迁移后 82 条历史快照数字与标记不变。
+
+---
+
 ## [未发布 · 第二轮] — 回归修复 + 项目审计整改
 
 ### 修复：顶栏导航点击不跳转（回归）

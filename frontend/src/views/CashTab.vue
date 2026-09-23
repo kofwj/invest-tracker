@@ -4,8 +4,8 @@
   >
     <template #actions>
       <el-space wrap>
-        <el-button size="small" type="primary" @click="saveFeeSettings">保存费率</el-button>
-        <el-button size="small" @click="resetFeeSettings">恢复默认费率</el-button>
+        <el-button size="small" type="primary" :loading="feeBusy === 'save'" :disabled="!!feeBusy && feeBusy !== 'save'" @click="onSaveFeeSettings">保存费率</el-button>
+        <el-button size="small" :loading="feeBusy === 'reset'" :disabled="!!feeBusy && feeBusy !== 'reset'" @click="onResetFeeSettings">恢复默认费率</el-button>
       </el-space>
     </template>
 
@@ -24,8 +24,8 @@
           <el-option v-for="acc in feeAccounts" :key="acc" :label="acc" :value="acc"></el-option>
         </el-select>
         <el-input v-model="newFeeAccountName" placeholder="新增账户，如 招商证券" style="width:220px" clearable></el-input>
-        <el-button @click="addFeeAccount">新增账户</el-button>
-        <el-button type="danger" plain @click="removeFeeAccount" :disabled="feeAccounts.length <= 1">删除当前账户</el-button>
+        <el-button :loading="feeBusy === 'add'" :disabled="!!feeBusy && feeBusy !== 'add'" @click="onAddFeeAccount">新增账户</el-button>
+        <el-button type="danger" plain :loading="feeBusy === 'remove'" :disabled="feeAccounts.length <= 1 || (!!feeBusy && feeBusy !== 'remove')" @click="onRemoveFeeAccount">删除当前账户</el-button>
       </div>
       <div class="fee-settings-native" v-if="feeSettings[activeFeeAccount]">
         <div class="fee-settings-head">
@@ -62,7 +62,7 @@
           <span class="ops-hint" style="margin-left:12px;">仅银证/券商现金校准</span>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" @click="updateCash">保存校准</el-button>
+          <el-button type="primary" :loading="cashSaving" @click="onUpdateCash">保存校准</el-button>
         </el-form-item>
       </el-form>
     </el-card>
@@ -107,7 +107,7 @@
           </el-col>
           <el-col :span="4">
             <el-form-item label=" ">
-              <el-button type="primary" @click="addCashFlow">新增流水</el-button>
+              <el-button type="primary" :loading="cashFlowSaving" @click="onAddCashFlow">新增流水</el-button>
             </el-form-item>
           </el-col>
         </el-row>
@@ -207,6 +207,7 @@
 
 <script setup>
 import PageShell from '../components/PageShell.vue';
+import { ref } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 const {
   dashboard, feeSettings, feeAccounts, activeFeeAccount, newFeeAccountName, feeCategories,
@@ -215,6 +216,47 @@ const {
   updateCash, queryCashFlows, resetCashFlowQuery, addCashFlow, openCashFlowEditDialog, deleteCashFlow,
   cashFlowTagType, formatMoney, fetchCashAudit,
 } = useAppCtx();
+
+// 写操作防连点：模块里没有现成的 loading ref，这里用一个 in-flight 标志包一层。
+// feeBusy 记当前在跑的费率写操作（保存/恢复默认/新增/删除账户），互斥避免并发覆盖同一份费率。
+const feeBusy = ref('');
+const cashSaving = ref(false);
+const cashFlowSaving = ref(false);
+
+async function runFeeWrite(key, fn) {
+  if (feeBusy.value) return;
+  feeBusy.value = key;
+  try {
+    await fn();
+  } finally {
+    if (feeBusy.value === key) feeBusy.value = '';
+  }
+}
+
+const onSaveFeeSettings = () => runFeeWrite('save', saveFeeSettings);
+const onResetFeeSettings = () => runFeeWrite('reset', resetFeeSettings);
+const onAddFeeAccount = () => runFeeWrite('add', addFeeAccount);
+const onRemoveFeeAccount = () => runFeeWrite('remove', removeFeeAccount);
+
+async function onUpdateCash() {
+  if (cashSaving.value) return;
+  cashSaving.value = true;
+  try {
+    await updateCash();
+  } finally {
+    cashSaving.value = false;
+  }
+}
+
+async function onAddCashFlow() {
+  if (cashFlowSaving.value) return;
+  cashFlowSaving.value = true;
+  try {
+    await addCashFlow();
+  } finally {
+    cashFlowSaving.value = false;
+  }
+}
 </script>
 
 <style scoped>

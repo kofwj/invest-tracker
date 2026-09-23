@@ -1,7 +1,9 @@
 try:
     from .portfolio_totals import compute_portfolio_totals
+    from .snapshots import latest_price_sync_at
 except ImportError:
     from portfolio_totals import compute_portfolio_totals
+    from snapshots import latest_price_sync_at
 
 # Re-export for older imports / tests that may reference this name.
 PENDING_DIRECTIONS = ("申购待确认", "待确认申购")
@@ -54,4 +56,7 @@ def build_dashboard(conn):
         # 缺价持仓计数（市值按 0 计），供快照打标记与前端提示
         "unpriced_count": totals.get("unpriced_count", 0),
         "unpriced_codes": totals.get("unpriced_codes", []),
+        # 最近一次「成功同步到至少一只价格」的时间（settings.last_price_sync_at，
+        # 老库回落 MAX(holdings.updated_at)）；快照价格闸门的判据来源。
+        "last_price_sync_at": latest_price_sync_at(conn),
     }
