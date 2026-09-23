@@ -14,7 +14,44 @@
     <div v-if="perfLoading && !perfSummary" class="sk-metrics" aria-hidden="true">
       <div v-for="i in 4" :key="'sk'+i" class="sk-block sk-metric"></div>
     </div>
+    <!-- 未录流水强提示 -->
+    <el-alert
+      v-if="!hasPerfFlows"
+      type="warning"
+      show-icon
+      :closable="false"
+      class="perf-flow-alert"
+      title="外部资金流水未录入"
+    >
+      <template #default>
+        <div style="margin-top:6px;">
+          <el-button size="small" type="warning" @click="scrollToFlows">去录流水</el-button>
+          <el-button size="small" :loading="perfSuggestLoading" @click="onLoadFlowSuggest">从银证生成建议</el-button>
+        </div>
+      </template>
+    </el-alert>
 
+    <!-- 一句话故事 -->
+    <el-card v-if="perfStory?.headline" shadow="never" class="perf-story-card" style="margin-bottom: 14px;">
+      <div class="perf-story-head">
+        <div class="perf-story-headline" :class="'is-' + (perfStory.tone || 'neutral')">{{ perfStory.headline }}</div>
+        <el-tag :type="perfStoryToneType" size="small">{{ perfStory.as_of_date || '今日' }}</el-tag>
+      </div>
+      <!-- 故事聚焦组合层面，个股详细贡献已移至「组合归因与风险」卡片和「持仓明细」 -->
+    </el-card>
+
+    <!-- 普通人核心指标（3 张最重要） -->
+    <div class="ledger-metrics cols-3" style="margin-bottom: 8px;">
+      <MetricCard
+        v-for="m in perfPrimaryCards"
+        :key="m.label"
+        :label="m.label"
+        :value="m.value"
+        :color="m.color"
+        :main="!!m.main"
+        :title="m.value"
+      />
+    </div>
     <!-- 时间轴收益尺：今天/本月/今年/近一年/开仓至今 -->
     <div class="perf-window-strip" :class="{ 'is-loading': perfLoading && !perfSummary }">
       <div
@@ -31,24 +68,17 @@
       </div>
     </div>
 
-    <!-- 月度：本月累计 + 最近 7 个交易日汇总 -->
+    <!-- 最近 7 个交易日汇总（本月 / 今年只在上方收益尺显示一处） -->
     <el-card shadow="never" class="perf-month-card">
       <div class="perf-daily-head">
         <div>
-          <div class="perf-section-title">月度概览</div>
+          <div class="perf-section-title">最近 7 个交易日</div>
           <div class="perf-contrib-sub">
-            本月累计 = 收益尺「本月」窗口的口径（已剔除转入/转出）；
-            下面三项按已有快照的最近 7 个交易日统计（不是自然日）。
+            按已有快照的最近 7 个交易日统计（不是自然日）；本月 / 今年看上方收益尺。
           </div>
         </div>
       </div>
-      <div class="ledger-metrics cols-4">
-        <MetricCard
-          label="本月累计"
-          :value="monthlyCard.monthText"
-          :tone="monthlyCard.monthTone"
-          :title="monthlyCard.monthTitle"
-        />
+      <div class="ledger-metrics cols-3">
         <MetricCard
           label="最近 7 个交易日累计"
           :value="monthlyCard.recent7Text"
@@ -157,45 +187,6 @@
     <!-- 快照明细：原「资产快照」页（/snapshots）已在分析组 5→3 页收敛时并入本页 -->
     <div class="perf-section-title" style="margin-bottom: 12px;">快照明细</div>
     <SnapshotPanel />
-
-    <!-- 未录流水强提示 -->
-    <el-alert
-      v-if="!hasPerfFlows"
-      type="warning"
-      show-icon
-      :closable="false"
-      class="perf-flow-alert"
-      title="外部资金流水未录入"
-    >
-      <template #default>
-        <div style="margin-top:6px;">
-          <el-button size="small" type="warning" @click="scrollToFlows">去录流水</el-button>
-          <el-button size="small" :loading="perfSuggestLoading" @click="onLoadFlowSuggest">从银证生成建议</el-button>
-        </div>
-      </template>
-    </el-alert>
-
-    <!-- 一句话故事 -->
-    <el-card v-if="perfStory?.headline" shadow="never" class="perf-story-card" style="margin-bottom: 14px;">
-      <div class="perf-story-head">
-        <div class="perf-story-headline" :class="'is-' + (perfStory.tone || 'neutral')">{{ perfStory.headline }}</div>
-        <el-tag :type="perfStoryToneType" size="small">{{ perfStory.as_of_date || '今日' }}</el-tag>
-      </div>
-      <!-- 故事聚焦组合层面，个股详细贡献已移至「组合归因与风险」卡片和「持仓明细」 -->
-    </el-card>
-
-    <!-- 普通人核心指标（3 张最重要） -->
-    <div class="ledger-metrics cols-3" style="margin-bottom: 8px;">
-      <MetricCard
-        v-for="m in perfPrimaryCards"
-        :key="m.label"
-        :label="m.label"
-        :value="m.value"
-        :color="m.color"
-        :main="!!m.main"
-        :title="m.value"
-      />
-    </div>
 
     <!-- 辅助小信息 -->
     <div class="ledger-metrics cols-2" style="margin-bottom: 12px;">
@@ -357,26 +348,21 @@ const perfSuggestionApplying = ref(false);
 const dailyRange = ref(30);
 const dailySnapshotSaving = ref(false);
 
-// === 月度概览：本月累计（收益尺的 month 窗口）+ 最近 7 个交易日汇总 ===
+// === 最近 7 个交易日汇总（本月 / 今年不在这里重复，见上方收益尺）===
 /**
  * 「最近 7 个交易日」取 perfDailyRows 的前 7 行。
  * 注意 perfDailyRows 只有"有快照的日子"，所以这是最近 7 个**有快照的**交易日，
  * 不是自然日；卡片副标题里也按这个口径说明，不要写成"最近 7 天"。
- * 本月累计直接用收益尺里 key === 'month' 那张卡，口径与收益尺一致（不另算）。
+ * 「本月 / 今年」只在上方收益尺显示一处 —— 这里不再重复，避免同一个数在一页里出现两遍
+ * （实测过：辅助卡的「今年以来」与收益尺「今年」都是 17086.02，月度卡的「本月累计」
+ * 与收益尺「本月」同源）。
  */
 const recentTradingDays = 7;
 const recent7DailyStats = computed(() => summarizeDailyPnl(perfDailyRows.value || [], recentTradingDays));
 const monthlyCard = computed(() => {
-  const monthWin = (perfWindowCards.value || []).find((w) => w && w.key === 'month') || null;
-  const monthGain = monthWin && monthWin.gain != null ? Number(monthWin.gain) : null;
   const s = recent7DailyStats.value;
   const hasRows = s.count > 0;
   return {
-    monthText: monthGain == null ? '—' : formatMoney(monthGain, 2, true),
-    monthTone: monthGain == null ? '' : (monthGain >= 0 ? 'up' : 'down'),
-    monthTitle: monthGain == null
-      ? '本月还没有可比的两天快照'
-      : `本月累计（口径同收益尺「本月」窗口）：${formatMoney(monthGain, 2, true)}`,
     recent7Text: hasRows ? formatMoney(s.total, 2, true) : '—',
     recent7Tone: hasRows ? (s.total >= 0 ? 'up' : 'down') : '',
     recent7Title: hasRows

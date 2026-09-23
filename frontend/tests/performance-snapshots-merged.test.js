@@ -221,13 +221,17 @@ describe('「收益与快照」合并页：每日收益 + 快照明细', () => {
     expect(dailyCard.textContent).toContain('缺价 3 只');
     expect(dailyCard.querySelector('[aria-label="每日收益"] [data-label="当日盈亏"]').querySelectorAll('.stub-cell').length).toBe(1);
 
-    // 快照历史：行来自 snapshots（列插槽渲染出该行的金额，且只有一行）
+    // 快照历史：行来自 snapshots；「总资产」列已去掉（与每日收益的「期末总资产」同一个数，
+    // 一页里不重复展示），所以这里断言它**不存在**，同时该行的其它金额仍然渲染
     const panel = host.querySelector('.snapshot-panel');
-    const totalAssetsCol = panel.querySelector('[aria-label="快照历史记录"] [data-label="总资产"]');
-    expect(totalAssetsCol.querySelectorAll('.stub-cell').length).toBe(1);
-    expect(totalAssetsCol.textContent).toContain(formatMoney(SNAPSHOT_ROW.total_assets));
+    expect(panel.querySelector('[aria-label="快照历史记录"] [data-label="总资产"]')).toBeNull();
+    const mvCol = panel.querySelector('[aria-label="快照历史记录"] [data-label="投资市值"]');
+    expect(mvCol.querySelectorAll('.stub-cell').length).toBe(1);
+    expect(mvCol.textContent).toContain(formatMoney(SNAPSHOT_ROW.total_market_value));
     expect(panel.textContent).toContain(formatMoney(SNAPSHOT_ROW.bank_balance));
     expect(panel.textContent).toContain(formatMoney(SNAPSHOT_ROW.securities_cash));
+    // 那天的总资产仍然能在同一页看到（每日收益表的「期末总资产」）
+    expect(dailyCard.textContent).toContain(formatMoney(DAILY_ROW.assets));
     app.unmount();
   });
 
@@ -244,6 +248,46 @@ describe('「收益与快照」合并页：每日收益 + 快照明细', () => {
       .toBeTruthy();
     expect(dailyTitle.compareDocumentPosition(snapshotTitle) & Node.DOCUMENT_POSITION_PRECEDING)
       .toBeFalsy();
+    app.unmount();
+  });
+});
+
+/**
+ * 区块顺序：结论在前、明细在后。
+ *
+ * 合并时曾把「快照明细」（明细表）插在「每日收益」之后，结果一句话故事 + 核心指标 + 风险
+ * 这些**结论类**内容全被顶到了快照表下面 —— 打开页面先看到的是一张逐日明细表。
+ * 这里把顺序钉住。
+ */
+describe('「收益与快照」区块顺序：结论在前、明细在后', () => {
+  const steps = (host) => [
+    { label: '核心指标', el: host.querySelector('.ledger-metrics') },
+    { label: '收益尺', el: host.querySelector('.perf-window-strip') },
+    { label: '最近 7 个交易日', el: host.querySelector('.perf-month-card') },
+    { label: '每日收益', el: host.querySelector('.perf-daily-card') },
+    { label: '快照明细', el: host.querySelector('.snapshot-panel') },
+    {
+      label: '风险一览',
+      el: [...host.querySelectorAll('.perf-contrib-title')].find((e) => e.textContent.includes('风险一览')),
+    },
+    { label: '组合资金流水', el: host.querySelector('#perf-flow-section') },
+  ];
+
+  it('核心指标 → 收益尺 → 最近 7 日 → 每日收益 → 快照明细 → 风险 → 流水', async () => {
+    const { host, app } = mountMerged();
+    await flush();
+
+    const list = steps(host);
+    expect(list.filter((s) => !s.el).map((s) => s.label), '这些区块没渲染出来').toEqual([]);
+    for (let i = 1; i < list.length; i += 1) {
+      const prev = list[i - 1];
+      const cur = list[i];
+      const pos = prev.el.compareDocumentPosition(cur.el);
+      expect(
+        Boolean(pos & Node.DOCUMENT_POSITION_FOLLOWING),
+        `「${prev.label}」应排在「${cur.label}」之前`,
+      ).toBe(true);
+    }
     app.unmount();
   });
 });

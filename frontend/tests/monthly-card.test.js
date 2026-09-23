@@ -1,11 +1,11 @@
 /**
  * 「月度概览」卡的取数与文案回归测试。
- *
- * 这张卡不新增任何接口，取数只有两处：
- *  - 本月累计：收益尺里 key === 'month' 的那张卡（口径与收益尺一致，不另算）；
+ * 这张卡不新增任何接口，取数只有一处：
  *  - 最近 7 个交易日：perfDailyRows 的前 7 行 + summarizeDailyPnl。
+ * 「本月 / 今年」只在上方收益尺显示一处 —— 实测过：辅助卡的「今年以来」与收益尺「今年」
+ * 都是同一个数（17086.02），月度卡的「本月累计」与收益尺「本月」同源。一页里出现两遍
+ * 只会让人怀疑哪个准，所以这张卡不再重复，下面也把"不重复"钉住。
  * perfDailyRows 只包含"有快照的日子"，所以卡片上必须如实写「最近 7 个交易日」，
- * 不能承诺自然日——这里连文案一起钉住。
  *
  * 注：生产构建里 el-* 由 unplugin-vue-components 自动注册，测试环境没有这层，
  * 所以用桩组件代替（只关心本页自己的结构、事件）。
@@ -155,16 +155,17 @@ function mountTab({ dailyRows = [], windowCards = [] } = {}) {
 
 const monthCardText = (host) => host.querySelector('.perf-month-card').textContent;
 
-describe('月度概览卡', () => {
-  it('本月累计取收益尺的 month 窗口', async () => {
+describe('「最近 7 个交易日」卡（原「月度概览」卡）', () => {
+  it('本月数字不再重复：这张卡不含「本月累计」，月窗口的值只留在收益尺上', async () => {
     const { host, app } = mountTab({ dailyRows: DAILY_ROWS, windowCards: [{ key: 'today', label: '今天', gain: 1, gainPct: 1 }, MONTH_CARD] });
     await flush();
 
     const text = monthCardText(host);
-    expect(text).toContain('本月累计');
-    expect(text).toContain(formatMoney(MONTH_CARD.gain, 2, true)); // +3456.78
-    // 今天窗口的值不该出现在月度卡里
-    expect(text).not.toContain('+1.00 ');
+    expect(text).not.toContain('本月累计');
+    // month 窗口的值不该在这张卡上出现第二遍
+    expect(text).not.toContain(formatMoney(MONTH_CARD.gain, 2, true));
+    // 但收益尺上仍然有「本月」这张卡（数字没被藏起来，只是不再重复）
+    expect(host.querySelector('.perf-window-strip').textContent).toContain('本月');
     app.unmount();
   });
 
@@ -214,7 +215,7 @@ describe('月度概览卡', () => {
     await flush();
 
     expect(host.querySelector('.perf-month-card')).toBeTruthy();
-    expect(monthCardText(host)).toContain('本月累计');
+    expect(monthCardText(host)).toContain('最近 7 个交易日累计');
     expect(monthCardText(host)).toContain('—');
     app.unmount();
   });

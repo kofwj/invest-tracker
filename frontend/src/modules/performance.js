@@ -96,11 +96,6 @@ const createPerformanceModule = ({
                 value: formatMoney(floatSum),
                 color: floatSum >= 0 ? 'var(--app-up)' : 'var(--app-down)',
             },
-            {
-                label: '今年以来',
-                value: formatMoney(s.ytd_gain),
-                color: s.ytd_gain >= 0 ? 'var(--app-up)' : 'var(--app-down)',
-            },
         ];
 
         // 距目标收益缺口（约 4% 净投入年化）

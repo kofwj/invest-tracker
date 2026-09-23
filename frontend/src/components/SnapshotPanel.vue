@@ -133,11 +133,12 @@
     </el-card>
 
     <el-card shadow="never" header="快照历史记录">
+      <div style="font-size:12.5px;color:var(--app-muted);margin-bottom:8px;">
+        逐日绝对值明细。当天总资产见上方「每日收益」的「期末总资产」——同一份快照，
+        这里不再重复一列。
+      </div>
       <el-table :data="snapshots" stripe size="small" class="snapshot-table" style="width: 100%" empty-text="暂无快照记录" aria-label="快照历史记录">
         <el-table-column prop="date" label="日期" width="108" sortable align="left" header-align="left" fixed="left"></el-table-column>
-        <el-table-column label="总资产" min-width="120" align="right" header-align="right">
-          <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.total_assets) }}</span></template>
-        </el-table-column>
         <el-table-column label="投资市值" min-width="120" align="right" header-align="right">
           <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.total_market_value) }}</span></template>
         </el-table-column>
