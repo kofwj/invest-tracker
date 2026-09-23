@@ -126,7 +126,7 @@
                     <el-row :gutter="20" style="margin-bottom: 18px;">
                         <el-col :span="24">
                             <el-card shadow="never" header="区间变化明细">
-                                <el-table :data="snapshotChangeRows" stripe size="small" class="snapshot-table" style="width: 100%" empty-text="至少需要两条快照，或选择包含两条以上记录的日期范围">
+                                <el-table :data="snapshotChangeRows" stripe size="small" class="snapshot-table" style="width: 100%" empty-text="至少需要两条快照，或选择包含两条以上记录的日期范围" aria-label="区间变化明细">
                                     <el-table-column prop="label" label="项目" width="120" align="left" header-align="left"></el-table-column>
                                     <el-table-column label="期初" min-width="120" align="right" header-align="right">
                                         <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.start) }}</span></template>
@@ -141,7 +141,7 @@
                                     </el-table-column>
                                     <el-table-column label="变化率" width="100" align="right" header-align="right">
                                         <template #default="scope">
-                                            <span class="num-cell" :class="(scope.row.change >= 0 ) ? 'num-up' : 'num-down'">{{ scope.row.change_pct === null ? '—' : (scope.row.change_pct >= 0 ? '+' : '') + scope.row.change_pct.toFixed(2) + '%' }}</span>
+                                            <span class="num-cell" :class="(scope.row.change >= 0 ) ? 'num-up' : 'num-down'">{{ scope.row.change_pct === null ? '—' : formatPercent(scope.row.change_pct, 2) }}</span>
                                         </template>
                                     </el-table-column>
                                 </el-table>
@@ -150,7 +150,7 @@
                     </el-row>
 
                     <el-card shadow="never" header="快照历史记录">
-                        <el-table :data="snapshots" stripe size="small" class="snapshot-table" style="width: 100%" empty-text="暂无快照记录">
+                        <el-table :data="snapshots" stripe size="small" class="snapshot-table" style="width: 100%" empty-text="暂无快照记录" aria-label="快照历史记录">
                             <el-table-column prop="date" label="日期" width="108" sortable align="left" header-align="left"></el-table-column>
                             <el-table-column label="总资产" min-width="120" align="right" header-align="right">
                                 <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.total_assets) }}</span></template>
@@ -209,6 +209,7 @@ import MetricCard from '../components/MetricCard.vue';
 import { ref } from 'vue';
 import { ElMessageBox } from 'element-plus';
 import { useAppCtx } from '../composables/useAppCtx.js';
+import { formatPercent } from '../utils/index.js';
 const { snapshots, snapshotRange, snapshotMetrics, snapshotChangeRows, snapshotInsights, snapshotSummary, snapshotLoading, reconcileData, reconcileForm, reconcileSaving, createSnapshot, fetchSnapshots, exportSnapshots, compactSnapshots, saveReconcile, formatMoney, pct } = useAppCtx();
 
 // 写操作防连点。快照用模块里现成的 snapshotLoading（模块内的 createSnapshot 会把它置位），

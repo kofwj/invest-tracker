@@ -1,7 +1,7 @@
 <template>
         <!-- 交易记录弹窗 -->
         <el-dialog v-model="transDialog.visible" :title="transDialog.title" width="800px">
-            <el-table :data="transDialog.transactions" stripe style="width: 100%">
+            <el-table :data="transDialog.transactions" stripe style="width: 100%" aria-label="交易记录明细">
                 <el-table-column prop="date" label="日期" width="120"></el-table-column>
                 <el-table-column prop="direction" label="方向" width="80"></el-table-column>
                 <el-table-column label="数量">
@@ -44,7 +44,7 @@
             </el-form>
             <template #footer>
                 <el-button @click="depositDialog.visible = false">取消</el-button>
-                <el-button type="primary" @click="saveDeposit">确定</el-button>
+                <el-button type="primary" :loading="depositSaving" @click="onSaveDeposit">确定</el-button>
             </template>
         </el-dialog>
 
@@ -134,7 +134,7 @@
             </el-form>
             <template #footer>
                 <el-button @click="transEditDialog.visible = false">取消</el-button>
-                <el-button type="primary" @click="saveTransactionEdit">确定</el-button>
+                <el-button type="primary" :loading="transEditSaving" @click="onSaveTransactionEdit">确定</el-button>
             </template>
         </el-dialog>
 
@@ -166,7 +166,7 @@
             </el-form>
             <template #footer>
                 <el-button @click="cashFlowEditDialog.visible = false">取消</el-button>
-                <el-button type="primary" @click="saveCashFlowEdit">保存</el-button>
+                <el-button type="primary" :loading="cashFlowEditSaving" @click="onSaveCashFlowEdit">保存</el-button>
             </template>
         </el-dialog>
 
@@ -215,13 +215,13 @@
             </el-form>
             <template #footer>
                 <el-button @click="holdingCorrectionDialog.visible = false">取消</el-button>
-                <el-button type="primary" @click="saveHoldingCorrection">保存校正</el-button>
+                <el-button type="primary" :loading="holdingCorrectionSaving" @click="onSaveHoldingCorrection">保存校正</el-button>
             </template>
         </el-dialog>
 
         <!-- 持仓校正记录弹窗 -->
         <el-dialog v-model="holdingCorrectionHistoryDialog.visible" :title="holdingCorrectionHistoryDialog.title" width="760px" append-to-body>
-            <el-table :data="holdingCorrectionHistoryDialog.records" stripe style="width:100%;">
+            <el-table :data="holdingCorrectionHistoryDialog.records" stripe style="width:100%;" aria-label="持仓校正历史记录">
                 <el-table-column prop="date" label="日期" width="105" align="center"></el-table-column>
                 <el-table-column label="数量" width="115" align="right" header-align="right">
                     <template #default="scope">{{ Number(scope.row.actual_quantity || 0).toLocaleString() }}</template>
@@ -235,7 +235,7 @@
                 <el-table-column prop="remark" label="备注" min-width="160" show-overflow-tooltip></el-table-column>
                 <el-table-column label="操作" width="80" align="center">
                     <template #default="scope">
-                        <el-button type="danger" link @click="deleteHoldingCorrection(scope.row)">删除</el-button>
+                        <el-button type="danger" link :loading="holdingCorrectionDeleting === scope.row" @click="onDeleteHoldingCorrection(scope.row)">删除</el-button>
                     </template>
                 </el-table-column>
             </el-table>
@@ -256,7 +256,7 @@
             </el-form>
             <template #footer>
                 <el-button @click="expectedReturnDialog.visible = false">取消</el-button>
-                <el-button type="primary" @click="saveExpectedReturn">确定</el-button>
+                <el-button type="primary" :loading="expectedReturnSaving" @click="onSaveExpectedReturn">确定</el-button>
             </template>
         </el-dialog>
 
@@ -282,7 +282,7 @@
                 <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
                     <span style="color:var(--app-muted);">回看天数</span>
                     <el-input-number v-model="dividendDialog.lookbackDays" :min="30" :max="2000" :step="30"></el-input-number>
-                    <el-button type="primary" :loading="dividendLoading" @click="scanDividendDrafts">扫描分红</el-button>
+                    <el-button type="primary" :loading="dividendLoading" @click="onScanDividendDrafts">扫描分红</el-button>
                     <el-button @click="selectSelectableDividendDrafts">全选可确认</el-button>
                     <el-button @click="clearDividendDraftSelection">清空选择</el-button>
                 </div>
@@ -299,6 +299,7 @@
                 stripe
                 max-height="480"
                 style="width:100%;"
+                aria-label="分红草稿明细"
                 @selection-change="onDividendSelectionChange"
                 empty-text="暂无草稿，请先扫描"
             >
@@ -354,11 +355,11 @@
                     <span style="color:var(--app-muted);font-size:13px;">已选 {{ dividendDialog.selected.length }} 条，确认后写入「分红」交易并重算持仓/现金</span>
                     <div>
                         <el-button size="small" @click="downloadDividendTemplate">下载分红模板</el-button>
-                        <el-upload action="#" :auto-upload="false" :show-file-list="false" accept=".csv" :on-change="importDividends" style="display:inline-block;margin-right:8px;">
+                        <el-upload action="#" :auto-upload="false" :show-file-list="false" accept=".csv" :on-change="onImportDividends" :disabled="dividendImporting" style="display:inline-block;margin-right:8px;">
                             <el-button size="small" type="success">导入分红CSV</el-button>
                         </el-upload>
                         <el-button @click="dividendDialog.visible = false">关闭</el-button>
-                        <el-button type="primary" :loading="dividendConfirming" @click="confirmSelectedDividends">确认入账</el-button>
+                        <el-button type="primary" :loading="dividendConfirming || dividendConfirmBusy" @click="onConfirmSelectedDividends">确认入账</el-button>
                     </div>
                 </div>
             </template>
@@ -369,7 +370,7 @@
             <pre style="white-space:pre-wrap;font-family:inherit;font-size:13px;line-height:1.6;margin:0;color:var(--app-text);">{{ eveningBriefDialog.text || '（空）' }}</pre>
             <template #footer>
                 <el-button @click="eveningBriefDialog.visible = false">关闭</el-button>
-                <el-button type="primary" plain :loading="eveningBriefDialog.loading" @click="openEveningBrief(true)">推送通知</el-button>
+                <el-button type="primary" plain :loading="eveningBriefDialog.loading" @click="onPushEveningBrief">推送通知</el-button>
             </template>
         </el-dialog>
 
@@ -378,6 +379,49 @@
 </template>
 
 <script setup>
+import { ref } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 const { dividendLoading, dividendConfirming, dividendDialog, dividendTableRef, feeAccounts, depositDialog, cashFlowEditDialog, transDialog, expectedReturnDialog, holdingCorrectionDialog, holdingCorrectionHistoryDialog, transEditDialog, eveningBriefDialog, openEveningBrief, openHoldingCorrectionHistory, scanDividendDrafts, confirmSelectedDividends, selectSelectableDividendDrafts, clearDividendDraftSelection, onDividendSelectionChange, isDividendDraftSelectable, dividendStatusLabel, dividendStatusType, saveDeposit, saveCashFlowEdit, saveTransactionEdit, saveExpectedReturn, saveHoldingCorrection, deleteHoldingCorrection, formatMoney, downloadDividendTemplate, importDividends } = useAppCtx();
+// 弹窗里的保存/删除按钮原来只绑了 :loading（有的连 loading 都没有），同一次事件循环里的连点
+// 会重复发 POST/PUT/DELETE。这里用本地 in-flight ref 包一层：进入前判断，finally 复位。
+const depositSaving = ref(false);
+const transEditSaving = ref(false);
+const cashFlowEditSaving = ref(false);
+const expectedReturnSaving = ref(false);
+const holdingCorrectionSaving = ref(false);
+const holdingCorrectionDeleting = ref(null);
+const dividendConfirmBusy = ref(false);
+const dividendImporting = ref(false);
+
+async function runGuarded(flag, fn) {
+    if (flag.value) return;
+    flag.value = true;
+    try {
+        await fn();
+    } finally {
+        flag.value = false;
+    }
+}
+
+const onSaveDeposit = () => runGuarded(depositSaving, saveDeposit);
+const onSaveTransactionEdit = () => runGuarded(transEditSaving, saveTransactionEdit);
+const onSaveCashFlowEdit = () => runGuarded(cashFlowEditSaving, saveCashFlowEdit);
+const onSaveExpectedReturn = () => runGuarded(expectedReturnSaving, saveExpectedReturn);
+const onSaveHoldingCorrection = () => runGuarded(holdingCorrectionSaving, saveHoldingCorrection);
+// 行内删除用「哪一行」做 in-flight 标记，只让被点的那行进 loading
+async function onDeleteHoldingCorrection(row) {
+    if (holdingCorrectionDeleting.value) return;
+    holdingCorrectionDeleting.value = row;
+    try {
+        await deleteHoldingCorrection(row);
+    } finally {
+        if (holdingCorrectionDeleting.value === row) holdingCorrectionDeleting.value = null;
+    }
+}
+const onImportDividends = (file) => runGuarded(dividendImporting, () => importDividends(file));
+const onConfirmSelectedDividends = () => runGuarded(dividendConfirmBusy, confirmSelectedDividends);
+
+// 扫描分红 / 推送晚报的 loading 由 modules 里的 ref 负责，这里只补入口判断（同一 tick 连点）
+const onScanDividendDrafts = () => { if (dividendLoading.value) return; return scanDividendDrafts(); };
+const onPushEveningBrief = () => { if (eveningBriefDialog.value?.loading) return; return openEveningBrief(true); };
 </script>

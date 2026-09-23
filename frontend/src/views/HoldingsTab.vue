@@ -3,7 +3,7 @@
     title="持仓明细"
   >
     <template #actions>
-      <el-button type="warning" plain :loading="trailingSyncing" @click="syncTrailingReturns">
+      <el-button type="warning" plain :loading="trailingSyncing" @click="onSyncTrailingReturns">
         同步近一年收益率
       </el-button>
     </template>
@@ -21,7 +21,7 @@
       <span>去交易页录入买入，或先同步价格核对。空仓时这里保持干净。</span>
       <el-button size="small" type="primary" plain @click="goTab('transactions')">去交易</el-button>
     </div>
-    <el-table v-else :data="holdings" stripe size="small" class="holdings-table table-clickable" style="width: 100%" @row-click="showTransactions">
+    <el-table v-else :data="holdings" stripe size="small" class="holdings-table table-clickable" style="width: 100%" @row-click="showTransactions" aria-label="持仓明细">
       <el-table-column label="标的" min-width="148" fixed="left" align="left" header-align="left">
         <template #default="scope">
           <div class="asset-cell">
@@ -107,7 +107,7 @@
       </el-table-column>
       <el-table-column label="预计年化" width="88" align="right" header-align="right">
         <template #default="scope">
-          <el-button link class="num-cell" title="点击修改预期年化收益" @click.stop="openExpectedReturnDialog(scope.row)">{{ scope.row.expected_return == null ? '—' : Number(scope.row.expected_return).toFixed(1) + '%' }}</el-button>
+          <el-button link class="num-cell" title="点击修改预期年化收益" @click.stop="openExpectedReturnDialog(scope.row)">{{ scope.row.expected_return == null ? '—' : formatPercent(scope.row.expected_return, 1) }}</el-button>
         </template>
       </el-table-column>
       <el-table-column label="近一年" width="88" align="right" header-align="right">
@@ -156,6 +156,13 @@ const {
   syncTrailingReturns,
   goTab,
 } = useAppCtx();
+
+// 同步近一年收益率走 POST /sync-trailing-returns：模块里的 trailingSyncing 一开头就置位，
+// 这里补一个入口判断，避免同一 tick 连点发两次请求（同时弹出两个全屏 loading）。
+function onSyncTrailingReturns() {
+  if (trailingSyncing.value) return;
+  return syncTrailingReturns();
+}
 
 </script>
 

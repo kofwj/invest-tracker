@@ -6,7 +6,7 @@
       <el-tag type="info" effect="plain">总资产 {{ formatMoney(dashboard.total_assets) }}</el-tag>
       <el-button size="small" :loading="allocationStoryLoading || disciplineLoading" @click="refreshAll">刷新诊断</el-button>
       <el-button size="small" @click="openPolicyDialog">调整参数</el-button>
-      <el-button size="small" type="primary" @click="createDraftsFromReport">建议→草稿</el-button>
+      <el-button size="small" type="primary" :loading="draftsGenerating" @click="onGenerateDrafts">建议→草稿</el-button>
     </template>
 
     <div class="ledger-metrics cols-4">
@@ -95,7 +95,7 @@
               <div class="hint">假设粗估，不是预测：只动权益市值，固收/存款/现金不变</div>
             </div>
           </template>
-          <el-table :data="storyScenarios" size="small" stripe empty-text="暂无">
+          <el-table :data="storyScenarios" size="small" stripe empty-text="暂无" aria-label="权益情景粗估">
             <el-table-column prop="label" label="情景" min-width="120" />
             <el-table-column label="粗估盈亏" min-width="110" align="right" header-align="right">
               <template #default="s">
@@ -113,7 +113,7 @@
         </el-card>
 
         <el-card shadow="never" class="merge-card" header="资产大类汇总">
-          <el-table :data="macroAllocationAnalysis" stripe size="small" class="allocation-table" style="width: 100%">
+          <el-table :data="macroAllocationAnalysis" stripe size="small" class="allocation-table" style="width: 100%" aria-label="资产大类汇总">
             <el-table-column prop="group" label="大类" width="80" align="center" header-align="center" />
             <el-table-column label="金额" min-width="110" align="right" header-align="right">
               <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.amount) }}</span></template>
@@ -151,9 +151,9 @@
                 type="button"
                 class="preset-seg-btn"
                 :class="{ active: p.id === disciplinePresetActiveId || p.active }"
-                :disabled="disciplinePresetLoading || p.id === disciplinePresetActiveId || p.active"
+                :disabled="presetApplying || disciplinePresetLoading || p.id === disciplinePresetActiveId || p.active"
                 :title="presetTitle(p)"
-                @click="applyDisciplinePreset(p.id)"
+                @click="onApplyPreset(p.id)"
               >{{ p.label }}</button>
             </div>
           </div>
@@ -284,7 +284,7 @@
               <div class="hint">只读建议；可生成草稿，确认后才入账</div>
             </div>
           </template>
-          <el-table :data="actions" stripe size="small" empty-text="暂无建议" v-loading="disciplineLoading">
+          <el-table :data="actions" stripe size="small" empty-text="暂无建议" v-loading="disciplineLoading" aria-label="再平衡建议">
             <el-table-column label="方向" width="72">
               <template #default="s">{{ s.row.side === 'sell' ? '卖出' : '买入' }}</template>
             </el-table-column>
@@ -300,7 +300,7 @@
     </div>
 
     <el-card shadow="never" class="merge-card" header="细分类别明细">
-      <el-table :data="allocationAnalysis" stripe size="small" class="allocation-table" style="width: 100%">
+      <el-table :data="allocationAnalysis" stripe size="small" class="allocation-table" style="width: 100%" aria-label="细分类别明细">
         <el-table-column prop="category" label="资产类别" width="110" align="center" header-align="center" />
         <el-table-column label="市值/金额" min-width="120" align="right" header-align="right">
           <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.market_value) }}</span></template>
@@ -325,7 +325,7 @@
         <el-table-column label="浮盈率" width="90" align="center" header-align="center">
           <template #default="scope">
             <span :class="(scope.row.profit_rate >= 0 ) ? 'num-up' : 'num-down'">
-              {{ scope.row.profit_rate >= 0 ? '+' : '' }}{{ scope.row.profit_rate?.toFixed(2) }}%
+              {{ formatPercent(scope.row.profit_rate, 2) }}
             </span>
           </template>
         </el-table-column>
@@ -347,11 +347,12 @@
           </div>
           <div class="card-actions">
             <el-button size="small" :loading="disciplineDraftLoading" @click="fetchDisciplineDrafts">刷新草稿</el-button>
-            <el-button size="small" type="warning" @click="confirmSelectedDrafts">批量确认</el-button>
+            <el-button size="small" type="warning" :loading="confirmingDrafts" @click="onConfirmSelectedDrafts">批量确认</el-button>
           </div>
         </div>
       </template>
       <el-table
+        aria-label="纪律草稿"
         :data="disciplineDrafts"
         stripe
         size="small"
@@ -467,7 +468,7 @@
       </el-form>
       <template #footer>
         <el-button @click="cancelPolicy">取消</el-button>
-        <el-button type="primary" @click="savePolicy">保存</el-button>
+        <el-button type="primary" :loading="policySaving" @click="onSavePolicy">保存</el-button>
       </template>
     </el-dialog>
 
@@ -497,7 +498,7 @@
       </el-form>
       <template #footer>
         <el-button @click="disciplineDraftEditDialog = false">取消</el-button>
-        <el-button type="primary" @click="saveDraftEdit">保存</el-button>
+        <el-button type="primary" :loading="draftEditSaving" @click="onSaveDraftEdit">保存</el-button>
       </template>
     </el-dialog>
   </PageShell>
@@ -506,6 +507,7 @@
 <script setup>
 import PageShell from '../components/PageShell.vue';
 import MetricCard from '../components/MetricCard.vue';
+import { formatPercent } from '../utils/index.js';
 import { computed, onMounted, watch, nextTick, ref } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 
@@ -569,6 +571,30 @@ async function runDraftWrite(key, fn) {
 
 const onConfirmDraft = (row) => runDraftWrite(`confirm:${row?.id}`, () => confirmDraft(row));
 const onDeleteDraft = (row) => runDraftWrite(`delete:${row?.id}`, () => deleteDraft(row));
+
+// 其余写操作按钮的防连点（模块里没有可视的 in-flight 标志，统一在本页包一层）
+const draftsGenerating = ref(false);
+const confirmingDrafts = ref(false);
+const policySaving = ref(false);
+const draftEditSaving = ref(false);
+const presetApplying = ref(false);
+
+/** 通用写操作闸门：进入前判断，finally 复位 */
+async function withBusy(flag, fn) {
+  if (flag.value) return undefined;
+  flag.value = true;
+  try {
+    return await fn();
+  } finally {
+    flag.value = false;
+  }
+}
+
+const onGenerateDrafts = () => withBusy(draftsGenerating, () => createDraftsFromReport());
+const onConfirmSelectedDrafts = () => withBusy(confirmingDrafts, () => confirmSelectedDrafts());
+const onSavePolicy = () => withBusy(policySaving, () => savePolicy());
+const onSaveDraftEdit = () => withBusy(draftEditSaving, () => saveDraftEdit());
+const onApplyPreset = (id) => withBusy(presetApplying, () => applyDisciplinePreset(id));
 
 if (disciplinePolicy.value && !disciplinePolicy.value.targets) {
   disciplinePolicy.value.targets = { equity_pct: 45, fixed_income_pct: 30, deposit_pct: 25 };

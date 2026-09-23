@@ -5,8 +5,8 @@
     <template #actions>
       <el-space wrap>
         <el-button size="small" @click="fetchNotifyPanel" :loading="notifyLoading">刷新</el-button>
-        <el-button size="small" type="success" plain :loading="notifyLoading" @click="testNotifyPush">试推一条</el-button>
-        <el-button size="small" type="primary" :loading="notifyLoading" @click="saveNotifyPanel">保存设置</el-button>
+        <el-button size="small" type="success" plain :loading="notifyLoading" @click="onTestNotifyPush">试推一条</el-button>
+        <el-button size="small" type="primary" :loading="notifyLoading" @click="onSaveNotifyPanel">保存设置</el-button>
       </el-space>
     </template>
 
@@ -258,7 +258,7 @@
           </div>
         </div>
       </template>
-      <el-table :data="eventRows" size="small" style="width:100%;" empty-text="暂无事件">
+      <el-table :data="eventRows" size="small" style="width:100%;" empty-text="暂无事件" aria-label="推送事件通道配置">
         <el-table-column prop="label" label="事件" min-width="120" />
         <el-table-column prop="event" label="代码" width="120" />
         <el-table-column label="通道" min-width="240">
@@ -283,19 +283,19 @@
         </div>
       </template>
       <div class="ops-action-grid">
-        <button type="button" class="ops-action" :disabled="eveningBriefDialog?.loading" @click="() => openEveningBrief(false)">
+        <button type="button" class="ops-action" :disabled="eveningBriefDialog?.loading" @click="() => onOpenEveningBrief(false)">
           <div class="ops-action-title">生成晚间简报</div>
           <div class="ops-action-sub">只预览，不推送</div>
         </button>
-        <button type="button" class="ops-action is-primary" :disabled="eveningBriefDialog?.loading" @click="() => openEveningBrief(true)">
+        <button type="button" class="ops-action is-primary" :disabled="eveningBriefDialog?.loading" @click="() => onOpenEveningBrief(true)">
           <div class="ops-action-title">生成并推送晚报</div>
           <div class="ops-action-sub">预览后可再推</div>
         </button>
-        <button type="button" class="ops-action" :disabled="notifyLoading" @click="pushDepositDueNow">
+        <button type="button" class="ops-action" :disabled="notifyLoading" @click="onPushDepositDue">
           <div class="ops-action-title">推送·存款到期</div>
           <div class="ops-action-sub">近 30 天到期项</div>
         </button>
-        <button type="button" class="ops-action" :disabled="notifyLoading" @click="pushDisciplineNow">
+        <button type="button" class="ops-action" :disabled="notifyLoading" @click="onPushDiscipline">
           <div class="ops-action-title">推送·纪律摘要</div>
           <div class="ops-action-sub">破线/再平衡提醒</div>
         </button>
@@ -312,7 +312,7 @@
           <el-tag size="small" type="info">{{ notifyLogs.length }} 条</el-tag>
         </div>
       </template>
-      <el-table :data="notifyLogs" size="small" style="width:100%;" empty-text="暂无发送记录" max-height="360">
+      <el-table :data="notifyLogs" size="small" style="width:100%;" empty-text="暂无发送记录" max-height="360" aria-label="推送发送日志">
         <el-table-column prop="created_at" label="时间" width="160" />
         <el-table-column prop="event" label="事件" width="110" />
         <el-table-column prop="channel" label="通道" width="90" />
@@ -340,6 +340,33 @@ const {
   fetchNotifyPanel, saveNotifyPanel, testNotifyPush, pushDepositDueNow, pushDisciplineNow,
   eveningBriefDialog, openEveningBrief,
 } = useAppCtx();
+
+// 写操作/推送防连点：模块里的 notifyLoading 在 saveNotifyPanel / testNotifyPush / push* 开头
+// 就置位，这里补一层入口判断挡住同一 tick 的第二次点击；晚报推送用 eveningBriefDialog.loading。
+async function onSaveNotifyPanel() {
+  if (notifyLoading.value) return;
+  await saveNotifyPanel();
+}
+
+async function onTestNotifyPush() {
+  if (notifyLoading.value) return;
+  await testNotifyPush();
+}
+
+async function onPushDepositDue() {
+  if (notifyLoading.value) return;
+  await pushDepositDueNow();
+}
+
+async function onPushDiscipline() {
+  if (notifyLoading.value) return;
+  await pushDisciplineNow();
+}
+
+async function onOpenEveningBrief(notify) {
+  if (eveningBriefDialog.value?.loading) return;
+  await openEveningBrief(notify);
+}
 
 const CHANNEL_LABEL = {
   feishu: '飞书',

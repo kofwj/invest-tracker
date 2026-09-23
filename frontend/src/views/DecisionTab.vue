@@ -6,7 +6,7 @@
       <el-tag v-if="marketUpdatedAt" size="small" type="info">更新 {{ marketUpdatedAt }}</el-tag>
       <el-tag v-if="quoteCacheSeconds != null" size="small" type="info">行情缓存 {{ quoteCacheSeconds }}s</el-tag>
       <el-button size="small" :loading="marketLoading || disciplineLoading" @click="refreshDecision">刷新</el-button>
-      <el-button size="small" type="warning" :loading="alertChecking" @click="() => checkAlerts(false)">立即检查预警</el-button>
+      <el-button size="small" type="warning" :loading="alertChecking" @click="onCheckAlerts">立即检查预警</el-button>
     </template>
 
     <div v-if="(marketLoading || disciplineLoading) && !marketUpdatedAt" class="sk-metrics" aria-hidden="true">
@@ -142,7 +142,7 @@
               <span class="hint">东财延时行情</span>
             </div>
           </template>
-          <el-table :data="indexRows" stripe size="small" empty-text="暂无指数数据" v-loading="marketLoading">
+          <el-table :data="indexRows" stripe size="small" empty-text="暂无指数数据" v-loading="marketLoading" aria-label="关键指数">
             <el-table-column prop="name" label="名称" min-width="100" />
             <el-table-column prop="code" label="代码" width="90" />
             <el-table-column label="最新" width="100" align="right" header-align="right">
@@ -167,7 +167,7 @@
               <span class="hint">最多 20 条 · 按绝对贡献排序</span>
             </div>
           </template>
-          <el-table :data="holdingsDayRows" stripe size="small" empty-text="暂无持仓或无法估算" v-loading="marketLoading">
+          <el-table :data="holdingsDayRows" stripe size="small" empty-text="暂无持仓或无法估算" v-loading="marketLoading" aria-label="持仓今日贡献">
             <el-table-column prop="name" label="名称" min-width="110" show-overflow-tooltip />
             <el-table-column prop="code" label="代码" width="90" />
             <el-table-column label="市值" width="100" align="right" header-align="right">
@@ -200,11 +200,11 @@
           </div>
           <div class="card-actions">
             <el-button size="small" @click="addWatchlistRow">添加一行</el-button>
-            <el-button size="small" type="primary" :loading="watchlistSaving" @click="saveWatchlist">保存自选</el-button>
+            <el-button size="small" type="primary" :loading="watchlistSaving" @click="onSaveWatchlist">保存自选</el-button>
           </div>
         </div>
       </template>
-      <el-table :data="watchlistDraft" stripe size="small" empty-text="暂无自选，点「添加一行」">
+      <el-table :data="watchlistDraft" stripe size="small" empty-text="暂无自选，点「添加一行」" aria-label="自选关注">
         <el-table-column label="代码" min-width="110">
           <template #default="scope">
             <el-input v-model="scope.row.code" size="small" placeholder="代码" />
@@ -251,7 +251,7 @@
           <el-button type="primary" size="small" @click="openAlertCreate">添加规则</el-button>
         </div>
       </template>
-      <el-table :data="alertRules" stripe size="small" empty-text="暂无规则">
+      <el-table :data="alertRules" stripe size="small" empty-text="暂无规则" aria-label="价格预警规则">
         <el-table-column label="类型" width="80">
           <template #default="scope">{{ scope.row.target_type === 'index' ? '指数' : '持仓' }}</template>
         </el-table-column>
@@ -267,14 +267,15 @@
           <template #default="scope">
             <el-switch
               :model-value="Number(scope.row.enabled) === 1 || scope.row.enabled === true"
-              @change="() => toggleAlertEnabled(scope.row)"
+              :disabled="!!alertRuleBusy"
+              @change="onToggleAlertEnabled(scope.row)"
             />
           </template>
         </el-table-column>
         <el-table-column label="操作" width="140" align="center">
           <template #default="scope">
             <el-button type="primary" link @click="openAlertEdit(scope.row)">编辑</el-button>
-            <el-button type="danger" link @click="deleteAlertRule(scope.row)">删除</el-button>
+            <el-button type="danger" link :loading="alertRuleBusy === 'delete:' + scope.row.id" :disabled="!!alertRuleBusy" @click="onDeleteAlertRule(scope.row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -282,7 +283,7 @@
 
     <el-card v-if="triggeredAlerts && triggeredAlerts.length" shadow="never" class="merge-card">
       <template #header><span class="section-title">最近一次检查触发</span></template>
-      <el-table :data="triggeredAlerts" stripe size="small">
+      <el-table :data="triggeredAlerts" stripe size="small" aria-label="最近一次检查触发">
         <el-table-column prop="message" label="说明" min-width="240" show-overflow-tooltip />
         <el-table-column prop="price" label="触发价" width="100" align="right" header-align="right">
           <template #default="scope">{{ Number(scope.row.price).toFixed(4) }}</template>
@@ -334,7 +335,7 @@
           </div>
         </div>
       </template>
-      <el-table :data="alertEvents" stripe size="small" empty-text="暂无触发记录" v-loading="alertEventsLoading">
+      <el-table :data="alertEvents" stripe size="small" empty-text="暂无触发记录" v-loading="alertEventsLoading" aria-label="预警历史">
         <el-table-column prop="target_code" label="代码" width="90" />
         <el-table-column prop="message" label="说明" min-width="240" show-overflow-tooltip />
         <el-table-column label="触发价" width="100" align="right" header-align="right">
@@ -380,7 +381,7 @@
       </el-form>
       <template #footer>
         <el-button @click="alertEditDialog = false">取消</el-button>
-        <el-button type="primary" @click="saveAlertRule">保存</el-button>
+        <el-button type="primary" :loading="alertRuleSaving" @click="onSaveAlertRule">保存</el-button>
       </template>
     </el-dialog>
   </PageShell>
@@ -391,6 +392,7 @@ import PageShell from '../components/PageShell.vue';
 import MetricCard from '../components/MetricCard.vue';
 import { computed, onMounted, ref } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
+import { formatPercent } from '../utils/index.js';
 
 const {
   goTab,
@@ -622,7 +624,7 @@ function pctText(v) {
   if (v === null || v === undefined || v === '') return '—';
   const n = Number(v);
   if (Number.isNaN(n)) return '—';
-  return `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
+  return formatPercent(n, 2);
 }
 
 function toneFromNum(v) {
@@ -665,6 +667,44 @@ async function onClearAlertEvents() {
     await clearAlertEvents();
   } finally {
     alertClearing.value = false;
+  }
+}
+
+// 写操作防连点：alertChecking / watchlistSaving 是模块里同步置位的现成标志，复用它做入口闸门；
+// 预警规则的增删改模块里没有标志，用本页 ref 兜住（同一行按钮转圈、其余行禁用）。
+const alertRuleBusy = ref('');
+const alertRuleSaving = ref(false);
+
+async function onCheckAlerts() {
+  if (alertChecking?.value) return;
+  await checkAlerts(false);
+}
+
+async function onSaveWatchlist() {
+  if (watchlistSaving?.value) return;
+  await saveWatchlist();
+}
+
+async function runAlertRuleWrite(key, fn) {
+  if (alertRuleBusy.value) return;
+  alertRuleBusy.value = key;
+  try {
+    await fn();
+  } finally {
+    if (alertRuleBusy.value === key) alertRuleBusy.value = '';
+  }
+}
+
+const onToggleAlertEnabled = (row) => runAlertRuleWrite(`toggle:${row?.id}`, () => toggleAlertEnabled(row));
+const onDeleteAlertRule = (row) => runAlertRuleWrite(`delete:${row?.id}`, () => deleteAlertRule(row));
+
+async function onSaveAlertRule() {
+  if (alertRuleSaving.value) return;
+  alertRuleSaving.value = true;
+  try {
+    await saveAlertRule();
+  } finally {
+    alertRuleSaving.value = false;
   }
 }
 

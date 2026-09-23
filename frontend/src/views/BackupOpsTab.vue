@@ -5,14 +5,14 @@
     <template #actions>
       <el-space wrap>
         <el-button size="small" @click="fetchMaintenance" :loading="maintenanceLoading">刷新列表</el-button>
-        <el-button size="small" type="primary" :loading="maintenanceLoading" @click="createDbBackup">创建备份</el-button>
+        <el-button size="small" type="primary" :loading="maintenanceLoading || backupBusy === 'create'" :disabled="!!backupBusy && backupBusy !== 'create'" @click="onCreateBackup">创建备份</el-button>
         <el-upload
           :auto-upload="false"
           :show-file-list="false"
           accept=".db,.bak"
-          :on-change="restoreUploadedBackup"
+          :on-change="onRestoreUploadedBackup"
         >
-          <el-button size="small" type="danger" plain :loading="maintenanceLoading">上传并恢复</el-button>
+          <el-button size="small" type="danger" plain :loading="maintenanceLoading || backupBusy === 'upload'" :disabled="!!backupBusy && backupBusy !== 'upload'">上传并恢复</el-button>
         </el-upload>
       </el-space>
     </template>
@@ -59,7 +59,7 @@
           <el-tag size="small" type="info">{{ backupCount }} 份</el-tag>
         </div>
       </template>
-      <el-table :data="backups" stripe size="small" style="width:100%;" empty-text="暂无备份文件" v-loading="maintenanceLoading">
+      <el-table :data="backups" stripe size="small" style="width:100%;" empty-text="暂无备份文件" v-loading="maintenanceLoading" aria-label="备份文件列表">
         <el-table-column prop="filename" label="备份文件" min-width="260" show-overflow-tooltip />
         <el-table-column label="大小" width="110" align="right" header-align="right">
           <template #default="scope">
@@ -107,6 +107,11 @@ async function runBackupAction(key, fn) {
 const onDownloadBackup = (row) => runBackupAction(`download:${row?.filename || ''}`, () => downloadBackup(row));
 const onRestoreBackup = (row) => runBackupAction(`restore:${row?.filename || ''}`, () => restoreBackup(row));
 const onDeleteBackup = (row) => runBackupAction(`delete:${row?.filename || ''}`, () => deleteBackup(row));
+
+// 工具栏的「创建备份 / 上传并恢复」以前只有表格 v-loading 遮罩，按钮本身没有入口判断，
+// 连点会发两次 POST。这里复用同一个 in-flight 标志（'create' / 'upload'）。
+const onCreateBackup = () => runBackupAction('create', createDbBackup);
+const onRestoreUploadedBackup = (file) => runBackupAction('upload', () => restoreUploadedBackup(file));
 
 const backupCount = computed(() => {
   const n = Number(maintenanceStatus.value?.backup_count || 0);

@@ -26,7 +26,7 @@
       >
         <div class="perf-window-label">{{ w.label }}</div>
         <div class="perf-window-gain">{{ w.gain != null ? formatMoney(w.gain, 0, true) : '—' }}</div>
-        <div class="perf-window-pct">{{ w.gainPct != null ? (w.gainPct >= 0 ? '+' : '') + w.gainPct.toFixed(1) + '%' : '无快照' }}</div>
+        <div class="perf-window-pct">{{ w.gainPct != null ? formatPercent(w.gainPct, 1) : '无快照' }}</div>
         <div v-if="w.stale" class="perf-window-stale">基准 {{ (w.baseDate || '').slice(5) }}（{{ w.staleDays }} 天前）</div>
       </div>
     </div>
@@ -71,7 +71,7 @@
 
         <div id="dailyPnlChart" class="perf-daily-chart"></div>
 
-        <el-table :data="dailyTableRows" size="small" stripe max-height="320" style="margin-top:10px;">
+        <el-table :data="dailyTableRows" size="small" stripe max-height="320" style="margin-top:10px;" aria-label="每日收益">
           <el-table-column label="日期" width="140">
             <template #default="s">
               <span>{{ s.row.date }}</span>
@@ -86,7 +86,7 @@
           <el-table-column label="当日涨跌" width="110" align="right">
             <template #default="s">
               <span :class="s.row.change >= 0 ? 'perf-up' : 'perf-down'">
-                {{ s.row.pct != null ? (s.row.pct >= 0 ? '+' : '') + s.row.pct.toFixed(2) + '%' : '—' }}
+                {{ s.row.pct != null ? formatPercent(s.row.pct, 2) : '—' }}
               </span>
             </template>
           </el-table-column>
@@ -218,7 +218,7 @@
       </div>
       <div v-if="perfFlowSuggestions.length" class="perf-suggest-box" style="margin-bottom:12px;">
         <div class="perf-contrib-sub" style="margin-bottom:8px;">建议草稿</div>
-        <el-table :data="perfFlowSuggestions" size="small" stripe>
+        <el-table :data="perfFlowSuggestions" size="small" stripe aria-label="资金流水建议草稿">
           <el-table-column prop="date" label="日期" width="110" />
           <el-table-column prop="flow_type" label="类型" width="70" />
           <el-table-column label="金额" width="120" align="right">
@@ -227,7 +227,7 @@
           <el-table-column prop="remark" label="说明" min-width="180" show-overflow-tooltip />
           <el-table-column label="操作" width="90">
             <template #default="s">
-              <el-button type="primary" link size="small" @click="applyPerfFlowSuggestion(s.row)">记入</el-button>
+              <el-button type="primary" link size="small" :loading="perfSuggestionApplying" @click="onApplyPerfFlowSuggestion(s.row)">记入</el-button>
             </template>
           </el-table-column>
         </el-table>
@@ -256,7 +256,7 @@
           <el-button v-if="perfFlowEditId" @click="cancelPerfFlowEdit">取消</el-button>
         </el-form-item>
       </el-form>
-      <el-table :data="perfFlows" stripe size="small" style="width:100%;">
+      <el-table :data="perfFlows" stripe size="small" style="width:100%;" aria-label="组合资金流水">
         <el-table-column prop="date" label="日期" width="110" />
         <el-table-column prop="flow_type" label="类型" width="70">
           <template #default="s">
@@ -271,7 +271,7 @@
         <el-table-column label="操作" width="140" align="center">
           <template #default="s">
             <el-button type="primary" size="small" text @click="startPerfFlowEdit(s.row)">编辑</el-button>
-            <el-button type="danger" size="small" text @click="deletePerfFlow(s.row.id)">删除</el-button>
+            <el-button type="danger" size="small" text :loading="perfFlowDeleting === s.row.id" :disabled="perfFlowDeleting !== null" @click="onDeletePerfFlow(s.row.id)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -286,6 +286,7 @@ import MetricCard from '../components/MetricCard.vue';
 import { ref, computed, onMounted, watch } from 'vue';
 import { ElMessageBox } from 'element-plus';
 import { useAppCtx } from '../composables/useAppCtx.js';
+import { formatPercent } from '../utils/index.js';
 
 const {
   formatMoney, pct,
@@ -314,6 +315,8 @@ const perfFlowSuggestions = ref([]);
 const perfSuggestLoading = ref(false);
 const perfFlowEditId = ref(null);
 const perfFlowSaving = ref(false);
+const perfFlowDeleting = ref(null);
+const perfSuggestionApplying = ref(false);
 
 // === 每日收益 ===
 const dailyRange = ref(30);
@@ -510,6 +513,7 @@ async function onSavePerfFlow() {
 }
 
 const onLoadFlowSuggest = async () => {
+  if (perfSuggestLoading.value) return;
   perfSuggestLoading.value = true;
   try {
     const data = await loadPerfFlowSuggestions();
@@ -528,6 +532,27 @@ const onContribRowClick = (row) => {
     goTab('holdings');
   }
 };
+
+// 删除流水 / 记入建议：模块里的 perfFlowSubmitting 未导出，in-flight 只能在本页兜住。
+async function onDeletePerfFlow(id) {
+  if (perfFlowDeleting.value !== null) return;
+  perfFlowDeleting.value = id;
+  try {
+    await deletePerfFlow(id);
+  } finally {
+    perfFlowDeleting.value = null;
+  }
+}
+
+async function onApplyPerfFlowSuggestion(row) {
+  if (perfSuggestionApplying.value) return;
+  perfSuggestionApplying.value = true;
+  try {
+    await applyPerfFlowSuggestion(row);
+  } finally {
+    perfSuggestionApplying.value = false;
+  }
+}
 </script>
 
 <style scoped>

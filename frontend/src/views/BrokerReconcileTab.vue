@@ -36,7 +36,7 @@
             :auto-upload="false"
             :show-file-list="false"
             accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            :on-change="onBrokerFileChange"
+            :on-change="onBrokerUpload"
             :disabled="brokerLoading"
           >
             <el-button type="primary" :loading="brokerLoading">上传预览</el-button>
@@ -49,9 +49,9 @@
           <el-button
             type="warning"
             size="small"
-            :loading="brokerLoading"
-            :disabled="!brokerSelected.length"
-            @click="applySelectedCorrections"
+            :loading="brokerLoading || applying"
+            :disabled="!brokerSelected.length || applying"
+            @click="onApplySelectedCorrections"
           >
             应用勾选校正（{{ brokerSelected.length }}）
           </el-button>
@@ -92,6 +92,7 @@
           size="small"
           class="table-scroll"
           style="width: 100%"
+          aria-label="券商与系统持仓差异明细"
           empty-text="无差异"
         >
           <el-table-column prop="code" label="代码" width="90" />
@@ -133,6 +134,7 @@
             size="small"
             class="table-scroll"
             style="width: 100%"
+            aria-label="券商对账校正建议明细"
             @selection-change="onBrokerSelectionChange"
           >
             <el-table-column type="selection" width="42" />
@@ -163,7 +165,7 @@
           <el-button size="small" @click="fetchBrokerHistory">刷新</el-button>
         </div>
       </template>
-      <el-table :data="brokerHistory" stripe size="small" empty-text="还没有对账记录" style="width: 100%">
+      <el-table :data="brokerHistory" stripe size="small" empty-text="还没有对账记录" style="width: 100%" aria-label="券商对账历史记录">
         <el-table-column label="时间" width="170">
           <template #default="s">{{ s.row.created_at || '—' }}</template>
         </el-table-column>
@@ -193,7 +195,7 @@
 </template>
 
 <script setup>
-import { onMounted } from 'vue';
+import { onMounted, ref } from 'vue';
 import PageShell from '../components/PageShell.vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 
@@ -213,6 +215,26 @@ const {
   applySelectedCorrections,
   fetchBrokerHistory,
 } = useAppCtx();
+
+// 写操作防连点：`brokerLoading` 要等确认框点完才置位（在 modules/brokerReconcile.js 的
+// applySelectedCorrections 里），所以这里再补一个本地 in-flight ref：进入前判断、finally 复位。
+const applying = ref(false);
+
+async function onApplySelectedCorrections() {
+  if (applying.value) return;
+  applying.value = true;
+  try {
+    await applySelectedCorrections();
+  } finally {
+    applying.value = false;
+  }
+}
+
+// 上传预览：模块里的 onBrokerFileChange 开头就置 brokerLoading，复用它做入口判断
+function onBrokerUpload(file) {
+  if (brokerLoading.value) return;
+  return onBrokerFileChange(file);
+}
 
 onMounted(() => {
   fetchBrokerHistory?.();

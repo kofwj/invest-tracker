@@ -12,7 +12,8 @@
                                 :auto-upload="false"
                                 :show-file-list="false"
                                 accept=".csv"
-                                :on-change="importDeposits"
+                                :disabled="depositImporting"
+                                :on-change="onImportDeposits"
                             >
                                 <el-button type="warning">导入存款</el-button>
                             </el-upload>
@@ -80,7 +81,7 @@
                         </el-col>
                         <el-col :span="12">
                             <el-card shadow="never" header="到期分布">
-                                <el-table :data="depositMaturityBuckets" size="small" style="width:100%;">
+                                <el-table :data="depositMaturityBuckets" size="small" style="width:100%;" aria-label="存款到期分布">
                                     <el-table-column prop="bucket" label="期限"></el-table-column>
                                     <el-table-column label="金额" align="right" header-align="right">
                                         <template #default="scope">{{ formatMoney(scope.row.amount) }}</template>
@@ -93,7 +94,7 @@
                         </el-col>
                     </el-row>
 
-                    <el-table :data="depositRows" stripe size="small" class="deposit-table" style="width: 100%">
+                    <el-table :data="depositRows" stripe size="small" class="deposit-table" style="width: 100%" aria-label="存款明细">
                         <el-table-column prop="bank_name" label="银行" min-width="100" align="left" header-align="left"></el-table-column>
                         <el-table-column label="金额" min-width="110" align="right" header-align="right">
                             <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.amount) }}</span></template>
@@ -149,7 +150,7 @@
                         <el-table-column label="操作" width="120" align="center" header-align="center">
                             <template #default="scope">
                                 <el-button type="primary" link size="small" @click="openDepositDialog(scope.row, scope.$index)">编辑</el-button>
-                                <el-button type="danger" link size="small" @click="deleteDeposit(scope.row, scope.$index)">删除</el-button>
+                                <el-button type="danger" link size="small" :loading="depositDeleting === scope.row" @click="onDeleteDeposit(scope.row)">删除</el-button>
                             </template>
                         </el-table-column>
                     </el-table>
@@ -159,6 +160,32 @@
 <script setup>
 import PageShell from '../components/PageShell.vue';
 import MetricCard from '../components/MetricCard.vue';
+import { ref } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 const { dashboard, depositRows, depositSummary, depositBankBreakdown, depositMaturityBuckets, downloadDepositsTemplate, exportDeposits, importDeposits, openDepositDialog, deleteDeposit, formatMoney, pct } = useAppCtx();
+
+// 写操作防连点：删除存款只有模块里的 confirm，导入存款是 el-upload 的 on-change，
+// 连点/连选会发两次请求。这里用本地 in-flight ref 包一层。
+const depositDeleting = ref(null);
+const depositImporting = ref(false);
+
+async function onDeleteDeposit(row) {
+  if (depositDeleting.value) return;
+  depositDeleting.value = row;
+  try {
+    await deleteDeposit(row);
+  } finally {
+    if (depositDeleting.value === row) depositDeleting.value = null;
+  }
+}
+
+async function onImportDeposits(file) {
+  if (depositImporting.value) return;
+  depositImporting.value = true;
+  try {
+    await importDeposits(file);
+  } finally {
+    depositImporting.value = false;
+  }
+}
 </script>

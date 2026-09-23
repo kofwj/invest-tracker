@@ -135,7 +135,7 @@
         <el-button @click="queryCashFlows">查询</el-button>
         <el-button @click="resetCashFlowQuery">重置</el-button>
       </div>
-      <el-table :data="cashFlows" stripe size="small" class="cash-table" style="width: 100%">
+      <el-table :data="cashFlows" stripe size="small" class="cash-table" style="width: 100%" aria-label="证券资金流水">
         <el-table-column prop="date" label="日期" width="108" align="left" header-align="left"></el-table-column>
         <el-table-column prop="account" label="账户" width="100" align="left" header-align="left"></el-table-column>
         <el-table-column prop="flow_type" label="类型" width="100" align="left" header-align="left">
@@ -152,7 +152,7 @@
         <el-table-column label="操作" width="120" fixed="right" align="center" header-align="center">
           <template #default="scope">
             <el-button type="primary" link size="small" @click="openCashFlowEditDialog(scope.row)">编辑</el-button>
-            <el-button type="danger" link size="small" @click="deleteCashFlow(scope.row)">删除</el-button>
+            <el-button type="danger" link size="small" :loading="cashFlowDeleting === scope.row" @click="onDeleteCashFlow(scope.row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -184,7 +184,7 @@
         <el-col :span="6"><el-statistic title="组合取出" :value="Math.abs(cashAudit.portfolio_out || 0)" :precision="2" prefix="¥" /></el-col>
       </el-row>
       <div v-if="cashAudit?.unmatched_bank?.length" class="ops-hint" style="margin-bottom: 8px">未配对银证 {{ cashAudit.unmatched_bank_count }} 笔</div>
-      <el-table v-if="cashAudit?.unmatched_bank?.length" :data="cashAudit.unmatched_bank" stripe size="small" style="width: 100%; margin-bottom: 12px">
+      <el-table v-if="cashAudit?.unmatched_bank?.length" :data="cashAudit.unmatched_bank" stripe size="small" style="width: 100%; margin-bottom: 12px" aria-label="未配对银证流水">
         <el-table-column prop="date" label="日期" width="110" />
         <el-table-column prop="flow_type" label="类型" width="100" />
         <el-table-column label="金额" width="130" align="right">
@@ -193,7 +193,7 @@
         <el-table-column prop="remark" label="备注" show-overflow-tooltip />
       </el-table>
       <div v-if="cashAudit?.unmatched_portfolio?.length" class="ops-hint" style="margin-bottom: 8px">未配对组合流水 {{ cashAudit.unmatched_portfolio_count }} 笔</div>
-      <el-table v-if="cashAudit?.unmatched_portfolio?.length" :data="cashAudit.unmatched_portfolio" stripe size="small" style="width: 100%">
+      <el-table v-if="cashAudit?.unmatched_portfolio?.length" :data="cashAudit.unmatched_portfolio" stripe size="small" style="width: 100%" aria-label="未配对组合流水">
         <el-table-column prop="date" label="日期" width="110" />
         <el-table-column prop="flow_type" label="类型" width="100" />
         <el-table-column label="金额" width="130" align="right">
@@ -255,6 +255,20 @@ async function onAddCashFlow() {
     await addCashFlow();
   } finally {
     cashFlowSaving.value = false;
+  }
+}
+
+// 行内删除流水防连点：原来只有模块里的 confirm，连点会发两次 DELETE。
+// 用「哪一行」做 in-flight 标记，只让被点的那行进 loading。
+const cashFlowDeleting = ref(null);
+
+async function onDeleteCashFlow(row) {
+  if (cashFlowDeleting.value) return;
+  cashFlowDeleting.value = row;
+  try {
+    await deleteCashFlow(row);
+  } finally {
+    if (cashFlowDeleting.value === row) cashFlowDeleting.value = null;
   }
 }
 </script>

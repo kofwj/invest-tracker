@@ -105,6 +105,7 @@
           <el-button size="small" type="primary" plain @click="goTab('holdings')">去持仓明细</el-button>
         </div>
         <el-table
+          aria-label="持仓速览"
           v-else
           :data="holdingsPreview"
           stripe
@@ -194,7 +195,7 @@ import {
   Zap,
 } from 'lucide-vue-next';
 import { useAppCtx } from '../composables/useAppCtx.js';
-import { todayLocalIso } from '../utils/index.js';
+import { formatPercent, todayLocalIso } from '../utils/index.js';
 
 const {
   dashboard,
@@ -357,7 +358,7 @@ const weekDeltaText = computed(() => {
 const weekDeltaSubText = computed(() => {
   if (!weekSeries.value.length) return '先记一条日快照';
   const pct = weekDeltaPct.value;
-  const pctText = pct === null ? '' : ` · ${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
+  const pctText = pct === null ? '' : ` · ${formatPercent(pct, 2)}`;
   const live = weekSeries.value.some((r) => r.live) ? ' · 含实时' : '';
   const mode = weekSeriesMeta.value.mode;
   const modeText = mode === 'recent' ? ' · 最近快照' : '';

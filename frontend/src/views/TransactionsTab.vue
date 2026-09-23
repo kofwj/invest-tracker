@@ -136,7 +136,7 @@
                         </el-row>
                         <div class="fee-hint">手续费会按当前费率自动估算，但保留手动输入；最终以券商实际成交单为准。{{ feeAutoHint }}</div>
                         <el-form-item>
-                            <el-button type="primary" @click="submitTrans">提交记录</el-button>
+                            <el-button type="primary" :loading="transSubmitting" @click="onSubmitTrans">提交记录</el-button>
                             <el-button @click="resetForm">重置</el-button>
                         </el-form-item>
                     </el-form>
@@ -168,9 +168,10 @@
                                     :auto-upload="false"
                                     :show-file-list="false"
                                     accept=".csv"
-                                    :on-change="importTransactions"
+                                    :on-change="onImportTransactions"
+                                    :disabled="transImporting"
                                 >
-                                    <el-button type="warning">导入交易</el-button>
+                                    <el-button type="warning" :loading="transImporting">导入交易</el-button>
                                 </el-upload>
                             </el-space>
                         </div>
@@ -210,7 +211,7 @@
                     </el-row>
                     
                     <!-- 交易记录表格 -->
-                    <el-table :data="filteredTransactions" stripe size="small" class="transaction-table" style="width: 100%" max-height="500">
+                    <el-table :data="filteredTransactions" stripe size="small" class="transaction-table" style="width: 100%" max-height="500" aria-label="交易流水">
                         <el-table-column prop="date" label="日期" width="108" sortable align="left" header-align="left"></el-table-column>
                         <el-table-column label="标的" min-width="148" align="left" header-align="left">
                             <template #default="scope">
@@ -244,7 +245,7 @@
                         <el-table-column label="操作" width="140" fixed="right" align="center" header-align="center">
                             <template #default="scope">
                                 <el-button type="primary" link size="small" @click="openTransEditDialog(scope.row)">编辑</el-button>
-                                <el-button type="danger" link size="small" @click="deleteTransaction(scope.row)">删除</el-button>
+                                <el-button type="danger" link size="small" :loading="transDeleting === scope.row" @click="onDeleteTransaction(scope.row)">删除</el-button>
                             </template>
                         </el-table-column>
                     </el-table>
@@ -268,6 +269,43 @@
 
 <script setup>
 import PageShell from '../components/PageShell.vue';
+import { ref } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 const { transForm, feeAccounts, feeAutoHint, filteredTransactions, pendingTransactions, pendingPurchaseTotal, transQuery, transPage, submitTrans, resetForm, markFeeManual, downloadTransactionsTemplate, exportTransactions, importTransactions, queryAssetByCode, queryAssetByName, selectTransAsset, autoMatchTransAsset, applyTransFilter, resetTransQuery, handleTransPageChange, handleTransPageSizeChange, openTransEditDialog, deleteTransaction, formatMoney, dashboard, dividendLoading, openDividendDraftDialog } = useAppCtx();
+
+// 写操作防连点：提交记录（模块里已有 transSubmitting 入口判断，这里补按钮 loading）、
+// 删除交易、导入交易 CSV（el-upload 的 on-change）都包一层本地 in-flight ref。
+const transSubmitting = ref(false);
+const transDeleting = ref(null);
+const transImporting = ref(false);
+
+async function onSubmitTrans() {
+  if (transSubmitting.value) return;
+  transSubmitting.value = true;
+  try {
+    await submitTrans();
+  } finally {
+    transSubmitting.value = false;
+  }
+}
+
+async function onDeleteTransaction(row) {
+  if (transDeleting.value) return;
+  transDeleting.value = row;
+  try {
+    await deleteTransaction(row);
+  } finally {
+    if (transDeleting.value === row) transDeleting.value = null;
+  }
+}
+
+async function onImportTransactions(file) {
+  if (transImporting.value) return;
+  transImporting.value = true;
+  try {
+    await importTransactions(file);
+  } finally {
+    transImporting.value = false;
+  }
+}
 </script>
