@@ -27,9 +27,24 @@
                 </form>
             </div>
         </div>
+
+        <!-- 代理层会话过期（oauth2-proxy）：密码框帮不上忙，只能重新走一次登录 -->
+        <div v-else-if="sessionExpired" class="login-overlay" role="dialog" aria-modal="true" aria-label="登录已过期">
+            <div class="login-box">
+                <div class="login-logo" aria-hidden="true">账</div>
+                <h3>Invest Tracker</h3>
+                <p class="login-subtitle">登录状态已过期</p>
+                <p class="login-error" style="margin-top: 16px;">
+                    长时间未操作，登录会话已失效（账务数据没有被改动，只是暂时读不到）。
+                </p>
+                <button type="button" class="login-native-button" style="margin-top: 20px;" @click="reloadForRelogin">
+                    重新登录
+                </button>
+            </div>
+        </div>
 </template>
 
 <script setup>
 import { useAppCtx } from '../composables/useAppCtx.js';
-const { showLoginOverlay, loginLoading, loginPassword, loginError, handleLogin } = useAppCtx();
+const { showLoginOverlay, loginLoading, loginPassword, loginError, handleLogin, sessionExpired, reloadForRelogin } = useAppCtx();
 </script>

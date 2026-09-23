@@ -177,32 +177,48 @@ def delete_holding_correction(correction_id: int):
 
 def _sync_trailing_returns_impl(backup: bool = False):
     backup_path = create_safety_backup("before_sync_trailing_returns") if backup else None
+    # 阶段 1（短事务）：补齐缓存列 + 取持仓快照。读完立刻 commit 结束事务，
+    # 否则下面逐只抓腾讯/akshare 的整段网络 IO 都落在写锁内（旧实现在第一只
+    # UPDATE 后就开写事务，10 只持仓能占锁 10-30s，并发写请求直接 database is locked）。
     with db_session(row_factory=sqlite3.Row) as conn:
         ensure_holding_return_columns(conn)
-        rows = conn.execute("SELECT code, name, last_price FROM holdings WHERE quantity > 0").fetchall()
-        updated = 0
-        failed = []
-        details = []
-        now = datetime.now(LOCAL_TZ).replace(tzinfo=None)
-        for row in rows:
-            code = str(row["code"]).strip()
-            pct, source = calculate_trailing_return_1y(code, row["last_price"])
-            if pct is None:
-                failed.append({"code": code, "name": row["name"], "reason": source})
-            else:
-                updated += 1
-            conn.execute(
+        rows = [
+            dict(r)
+            for r in conn.execute(
+                "SELECT code, name, last_price FROM holdings WHERE quantity > 0"
+            ).fetchall()
+        ]
+        conn.commit()
+    # 阶段 2（纯网络，不持有任何 DB 事务/锁）：结果只进内存
+    now = datetime.now(LOCAL_TZ).replace(tzinfo=None)
+    updated = 0
+    failed = []
+    details = []
+    pending = []
+    for row in rows:
+        code = str(row["code"]).strip()
+        pct, source = calculate_trailing_return_1y(code, row["last_price"])
+        if pct is None:
+            failed.append({"code": code, "name": row["name"], "reason": source})
+        else:
+            updated += 1
+        # 与旧实现一致：失败的标的也写 NULL（清掉过期缓存值）
+        pending.append((pct, source, now, code))
+        details.append(
+            {"code": code, "name": row["name"], "trailing_return_1y": pct, "source": source}
+        )
+    # 阶段 3（短写事务）：批量落库，纯 DB 操作
+    if pending:
+        with db_session() as conn:
+            conn.executemany(
                 """
                 UPDATE holdings
                 SET trailing_return_1y = ?, trailing_return_1y_source = ?, trailing_return_1y_updated_at = ?
                 WHERE code = ?
                 """,
-                (pct, source, now, code),
+                pending,
             )
-            details.append(
-                {"code": code, "name": row["name"], "trailing_return_1y": pct, "source": source}
-            )
-        conn.commit()
+            conn.commit()
     return {
         "status": "success",
         "checked": len(rows),
@@ -215,64 +231,87 @@ def _sync_trailing_returns_impl(backup: bool = False):
 
 def _sync_prices_impl(backup: bool = False):
     backup_path = create_safety_backup("before_sync_prices") if backup else None
+    # 阶段 1（短事务）：取持仓快照，立即结束事务——网络阶段不再持锁。
     with db_session(row_factory=sqlite3.Row) as conn:
-        rows = conn.execute("SELECT code, name, last_price FROM holdings WHERE quantity > 0").fetchall()
-        updated = 0
-        unchanged = 0
-        failed = []
-        details = []
-        now = datetime.now(LOCAL_TZ).replace(tzinfo=None)
-
-        codes = [row["code"] for row in rows]
-        em_prices = {}
-        try:
-            em_prices = fetch_eastmoney_prices(codes)
-        except Exception as e:
-            logger.error(f"Eastmoney batch price sync failed: {e}")
-
-        for row in rows:
-            code = str(row["code"]).strip()
-            lookup_code = code.lower().replace("f", "")
-            old_price = float(row["last_price"] or 0)
-            price = None
-            source = ""
-            try:
-                if code.lower().startswith("f"):
-                    price = fetch_open_fund_nav(code)
-                    source = "天天基金净值"
-                else:
-                    price = em_prices.get(lookup_code)
-                    source = "东方财富行情"
-
-                if price is None or price <= 0:
-                    failed.append({"code": code, "name": row["name"], "reason": "未取到有效价格"})
-                    continue
-
-                conn.execute(
-                    "UPDATE holdings SET last_price = ?, updated_at = ? WHERE code = ?",
-                    (float(price), now, code),
-                )
-                if abs(price - old_price) >= 1e-8:
-                    updated += 1
-                else:
-                    unchanged += 1
-                details.append(
-                    {
-                        "code": code,
-                        "name": row["name"],
-                        "old_price": old_price,
-                        "new_price": float(price),
-                        "source": source,
-                    }
-                )
-            except Exception as e:
-                logger.error(f"Error syncing {code}: {e}")
-                failed.append({"code": code, "name": row["name"], "reason": str(e)})
-
+        rows = [
+            dict(r)
+            for r in conn.execute(
+                "SELECT code, name, last_price FROM holdings WHERE quantity > 0"
+            ).fetchall()
+        ]
         conn.commit()
-    # 顺手增量同步日K缓存（失败不影响同步价结果）
+    now = datetime.now(LOCAL_TZ).replace(tzinfo=None)
+
+    codes = [row["code"] for row in rows]
+    em_prices = {}
     try:
-        from .kline_cache import sync_klines_for_holdings as _sync_klines
+        em_prices = fetch_eastmoney_prices(codes)
+    except Exception as e:
+        logger.error(f"Eastmoney batch price sync failed: {e}")
+
+    # 阶段 2（纯网络）：把新价/来源/计数全部算到内存，不碰 DB。
+    # 注意场外基金逐只调 fetch_open_fund_nav，以前这段是在写事务里的。
+    updated = 0
+    unchanged = 0
+    failed = []
+    details = []
+    pending = []
+    for row in rows:
+        code = str(row["code"]).strip()
+        lookup_code = code.lower().replace("f", "")
+        old_price = float(row["last_price"] or 0)
+        price = None
+        source = ""
+        try:
+            if code.lower().startswith("f"):
+                price = fetch_open_fund_nav(code)
+                source = "天天基金净值"
+            else:
+                price = em_prices.get(lookup_code)
+                source = "东方财富行情"
+
+            if price is None or price <= 0:
+                # 取不到净值/行情 → 保留旧价（不写库），语义与旧实现一致
+                failed.append({"code": code, "name": row["name"], "reason": "未取到有效价格"})
+                continue
+
+            pending.append((float(price), now, code))
+            if abs(price - old_price) >= 1e-8:
+                updated += 1
+            else:
+                unchanged += 1
+            details.append(
+                {
+                    "code": code,
+                    "name": row["name"],
+                    "old_price": old_price,
+                    "new_price": float(price),
+                    "source": source,
+                }
+            )
+        except Exception as e:
+            logger.error(f"Error syncing {code}: {e}")
+            failed.append({"code": code, "name": row["name"], "reason": str(e)})
+
+    # 阶段 3（短写事务）：批量落库。价格没变的标的也刷新 updated_at（与旧实现一致）。
+    if pending:
+        with db_session() as conn:
+            conn.executemany(
+                "UPDATE holdings SET last_price = ?, updated_at = ? WHERE code = ?",
+                pending,
+            )
+            conn.commit()
+
+    # 顺手增量同步日K缓存（失败不影响同步价结果）。
+    # 注意：这里必须用「相对 + 绝对」双导入。生产是 uvicorn main:app 平铺加载
+    # （backend/ 没有 __init__.py），routers_holdings.__package__ 为空字符串，
+    # 只写相对导入会抛 ImportError 并被下面的 except 吞掉 —— 也就是说这段
+    # K线同步在线上从来没执行过。全仓其它 100 处都带 ImportError 兜底，只有这里漏了。
+    try:
+        try:
+            from .kline_cache import sync_klines_for_holdings as _sync_klines
+        except ImportError:
+            from kline_cache import sync_klines_for_holdings as _sync_klines
         with db_session() as conn2:
             _sync_klines(conn2, force=False)
             conn2.commit()

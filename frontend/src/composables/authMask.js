@@ -32,6 +32,12 @@ export function createAuthMask({ onUnlocked } = {}) {
     const loginPassword = ref('');
     const loginError = ref('');
     const authEnabled = ref(false);
+    /**
+     * 会话在代理层过期（oauth2-proxy / Caddy forward_auth）。
+     * 这种情况弹"请输入访问密码"没有意义——应用级密码根本没开，
+     * 要重新走的是身份提供方（GitHub）。所以单独一个状态。
+     */
+    const sessionExpired = ref(false);
 
     const showMessage = (type, text) => {
         try {
@@ -82,8 +88,21 @@ export function createAuthMask({ onUnlocked } = {}) {
         ElMessage.success('已安全退出');
     };
 
+    // 会话失效的两种成因，处理方式不同：
+    //  - 应用级密码模式（authEnabled）→ 弹密码框就能救
+    //  - 代理模式 → 只能重新走一次登录流程（刷新页面会被 Caddy 带去身份提供方）
     window.onAuthRequired = () => {
-        showLoginOverlay.value = true;
+        if (authEnabled.value) {
+            sessionExpired.value = false;
+            showLoginOverlay.value = true;
+        } else {
+            showLoginOverlay.value = false;
+            sessionExpired.value = true;
+        }
+    };
+
+    const reloadForRelogin = () => {
+        window.location.reload();
     };
 
     // Login gate must never look "garbled": drop privacy blur while overlay is visible.
@@ -105,6 +124,8 @@ export function createAuthMask({ onUnlocked } = {}) {
         authEnabled,
         handleLogin,
         handleLogout,
+        sessionExpired,
+        reloadForRelogin,
         showMessage,
     };
 }

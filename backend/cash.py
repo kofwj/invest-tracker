@@ -9,6 +9,21 @@ except ImportError:
 DEFAULT_ACCOUNT = "华泰证券"
 
 
+def ensure_cash_flow_indexes(conn):
+    """资金流水查询索引（老库自动补，IF NOT EXISTS 幂等）。
+
+    - (date DESC, id DESC)：列表默认 ORDER BY date DESC, id DESC / 日期区间过滤
+    - (flow_type, date DESC, id DESC)：按 flow_type 过滤后再按日期倒序取最新（银证流水草稿）
+    """
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_cash_flows_date_id ON cash_flows(date DESC, id DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_cash_flows_flow_type_date_id "
+        "ON cash_flows(flow_type, date DESC, id DESC)"
+    )
+
+
 def transaction_cash_flow(conn):
     """交易对证券现金的自动影响：买入/申购待确认扣现金，卖出/分红加现金。"""
     conn.row_factory = sqlite3.Row

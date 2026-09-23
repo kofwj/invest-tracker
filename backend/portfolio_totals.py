@@ -93,9 +93,18 @@ def compute_portfolio_totals(conn, *, holdings=None):
     market_value = 0.0
     total_profit = 0.0
     lifetime_profit = 0.0
+    # 缺价持仓（last_price 为 0/NULL/NaN）会被当成市值 0 计入总资产，
+    # 这里把它们单独记下来交给快照/时间轴打标记；不改变任何已有数值口径。
+    unpriced_codes = []
+    unpriced_count = 0
     for h in holdings:
         qty = float(_row_get(h, "quantity", 0) or 0)
         last = float(_row_get(h, "last_price", 0) or 0)
+        if qty > 0 and not (last > 0):
+            unpriced_count += 1
+            code = str(_row_get(h, "code", "") or "").strip()
+            if code:
+                unpriced_codes.append(code)
         market_value += qty * last
         total_profit += holding_float_profit(h)
         lifetime_profit += holding_lifetime_profit(h)
@@ -121,4 +130,6 @@ def compute_portfolio_totals(conn, *, holdings=None):
         "total_profit": total_profit,
         "lifetime_profit": lifetime_profit,
         "category_market_value": cat_mv,
+        "unpriced_count": unpriced_count,
+        "unpriced_codes": unpriced_codes,
     }

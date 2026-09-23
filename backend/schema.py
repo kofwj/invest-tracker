@@ -2,9 +2,10 @@ import json
 import sqlite3
 
 try:
-    from .cash import ensure_cash_base, set_setting
+    from .cash import ensure_cash_base, set_setting, ensure_cash_flow_indexes
     from .database import open_db
     from .discipline import ensure_discipline_tables
+    from .holding_calculator import ensure_holding_correction_indexes
     from .holdings import ensure_holding_return_columns
     from .kline_cache import ensure_kline_cache_table
     from .market import ensure_alert_tables
@@ -12,9 +13,10 @@ try:
     from .broker_reconcile import ensure_broker_reconcile_history_table
     from .snapshots import ensure_snapshot_columns, ensure_portfolio_cash_flows_table, ensure_reconcile_table
 except ImportError:
-    from cash import ensure_cash_base, set_setting
+    from cash import ensure_cash_base, set_setting, ensure_cash_flow_indexes
     from database import open_db
     from discipline import ensure_discipline_tables
+    from holding_calculator import ensure_holding_correction_indexes
     from holdings import ensure_holding_return_columns
     from kline_cache import ensure_kline_cache_table
     from market import ensure_alert_tables
@@ -23,7 +25,7 @@ except ImportError:
     from snapshots import ensure_snapshot_columns, ensure_portfolio_cash_flows_table, ensure_reconcile_table
 
 
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 SCHEMA_VERSION_KEY = "schema_version"
 
 
@@ -145,6 +147,8 @@ def ensure_app_tables(conn):
     ensure_notify_tables(conn)
     ensure_kline_cache_table(conn)
     ensure_broker_reconcile_history_table(conn)
+    ensure_cash_flow_indexes(conn)
+    ensure_holding_correction_indexes(conn)
 
 
 def migrate_to_v1_core_compat(conn):
@@ -301,6 +305,20 @@ def migrate_to_v12_focus_defaults(conn):
     )
 
 
+def migrate_to_v14_query_indexes(conn):
+    """补查询索引（老库升级自动补齐；CREATE INDEX IF NOT EXISTS 幂等、不写数据）。
+
+    背景：cash_flows / portfolio_cash_flows / holding_corrections / alert_events
+    此前零索引，真实库上 EXPLAIN QUERY PLAN 证实为全表扫 + 临时 B 树排序。
+    - daily_snapshots.unpriced_count 由 ensure_snapshot_columns 补列（缺价持仓只数）。
+    """
+    ensure_snapshot_columns(conn)
+    ensure_portfolio_cash_flows_table(conn)
+    ensure_alert_tables(conn)
+    ensure_cash_flow_indexes(conn)
+    ensure_holding_correction_indexes(conn)
+
+
 MIGRATIONS = [
     (1, migrate_to_v1_core_compat),
     (2, migrate_to_v2_holdings_and_snapshots),
@@ -315,6 +333,7 @@ MIGRATIONS = [
     (11, migrate_to_v11_reconcile),
     (12, migrate_to_v12_focus_defaults),
     (13, migrate_to_v13_broker_reconcile_history),
+    (14, migrate_to_v14_query_indexes),
 ]
 
 

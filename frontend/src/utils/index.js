@@ -183,13 +183,6 @@ const summarizeDailyPnl = (rows = [], days = 0) => {
     return { count: slice.length, total, upDays, downDays, best, worst };
 };
 
-Object.assign(window, {
-    normalizeText, daysUntil, daysBetween, formatMoney, formatPercent, pct,
-    inferCategoryByCode, holdingFloatProfit, holdingLifetimeProfit,
-    holdingFloatProfitRate, holdingLifetimeProfitRate, todayLocalIso,
-    interestForDays, apiErrorDetail, buildDailyPnlRows, summarizeDailyPnl,
-});
-
 export {
     normalizeText,
     daysUntil,

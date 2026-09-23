@@ -222,15 +222,6 @@ const createPerformanceModule = ({
         return rows.length ? String(rows[rows.length - 1].date || '') : null;
     });
 
-    /** 今天窗口：gain 的基准日与"距今几天" */
-    const perfTodayWindow = computed(
-        () => (perfWindows.value || []).find((w) => w.key === 'today') || null,
-    );
-
-    const perfTodayStale = computed(() => {
-        const w = perfTodayWindow.value;
-        return !!(w && w.stale_days != null && Number(w.stale_days) > 1);
-    });
 
     const perfDailyStats = computed(() => summarizeDailyPnl(perfDailyRows.value, 30));
 
@@ -473,8 +464,6 @@ const createPerformanceModule = ({
         perfDailyRows,
         perfDailyStats,
         perfLatestSnapshotDate,
-        perfTodayWindow,
-        perfTodayStale,
     };
 };
 

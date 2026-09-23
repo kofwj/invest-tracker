@@ -1,4 +1,5 @@
 import logging
+import sqlite3
 from datetime import date as dt_date, datetime
 from typing import Optional
 
@@ -22,6 +23,9 @@ def ensure_snapshot_columns(conn):
         conn.execute("ALTER TABLE daily_snapshots ADD COLUMN bond_mv REAL DEFAULT 0")
     if "reit_mv" not in cols:
         conn.execute("ALTER TABLE daily_snapshots ADD COLUMN reit_mv REAL DEFAULT 0")
+    if "unpriced_count" not in cols:
+        # 该日快照里 last_price 缺失（按 0 计市值）的持仓只数
+        conn.execute("ALTER TABLE daily_snapshots ADD COLUMN unpriced_count INTEGER DEFAULT 0")
 
 
 def ensure_portfolio_cash_flows_table(conn):
@@ -38,6 +42,10 @@ def ensure_portfolio_cash_flows_table(conn):
         remark TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )""")
+    # 绩效/勾稽按日期顺序读全表：无索引时是全表扫 + 临时 B 树排序
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_portfolio_cash_flows_date_id ON portfolio_cash_flows(date, id)"
+    )
 
 
 def ensure_reconcile_table(conn):
@@ -89,17 +97,50 @@ def latest_reconcile_with_gap(conn):
     return rec
 
 
+def _count_unpriced_holdings(conn):
+    """兜底：调用方没给缺价标记时，直接按持仓表现算一次（老调用方兼容）。"""
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) AS cnt FROM holdings "
+            "WHERE quantity > 0 AND (last_price IS NULL OR last_price <= 0)"
+        ).fetchone()
+    except Exception:
+        return 0
+    try:
+        if isinstance(row, sqlite3.Row):
+            return int(row["cnt"] or 0)
+        return int((row[0] if row else 0) or 0)
+    except (TypeError, ValueError, IndexError):
+        return 0
+
+
+def resolve_unpriced_count(conn, dashboard):
+    """本次快照里缺价（市值按 0 计）的持仓只数。只记录，不阻断快照。"""
+    if not isinstance(dashboard, dict):
+        return _count_unpriced_holdings(conn)
+    raw = dashboard.get("unpriced_count")
+    if raw is None and "unpriced_codes" in dashboard:
+        raw = len(dashboard.get("unpriced_codes") or [])
+    if raw is None:
+        return _count_unpriced_holdings(conn)
+    try:
+        return max(0, int(raw or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
 def create_snapshot_record(conn, today_iso, dashboard):
     ensure_snapshot_columns(conn)
     now = datetime.now(LOCAL_TZ).replace(tzinfo=None)
     lifetime = dashboard.get("lifetime_profit", 0)
+    unpriced_count = resolve_unpriced_count(conn, dashboard)
     existing = conn.execute("SELECT id FROM daily_snapshots WHERE date = ?", (today_iso,)).fetchone()
     if existing:
         conn.execute("""
             UPDATE daily_snapshots
             SET total_assets = ?, total_market_value = ?, bank_balance = ?, securities_cash = ?,
                 pending_purchase = ?, total_profit = ?, lifetime_profit = ?, holdings_count = ?,
-                equity_mv = ?, bond_mv = ?, reit_mv = ?, created_at = ?
+                equity_mv = ?, bond_mv = ?, reit_mv = ?, created_at = ?, unpriced_count = ?
             WHERE date = ?
         """, (
             dashboard['total_assets'],
@@ -114,6 +155,7 @@ def create_snapshot_record(conn, today_iso, dashboard):
             (dashboard.get("category_market_value") or {}).get("债基", 0),
             (dashboard.get("category_market_value") or {}).get("REITs", 0),
             now,
+            unpriced_count,
             today_iso,
         ))
         return existing['id'], 'updated'
@@ -121,8 +163,9 @@ def create_snapshot_record(conn, today_iso, dashboard):
     conn.execute("""
         INSERT INTO daily_snapshots
         (date, total_assets, total_market_value, bank_balance, securities_cash, pending_purchase,
-         total_profit, lifetime_profit, holdings_count, equity_mv, bond_mv, reit_mv, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         total_profit, lifetime_profit, holdings_count, equity_mv, bond_mv, reit_mv, created_at,
+         unpriced_count)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         today_iso,
         dashboard['total_assets'],
@@ -137,6 +180,7 @@ def create_snapshot_record(conn, today_iso, dashboard):
         (dashboard.get("category_market_value") or {}).get("债基", 0),
         (dashboard.get("category_market_value") or {}).get("REITs", 0),
         now,
+        unpriced_count,
     ))
     snapshot_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
     return snapshot_id, 'created'

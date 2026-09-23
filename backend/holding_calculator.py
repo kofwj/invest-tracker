@@ -85,6 +85,14 @@ def normalized_transaction_cash(direction, quantity, price, amount, fee):
     return amt
 
 
+def ensure_holding_correction_indexes(conn):
+    """持仓校正按 (code, date DESC, id DESC) 取最新的索引（列表 + 逐标的快路径）。"""
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_holding_corrections_code_date_id "
+        "ON holding_corrections(code, date DESC, id DESC)"
+    )
+
+
 def latest_holding_corrections(conn):
     """Return latest forced correction per code. Latest id wins when dates tie."""
     try:

@@ -164,8 +164,41 @@ def upsert_klines(conn, code: str, rows: List[dict]) -> int:
     return cnt
 
 
+def _fetch_kline_rows(code: str) -> List[dict]:
+    """纯网络阶段：先腾讯，空则退化东财。不碰 DB，可在任何事务之外调用。"""
+    rows = fetch_tencent_kline_ohlc(code, count=KLINE_DEFAULT_DAYS)
+    if not rows:
+        rows = fetch_eastmoney_kline_ohlc(code, count=KLINE_DEFAULT_DAYS)
+    return rows or []
+
+
+def _row_get(row, key: str, index: int):
+    """兼容 sqlite3.Row 与普通 tuple 取值。"""
+    if isinstance(row, sqlite3.Row):
+        return row[key]
+    return row[index]
+
+
+def _synced_today_codes(conn) -> set:
+    """一次查询取出「今天已同步过」的 code 集合，替代循环内逐只 SELECT。"""
+    today = _local_today_iso()
+    out = set()
+    for row in conn.execute(
+        f"SELECT code, MAX(updated_at) as last FROM {KLINE_TABLE} GROUP BY code"
+    ).fetchall():
+        last = _row_get(row, "last", 1)
+        if last and str(last)[:10] == today:
+            out.add(str(_row_get(row, "code", 0) or "").strip())
+    return out
+
+
 def sync_kline_for_code(conn, code: str, *, force: bool = False) -> int:
-    """拉单只标的日K并入库。返回新写入的行数。"""
+    """拉单只标的日K并入库。返回新写入的行数。
+
+    网络拉取必须在任何 DB 事务之外：增量检查（SELECT）后立刻 commit 结束读事务，
+    否则 WAL 下长时间持读快照、随后写升级会直接 SQLITE_BUSY_SNAPSHOT；
+    旧实现更是把每只标的的网络 IO 都放在上一只已开的写事务里。
+    """
     code = str(code or "").strip()
     if not code:
         return 0
@@ -178,34 +211,55 @@ def sync_kline_for_code(conn, code: str, *, force: bool = False) -> int:
         row = conn.execute(
             f"SELECT MAX(updated_at) as last FROM {KLINE_TABLE} WHERE code = ?", (code,)
         ).fetchone()
-        last = row["last"] if isinstance(row, sqlite3.Row) else (row[0] if row else None)
+        last = _row_get(row, "last", 0) if row else None
         today = _local_today_iso()
         if last and str(last)[:10] == today:
             return 0
-    # 拉数据
-    rows = fetch_tencent_kline_ohlc(code, count=KLINE_DEFAULT_DAYS)
-    if not rows:
-        rows = fetch_eastmoney_kline_ohlc(code, count=KLINE_DEFAULT_DAYS)
+    conn.commit()  # 结束读事务：下面的网络拉取不持有任何 DB 事务/锁
+    rows = _fetch_kline_rows(code)
     if not rows:
         return 0
     return upsert_klines(conn, code, rows)
 
 
 def sync_klines_for_holdings(conn, *, force: bool = False) -> dict:
-    """批量给所有持仓同步日K。"""
+    """批量给所有持仓同步日K。
+
+    两阶段：先把所有标的的网络数据拉进内存（期间不持有任何 DB 事务/锁），
+    再用一个短事务批量 upsert。cron 每天 15:20/16:40 会触发，旧实现会让整个
+    批量抓取期间写锁一直被占，导致并发写请求 5 秒后 database is locked。
+    """
     ensure_kline_cache_table(conn)
     rows = conn.execute("SELECT code FROM holdings WHERE quantity > 0").fetchall()
-    synced = 0
+    codes = [str(r["code"]).strip() for r in rows]
+    # 增量集合（force 时不用）先在阶段 1 查完，然后结束读事务
+    synced_today = set() if force else _synced_today_codes(conn)
+    conn.commit()  # 阶段 1 结束：网络阶段不再持有 DB 事务/锁
+
+    # 阶段 2：纯网络拉取，结果只进内存
+    pending = []
     skipped = 0
     failed = []
-    for r in rows:
-        code = str(r["code"]).strip()
+    for code in codes:
         try:
-            n = sync_kline_for_code(conn, code, force=force)
-            if n > 0:
-                synced += 1
-            else:
+            if not code or code.lower().startswith("f") or code in synced_today:
                 skipped += 1
+                continue
+            fetched = _fetch_kline_rows(code)
+            if not fetched:
+                skipped += 1
+                continue
+            pending.append((code, fetched))
+        except Exception as exc:
+            logger.warning("kline sync failed for %s: %s", code, exc)
+            failed.append({"code": code, "reason": str(exc)})
+
+    # 阶段 3：短写事务批量落库（调用方负责 commit）
+    synced = 0
+    for code, fetched in pending:
+        try:
+            upsert_klines(conn, code, fetched)
+            synced += 1
         except Exception as exc:
             logger.warning("kline sync failed for %s: %s", code, exc)
             failed.append({"code": code, "reason": str(exc)})

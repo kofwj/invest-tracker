@@ -2,6 +2,42 @@ import axios from 'axios';
 
 const API = '/api';
 
+/**
+ * oauth2-proxy 会话过期时不会返回 401：Caddy 的 forward_auth 会 302 到 /oauth2/sign_in，
+ * 而 XHR 自动跟随 302 —— axios 最终拿到的是 **200 的登录页 HTML**（实测 46KB、
+ * content-type: text/html）。此时 axios 认为请求成功，dashboard.value 被赋成一段 HTML，
+ * 页面所有数字变成 undefined/0，却没有任何登录提示。所以对 /api/* 的响应补一层
+ * content-type 校验兜底。
+ */
+const SESSION_EXPIRED_MESSAGE = '登录状态已过期，请重新登录';
+
+const isApiUrl = (url) => typeof url === 'string' && url.includes(API + '/');
+
+const looksLikeHtml = (response) => {
+    const contentType = response?.headers?.['content-type'];
+    return typeof contentType === 'string' && contentType.toLowerCase().includes('text/html');
+};
+
+const notifyAuthRequired = () => {
+    localStorage.removeItem('invest_tracker_token');
+    if (typeof window !== 'undefined' && typeof window.onAuthRequired === 'function') {
+        window.onAuthRequired();
+    }
+};
+
+const sessionExpiredError = (response) => {
+    const err = new Error(SESSION_EXPIRED_MESSAGE);
+    err.isSessionExpired = true;
+    err.response = response;
+    err.config = response?.config;
+    return err;
+};
+
+// 兜底超时：没单独声明 timeout 的接口原先可能一直挂着（表现为按钮永远转圈）。
+// 需要更久的接口（同步价 120s / 同步收益率 180s / K线 180s / 导入导出 180s）
+// 都显式声明了自己的 timeout，会覆盖这个默认值。
+axios.defaults.timeout = 60000;
+
 // 注册请求与响应拦截器处理身份校验
 axios.interceptors.request.use(
     (config) => {
@@ -15,13 +51,17 @@ axios.interceptors.request.use(
 );
 
 axios.interceptors.response.use(
-    (response) => response,
+    (response) => {
+        // 会话失效被伪装成 200 HTML —— 必须当成失败，否则页面静默显示空数据
+        if (isApiUrl(response?.config?.url) && looksLikeHtml(response)) {
+            notifyAuthRequired();
+            return Promise.reject(sessionExpiredError(response));
+        }
+        return response;
+    },
     (error) => {
         if (error.response && error.response.status === 401) {
-            localStorage.removeItem('invest_tracker_token');
-            if (typeof window.onAuthRequired === 'function') {
-                window.onAuthRequired();
-            }
+            notifyAuthRequired();
         }
         return Promise.reject(error);
     }
@@ -180,7 +220,6 @@ const api = {
     uploadCsv: (url, formData) => axios.post(API + url, formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 180000 }),
 };
 
-Object.assign(window, { API, api });
+export { API, api, SESSION_EXPIRED_MESSAGE };
 
-export { API, api };
 export default api;

@@ -27,52 +27,94 @@ const createMarketModule = ({
         enabled: true,
     });
 
+    // 同一时刻只保留一份"同参数"的请求：切 tab / 连点刷新会并发触发同一接口，
+    // 命中 in-flight 时直接复用已在飞的 Promise（照抄 performance.js 的 perfInFlight）。
+    // 只有真正发起请求的那一次会在 finally 里清 loading，复用的那几次不碰它。
+    const marketSummaryInFlight = new Map();
+    const alertRulesInFlight = new Map();
+    const alertEventsInFlight = new Map();
+    const refreshMarketInFlight = new Map();
+
     const fetchMarketSummary = async () => {
+        const key = JSON.stringify({});
         marketLoading.value = true;
+        if (marketSummaryInFlight.has(key)) return marketSummaryInFlight.get(key);
+        const task = (async () => {
+            try {
+                const res = await api.getMarketSummary();
+                marketSummary.value = res.data || {};
+                // sync watchlist draft from server summary
+                const wl = (marketSummary.value.watchlist || []).map((x) => ({
+                    code: x.code,
+                    name: x.name || x.code,
+                    secid: x.secid || '',
+                }));
+                if (watchlistDraft) watchlistDraft.value = wl;
+            } catch (e) {
+                const detail = e?.response?.data?.detail || e?.message || '加载市场摘要失败';
+                ElMessage.error(detail);
+            }
+        })();
+        marketSummaryInFlight.set(key, task);
         try {
-            const res = await api.getMarketSummary();
-            marketSummary.value = res.data || {};
-            // sync watchlist draft from server summary
-            const wl = (marketSummary.value.watchlist || []).map((x) => ({
-                code: x.code,
-                name: x.name || x.code,
-                secid: x.secid || '',
-            }));
-            if (watchlistDraft) watchlistDraft.value = wl;
-        } catch (e) {
-            const detail = e?.response?.data?.detail || e?.message || '加载市场摘要失败';
-            ElMessage.error(detail);
+            return await task;
         } finally {
+            marketSummaryInFlight.delete(key);
             marketLoading.value = false;
         }
     };
 
     const fetchAlertRules = async () => {
+        const key = JSON.stringify({});
+        if (alertRulesInFlight.has(key)) return alertRulesInFlight.get(key);
+        const task = (async () => {
+            try {
+                const res = await api.listAlertRules();
+                alertRules.value = res.data || [];
+            } catch (e) {
+                ElMessage.error(e?.response?.data?.detail || '加载预警规则失败');
+            }
+        })();
+        alertRulesInFlight.set(key, task);
         try {
-            const res = await api.listAlertRules();
-            alertRules.value = res.data || [];
-        } catch (e) {
-            ElMessage.error(e?.response?.data?.detail || '加载预警规则失败');
+            return await task;
+        } finally {
+            alertRulesInFlight.delete(key);
         }
+    };
+
+    // 查询条件（含筛选）随时会变，key 必须带上它，否则不同筛选会被错误合并成一次请求。
+    const alertEventsQuery = () => {
+        const code = (alertEventCodeFilter?.value || '').trim();
+        const start_date = (alertEventStartDate?.value || '').trim() || undefined;
+        const end_date = (alertEventEndDate?.value || '').trim() || undefined;
+        return {
+            limit: 100,
+            code: code || undefined,
+            start_date,
+            end_date,
+        };
     };
 
     const fetchAlertEvents = async () => {
         if (!alertEvents) return;
+        const query = alertEventsQuery();
+        const key = JSON.stringify(query);
         alertEventsLoading.value = true;
+        if (alertEventsInFlight.has(key)) return alertEventsInFlight.get(key);
+        const task = (async () => {
+            try {
+                const res = await api.listAlertEvents(query);
+                alertEvents.value = res.data || [];
+            } catch (e) {
+                ElMessage.error(e?.response?.data?.detail || '加载预警历史失败');
+            }
+        })();
+        alertEventsInFlight.set(key, task);
         try {
-            const code = (alertEventCodeFilter?.value || '').trim();
-            const start_date = (alertEventStartDate?.value || '').trim() || undefined;
-            const end_date = (alertEventEndDate?.value || '').trim() || undefined;
-            const res = await api.listAlertEvents({
-                limit: 100,
-                code: code || undefined,
-                start_date,
-                end_date,
-            });
-            alertEvents.value = res.data || [];
-        } catch (e) {
-            ElMessage.error(e?.response?.data?.detail || '加载预警历史失败');
+            return await task;
         } finally {
+            alertEventsInFlight.delete(key);
             alertEventsLoading.value = false;
         }
     };
@@ -127,7 +169,17 @@ const createMarketModule = ({
     };
 
     const refreshMarket = async () => {
-        await Promise.all([fetchMarketSummary(), fetchAlertRules(), fetchAlertEvents()]);
+        const key = JSON.stringify({});
+        if (refreshMarketInFlight.has(key)) return refreshMarketInFlight.get(key);
+        const task = (async () => {
+            await Promise.all([fetchMarketSummary(), fetchAlertRules(), fetchAlertEvents()]);
+        })();
+        refreshMarketInFlight.set(key, task);
+        try {
+            return await task;
+        } finally {
+            refreshMarketInFlight.delete(key);
+        }
     };
 
     const resetAlertForm = () => {

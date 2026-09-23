@@ -480,6 +480,8 @@ def build_performance_timeline(conn, start_date=None, end_date=None):
                 "daily_change": daily_change,
                 "daily_pct": daily_pct,
                 "days_gap": days_gap,
+                # 这一天的快照有几只持仓缺价（市值按 0 计），前端据此打标记
+                "unpriced_count": int(snap.get("unpriced_count") or 0),
             }
         )
         prev_date = snap_date

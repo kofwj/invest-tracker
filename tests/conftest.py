@@ -16,6 +16,16 @@ elif (THIS_FILE.parents[1] / 'main.py').exists():
 else:
     raise RuntimeError(f'Cannot locate backend main.py from {THIS_FILE}')
 
+# 让 tests/ 里那几个直接 import 后端模块的文件（import dividend_sync / market / ...）
+# 在两条路径下都能跑：
+#   - `make test-local` → PYTHONPATH=backend python3 -m pytest -q tests
+#   - 容器内 `pytest -q /app/tests` → 没有 PYTHONPATH，而且 pytest 控制台脚本只会把
+#     测试文件所在目录塞进 sys.path，不会塞 cwd，于是那 8 个文件全是 collection error。
+# 在这里兜底最稳：不管从哪条路进，后端目录都在 sys.path 上。
+BACKEND_DIR = BACKEND_MAIN.parent
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(BACKEND_DIR))
+
 
 def load_backend_module():
     spec = importlib.util.spec_from_file_location('backend_main_test', BACKEND_MAIN)

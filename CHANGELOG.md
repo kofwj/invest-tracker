@@ -4,6 +4,78 @@
 版本号单一来源 `backend/version.py`；发布流程：改那里 → 本文件记版本 → `git tag vX.Y.Z`。生产部署以分支 `deploy/vps` 为准。
 
 ---
+## [未发布 · 第二轮] — 回归修复 + 项目审计整改
+
+### 修复：顶栏导航点击不跳转（回归）
+
+上一批给顶栏「刷新」接 `refreshCurrentTab` 时，误把解构里的 `goTab` 覆盖掉了：`onGroupClick`
+和品牌按钮调用的 `goTab` 变成 undefined，点分组导航/标题栏直接抛 `ReferenceError`、页面不跳转。
+`<script setup>` 的未定义标识符不会让 vite build 失败，所以构建和当时的测试都拦不住。
+新增 `frontend/tests/app-header.test.js`（5 例，jsdom 真挂组件 + 真点按钮）——把 `goTab`
+拿掉该用例会红，修复后全绿；同时覆盖「点当前分组不重复跳转」与「刷新按钮走 refreshCurrentTab」。
+
+### 修复：分析页偶发「刷新不出来」（P0）
+
+- **会话失效被伪装成 200 HTML**：oauth2-proxy 会话过期时 Caddy 的 `forward_auth` 302 到登录页，
+  XHR 跟随 302 后 axios 拿到的是 **200 的登录页 HTML**（生产实测：`text/html`、46KB）。原拦截器
+  只判断 401，于是 `dashboard.value` 被赋成 HTML、页面数字全变 undefined/0 且没有任何提示。
+  现在对 `/api/*` 响应校验 `content-type`，命中即清 token + 触发登录遮罩，并抛出
+  `isSessionExpired` 错误。代理模式下不再弹「访问密码」（生产没开应用级密码，弹它没意义），
+  改为显示「登录状态已过期 + 重新登录」。
+- **`scripts/check.sh` 早就坏了**：第 52 行 `test -f frontend/src/views/MaintenanceTab.vue`
+  引用的文件已删除，`set -e` 让脚本在第一段就 exit 1，**后面 180 行从未执行**（ruff / build /
+  node --check / 路由检查 / 容器内 pytest 全部形同虚设）。同时清掉另外 7 处过期断言
+  （App.vue 的 `el-tabs`/`SnapshotsTab`/`defineAsyncComponent` 等随 vue-router 迁移消失、
+  `assert "computed," not in main` 与 main.js 直接矛盾、`checkAlerts` 已搬到 DecisionTab）。
+  补上 vitest 与 `npm audit`（CI 有、`make check` 原本没有），失败时用 ERR trap 打印行号，
+  docker 不可用时明确跳过而不是挂在中间。
+- **`make test` 与 `make test-local` 不等价**：容器内 `pytest /app/tests` 没有 PYTHONPATH，
+  而 pytest 控制台脚本只把测试目录加进 `sys.path`，导致 `tests/` 里 8 个裸导入后端模块的文件
+  全部 collection error。改在 `tests/conftest.py` 里兜底插入后端目录，两条路径都能跑。
+
+### 修复：写事务内做外网抓取 → 并发写 `database is locked`（P0）
+
+`busy_timeout` 只有 5000ms，而三处「拿到写锁后继续抓外网」会把锁持有 10–30 秒：
+`routers_holdings.py` 的 `_sync_trailing_returns_impl` / `_sync_prices_impl`、
+`kline_cache.py` 的逐只 K 线同步（**由 cron 每天 15:20/16:40 触发**）。落在这个窗口里的
+录交易、建快照、改设置请求会 500。现在统一拆成两阶段：先把所有价格/收益/K线抓进内存，
+再用一个短事务 `executemany` 批量落库。
+
+已用「真实 uvicorn + 真实 SQLite + 真实 endpoint + sleep 替身外网」验证：三个同步接口在
+仍在抓取外网时，并发写请求 **200 且 <15ms**；用同样替身复刻旧顺序的对照组则被阻塞到
+`busy_timeout` 后 **500 + database is locked**（证明该验证确实能捕获这个 bug）。
+
+### 修复：同步价之后的 K 线同步在生产从未执行
+
+`routers_holdings.py:307` 只写了相对导入 `from .kline_cache import ...`，而生产是
+`uvicorn main:app` 平铺加载（`backend/` 无 `__init__.py`），`routers_holdings.__package__`
+是空字符串 → 必然 `ImportError`，被下面的 `except Exception` 吞成一条 warning。
+已在生产容器里实测确认。全仓另外 100 处相对导入都带 `ImportError` 兜底，只有这里漏了。
+改为双导入后，同步价会按原意顺带增量同步日 K 缓存（`force=False`，当天已同步的会跳过）。
+
+### 优化
+
+- **消除分析页重复请求**：`watch(activeTab)` 与各 view `onMounted` 双触发，实测「今天该看」
+  切一次会打 **13 次请求 / 6 个端点**、「结构与目标」9 次 / 4 个端点。给 market / discipline /
+  allocation 的加载函数加上同参数 in-flight Promise 复用（照抄 performance 的 `perfInFlight`）。
+- **补 5 个缺失索引**：`cash_flows`、`portfolio_cash_flows`、`holding_corrections`、`alert_events`
+  在真实库上实测为全表扫 + 临时 B 树排序；新增索引走 v14 迁移自动补到老库。EXPLAIN 前后对比：
+  `SCAN + TEMP B-TREE` → `SEARCH USING INDEX`。迁移在真实库副本上验证行数与
+  `SUM(total_assets)` 不变。
+- **缺价持仓不再静默按 0 计入**：`compute_portfolio_totals` 额外返回 `unpriced_codes/count`，
+  `daily_snapshots` 增列 `unpriced_count`，`/dashboard` 与 `/performance/timeline` 逐日行都暴露它。
+  只记录、不改数字、不阻断快照。
+- **清理死代码**：删除永不加载的 `views/MarketTab.vue` / `views/DisciplineTab.vue`（router 已
+  全部 redirect）；移除 `utils/index.js` 与 `api/index.js` 里无人消费的 `Object.assign(window, …)`
+  全局污染；移除上一批我自己引入但没人用的 `perfTodayStale` / `perfTodayWindow`。
+
+### 测试
+
+后端 221 项（+6：缺价持仓链路）；前端 56 项（+9 去重、+8 会话失效、+5 顶栏导航）。
+`make check` 恢复可用：56 项 vitest + `npm audit` 0 漏洞 + 构建 + ruff + 路由检查全过。
+
+---
+
 ## [未发布] — 每日收益视图 + 分析页刷新修复
 
 用户反馈两件事：「看不到每天的收益情况」和「分析里面刷新数据的时候有时刷新不出来」。

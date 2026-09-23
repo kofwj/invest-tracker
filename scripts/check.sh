@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# 检查失败时至少告诉人家是哪一行挂的：原先 set -e 直接退出，零提示。
+trap 'status=$?; echo "" >&2; echo "!! 检查失败：scripts/check.sh 第 $LINENO 行（exit $status）" >&2' ERR
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
@@ -44,12 +47,13 @@ test -f frontend/src/components/LoginOverlay.vue
 test -f frontend/src/views/SnapshotsTab.vue
 test -f frontend/src/views/AllocationTab.vue
 test -f frontend/src/views/PerformanceTab.vue
-test -f frontend/src/views/MarketTab.vue
+test -f frontend/src/views/DecisionTab.vue
 test -f frontend/src/views/HoldingsTab.vue
 test -f frontend/src/views/DepositsTab.vue
 test -f frontend/src/views/TransactionsTab.vue
 test -f frontend/src/views/CashTab.vue
-test -f frontend/src/views/MaintenanceTab.vue
+test -f frontend/src/views/NotifyOpsTab.vue
+test -f frontend/src/views/BackupOpsTab.vue
 test -f frontend/src/modules/market.js
 test -f backend/market.py
 test -f backend/routers_market.py
@@ -60,7 +64,7 @@ test -f backend/notify.py
 test -f backend/routers_notify.py
 test -f backend/routers_cron.py
 test -f frontend/src/modules/discipline.js
-test -f frontend/src/views/DisciplineTab.vue
+test -f frontend/src/views/BrokerReconcileTab.vue
 grep -q 'type="module" src="/src/main.js"' frontend/index.html
 grep -q '@vitejs/plugin-vue' frontend/package.json
 grep -q 'unplugin-vue-components' frontend/package.json
@@ -84,7 +88,10 @@ for module in ['./utils/index.js', './api/index.js', './modules/transactions.js'
     assert module in main, f'missing frontend module import: {module}'
 assert 'createFeeHelpers' in main or 'feeHelpers' in main or "from './composables/domainHelpers.js'" in main
 # modules import computed themselves; main should not pass computed into factories
-assert "computed," not in main
+# 路由化之后 tab 由 vue-router 驱动（旧断言 "computed," not in main 与之矛盾：main 本来就
+# import computed，它一直是假断言）。改为断言真正的结构约束。
+assert 'createRouter' in Path('frontend/src/router/index.js').read_text(encoding='utf-8'), 'missing vue-router setup'
+assert 'router-view' in Path('frontend/src/App.vue').read_text(encoding='utf-8'), 'App.vue should render the router outlet'
 fee = Path('frontend/src/composables/feeHelpers.js').read_text(encoding='utf-8')
 assert 'createFeeHelpers' in fee
 assert 'apiErrorDetail' in Path('frontend/src/utils/index.js').read_text(encoding='utf-8')
@@ -94,18 +101,20 @@ assert "import { computed } from 'vue'" in deposits_mod
 # charts import may now live in allocation module after extraction
 allocation = Path('frontend/src/modules/allocation.js').read_text(encoding='utf-8')
 assert ('./charts/index.js' in main or '../charts/index.js' in allocation or './charts/index.js' in allocation), 'missing charts dynamic/static import reference'
-assert "'market'" in main or '"market"' in main, 'screenshotTabs should include market'
+tab_nav = Path('frontend/src/modules/tabNav.js').read_text(encoding='utf-8')
+assert "'market'" in tab_nav or '"market"' in tab_nav, 'SCREENSHOT_TABS should still include market (legacy ?tab= compatibility)'
 app_vue = Path('frontend/src/App.vue').read_text(encoding='utf-8')
-for needle in ['el-tabs', 'activeTab', 'SnapshotsTab', 'MarketTab', 'defineAsyncComponent']:
+for needle in ['router-view', 'AppHeader', 'AppDialogs', 'LoginOverlay', 'goTab']:
     assert needle in app_vue, f'missing shell fragment in App.vue: {needle}'
 assert 'provide' in main or 'APP_CTX_KEY' in main, 'root should provide app context'
 holdings = Path('frontend/src/views/HoldingsTab.vue').read_text(encoding='utf-8')
 assert 'holdingLifetimeProfit' in holdings, 'holdings tab missing lifetime helper'
 assert 'useAppCtx' in holdings, 'views should inject app ctx'
-market_tab = Path('frontend/src/views/MarketTab.vue').read_text(encoding='utf-8')
-assert 'useAppCtx' in market_tab, 'market tab should inject app ctx'
-assert 'checkAlerts' in market_tab, 'market tab missing checkAlerts'
-assert 'exportAlertEvents' in market_tab or 'exportAlertEvents' in Path('frontend/src/modules/market.js').read_text(encoding='utf-8'), 'market should support alert export'
+decision_tab = Path('frontend/src/views/DecisionTab.vue').read_text(encoding='utf-8')
+assert 'useAppCtx' in decision_tab, 'decision tab should inject app ctx'
+market_mod = Path('frontend/src/modules/market.js').read_text(encoding='utf-8')
+assert 'checkAlerts' in decision_tab or 'checkAlerts' in market_mod, 'decision/market should expose checkAlerts'
+assert 'exportAlertEvents' in decision_tab or 'exportAlertEvents' in market_mod, 'market should support alert export'
 backend_main = Path('backend/main.py').read_text(encoding='utf-8')
 assert 'market_router' in backend_main, 'backend should register market router'
 schema = Path('backend/schema.py').read_text(encoding='utf-8')
@@ -131,6 +140,20 @@ if command -v npm >/dev/null 2>&1; then
   npm --prefix frontend run build
 else
   echo "npm not found; skipping frontend build check"
+fi
+
+echo "==> Running frontend unit tests (vitest)"
+if command -v npm >/dev/null 2>&1; then
+  npm --prefix frontend test
+else
+  echo "npm not found; skipping frontend unit tests"
+fi
+
+echo "==> Auditing frontend dependencies"
+if command -v npm >/dev/null 2>&1; then
+  npm --prefix frontend audit --omit=dev
+else
+  echo "npm not found; skipping npm audit"
 fi
 
 echo "==> Checking frontend JavaScript syntax"
@@ -217,19 +240,28 @@ if missing:
     raise SystemExit(f"Missing required routes: {missing}")
 PY
 
-echo "==> Validating docker compose config"
-docker compose config >/dev/null
+# 下面这几段依赖 docker / 正在跑的服务；本地没起 docker 时应该明确跳过，
+# 而不是让整个 check 脚本挂在中间（以前就是这个下场）。
+if docker info >/dev/null 2>&1; then
+  echo "==> Validating docker compose config"
+  docker compose config >/dev/null
 
-echo "==> Checking running services"
-docker compose ps
+  echo "==> Checking running services"
+  docker compose ps
 
-echo "==> Running backend pytest suite"
-docker compose exec -T "$backend_container" pytest -q /app/tests
+  echo "==> Running backend pytest suite"
+  # 注意：容器内必须让 backend 目录在 sys.path 上，否则 tests/ 里那几个
+  # 裸导入（import dividend_sync / market ...）会 collection error。
+  docker compose exec -T -e PYTHONPATH=/app "$backend_container" pytest -q /app/tests
 
-echo "==> Checking backend health endpoint"
-curl --fail --silent --show-error "$backend_url/api/health" >/dev/null
+  echo "==> Checking backend health endpoint"
+  curl --fail --silent --show-error "$backend_url/api/health" >/dev/null
 
-echo "==> Checking frontend HTTP endpoint"
-curl --fail --silent --show-error --head "$frontend_url/" >/dev/null
+  echo "==> Checking frontend HTTP endpoint"
+  curl --fail --silent --show-error --head "$frontend_url/" >/dev/null
+else
+  echo "==> docker 不可用，跳过 compose 校验 / 容器内 pytest / 健康检查"
+  echo "    （本地可以先跑：PYTHONPATH=backend python3 -m pytest -q tests）"
+fi
 
 echo "==> All checks passed"

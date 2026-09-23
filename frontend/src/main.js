@@ -65,6 +65,8 @@ const app = createApp({
             authEnabled,
             handleLogin,
             handleLogout,
+            sessionExpired,
+            reloadForRelogin,
         } = createAuthMask({
             onUnlocked: () => bootstrapAfterAuth(),
         });
@@ -467,8 +469,6 @@ const app = createApp({
             perfDailyRows,
             perfDailyStats,
             perfLatestSnapshotDate,
-            perfTodayWindow,
-            perfTodayStale,
         } = createPerformanceModule({
             perfSummary,
             perfTimeline,
@@ -748,7 +748,7 @@ const app = createApp({
             zhCn,
             isMasked, toggleMask,
             themeMode, resolvedTheme, themeLabel, setThemeMode, cycleThemeMode,
-            showLoginOverlay, loginLoading, loginPassword, loginError, authEnabled, handleLogin, handleLogout,
+            showLoginOverlay, loginLoading, loginPassword, loginError, authEnabled, handleLogin, handleLogout, sessionExpired, reloadForRelogin,
             activeTab, tabGroup, tabGroups, goTab, dashboard, holdings, deposits, depositRows, depositSummary, depositBankBreakdown, depositMaturityBuckets, syncing, trailingSyncing, syncNotice,
             snapshots, snapshotRange, snapshotSummary, snapshotMetrics, snapshotChangeRows, snapshotInsights, snapshotLoading, reconcileData, reconcileForm, reconcileSaving, fetchReconcile, saveReconcile, maintenanceStatus, backups, maintenanceLoading, dividendLoading, dividendConfirming, dividendDialog, dividendTableRef, todayIso, todaySnapshotDone, latestPriceStatusText, latestBackupText,
             transForm, feeSettings, feeAccounts, activeFeeAccount, newFeeAccountName, feeCategories, feeSettingRows, feeAutoHint, depositDialog, cashForm, cashFlows, cashFlowForm, cashFlowQuery, cashFlowSummary, cashFlowEditDialog, cashAudit, transDialog, allocationAnalysis, macroAllocationAnalysis, allocationSummary, allocationHealth, portfolioExpectedReturn, allocationStory, allocationStoryLoading, fetchAllocationStory,
@@ -766,7 +766,7 @@ const app = createApp({
             displayedPerfContribution, perfContributionFilter, perfContributionSort, perfContributionHeadline, perfContributionMix, perfTimelineRange,
             fetchPerformance, setPerfTimelineRange, addPerfFlow, updatePerfFlow, deletePerfFlow, loadPerfFlowSuggestions, applyPerfFlowSuggestion, contributionBarStyle, fetchMaintenance, createDbBackup, downloadBackup, restoreBackup, deleteBackup, restoreUploadedBackup,
             perfRiskMetrics, perfContributionSummary, perfWindowCards, selectPerfWindow,
-            perfDailyRows, perfDailyStats, perfLatestSnapshotDate, perfTodayWindow, perfTodayStale,
+            perfDailyRows, perfDailyStats, perfLatestSnapshotDate,
             refreshCurrentTab,
             notifyStatus, notifyLogs, notifyLoading, notifyEventDraft, notifyChannelDraft, notifyChannelClear, fetchNotifyPanel, saveNotifyPanel, testNotifyPush, pushDepositDueNow, pushDisciplineNow,
             brokerResult, brokerLoading, brokerSelected, brokerAsOfDate, brokerCashInput, brokerHistory,

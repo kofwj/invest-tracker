@@ -65,6 +65,13 @@ def ensure_alert_tables(conn) -> None:
             message TEXT
         )"""
     )
+    # 冷却判断按 (rule_id, id DESC) 取最新一条；事件表随每日检查增长，无索引即全表扫。
+    # 老库/测试里的 legacy alert_events 可能没有 rule_id 列，缺列时跳过（不在请求路径上尝试改表）。
+    alert_event_cols = [row[1] for row in conn.execute("PRAGMA table_info(alert_events)").fetchall()]
+    if "rule_id" in alert_event_cols:
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_alert_events_rule_id_id ON alert_events(rule_id, id DESC)"
+        )
 
 
 def _row_to_dict(row) -> Dict[str, Any]:

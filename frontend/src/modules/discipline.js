@@ -56,55 +56,95 @@ const createDisciplineModule = ({
         await runAfterDisciplineChange();
     };
 
+    // 同一时刻只保留一份"同参数"的请求：切 tab（decision / allocation 都会触发
+    // refreshDiscipline）时同一接口会被并发拉多次，命中 in-flight 就直接复用。
+    // 只有真正发起请求的那一次会在 finally 里清 loading。
+    const disciplineReportInFlight = new Map();
+    const disciplineDraftsInFlight = new Map();
+    const disciplinePresetsInFlight = new Map();
+    const refreshDisciplineInFlight = new Map();
+
     const fetchDisciplineReport = async () => {
+        const key = JSON.stringify({});
         disciplineLoading.value = true;
-        try {
-            const res = await api.getDisciplineReport();
-            disciplineReport.value = res.data || {};
-            if (res.data?.policy) {
-                const p = res.data.policy || {};
-                if (!p.targets) p.targets = { equity_pct: 45, fixed_income_pct: 30, deposit_pct: 25 };
-                if (!p.plans) p.plans = {};
-                disciplinePolicy.value = {
-                    ...(disciplinePolicy.value || {}),
-                    ...p,
-                    targets: { ...(disciplinePolicy.value?.targets || {}), ...(p.targets || {}) },
-                    plans: { ...(disciplinePolicy.value?.plans || {}), ...(p.plans || {}) },
-                };
+        if (disciplineReportInFlight.has(key)) return disciplineReportInFlight.get(key);
+        const task = (async () => {
+            try {
+                const res = await api.getDisciplineReport();
+                disciplineReport.value = res.data || {};
+                if (res.data?.policy) {
+                    const p = res.data.policy || {};
+                    if (!p.targets) p.targets = { equity_pct: 45, fixed_income_pct: 30, deposit_pct: 25 };
+                    if (!p.plans) p.plans = {};
+                    disciplinePolicy.value = {
+                        ...(disciplinePolicy.value || {}),
+                        ...p,
+                        targets: { ...(disciplinePolicy.value?.targets || {}), ...(p.targets || {}) },
+                        plans: { ...(disciplinePolicy.value?.plans || {}), ...(p.plans || {}) },
+                    };
+                }
+            } catch (e) {
+                ElMessage.error(e?.response?.data?.detail || '加载纪律报告失败');
             }
-        } catch (e) {
-            ElMessage.error(e?.response?.data?.detail || '加载纪律报告失败');
+        })();
+        disciplineReportInFlight.set(key, task);
+        try {
+            return await task;
         } finally {
+            disciplineReportInFlight.delete(key);
             disciplineLoading.value = false;
         }
     };
 
+    // 查询条件固定为 {status:'draft'}，但仍按 JSON.stringify(query) 生成 key，
+    // 与其它模块保持一致（将来加筛选参数时不会错误合并）。
+    const disciplineDraftsQuery = () => ({ status: 'draft' });
+
     const fetchDisciplineDrafts = async () => {
+        const query = disciplineDraftsQuery();
+        const key = JSON.stringify(query);
         disciplineDraftLoading.value = true;
-        try {
-            const res = await api.listDisciplineDrafts({ status: 'draft' });
-            disciplineDrafts.value = res.data || [];
-            if (disciplineSelectedDraftIds) {
-                const live = new Set((disciplineDrafts.value || []).map((d) => d.id));
-                disciplineSelectedDraftIds.value = (disciplineSelectedDraftIds.value || []).filter((id) => live.has(id));
+        if (disciplineDraftsInFlight.has(key)) return disciplineDraftsInFlight.get(key);
+        const task = (async () => {
+            try {
+                const res = await api.listDisciplineDrafts(query);
+                disciplineDrafts.value = res.data || [];
+                if (disciplineSelectedDraftIds) {
+                    const live = new Set((disciplineDrafts.value || []).map((d) => d.id));
+                    disciplineSelectedDraftIds.value = (disciplineSelectedDraftIds.value || []).filter((id) => live.has(id));
+                }
+            } catch (e) {
+                ElMessage.error(e?.response?.data?.detail || '加载草稿失败');
             }
-        } catch (e) {
-            ElMessage.error(e?.response?.data?.detail || '加载草稿失败');
+        })();
+        disciplineDraftsInFlight.set(key, task);
+        try {
+            return await task;
         } finally {
+            disciplineDraftsInFlight.delete(key);
             disciplineDraftLoading.value = false;
         }
     };
 
     const fetchDisciplinePresets = async () => {
+        const key = JSON.stringify({});
         localPresetLoading.value = true;
+        if (disciplinePresetsInFlight.has(key)) return disciplinePresetsInFlight.get(key);
+        const task = (async () => {
+            try {
+                const res = await api.listDisciplinePresets();
+                const data = res.data || {};
+                localPresets.value = Array.isArray(data.presets) ? data.presets : [];
+                localActiveId.value = data.active_id || null;
+            } catch (e) {
+                console.warn('discipline presets failed', e);
+            }
+        })();
+        disciplinePresetsInFlight.set(key, task);
         try {
-            const res = await api.listDisciplinePresets();
-            const data = res.data || {};
-            localPresets.value = Array.isArray(data.presets) ? data.presets : [];
-            localActiveId.value = data.active_id || null;
-        } catch (e) {
-            console.warn('discipline presets failed', e);
+            return await task;
         } finally {
+            disciplinePresetsInFlight.delete(key);
             localPresetLoading.value = false;
         }
     };
@@ -143,7 +183,17 @@ const createDisciplineModule = ({
     };
 
     const refreshDiscipline = async () => {
-        await Promise.all([fetchDisciplineReport(), fetchDisciplineDrafts(), fetchDisciplinePresets()]);
+        const key = JSON.stringify({});
+        if (refreshDisciplineInFlight.has(key)) return refreshDisciplineInFlight.get(key);
+        const task = (async () => {
+            await Promise.all([fetchDisciplineReport(), fetchDisciplineDrafts(), fetchDisciplinePresets()]);
+        })();
+        refreshDisciplineInFlight.set(key, task);
+        try {
+            return await task;
+        } finally {
+            refreshDisciplineInFlight.delete(key);
+        }
     };
 
     const openPolicyDialog = async () => {

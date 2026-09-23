@@ -201,17 +201,31 @@ const createAllocationModule = ({
         allocationStory.value = emptyStory();
     }
 
+    // 同一时刻只保留一份请求：allocation tab 与 discipline 变更后的 afterDisciplineChange
+    // 都可能在同一个 tick 里调它，命中 in-flight 就直接复用（照抄 performance.js）。
+    // loading 只有真正发起请求的那一次会在 finally 里清掉。
+    const allocationStoryInFlight = new Map();
+
     const fetchAllocationStory = async () => {
+        const key = JSON.stringify({});
         if (allocationStoryLoading) allocationStoryLoading.value = true;
+        if (allocationStoryInFlight.has(key)) return allocationStoryInFlight.get(key);
+        const task = (async () => {
+            try {
+                const res = await api.allocationStory();
+                allocationStory.value = res.data || emptyStory();
+            } catch (e) {
+                console.warn('allocation story failed', e);
+                ElMessage.error(e?.response?.data?.detail || '配置诊断刷新失败，当前内容可能已过期');
+                // keep last good story if any
+                if (!allocationStory.value) allocationStory.value = emptyStory();
+            }
+        })();
+        allocationStoryInFlight.set(key, task);
         try {
-            const res = await api.allocationStory();
-            allocationStory.value = res.data || emptyStory();
-        } catch (e) {
-            console.warn('allocation story failed', e);
-            ElMessage.error(e?.response?.data?.detail || '配置诊断刷新失败，当前内容可能已过期');
-            // keep last good story if any
-            if (!allocationStory.value) allocationStory.value = emptyStory();
+            return await task;
         } finally {
+            allocationStoryInFlight.delete(key);
             if (allocationStoryLoading) allocationStoryLoading.value = false;
         }
     };

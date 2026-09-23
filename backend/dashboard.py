@@ -51,4 +51,7 @@ def build_dashboard(conn):
         "price_stale": price_stale,
         "latest_snapshot_date": snapshot_row["latest"] if snapshot_row else None,
         "category_market_value": totals.get("category_market_value", {}),
+        # 缺价持仓计数（市值按 0 计），供快照打标记与前端提示
+        "unpriced_count": totals.get("unpriced_count", 0),
+        "unpriced_codes": totals.get("unpriced_codes", []),
     }
