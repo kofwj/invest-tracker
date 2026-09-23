@@ -38,8 +38,8 @@ const props = defineProps({
   title: { type: String, default: '' },
   /** 无外边距，给特殊页用 */
   flush: { type: Boolean, default: false },
-  /** 更紧的页头 */
-  compact: { type: Boolean, default: false },
+  /** 更紧的页头；默认开（全站 12 个页面共用，窄一点的页头省垂直空间） */
+  compact: { type: Boolean, default: true },
 });
 
 const slots = useSlots();

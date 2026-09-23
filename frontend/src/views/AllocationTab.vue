@@ -33,354 +33,370 @@
       />
     </div>
 
-    <el-card shadow="never" class="story-hero merge-card" v-loading="allocationStoryLoading">
-      <div class="story-hero-head">
-        <div>
-          <div class="story-kicker">配置结论</div>
-          <div class="story-headline">{{ storyHeadline }}</div>
-        </div>
-        <el-tag :type="severityTagType" effect="light">{{ severityLabel }}</el-tag>
-      </div>
-      <ul v-if="storyBullets.length" class="story-bullets">
-        <li v-for="(b, i) in storyBullets" :key="i">{{ b }}</li>
-      </ul>
-    </el-card>
-
-    <div class="merge-grid structure-merge">
-      <!-- 左：结构 -->
-      <section class="merge-pane">
-        <div class="merge-pane-title">当前结构</div>
-
-        <el-row :gutter="12" style="margin-bottom: 12px;">
-          <el-col :span="12">
-            <el-card shadow="never" header="大类资产结构">
-              <div id="allocationChart" class="chart-container"></div>
-            </el-card>
-          </el-col>
-          <el-col :span="12">
-            <el-card shadow="never" header="细分类别占比">
-              <div id="categoryChart" class="chart-container"></div>
-            </el-card>
-          </el-col>
-        </el-row>
-
-        <el-card shadow="never" class="merge-card" header="配置健康检查">
-          <div class="allocation-risk-list">
-            <div v-for="item in (allocationHealth || [])" :key="item.label" class="allocation-risk-item">
-              <div class="allocation-risk-head">
-                <span>{{ item.label }}</span>
-                <el-tag :type="item.type" effect="light">{{ item.status }}</el-tag>
-              </div>
-              <div class="risk-text">{{ item.text }}</div>
-            </div>
-            <el-empty v-if="!(allocationHealth || []).length" description="诊断加载中或暂无数据" :image-size="48" />
-          </div>
-        </el-card>
-
-        <el-card v-if="story?.liquidity" shadow="never" class="merge-card" header="流动性（30 天）">
-            <div class="risk-text">{{ story?.liquidity?.text || '加载中…' }}</div>
-            <div class="liq-metrics" v-if="story?.liquidity">
-              <span>证券现金 {{ formatMoney(story.liquidity.securities_cash) }}</span>
-              <span>近端存款 {{ formatMoney(story.liquidity.deposit_due_30d_amount) }}</span>
-              <span>可挪约 {{ formatMoney(story.liquidity.deployable_30d) }}</span>
-            </div>
-        </el-card>
-
-        <el-card shadow="never" class="merge-card">
-          <template #header>
+    <el-tabs v-model="seg" class="alloc-segments">
+      <el-tab-pane name="overview" label="看现状">
+        <el-card shadow="never" class="story-hero merge-card" v-loading="allocationStoryLoading">
+          <div class="story-hero-head">
             <div>
-              <div class="section-title">权益情景粗估</div>
-              <div class="hint">假设粗估，不是预测：只动权益市值，固收/存款/现金不变</div>
+              <div class="story-kicker">配置结论</div>
+              <div class="story-headline">{{ storyHeadline }}</div>
             </div>
-          </template>
-          <el-table :data="storyScenarios" size="small" stripe empty-text="暂无" aria-label="权益情景粗估">
-            <el-table-column prop="label" label="情景" min-width="120" />
-            <el-table-column label="粗估盈亏" min-width="110" align="right" header-align="right">
-              <template #default="s">
-                <span class="num-cell" :class="Number(s.row.estimated_pnl) >= 0 ? 'num-up' : 'num-down'">
-                  {{ formatMoney(s.row.estimated_pnl, 0, true) }}
-                </span>
-              </template>
-            </el-table-column>
-            <el-table-column label="粗估总资产" min-width="120" align="right" header-align="right">
-              <template #default="s">
-                <span class="num-cell">{{ formatMoney(s.row.estimated_total_assets) }}</span>
-              </template>
-            </el-table-column>
-          </el-table>
+            <el-tag :type="severityTagType" effect="light">{{ severityLabel }}</el-tag>
+          </div>
+          <ul v-if="storyBullets.length" class="story-bullets">
+            <li v-for="(b, i) in storyBullets" :key="i">{{ b }}</li>
+          </ul>
         </el-card>
 
-        <el-card shadow="never" class="merge-card" header="资产大类汇总">
-          <el-table :data="macroAllocationAnalysis" stripe size="small" class="allocation-table" style="width: 100%" aria-label="资产大类汇总">
-            <el-table-column prop="group" label="大类" width="80" align="center" header-align="center" />
-            <el-table-column label="金额" min-width="110" align="right" header-align="right">
-              <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.amount) }}</span></template>
+        <div class="merge-grid structure-merge">
+          <!-- 左：结构 -->
+          <section class="merge-pane">
+            <div class="merge-pane-title">当前结构</div>
+
+            <el-row :gutter="12" style="margin-bottom: 12px;">
+              <el-col :span="12">
+                <el-card shadow="never" header="大类资产结构">
+                  <div id="allocationChart" class="chart-container"></div>
+                </el-card>
+              </el-col>
+              <el-col :span="12">
+                <el-card shadow="never" header="细分类别占比">
+                  <div id="categoryChart" class="chart-container"></div>
+                </el-card>
+              </el-col>
+            </el-row>
+
+            <el-card shadow="never" class="merge-card" header="配置健康检查">
+              <div class="allocation-risk-list">
+                <div v-for="item in (allocationHealth || [])" :key="item.label" class="allocation-risk-item">
+                  <div class="allocation-risk-head">
+                    <span>{{ item.label }}</span>
+                    <el-tag :type="item.type" effect="light">{{ item.status }}</el-tag>
+                  </div>
+                  <div class="risk-text">{{ item.text }}</div>
+                </div>
+                <el-empty v-if="!(allocationHealth || []).length" description="诊断加载中或暂无数据" :image-size="48" />
+              </div>
+            </el-card>
+
+            <el-card v-if="story?.liquidity" shadow="never" class="merge-card" header="流动性（30 天）">
+                <div class="risk-text">{{ story?.liquidity?.text || '加载中…' }}</div>
+                <div class="liq-metrics" v-if="story?.liquidity">
+                  <span>证券现金 {{ formatMoney(story.liquidity.securities_cash) }}</span>
+                  <span>近端存款 {{ formatMoney(story.liquidity.deposit_due_30d_amount) }}</span>
+                  <span>可挪约 {{ formatMoney(story.liquidity.deployable_30d) }}</span>
+                </div>
+            </el-card>
+
+            <el-card shadow="never" class="merge-card">
+              <template #header>
+                <div>
+                  <div class="section-title">权益情景粗估</div>
+                  <div class="hint">假设粗估，不是预测：只动权益市值，固收/存款/现金不变</div>
+                </div>
+              </template>
+              <el-table :data="storyScenarios" size="small" stripe empty-text="暂无" aria-label="权益情景粗估">
+                <el-table-column prop="label" label="情景" min-width="120" />
+                <el-table-column label="粗估盈亏" min-width="110" align="right" header-align="right">
+                  <template #default="s">
+                    <span class="num-cell" :class="Number(s.row.estimated_pnl) >= 0 ? 'num-up' : 'num-down'">
+                      {{ formatMoney(s.row.estimated_pnl, 0, true) }}
+                    </span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="粗估总资产" min-width="120" align="right" header-align="right">
+                  <template #default="s">
+                    <span class="num-cell">{{ formatMoney(s.row.estimated_total_assets) }}</span>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-card>
+
+            <el-card shadow="never" class="merge-card" header="资产大类汇总">
+              <el-table :data="macroAllocationAnalysis" stripe size="small" class="allocation-table" style="width: 100%" aria-label="资产大类汇总">
+                <el-table-column prop="group" label="大类" width="80" align="center" header-align="center" />
+                <el-table-column label="金额" min-width="110" align="right" header-align="right">
+                  <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.amount) }}</span></template>
+                </el-table-column>
+                <el-table-column label="占比" width="88" align="center" header-align="center">
+                  <template #default="scope">{{ Number(scope.row.percentage || 0).toFixed(1) }}%</template>
+                </el-table-column>
+                <el-table-column label="持仓浮盈" min-width="100" align="right" header-align="right">
+                  <template #default="scope">
+                    <span class="num-cell" :class="(scope.row.profit >= 0) ? 'num-up' : 'num-down'">
+                      {{ formatMoney(scope.row.profit, 2, true) }}
+                    </span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="预计年化" width="88" align="center" header-align="center">
+                  <template #default="scope">
+                    <span class="num-info" style="font-weight:700;">{{ scope.row.expected_return?.toFixed(2) }}%</span>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-card>
+          </section>
+        </div><!-- /merge-grid -->
+      </el-tab-pane>
+
+      <el-tab-pane name="target" label="设目标">
+        <div class="merge-grid structure-merge">
+
+          <!-- 右：目标与纪律 -->
+          <section class="merge-pane">
+            <div class="merge-pane-title">目标与纪律</div>
+
+            <el-card shadow="never" class="merge-card target-panel" v-loading="disciplinePresetLoading">
+              <div class="preset-row">
+                <div class="preset-row-label">目标尺子</div>
+                <div class="preset-seg" role="group" aria-label="目标尺子">
+                  <button
+                    v-for="p in (disciplinePresets || [])"
+                    :key="p.id"
+                    type="button"
+                    class="preset-seg-btn"
+                    :class="{ active: p.id === disciplinePresetActiveId || p.active }"
+                    :disabled="presetApplying || disciplinePresetLoading || p.id === disciplinePresetActiveId || p.active"
+                    :title="presetTitle(p)"
+                    @click="onApplyPreset(p.id)"
+                  >{{ p.label }}</button>
+                </div>
+              </div>
+              <div class="preset-meta">
+                <span class="preset-meta-main">当前 · {{ activePresetLabel }}</span>
+                <span class="preset-meta-sub">{{ activePresetHint }}</span>
+              </div>
+              <div class="hint preset-guard">只改目标与安全带；优先加仓 / 禁开 / 格力上限不动</div>
+
+              <div class="gap-list" style="margin-top: 12px;">
+                <div v-for="row in gapRows" :key="row.key" class="gap-row">
+                  <div class="gap-row-head">
+                    <span class="gap-label">{{ row.label }}</span>
+                    <span class="gap-nums">
+                      <b class="gap-actual">{{ fmtPct(row.actual) }}</b>
+                      <span class="gap-arrow">→</span>
+                      目标 {{ fmtPct(row.target) }}
+                      <template v-if="row.gapAmt">
+                        · {{ formatMoney(Math.abs(row.gapAmt), 0) }}{{ row.gapAmt > 0 ? '偏少' : '偏多' }}
+                      </template>
+                    </span>
+                  </div>
+                  <el-progress
+                    :percentage="Math.min(Math.max(Number(row.actual || 0), 0), 100)"
+                    :stroke-width="8"
+                    :color="row.barColor"
+                  />
+                </div>
+                <div class="hint">带宽 ±{{ fmtPct(bandPct) }}；超出才出再平衡建议</div>
+              </div>
+            </el-card>
+
+            <!-- 卫星仓进度：510880 ~6% + 159201 ~4% -->
+            <el-card shadow="never" class="merge-card satellite-card" v-if="satelliteRows.length">
+              <template #header>
+                <div>
+                  <div class="section-title">卫星仓（红利 + 自由现金流）</div>
+                  <div class="hint">510880 ~6% + 159201 ~4%，合计约 10%；从格力/石化/REIT 转</div>
+                </div>
+              </template>
+              <div class="satellite-overall">
+                整体进度
+                <b :class="satOverall >= 99 ? 'num-up' : ''">{{ satOverall.toFixed(1) }}%</b>
+                <span class="hint">（已配置 {{ fmtPct(satAchieved) }} / 目标 {{ fmtPct(satTarget) }}）</span>
+              </div>
+              <div class="satellite-list">
+                <div v-for="r in satelliteRows" :key="r.code" class="satellite-item">
+                  <div class="satellite-head">
+                    <span class="satellite-name">{{ r.label }}</span>
+                    <span class="satellite-nums">
+                      <b>{{ fmtPct(r.pct) }}</b> / {{ fmtPct(r.target_pct) }}
+                      <template v-if="r.need_amount > 0">
+                        · 还差 {{ formatMoney(r.need_amount) }}
+                        <template v-if="r.last_price > 0">（约 {{ r.need_lots }} 手）</template>
+                      </template>
+                      <template v-else-if="r.pct >= r.target_pct">· 已到位</template>
+                    </span>
+                  </div>
+                  <el-progress
+                    :percentage="Math.min(Math.max(Number(r.pct) / Number(r.target_pct) * 100, 0), 100)"
+                    :stroke-width="8"
+                    :status="r.pct >= r.target_pct ? 'success' : undefined"
+                  />
+                  <div v-if="!r.held && r.pct === 0" class="hint">未建仓（0 份）——真买后从交易页录入即自动纳入进度</div>
+                </div>
+              </div>
+            </el-card>
+        </section>
+        </div><!-- /merge-grid -->
+      </el-tab-pane>
+
+      <el-tab-pane name="deviation" label="处理偏离">
+        <div class="merge-grid structure-merge">
+          <section class="merge-pane">
+
+            <el-card shadow="never" class="merge-card" v-loading="disciplineLoading">
+              <template #header><span class="section-title">纪律检查</span></template>
+              <div class="breach-list">
+                <div v-for="(b, i) in visibleBreaches" :key="i" class="breach-item" :class="'lv-' + (b.level || 'info')">
+                  <div class="breach-head">
+                    <span>{{ b.title }}</span>
+                    <el-tag size="small" :type="tagType(b.level)">{{ levelLabel(b.level) }}</el-tag>
+                  </div>
+                  <div class="breach-text">{{ b.text }}</div>
+                </div>
+                <el-empty v-if="!visibleBreaches.length" description="暂无非正常提醒" :image-size="56" />
+              </div>
+            </el-card>
+
+            <el-card shadow="never" class="merge-card" header="问题清单" v-if="storyIssues.length">
+              <div class="issue-list">
+                <div v-for="(iss, i) in storyIssues" :key="iss.id + '-' + i" class="issue-item" :class="'lv-' + (iss.level || 'info')">
+                  <div class="issue-head">
+                    <span>{{ iss.title }}</span>
+                    <el-tag size="small" :type="tagType(iss.level)">{{ levelLabel(iss.level) }}</el-tag>
+                  </div>
+                  <div class="issue-text">{{ iss.text }}</div>
+                  <div v-if="iss.action_hint" class="hint">{{ iss.action_hint }}</div>
+                </div>
+              </div>
+            </el-card>
+
+            <el-card shadow="never" class="merge-card" v-if="planItems.length">
+              <template #header>
+                <div>
+                  <div class="section-title">个人计划</div>
+                  <div class="hint">A500 分批 / 格力软上限等，只提醒不自动下单</div>
+                </div>
+              </template>
+              <div class="breach-list">
+                <div v-for="(p, i) in planItems" :key="i" class="breach-item" :class="'lv-' + (p.level || 'info')">
+                  <div class="breach-head">
+                    <span>{{ p.title }}</span>
+                    <el-tag size="small" :type="tagType(p.level)">{{ levelLabel(p.level) }}</el-tag>
+                  </div>
+                  <div class="breach-text">{{ p.text }}</div>
+                  <div v-if="p.target_amount" class="plan-progress" style="margin-top:8px;">
+                    <el-progress
+                      :percentage="Math.min(Number(p.progress_pct || 0), 100)"
+                      :stroke-width="10"
+                      :status="Number(p.remaining_amount || 0) <= 0 ? 'success' : undefined"
+                    />
+                    <div class="hint" style="margin-top:4px;" v-if="p.suggested_next_amount">
+                      建议下次约 {{ formatMoney(p.suggested_next_amount) }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </el-card>
+
+            <el-card shadow="never" class="merge-card">
+              <template #header>
+                <div>
+                  <div class="section-title">再平衡建议</div>
+                  <div class="hint">只读建议；可生成草稿，确认后才入账</div>
+                </div>
+              </template>
+              <el-table :data="actions" stripe size="small" empty-text="暂无建议" v-loading="disciplineLoading" aria-label="再平衡建议">
+                <el-table-column label="方向" width="72">
+                  <template #default="s">{{ s.row.side === 'sell' ? '卖出' : '买入' }}</template>
+                </el-table-column>
+                <el-table-column prop="name" label="名称" min-width="100" show-overflow-tooltip />
+                <el-table-column prop="code" label="代码" width="88" />
+                <el-table-column label="金额" width="100" align="right" header-align="right">
+                  <template #default="s"><span class="num-cell">{{ formatMoney(s.row.amount) }}</span></template>
+                </el-table-column>
+                <el-table-column prop="reason" label="原因" min-width="140" show-overflow-tooltip />
+              </el-table>
+            </el-card>
+          </section>
+        </div>
+
+        <el-card shadow="never" class="merge-card" header="细分类别明细">
+          <el-table :data="allocationAnalysis" stripe size="small" class="allocation-table" style="width: 100%" aria-label="细分类别明细">
+            <el-table-column prop="category" label="资产类别" width="110" align="center" header-align="center" fixed="left" />
+            <el-table-column label="市值/金额" min-width="120" align="right" header-align="right">
+              <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.market_value) }}</span></template>
             </el-table-column>
-            <el-table-column label="占比" width="88" align="center" header-align="center">
-              <template #default="scope">{{ Number(scope.row.percentage || 0).toFixed(1) }}%</template>
+            <el-table-column label="总资产占比" width="100" align="center" header-align="center">
+              <template #default="scope">{{ scope.row.percentage?.toFixed(1) }}%</template>
             </el-table-column>
-            <el-table-column label="持仓浮盈" min-width="100" align="right" header-align="right">
+            <el-table-column label="持仓浮盈" min-width="110" align="right" header-align="right">
               <template #default="scope">
-                <span class="num-cell" :class="(scope.row.profit >= 0) ? 'num-up' : 'num-down'">
+                <span class="num-cell" :class="(scope.row.profit >= 0 ) ? 'num-up' : 'num-down'">
                   {{ formatMoney(scope.row.profit, 2, true) }}
                 </span>
               </template>
             </el-table-column>
-            <el-table-column label="预计年化" width="88" align="center" header-align="center">
+            <el-table-column label="全周期盈亏" min-width="110" align="right" header-align="right">
               <template #default="scope">
-                <span class="num-info" style="font-weight:700;">{{ scope.row.expected_return?.toFixed(2) }}%</span>
+                <span class="num-cell" :class="((scope.row.lifetime_profit || 0) >= 0 ) ? 'num-up' : 'num-down'">
+                  {{ formatMoney(scope.row.lifetime_profit || 0, 2, true) }}
+                </span>
+              </template>
+            </el-table-column>
+            <el-table-column label="浮盈率" width="90" align="center" header-align="center">
+              <template #default="scope">
+                <span :class="(scope.row.profit_rate >= 0 ) ? 'num-up' : 'num-down'">
+                  {{ formatPercent(scope.row.profit_rate, 2) }}
+                </span>
+              </template>
+            </el-table-column>
+            <el-table-column prop="count" label="标的数" width="72" align="center" header-align="center" />
+            <el-table-column label="预计年化" width="90" align="center" header-align="center">
+              <template #default="scope">
+                <span class="num-info" style="font-weight:700;">{{ scope.row.expected_annual_return?.toFixed(1) }}%</span>
               </template>
             </el-table-column>
           </el-table>
         </el-card>
-      </section>
-
-      <!-- 右：目标与纪律 -->
-      <section class="merge-pane">
-        <div class="merge-pane-title">目标与纪律</div>
-
-        <el-card shadow="never" class="merge-card target-panel" v-loading="disciplinePresetLoading">
-          <div class="preset-row">
-            <div class="preset-row-label">目标尺子</div>
-            <div class="preset-seg" role="group" aria-label="目标尺子">
-              <button
-                v-for="p in (disciplinePresets || [])"
-                :key="p.id"
-                type="button"
-                class="preset-seg-btn"
-                :class="{ active: p.id === disciplinePresetActiveId || p.active }"
-                :disabled="presetApplying || disciplinePresetLoading || p.id === disciplinePresetActiveId || p.active"
-                :title="presetTitle(p)"
-                @click="onApplyPreset(p.id)"
-              >{{ p.label }}</button>
-            </div>
-          </div>
-          <div class="preset-meta">
-            <span class="preset-meta-main">当前 · {{ activePresetLabel }}</span>
-            <span class="preset-meta-sub">{{ activePresetHint }}</span>
-          </div>
-          <div class="hint preset-guard">只改目标与安全带；优先加仓 / 禁开 / 格力上限不动</div>
-
-          <div class="gap-list" style="margin-top: 12px;">
-            <div v-for="row in gapRows" :key="row.key" class="gap-row">
-              <div class="gap-row-head">
-                <span class="gap-label">{{ row.label }}</span>
-                <span class="gap-nums">
-                  <b class="gap-actual">{{ fmtPct(row.actual) }}</b>
-                  <span class="gap-arrow">→</span>
-                  目标 {{ fmtPct(row.target) }}
-                  <template v-if="row.gapAmt">
-                    · {{ formatMoney(Math.abs(row.gapAmt), 0) }}{{ row.gapAmt > 0 ? '偏少' : '偏多' }}
-                  </template>
-                </span>
-              </div>
-              <el-progress
-                :percentage="Math.min(Math.max(Number(row.actual || 0), 0), 100)"
-                :stroke-width="8"
-                :color="row.barColor"
-              />
-            </div>
-            <div class="hint">带宽 ±{{ fmtPct(bandPct) }}；超出才出再平衡建议</div>
-          </div>
-        </el-card>
-
-        <!-- 卫星仓进度：510880 ~6% + 159201 ~4% -->
-        <el-card shadow="never" class="merge-card satellite-card" v-if="satelliteRows.length">
-          <template #header>
-            <div>
-              <div class="section-title">卫星仓（红利 + 自由现金流）</div>
-              <div class="hint">510880 ~6% + 159201 ~4%，合计约 10%；从格力/石化/REIT 转</div>
-            </div>
-          </template>
-          <div class="satellite-overall">
-            整体进度
-            <b :class="satOverall >= 99 ? 'num-up' : ''">{{ satOverall.toFixed(1) }}%</b>
-            <span class="hint">（已配置 {{ fmtPct(satAchieved) }} / 目标 {{ fmtPct(satTarget) }}）</span>
-          </div>
-          <div class="satellite-list">
-            <div v-for="r in satelliteRows" :key="r.code" class="satellite-item">
-              <div class="satellite-head">
-                <span class="satellite-name">{{ r.label }}</span>
-                <span class="satellite-nums">
-                  <b>{{ fmtPct(r.pct) }}</b> / {{ fmtPct(r.target_pct) }}
-                  <template v-if="r.need_amount > 0">
-                    · 还差 {{ formatMoney(r.need_amount) }}
-                    <template v-if="r.last_price > 0">（约 {{ r.need_lots }} 手）</template>
-                  </template>
-                  <template v-else-if="r.pct >= r.target_pct">· 已到位</template>
-                </span>
-              </div>
-              <el-progress
-                :percentage="Math.min(Math.max(Number(r.pct) / Number(r.target_pct) * 100, 0), 100)"
-                :stroke-width="8"
-                :status="r.pct >= r.target_pct ? 'success' : undefined"
-              />
-              <div v-if="!r.held && r.pct === 0" class="hint">未建仓（0 份）——真买后从交易页录入即自动纳入进度</div>
-            </div>
-          </div>
-        </el-card>
-
-        <el-card shadow="never" class="merge-card" v-loading="disciplineLoading">
-          <template #header><span class="section-title">纪律检查</span></template>
-          <div class="breach-list">
-            <div v-for="(b, i) in visibleBreaches" :key="i" class="breach-item" :class="'lv-' + (b.level || 'info')">
-              <div class="breach-head">
-                <span>{{ b.title }}</span>
-                <el-tag size="small" :type="tagType(b.level)">{{ levelLabel(b.level) }}</el-tag>
-              </div>
-              <div class="breach-text">{{ b.text }}</div>
-            </div>
-            <el-empty v-if="!visibleBreaches.length" description="暂无非正常提醒" :image-size="56" />
-          </div>
-        </el-card>
-
-        <el-card shadow="never" class="merge-card" header="问题清单" v-if="storyIssues.length">
-          <div class="issue-list">
-            <div v-for="(iss, i) in storyIssues" :key="iss.id + '-' + i" class="issue-item" :class="'lv-' + (iss.level || 'info')">
-              <div class="issue-head">
-                <span>{{ iss.title }}</span>
-                <el-tag size="small" :type="tagType(iss.level)">{{ levelLabel(iss.level) }}</el-tag>
-              </div>
-              <div class="issue-text">{{ iss.text }}</div>
-              <div v-if="iss.action_hint" class="hint">{{ iss.action_hint }}</div>
-            </div>
-          </div>
-        </el-card>
-
-        <el-card shadow="never" class="merge-card" v-if="planItems.length">
-          <template #header>
-            <div>
-              <div class="section-title">个人计划</div>
-              <div class="hint">A500 分批 / 格力软上限等，只提醒不自动下单</div>
-            </div>
-          </template>
-          <div class="breach-list">
-            <div v-for="(p, i) in planItems" :key="i" class="breach-item" :class="'lv-' + (p.level || 'info')">
-              <div class="breach-head">
-                <span>{{ p.title }}</span>
-                <el-tag size="small" :type="tagType(p.level)">{{ levelLabel(p.level) }}</el-tag>
-              </div>
-              <div class="breach-text">{{ p.text }}</div>
-              <div v-if="p.target_amount" class="plan-progress" style="margin-top:8px;">
-                <el-progress
-                  :percentage="Math.min(Number(p.progress_pct || 0), 100)"
-                  :stroke-width="10"
-                  :status="Number(p.remaining_amount || 0) <= 0 ? 'success' : undefined"
-                />
-                <div class="hint" style="margin-top:4px;" v-if="p.suggested_next_amount">
-                  建议下次约 {{ formatMoney(p.suggested_next_amount) }}
-                </div>
-              </div>
-            </div>
-          </div>
-        </el-card>
 
         <el-card shadow="never" class="merge-card">
           <template #header>
-            <div>
-              <div class="section-title">再平衡建议</div>
-              <div class="hint">只读建议；可生成草稿，确认后才入账</div>
+            <div class="card-head">
+              <div>
+                <div class="section-title">纪律草稿</div>
+                <div class="hint">可编辑后再确认；买入金额单默认「申购待确认」</div>
+              </div>
+              <div class="card-actions">
+                <el-button size="small" :loading="disciplineDraftLoading" @click="fetchDisciplineDrafts">刷新草稿</el-button>
+                <el-button size="small" type="warning" :loading="confirmingDrafts" @click="onConfirmSelectedDrafts">批量确认</el-button>
+              </div>
             </div>
           </template>
-          <el-table :data="actions" stripe size="small" empty-text="暂无建议" v-loading="disciplineLoading" aria-label="再平衡建议">
+          <el-table
+            aria-label="纪律草稿"
+            :data="disciplineDrafts"
+            stripe
+            size="small"
+            empty-text="暂无草稿"
+            v-loading="disciplineDraftLoading"
+            @selection-change="onDraftSelectionChange"
+          >
+            <el-table-column type="selection" width="44" fixed="left" />
             <el-table-column label="方向" width="72">
               <template #default="s">{{ s.row.side === 'sell' ? '卖出' : '买入' }}</template>
             </el-table-column>
-            <el-table-column prop="name" label="名称" min-width="100" show-overflow-tooltip />
-            <el-table-column prop="code" label="代码" width="88" />
+            <el-table-column prop="name" label="名称" min-width="100" fixed="left" />
+            <el-table-column prop="code" label="代码" width="90" />
             <el-table-column label="金额" width="100" align="right" header-align="right">
               <template #default="s"><span class="num-cell">{{ formatMoney(s.row.amount) }}</span></template>
             </el-table-column>
+            <el-table-column label="数量" width="88" align="right" header-align="right">
+              <template #default="s">{{ s.row.quantity ? Number(s.row.quantity).toFixed(2) : '—' }}</template>
+            </el-table-column>
             <el-table-column prop="reason" label="原因" min-width="140" show-overflow-tooltip />
+            <el-table-column prop="created_at" label="创建" width="140" />
+            <el-table-column label="操作" width="200" align="center">
+              <template #default="s">
+                <el-button type="primary" link @click="openDraftEdit(s.row)">编辑</el-button>
+                <el-button type="primary" link :loading="draftBusy === 'confirm:' + s.row.id" :disabled="!!draftBusy" @click="onConfirmDraft(s.row)">确认入账</el-button>
+                <el-button type="danger" link :loading="draftBusy === 'delete:' + s.row.id" :disabled="!!draftBusy" @click="onDeleteDraft(s.row)">删除</el-button>
+              </template>
+            </el-table-column>
           </el-table>
         </el-card>
-      </section>
-    </div>
-
-    <el-card shadow="never" class="merge-card" header="细分类别明细">
-      <el-table :data="allocationAnalysis" stripe size="small" class="allocation-table" style="width: 100%" aria-label="细分类别明细">
-        <el-table-column prop="category" label="资产类别" width="110" align="center" header-align="center" fixed="left" />
-        <el-table-column label="市值/金额" min-width="120" align="right" header-align="right">
-          <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.market_value) }}</span></template>
-        </el-table-column>
-        <el-table-column label="总资产占比" width="100" align="center" header-align="center">
-          <template #default="scope">{{ scope.row.percentage?.toFixed(1) }}%</template>
-        </el-table-column>
-        <el-table-column label="持仓浮盈" min-width="110" align="right" header-align="right">
-          <template #default="scope">
-            <span class="num-cell" :class="(scope.row.profit >= 0 ) ? 'num-up' : 'num-down'">
-              {{ formatMoney(scope.row.profit, 2, true) }}
-            </span>
-          </template>
-        </el-table-column>
-        <el-table-column label="全周期盈亏" min-width="110" align="right" header-align="right">
-          <template #default="scope">
-            <span class="num-cell" :class="((scope.row.lifetime_profit || 0) >= 0 ) ? 'num-up' : 'num-down'">
-              {{ formatMoney(scope.row.lifetime_profit || 0, 2, true) }}
-            </span>
-          </template>
-        </el-table-column>
-        <el-table-column label="浮盈率" width="90" align="center" header-align="center">
-          <template #default="scope">
-            <span :class="(scope.row.profit_rate >= 0 ) ? 'num-up' : 'num-down'">
-              {{ formatPercent(scope.row.profit_rate, 2) }}
-            </span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="count" label="标的数" width="72" align="center" header-align="center" />
-        <el-table-column label="预计年化" width="90" align="center" header-align="center">
-          <template #default="scope">
-            <span class="num-info" style="font-weight:700;">{{ scope.row.expected_annual_return?.toFixed(1) }}%</span>
-          </template>
-        </el-table-column>
-      </el-table>
-    </el-card>
-
-    <el-card shadow="never" class="merge-card">
-      <template #header>
-        <div class="card-head">
-          <div>
-            <div class="section-title">纪律草稿</div>
-            <div class="hint">可编辑后再确认；买入金额单默认「申购待确认」</div>
-          </div>
-          <div class="card-actions">
-            <el-button size="small" :loading="disciplineDraftLoading" @click="fetchDisciplineDrafts">刷新草稿</el-button>
-            <el-button size="small" type="warning" :loading="confirmingDrafts" @click="onConfirmSelectedDrafts">批量确认</el-button>
-          </div>
-        </div>
-      </template>
-      <el-table
-        aria-label="纪律草稿"
-        :data="disciplineDrafts"
-        stripe
-        size="small"
-        empty-text="暂无草稿"
-        v-loading="disciplineDraftLoading"
-        @selection-change="onDraftSelectionChange"
-      >
-        <el-table-column type="selection" width="44" fixed="left" />
-        <el-table-column label="方向" width="72">
-          <template #default="s">{{ s.row.side === 'sell' ? '卖出' : '买入' }}</template>
-        </el-table-column>
-        <el-table-column prop="name" label="名称" min-width="100" fixed="left" />
-        <el-table-column prop="code" label="代码" width="90" />
-        <el-table-column label="金额" width="100" align="right" header-align="right">
-          <template #default="s"><span class="num-cell">{{ formatMoney(s.row.amount) }}</span></template>
-        </el-table-column>
-        <el-table-column label="数量" width="88" align="right" header-align="right">
-          <template #default="s">{{ s.row.quantity ? Number(s.row.quantity).toFixed(2) : '—' }}</template>
-        </el-table-column>
-        <el-table-column prop="reason" label="原因" min-width="140" show-overflow-tooltip />
-        <el-table-column prop="created_at" label="创建" width="140" />
-        <el-table-column label="操作" width="200" align="center">
-          <template #default="s">
-            <el-button type="primary" link @click="openDraftEdit(s.row)">编辑</el-button>
-            <el-button type="primary" link :loading="draftBusy === 'confirm:' + s.row.id" :disabled="!!draftBusy" @click="onConfirmDraft(s.row)">确认入账</el-button>
-            <el-button type="danger" link :loading="draftBusy === 'delete:' + s.row.id" :disabled="!!draftBusy" @click="onDeleteDraft(s.row)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-    </el-card>
+      </el-tab-pane>
+    </el-tabs>
 
 <el-dialog v-model="disciplinePolicyDialog" title="纪律 / 目标参数" width="560px" destroy-on-close>
       <el-alert
@@ -552,6 +568,33 @@ const {
   summaryText,
   resolvedTheme,
 } = useAppCtx();
+
+// === 页面分三段（看现状 / 设目标 / 处理偏离）===
+// 这一页原来把 15 个卡片堆在一起，要滚很久才能找到想改的那块。现在按"看→设→调"分成三段。
+// 深链用 ?seg=target 直接落到某一段；刻意不引入 vue-router 依赖（测试里也不必挂路由）。
+const SEG_KEYS = ['overview', 'target', 'deviation'];
+
+function initialSeg() {
+  try {
+    const q = new URLSearchParams(window.location.search).get('seg');
+    return SEG_KEYS.includes(String(q)) ? String(q) : 'overview';
+  } catch {
+    return 'overview';
+  }
+}
+
+const seg = ref(initialSeg());
+
+watch(seg, (value) => {
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.set('seg', value);
+    // replaceState 而不是 pushState：切段是同一页内的视图切换，不该污染浏览历史
+    window.history.replaceState(window.history.state, '', url);
+  } catch {
+    /* 深链只是便利功能，失败不影响使用 */
+  }
+});
 
 // 草稿的 确认入账/删除 都是写操作（模块里没有 in-flight 标志），这里包一层防连点：
 // 进行中同一行按钮转圈，其余行按钮禁用。
@@ -817,9 +860,11 @@ watch(
 </script>
 
 <style scoped>
+/* 原来是「当前结构 | 目标与纪律」两列并排；拆成三段 tab 之后每个 tab 里只剩一个 pane，
+   所以改成单列（否则内容会挤在左半屏、右边留一大片空）。 */
 .merge-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.95fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   margin-bottom: 14px;
   align-items: start;

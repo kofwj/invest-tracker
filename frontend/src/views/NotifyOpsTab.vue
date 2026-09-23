@@ -35,7 +35,7 @@
         <div class="ops-card-head">
           <div>
             <div class="ops-section-title">基础设置</div>
-            <div class="ops-hint">改完点右上角「保存设置」才生效</div>
+            <div class="ops-hint">改完点右上角「保存设置」才生效；正文模板 / 冷却 / 事件映射收在下面的折叠区</div>
           </div>
         </div>
       </template>
@@ -43,23 +43,6 @@
         <el-col :xs="24" :sm="8">
           <div class="ops-field-label">总开关</div>
           <el-switch v-model="notifyStatus.enabled" active-text="开" inactive-text="关" />
-        </el-col>
-        <el-col :xs="24" :sm="8">
-          <div class="ops-field-label">正文模板</div>
-          <el-radio-group v-model="notifyStatus.template" size="small">
-            <el-radio-button label="short">短</el-radio-button>
-            <el-radio-button label="medium">中</el-radio-button>
-          </el-radio-group>
-        </el-col>
-        <el-col :xs="24" :sm="8">
-          <div class="ops-field-label">同事件冷却（分钟）</div>
-          <el-input-number
-            v-model="notifyStatus.cooldown_minutes"
-            :min="0"
-            :max="10080"
-            :step="30"
-            size="small"
-          />
         </el-col>
       </el-row>
     </el-card>
@@ -247,82 +230,96 @@
       </el-form>
     </el-card>
 
-    <el-card shadow="never" class="ops-card">
-      <template #header>
-        <div class="ops-card-head">
-          <div>
-            <div class="ops-section-title">事件 → 通道</div>
-            <div class="ops-hint">逗号分隔：feishu,dingtalk,wecom,telegram</div>
-          </div>
-        </div>
-      </template>
-      <el-table :data="eventRows" size="small" style="width:100%;" empty-text="暂无事件" aria-label="推送事件通道配置">
-        <el-table-column prop="label" label="事件" min-width="120" />
-        <el-table-column prop="event" label="代码" width="120" />
-        <el-table-column label="通道" min-width="240">
-          <template #default="s">
-            <el-input
-              v-model="notifyEventDraft[s.row.event]"
-              size="small"
-              placeholder="例如 feishu,telegram"
-            />
-          </template>
-        </el-table-column>
-      </el-table>
-    </el-card>
+    <!-- 低频入口收进折叠区（默认收起）：模板/事件映射、一次性推送、发送日志；功能与请求一个不少 -->
+    <el-collapse v-model="foldedPanels" class="ops-collapse">
+      <el-collapse-item name="compose">
+        <template #title>
+          <span class="ops-collapse-title">模板与事件通道</span>
+          <span class="ops-collapse-hint">{{ templateLabel }}模板 · 事件 {{ eventRows.length }} 条 · 逗号分隔 feishu,dingtalk,wecom,telegram</span>
+        </template>
+        <el-form label-position="top" class="ops-inline-form">
+          <el-row :gutter="16">
+            <el-col :xs="24" :sm="12">
+              <el-form-item label="正文模板">
+                <el-radio-group v-model="notifyStatus.template" size="small">
+                  <el-radio-button label="short">短</el-radio-button>
+                  <el-radio-button label="medium">中</el-radio-button>
+                </el-radio-group>
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="12">
+              <el-form-item label="同事件冷却（分钟）">
+                <el-input-number
+                  v-model="notifyStatus.cooldown_minutes"
+                  :min="0"
+                  :max="10080"
+                  :step="30"
+                  size="small"
+                />
+              </el-form-item>
+            </el-col>
+          </el-row>
+        </el-form>
+        <el-table :data="eventRows" size="small" style="width:100%;" empty-text="暂无事件" aria-label="推送事件通道配置">
+          <el-table-column prop="label" label="事件" min-width="120" />
+          <el-table-column prop="event" label="代码" width="120" />
+          <el-table-column label="通道" min-width="240">
+            <template #default="s">
+              <el-input
+                v-model="notifyEventDraft[s.row.event]"
+                size="small"
+                placeholder="例如 feishu,telegram"
+              />
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-collapse-item>
 
-    <el-card shadow="never" class="ops-card">
-      <template #header>
-        <div class="ops-card-head">
-          <div>
-            <div class="ops-section-title">立刻推一把</div>
-            <div class="ops-hint">晚报会先弹窗预览；存款/纪律是强制检查后推</div>
-          </div>
+      <el-collapse-item name="oneShot">
+        <template #title>
+          <span class="ops-collapse-title">立刻推一把</span>
+          <span class="ops-collapse-hint">存款到期 / 纪律摘要 / 晚间简报（一次性）</span>
+        </template>
+        <div class="ops-hint" style="margin-bottom: 10px;">晚报会先弹窗预览；存款/纪律是强制检查后推</div>
+        <div class="ops-action-grid">
+          <button type="button" class="ops-action" :disabled="eveningBriefDialog?.loading" @click="() => onOpenEveningBrief(false)">
+            <div class="ops-action-title">生成晚间简报</div>
+            <div class="ops-action-sub">只预览，不推送</div>
+          </button>
+          <button type="button" class="ops-action is-primary" :disabled="eveningBriefDialog?.loading" @click="() => onOpenEveningBrief(true)">
+            <div class="ops-action-title">生成并推送晚报</div>
+            <div class="ops-action-sub">预览后可再推</div>
+          </button>
+          <button type="button" class="ops-action" :disabled="notifyLoading" @click="onPushDepositDue">
+            <div class="ops-action-title">推送·存款到期</div>
+            <div class="ops-action-sub">近 30 天到期项</div>
+          </button>
+          <button type="button" class="ops-action" :disabled="notifyLoading" @click="onPushDiscipline">
+            <div class="ops-action-title">推送·纪律摘要</div>
+            <div class="ops-action-sub">破线/再平衡提醒</div>
+          </button>
         </div>
-      </template>
-      <div class="ops-action-grid">
-        <button type="button" class="ops-action" :disabled="eveningBriefDialog?.loading" @click="() => onOpenEveningBrief(false)">
-          <div class="ops-action-title">生成晚间简报</div>
-          <div class="ops-action-sub">只预览，不推送</div>
-        </button>
-        <button type="button" class="ops-action is-primary" :disabled="eveningBriefDialog?.loading" @click="() => onOpenEveningBrief(true)">
-          <div class="ops-action-title">生成并推送晚报</div>
-          <div class="ops-action-sub">预览后可再推</div>
-        </button>
-        <button type="button" class="ops-action" :disabled="notifyLoading" @click="onPushDepositDue">
-          <div class="ops-action-title">推送·存款到期</div>
-          <div class="ops-action-sub">近 30 天到期项</div>
-        </button>
-        <button type="button" class="ops-action" :disabled="notifyLoading" @click="onPushDiscipline">
-          <div class="ops-action-title">推送·纪律摘要</div>
-          <div class="ops-action-sub">破线/再平衡提醒</div>
-        </button>
-      </div>
-    </el-card>
+      </el-collapse-item>
 
-    <el-card shadow="never" class="ops-card">
-      <template #header>
-        <div class="ops-card-head">
-          <div>
-            <div class="ops-section-title">最近发送日志</div>
-            <div class="ops-hint">最多 20 条 · 成功/失败一眼看</div>
-          </div>
-          <el-tag size="small" type="info">{{ notifyLogs.length }} 条</el-tag>
-        </div>
-      </template>
-      <el-table :data="notifyLogs" size="small" style="width:100%;" empty-text="暂无发送记录" max-height="360" aria-label="推送发送日志">
-        <el-table-column prop="created_at" label="时间" width="160" />
-        <el-table-column prop="event" label="事件" width="110" />
-        <el-table-column prop="channel" label="通道" width="90" />
-        <el-table-column prop="title" label="标题" min-width="120" show-overflow-tooltip />
-        <el-table-column label="结果" width="80" align="center">
-          <template #default="s">
-            <el-tag :type="s.row.ok ? 'success' : 'danger'" size="small">{{ s.row.ok ? '成功' : '失败' }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="reason" label="原因" min-width="140" show-overflow-tooltip />
-      </el-table>
-    </el-card>
+      <el-collapse-item name="logs">
+        <template #title>
+          <span class="ops-collapse-title">最近发送日志</span>
+          <span class="ops-collapse-hint">{{ notifyLogs.length }} 条 · 最多 20 条 · 成功/失败一眼看</span>
+        </template>
+        <el-table :data="notifyLogs" size="small" style="width:100%;" empty-text="暂无发送记录" max-height="360" aria-label="推送发送日志">
+          <el-table-column prop="created_at" label="时间" width="160" />
+          <el-table-column prop="event" label="事件" width="110" />
+          <el-table-column prop="channel" label="通道" width="90" />
+          <el-table-column prop="title" label="标题" min-width="120" show-overflow-tooltip />
+          <el-table-column label="结果" width="80" align="center">
+            <template #default="s">
+              <el-tag :type="s.row.ok ? 'success' : 'danger'" size="small">{{ s.row.ok ? '成功' : '失败' }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="reason" label="原因" min-width="140" show-overflow-tooltip />
+        </el-table>
+      </el-collapse-item>
+    </el-collapse>
   </PageShell>
 </template>
 
@@ -338,6 +335,10 @@ const {
   fetchNotifyPanel, saveNotifyPanel, testNotifyPush, pushDepositDueNow, pushDisciplineNow,
   eveningBriefDialog, openEveningBrief,
 } = useAppCtx();
+
+// 折叠区默认全部收起：模板/事件映射、一次性推送、发送日志都是低频入口。
+// 这里只管展示，底层请求与守卫（notifyLoading / eveningBriefDialog.loading）不变。
+const foldedPanels = ref([]);
 
 // 写操作/推送防连点：模块里的 notifyLoading 在 saveNotifyPanel / testNotifyPush / push* 开头
 // 就置位，这里补一层入口判断挡住同一 tick 的第二次点击；晚报推送用 eveningBriefDialog.loading。
@@ -473,6 +474,30 @@ watch(
   color: var(--app-muted);
   font-weight: 600;
 }
+
+/* 折叠区：低频入口收起来，标题保持一行式 */
+.ops-collapse {
+  margin-top: 4px;
+  border-top: 1px solid var(--app-border);
+  border-bottom: 1px solid var(--app-border);
+}
+.ops-collapse :deep(.el-collapse-item__header) {
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--app-text);
+  background: transparent;
+}
+.ops-collapse :deep(.el-collapse-item__wrap) { border: none; background: transparent; }
+.ops-collapse :deep(.el-collapse-item__content) { padding: 4px 2px 18px; }
+.ops-collapse-title { font-size: 14px; font-weight: 700; color: var(--app-text); }
+.ops-collapse-hint {
+  margin-left: 4px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--app-soft);
+}
+.ops-inline-form { margin-bottom: 6px; }
 .channel-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

@@ -11,99 +11,121 @@
       <div v-for="i in 6" :key="'dsk'+i" class="sk-block sk-metric"></div>
     </div>
 
-    <div class="merge-grid decision-merge">
-      <!-- 左：关键指标 -->
-      <section class="merge-pane merge-pane-left">
-        <div class="merge-pane-title">关键指标</div>
-        <div class="ledger-metrics cols-2 decision-metrics">
-          <MetricCard
-            label="今日贡献粗估"
-            :value="formatMoney(signals.today_contrib_estimate || 0, 2, true)"
-            :tone="Number(signals.today_contrib_estimate || 0) >= 0 ? 'up' : 'down'"
-            main
-            :title="formatMoney(signals.today_contrib_estimate || 0, 2, true)"
-          />
-          <MetricCard
-            label="组合涨跌粗估"
-            :value="pctText(signals.portfolio_change_pct_estimate)"
-            :tone="toneFromNum(signals.portfolio_change_pct_estimate)"
-          />
-          <MetricCard
-            label="vs 沪深300"
-            :value="vsHs300Text"
-            :tone="toneFromNum(vsHs300Diff)"
-          />
-          <MetricCard
-            label="vs 中证A500"
-            :value="vsA500Text"
-            :tone="toneFromNum(vsA500Diff)"
-          />
-          <MetricCard
-            label="总资产"
-            :value="formatMoney(totalAssetsNow)"
-            :title="formatMoney(totalAssetsNow)"
-          />
-          <MetricCard
-            label="权益仓位"
-            :value="equityPctText"
-            :tone="equityTone"
-          />
-          <MetricCard
-            label="纪律破线"
-            :value="String(breachCount)"
-            :tone="breachCount ? 'warn' : 'ok'"
-          />
-          <MetricCard
-            label="存款 30 天内到期"
-            :value="`${dueSoonCount} 笔`"
-            :tone="dueSoonCount ? 'warn' : ''"
-          />
-          <MetricCard
-            label="今日最强"
-            :value="topMoverName"
-            :tone="toneFromNum(topMover?.day_contrib ?? topMover?.change_pct)"
-            :title="topMoverTitle"
-          />
-          <MetricCard
-            label="今日最弱"
-            :value="bottomMoverName"
-            :tone="toneFromNum(bottomMover?.day_contrib ?? bottomMover?.change_pct)"
-            :title="bottomMoverTitle"
-          />
-          <MetricCard
-            label="启用预警"
-            :value="`${enabledAlertCount} 条`"
-            :tone="enabledAlertCount ? 'ok' : 'muted'"
-          />
-          <MetricCard
-            label="指数情绪"
-            :value="indexBreadthText"
-            :tone="indexBreadthTone"
-          />
+    <!-- ① 今天该看什么：默认展开，第一屏就是结论 -->
+    <section class="decision-group decision-group-today" aria-labelledby="decision-group-today">
+      <div class="group-head">
+        <h2 id="decision-group-today" class="group-title">今天该看什么</h2>
+        <span class="group-hint">先看结论，再看行情；明细在下面两组</span>
+      </div>
+
+      <div class="group-block-title section-title">市场与结论</div>
+
+      <el-card shadow="never" class="merge-card highlight-card">
+        <template #header>
+          <div class="card-head">
+            <span class="section-title">今日看点</span>
+            <span class="hint">人话结论，不是买卖指令</span>
+          </div>
+        </template>
+        <ul v-if="marketHighlights && marketHighlights.length" class="market-highlights">
+          <li v-for="(line, idx) in marketHighlights" :key="idx">{{ line }}</li>
+        </ul>
+        <div v-else class="empty-line">暂无看点，点右上角刷新拉行情。</div>
+        <div v-if="marketComparisons && marketComparisons.length" class="market-compare">
+          <div v-for="(c, i) in marketComparisons" :key="i">{{ c.text }}</div>
+        </div>
+      </el-card>
+
+      <el-alert
+        :title="headline"
+        type="info"
+        show-icon
+        :closable="false"
+        class="decision-headline"
+      />
+
+      <!-- 行情带：关键指标一行 + 破线摘要一行 -->
+      <div class="market-band">
+        <div class="band-row">
+          <div class="band-label section-title">关键指标</div>
+          <div class="ledger-metrics band-metrics decision-metrics">
+            <MetricCard
+              label="今日贡献粗估"
+              :value="formatMoney(signals.today_contrib_estimate || 0, 2, true)"
+              :tone="Number(signals.today_contrib_estimate || 0) >= 0 ? 'up' : 'down'"
+              main
+              :title="formatMoney(signals.today_contrib_estimate || 0, 2, true)"
+            />
+            <MetricCard
+              label="组合涨跌粗估"
+              :value="pctText(signals.portfolio_change_pct_estimate)"
+              :tone="toneFromNum(signals.portfolio_change_pct_estimate)"
+            />
+            <MetricCard
+              label="vs 沪深300"
+              :value="vsHs300Text"
+              :tone="toneFromNum(vsHs300Diff)"
+            />
+            <MetricCard
+              label="vs 中证A500"
+              :value="vsA500Text"
+              :tone="toneFromNum(vsA500Diff)"
+            />
+            <MetricCard
+              label="总资产"
+              :value="formatMoney(totalAssetsNow)"
+              :title="formatMoney(totalAssetsNow)"
+            />
+            <MetricCard
+              label="权益仓位"
+              :value="equityPctText"
+              :tone="equityTone"
+            />
+            <MetricCard
+              label="纪律破线"
+              :value="String(breachCount)"
+              :tone="breachCount ? 'warn' : 'ok'"
+            />
+            <MetricCard
+              label="存款 30 天内到期"
+              :value="`${dueSoonCount} 笔`"
+              :tone="dueSoonCount ? 'warn' : ''"
+            />
+            <MetricCard
+              label="今日最强"
+              :value="topMoverName"
+              :tone="toneFromNum(topMover?.day_contrib ?? topMover?.change_pct)"
+              :title="topMoverTitle"
+            />
+            <MetricCard
+              label="今日最弱"
+              :value="bottomMoverName"
+              :tone="toneFromNum(bottomMover?.day_contrib ?? bottomMover?.change_pct)"
+              :title="bottomMoverTitle"
+            />
+            <MetricCard
+              label="启用预警"
+              :value="`${enabledAlertCount} 条`"
+              :tone="enabledAlertCount ? 'ok' : 'muted'"
+            />
+            <MetricCard
+              label="指数情绪"
+              :value="indexBreadthText"
+              :tone="indexBreadthTone"
+            />
+          </div>
         </div>
 
-        <el-alert
-          :title="headline"
-          type="info"
-          show-icon
-          :closable="false"
-          class="decision-headline"
-        />
-
-        <el-card v-if="breachPreview.length" shadow="never" class="merge-card tight">
-          <template #header>
-            <div class="card-head">
-              <span class="section-title">破线摘要</span>
-              <el-button size="small" link type="primary" @click="goTab('allocation')">去结构与目标</el-button>
-            </div>
-          </template>
-          <ul class="breach-list">
+        <div v-if="breachPreview.length" class="band-row band-breach">
+          <div class="band-label section-title">破线摘要</div>
+          <ul class="breach-list breach-inline">
             <li v-for="(b, idx) in breachPreview" :key="idx">
               <span class="breach-level" :class="b.level === 'warning' ? 'warn' : 'info'">{{ b.level === 'warning' ? '警告' : '提示' }}</span>
-              {{ b.line || b.title || '纪律提醒' }}
+              <span class="breach-text">{{ b.line || b.title || '纪律提醒' }}</span>
             </li>
           </ul>
-        </el-card>
+          <el-button size="small" link type="primary" @click="goTab('allocation')">去结构与目标</el-button>
+        </div>
 
         <div class="decision-jumps">
           <el-button size="small" @click="goTab('allocation')">去结构与目标</el-button>
@@ -111,244 +133,248 @@
           <el-button size="small" @click="goTab('performance')">去收益分析</el-button>
           <el-button size="small" @click="goTab('holdings')">去持仓</el-button>
         </div>
-      </section>
+      </div>
+    </section>
 
-      <!-- 右：今日看点 + 市场详情 -->
-      <section class="merge-pane merge-pane-right">
-        <div class="merge-pane-title">市场与结论</div>
+    <!-- ② 我的持仓今天怎么样：默认展开 -->
+    <section class="decision-group decision-group-holdings" aria-labelledby="decision-group-holdings">
+      <div class="group-head">
+        <h2 id="decision-group-holdings" class="group-title">我的持仓今天怎么样</h2>
+        <span class="group-hint">本日贡献粗估，先看整体再看个股</span>
+      </div>
 
-        <el-card shadow="never" class="merge-card highlight-card">
-          <template #header>
-            <div class="card-head">
-              <span class="section-title">今日看点</span>
-              <span class="hint">人话结论，不是买卖指令</span>
-            </div>
-          </template>
-          <ul v-if="marketHighlights && marketHighlights.length" class="market-highlights">
-            <li v-for="(line, idx) in marketHighlights" :key="idx">{{ line }}</li>
-          </ul>
-          <div v-else class="empty-line">暂无看点，点右上角刷新拉行情。</div>
-          <div v-if="marketComparisons && marketComparisons.length" class="market-compare">
-            <div v-for="(c, i) in marketComparisons" :key="i">{{ c.text }}</div>
+      <el-card shadow="never" class="merge-card">
+        <template #header>
+          <div class="card-head">
+            <span class="section-title">持仓今日贡献（粗估）</span>
+            <span class="hint">最多 20 条 · 按绝对贡献排序</span>
           </div>
-        </el-card>
-
-        <el-card shadow="never" class="merge-card">
-          <template #header>
-            <div class="card-head">
-              <span class="section-title">关键指数</span>
-              <span class="hint">东财延时行情</span>
-            </div>
-          </template>
-          <el-table :data="indexRows" stripe size="small" empty-text="暂无指数数据" v-loading="marketLoading" aria-label="关键指数">
-            <el-table-column prop="name" label="名称" min-width="100" />
-            <el-table-column prop="code" label="代码" width="90" />
-            <el-table-column label="最新" width="100" align="right" header-align="right">
-              <template #default="scope">
-                {{ scope.row.price == null ? '—' : Number(scope.row.price).toFixed(2) }}
-              </template>
-            </el-table-column>
-            <el-table-column label="涨跌%" width="90" align="right" header-align="right">
-              <template #default="scope">
-                <span :style="{ color: changeColor(scope.row.change_pct) }">
-                  {{ formatChangePct(scope.row.change_pct) }}
-                </span>
-              </template>
-            </el-table-column>
-          </el-table>
-        </el-card>
-
-        <el-card shadow="never" class="merge-card">
-          <template #header>
-            <div class="card-head">
-              <span class="section-title">持仓今日贡献（粗估）</span>
-              <span class="hint">最多 20 条 · 按绝对贡献排序</span>
-            </div>
-          </template>
-          <el-table :data="holdingsDayRows" stripe size="small" empty-text="暂无持仓或无法估算" v-loading="marketLoading" aria-label="持仓今日贡献">
-            <el-table-column prop="name" label="名称" min-width="110" show-overflow-tooltip />
-            <el-table-column prop="code" label="代码" width="90" />
-            <el-table-column label="市值" width="100" align="right" header-align="right">
-              <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.market_value) }}</span></template>
-            </el-table-column>
-            <el-table-column label="涨跌%" width="88" align="right" header-align="right">
-              <template #default="scope">
-                <span :style="{ color: changeColor(scope.row.change_pct) }">{{ formatChangePct(scope.row.change_pct) }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="本日贡献" width="110" align="right" header-align="right">
-              <template #default="scope">
-                <span class="num-cell" :style="{ color: changeColor(scope.row.day_contrib) }">
-                  {{ scope.row.day_contrib == null ? '—' : formatMoney(scope.row.day_contrib, 2, true) }}
-                </span>
-              </template>
-            </el-table-column>
-          </el-table>
-        </el-card>
-      </section>
-    </div>
-
-    <!-- 下方：自选 + 预警（全宽） -->
-    <el-card shadow="never" class="merge-card">
-      <template #header>
-        <div class="card-head">
-          <div>
-            <div class="section-title">自选关注</div>
-            <div class="hint">额外代码（股票/指数/ETF）；指数可填 secid（如 1.000300）</div>
-          </div>
-          <div class="card-actions">
-            <el-button size="small" @click="addWatchlistRow">添加一行</el-button>
-            <el-button size="small" type="primary" :loading="watchlistSaving" @click="onSaveWatchlist">保存自选</el-button>
-          </div>
-        </div>
-      </template>
-      <el-table :data="watchlistDraft" stripe size="small" empty-text="暂无自选，点「添加一行」" aria-label="自选关注">
-        <el-table-column label="代码" min-width="110">
-          <template #default="scope">
-            <el-input v-model="scope.row.code" size="small" placeholder="代码" />
-          </template>
-        </el-table-column>
-        <el-table-column label="名称" min-width="110">
-          <template #default="scope">
-            <el-input v-model="scope.row.name" size="small" placeholder="可选" />
-          </template>
-        </el-table-column>
-        <el-table-column label="secid" min-width="110">
-          <template #default="scope">
-            <el-input v-model="scope.row.secid" size="small" placeholder="指数可选" />
-          </template>
-        </el-table-column>
-        <el-table-column label="行情" width="150" align="right" header-align="right">
-          <template #default="scope">
-            <span v-if="quoteForWatch(scope.row.code)">
-              {{ quoteForWatch(scope.row.code).price == null ? '—' : Number(quoteForWatch(scope.row.code).price).toFixed(2) }}
-              <span :style="{ color: changeColor(quoteForWatch(scope.row.code).change_pct), marginLeft: '6px' }">
-                {{ formatChangePct(quoteForWatch(scope.row.code).change_pct) }}
+        </template>
+        <el-table :data="holdingsDayRows" stripe size="small" empty-text="暂无持仓或无法估算" v-loading="marketLoading" aria-label="持仓今日贡献">
+          <el-table-column prop="name" label="名称" min-width="110" show-overflow-tooltip />
+          <el-table-column prop="code" label="代码" width="90" />
+          <el-table-column label="市值" width="100" align="right" header-align="right">
+            <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.market_value) }}</span></template>
+          </el-table-column>
+          <el-table-column label="涨跌%" width="88" align="right" header-align="right">
+            <template #default="scope">
+              <span :style="{ color: changeColor(scope.row.change_pct) }">{{ formatChangePct(scope.row.change_pct) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="本日贡献" width="110" align="right" header-align="right">
+            <template #default="scope">
+              <span class="num-cell" :style="{ color: changeColor(scope.row.day_contrib) }">
+                {{ scope.row.day_contrib == null ? '—' : formatMoney(scope.row.day_contrib, 2, true) }}
               </span>
-            </span>
-            <span v-else class="muted">—</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="80" align="center">
-          <template #default="scope">
-            <el-button type="danger" link @click="removeWatchlistRow(scope.$index)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-    </el-card>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-card>
+    </section>
 
-    <el-card shadow="never" class="merge-card">
-      <template #header>
-        <div class="card-head">
-          <div>
-            <div class="section-title">价格预警规则</div>
-            <div class="hint">
-              持仓或指数代码，上穿/下穿阈值。同规则默认 {{ alertCooldownMinutes == null ? 240 : alertCooldownMinutes }} 分钟内不重复。
+    <!-- ③ 观察与预警：默认收起（el-collapse），功能一个不少 -->
+    <section class="decision-group decision-group-observe" aria-labelledby="decision-group-observe">
+      <el-collapse v-model="observeOpen" class="decision-collapse">
+        <el-collapse-item name="observe" class="decision-collapse-item">
+          <template #title>
+            <div class="group-head is-in-collapse">
+              <h2 id="decision-group-observe" class="group-title">观察与预警</h2>
+              <span class="group-hint">
+                {{ indexList.length }} 指数 · {{ watchlistCount }} 自选 · {{ alertRuleCount }} 条规则（启用 {{ enabledAlertCount }}）· 默认收起
+              </span>
             </div>
-          </div>
-          <el-button type="primary" size="small" @click="openAlertCreate">添加规则</el-button>
-        </div>
-      </template>
-      <el-table :data="alertRules" stripe size="small" empty-text="暂无规则" aria-label="价格预警规则">
-        <el-table-column label="类型" width="80">
-          <template #default="scope">{{ scope.row.target_type === 'index' ? '指数' : '持仓' }}</template>
-        </el-table-column>
-        <el-table-column prop="name" label="名称" min-width="110" show-overflow-tooltip />
-        <el-table-column prop="code" label="代码" width="90" />
-        <el-table-column label="条件" width="88">
-          <template #default="scope">{{ scope.row.condition === 'below' ? '≤ 下穿' : '≥ 上穿' }}</template>
-        </el-table-column>
-        <el-table-column label="阈值" width="100" align="right" header-align="right">
-          <template #default="scope">{{ Number(scope.row.threshold).toFixed(4) }}</template>
-        </el-table-column>
-        <el-table-column label="启用" width="72" align="center">
-          <template #default="scope">
-            <el-switch
-              :model-value="Number(scope.row.enabled) === 1 || scope.row.enabled === true"
-              :disabled="!!alertRuleBusy"
-              @change="onToggleAlertEnabled(scope.row)"
-            />
           </template>
-        </el-table-column>
-        <el-table-column label="操作" width="140" align="center">
-          <template #default="scope">
-            <el-button type="primary" link @click="openAlertEdit(scope.row)">编辑</el-button>
-            <el-button type="danger" link :loading="alertRuleBusy === 'delete:' + scope.row.id" :disabled="!!alertRuleBusy" @click="onDeleteAlertRule(scope.row)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-    </el-card>
 
-    <el-card v-if="triggeredAlerts && triggeredAlerts.length" shadow="never" class="merge-card">
-      <template #header><span class="section-title">最近一次检查触发</span></template>
-      <el-table :data="triggeredAlerts" stripe size="small" aria-label="最近一次检查触发">
-        <el-table-column prop="message" label="说明" min-width="240" show-overflow-tooltip />
-        <el-table-column prop="price" label="触发价" width="100" align="right" header-align="right">
-          <template #default="scope">{{ Number(scope.row.price).toFixed(4) }}</template>
-        </el-table-column>
-        <el-table-column label="涨跌%" width="90" align="right" header-align="right">
-          <template #default="scope">
-            <span :style="{ color: changeColor(scope.row.change_pct) }">{{ formatChangePct(scope.row.change_pct) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="trigger_time" label="时间" width="160" />
-      </el-table>
-    </el-card>
+          <div class="observe-body">
+            <el-card shadow="never" class="merge-card">
+              <template #header>
+                <div class="card-head">
+                  <span class="section-title">关键指数</span>
+                  <span class="hint">东财延时行情</span>
+                </div>
+              </template>
+              <el-table :data="indexRows" stripe size="small" empty-text="暂无指数数据" v-loading="marketLoading" aria-label="关键指数">
+                <el-table-column prop="name" label="名称" min-width="100" />
+                <el-table-column prop="code" label="代码" width="90" />
+                <el-table-column label="最新" width="100" align="right" header-align="right">
+                  <template #default="scope">
+                    {{ scope.row.price == null ? '—' : Number(scope.row.price).toFixed(2) }}
+                  </template>
+                </el-table-column>
+                <el-table-column label="涨跌%" width="90" align="right" header-align="right">
+                  <template #default="scope">
+                    <span :style="{ color: changeColor(scope.row.change_pct) }">
+                      {{ formatChangePct(scope.row.change_pct) }}
+                    </span>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-card>
 
-    <el-card shadow="never" class="merge-card">
-      <template #header>
-        <div class="card-head">
-          <div>
-            <div class="section-title">预警历史</div>
-            <div class="hint">来自 alert_events</div>
+            <el-card shadow="never" class="merge-card">
+              <template #header>
+                <div class="card-head">
+                  <div>
+                    <div class="section-title">自选关注</div>
+                    <div class="hint">额外代码（股票/指数/ETF）；指数可填 secid（如 1.000300）</div>
+                  </div>
+                  <div class="card-actions">
+                    <el-button size="small" @click="addWatchlistRow">添加一行</el-button>
+                    <el-button size="small" type="primary" :loading="watchlistSaving" @click="onSaveWatchlist">保存自选</el-button>
+                  </div>
+                </div>
+              </template>
+              <el-table :data="watchlistDraft" stripe size="small" empty-text="暂无自选，点「添加一行」" aria-label="自选关注">
+                <el-table-column label="代码" min-width="110">
+                  <template #default="scope">
+                    <el-input v-model="scope.row.code" size="small" placeholder="代码" />
+                  </template>
+                </el-table-column>
+                <el-table-column label="名称" min-width="110">
+                  <template #default="scope">
+                    <el-input v-model="scope.row.name" size="small" placeholder="可选" />
+                  </template>
+                </el-table-column>
+                <el-table-column label="secid" min-width="110">
+                  <template #default="scope">
+                    <el-input v-model="scope.row.secid" size="small" placeholder="指数可选" />
+                  </template>
+                </el-table-column>
+                <el-table-column label="行情" width="150" align="right" header-align="right">
+                  <template #default="scope">
+                    <span v-if="quoteForWatch(scope.row.code)">
+                      {{ quoteForWatch(scope.row.code).price == null ? '—' : Number(quoteForWatch(scope.row.code).price).toFixed(2) }}
+                      <span :style="{ color: changeColor(quoteForWatch(scope.row.code).change_pct), marginLeft: '6px' }">
+                        {{ formatChangePct(quoteForWatch(scope.row.code).change_pct) }}
+                      </span>
+                    </span>
+                    <span v-else class="muted">—</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="80" align="center">
+                  <template #default="scope">
+                    <el-button type="danger" link @click="removeWatchlistRow(scope.$index)">删除</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-card>
+
+            <el-card shadow="never" class="merge-card">
+              <template #header>
+                <div class="card-head">
+                  <div>
+                    <div class="section-title">价格预警规则</div>
+                    <div class="hint">
+                      持仓或指数代码，上穿/下穿阈值。同规则默认 {{ alertCooldownMinutes == null ? 240 : alertCooldownMinutes }} 分钟内不重复。
+                    </div>
+                  </div>
+                  <el-button type="primary" size="small" @click="openAlertCreate">添加规则</el-button>
+                </div>
+              </template>
+              <el-table :data="alertRules" stripe size="small" empty-text="暂无规则" aria-label="价格预警规则">
+                <el-table-column label="类型" width="80">
+                  <template #default="scope">{{ scope.row.target_type === 'index' ? '指数' : '持仓' }}</template>
+                </el-table-column>
+                <el-table-column prop="name" label="名称" min-width="110" show-overflow-tooltip />
+                <el-table-column prop="code" label="代码" width="90" />
+                <el-table-column label="条件" width="88">
+                  <template #default="scope">{{ scope.row.condition === 'below' ? '≤ 下穿' : '≥ 上穿' }}</template>
+                </el-table-column>
+                <el-table-column label="阈值" width="100" align="right" header-align="right">
+                  <template #default="scope">{{ Number(scope.row.threshold).toFixed(4) }}</template>
+                </el-table-column>
+                <el-table-column label="启用" width="72" align="center">
+                  <template #default="scope">
+                    <el-switch
+                      :model-value="Number(scope.row.enabled) === 1 || scope.row.enabled === true"
+                      :disabled="!!alertRuleBusy"
+                      @change="onToggleAlertEnabled(scope.row)"
+                    />
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="140" align="center">
+                  <template #default="scope">
+                    <el-button type="primary" link @click="openAlertEdit(scope.row)">编辑</el-button>
+                    <el-button type="danger" link :loading="alertRuleBusy === 'delete:' + scope.row.id" :disabled="!!alertRuleBusy" @click="onDeleteAlertRule(scope.row)">删除</el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </el-card>
+
+            <el-card v-if="triggeredAlerts && triggeredAlerts.length" shadow="never" class="merge-card">
+              <template #header><span class="section-title">最近一次检查触发</span></template>
+              <el-table :data="triggeredAlerts" stripe size="small" aria-label="最近一次检查触发">
+                <el-table-column prop="message" label="说明" min-width="240" show-overflow-tooltip />
+                <el-table-column prop="price" label="触发价" width="100" align="right" header-align="right">
+                  <template #default="scope">{{ Number(scope.row.price).toFixed(4) }}</template>
+                </el-table-column>
+                <el-table-column label="涨跌%" width="90" align="right" header-align="right">
+                  <template #default="scope">
+                    <span :style="{ color: changeColor(scope.row.change_pct) }">{{ formatChangePct(scope.row.change_pct) }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="trigger_time" label="时间" width="160" />
+              </el-table>
+            </el-card>
+
+            <el-card shadow="never" class="merge-card">
+              <template #header>
+                <div class="card-head">
+                  <div>
+                    <div class="section-title">预警历史</div>
+                    <div class="hint">来自 alert_events</div>
+                  </div>
+                  <div class="card-actions">
+                    <el-input
+                      v-model="alertEventCodeFilter"
+                      clearable
+                      placeholder="按代码筛选"
+                      style="width:120px"
+                      size="small"
+                      @keyup.enter="fetchAlertEvents"
+                    />
+                    <el-date-picker
+                      v-model="alertEventStartDate"
+                      type="date"
+                      value-format="YYYY-MM-DD"
+                      placeholder="开始"
+                      size="small"
+                      style="width:130px"
+                    />
+                    <el-date-picker
+                      v-model="alertEventEndDate"
+                      type="date"
+                      value-format="YYYY-MM-DD"
+                      placeholder="结束"
+                      size="small"
+                      style="width:130px"
+                    />
+                    <el-button size="small" :loading="alertEventsLoading" @click="fetchAlertEvents">刷新</el-button>
+                    <el-button size="small" @click="exportAlertEvents">导出</el-button>
+                    <el-button size="small" type="danger" plain :loading="alertClearing" @click="onClearAlertEvents">清空</el-button>
+                  </div>
+                </div>
+              </template>
+              <el-table :data="alertEvents" stripe size="small" empty-text="暂无触发记录" v-loading="alertEventsLoading" aria-label="预警历史">
+                <el-table-column prop="target_code" label="代码" width="90" />
+                <el-table-column prop="message" label="说明" min-width="240" show-overflow-tooltip />
+                <el-table-column label="触发价" width="100" align="right" header-align="right">
+                  <template #default="scope">
+                    {{ scope.row.triggered_price == null ? '—' : Number(scope.row.triggered_price).toFixed(4) }}
+                  </template>
+                </el-table-column>
+                <el-table-column label="阈值" width="90" align="right" header-align="right">
+                  <template #default="scope">
+                    {{ scope.row.threshold == null ? '—' : Number(scope.row.threshold).toFixed(4) }}
+                  </template>
+                </el-table-column>
+                <el-table-column prop="trigger_time" label="时间" width="160" />
+              </el-table>
+            </el-card>
           </div>
-          <div class="card-actions">
-            <el-input
-              v-model="alertEventCodeFilter"
-              clearable
-              placeholder="按代码筛选"
-              style="width:120px"
-              size="small"
-              @keyup.enter="fetchAlertEvents"
-            />
-            <el-date-picker
-              v-model="alertEventStartDate"
-              type="date"
-              value-format="YYYY-MM-DD"
-              placeholder="开始"
-              size="small"
-              style="width:130px"
-            />
-            <el-date-picker
-              v-model="alertEventEndDate"
-              type="date"
-              value-format="YYYY-MM-DD"
-              placeholder="结束"
-              size="small"
-              style="width:130px"
-            />
-            <el-button size="small" :loading="alertEventsLoading" @click="fetchAlertEvents">刷新</el-button>
-            <el-button size="small" @click="exportAlertEvents">导出</el-button>
-            <el-button size="small" type="danger" plain :loading="alertClearing" @click="onClearAlertEvents">清空</el-button>
-          </div>
-        </div>
-      </template>
-      <el-table :data="alertEvents" stripe size="small" empty-text="暂无触发记录" v-loading="alertEventsLoading" aria-label="预警历史">
-        <el-table-column prop="target_code" label="代码" width="90" />
-        <el-table-column prop="message" label="说明" min-width="240" show-overflow-tooltip />
-        <el-table-column label="触发价" width="100" align="right" header-align="right">
-          <template #default="scope">
-            {{ scope.row.triggered_price == null ? '—' : Number(scope.row.triggered_price).toFixed(4) }}
-          </template>
-        </el-table-column>
-        <el-table-column label="阈值" width="90" align="right" header-align="right">
-          <template #default="scope">
-            {{ scope.row.threshold == null ? '—' : Number(scope.row.threshold).toFixed(4) }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="trigger_time" label="时间" width="160" />
-      </el-table>
-    </el-card>
+        </el-collapse-item>
+      </el-collapse>
+    </section>
 
     <el-dialog v-model="alertEditDialog" :title="alertForm.id ? '编辑预警' : '添加预警'" width="460px" destroy-on-close>
       <el-form label-width="88px">
@@ -673,6 +699,9 @@ async function onClearAlertEvents() {
 const alertRuleBusy = ref('');
 const alertRuleSaving = ref(false);
 
+// 第三组「观察与预警」默认收起：空数组 = 全部折叠；里面 5 个区块的功能与请求一个都没删。
+const observeOpen = ref([]);
+
 async function onCheckAlerts() {
   if (alertChecking?.value) return;
   await checkAlerts(false);
@@ -713,32 +742,103 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.merge-grid {
-  display: grid;
-  grid-template-columns: minmax(300px, 1fr) minmax(0, 1.05fr);
-  gap: 14px;
-  margin-bottom: 14px;
-  align-items: start;
+/* 三组区块：① 今天该看什么 ② 我的持仓今天怎么样 ③ 观察与预警（默认收起） */
+.decision-group { margin-bottom: 18px; }
+.decision-group:last-of-type { margin-bottom: 0; }
+.group-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--app-border);
 }
-.merge-pane {
-  min-width: 0;
+.group-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--app-text);
+  letter-spacing: 0.01em;
+}
+.group-hint { font-size: 12px; color: var(--app-soft); }
+.group-block-title { margin-bottom: 8px; }
+/* 折叠标题栏里的组标题：边框交给 el-collapse 自己的分隔线 */
+.group-head.is-in-collapse {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+  width: 100%;
+}
+/* 行情带：一行关键指标 + 一行破线摘要，窄屏横向滚动，信息不裁 */
+.market-band {
   border: 1px solid var(--app-border);
   border-radius: 14px;
   background: var(--app-surface);
-  padding: 14px;
+  padding: 10px 12px;
 }
-.merge-pane-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--app-muted);
-  margin-bottom: 10px;
-  letter-spacing: 0.02em;
+.band-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
 }
-.decision-metrics { margin-bottom: 10px; }
+.band-row + .band-row {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--app-border);
+}
+.band-label { flex: 0 0 auto; font-size: 12.5px; white-space: nowrap; }
+.band-metrics {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  margin-bottom: 0;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  min-width: 0;
+}
+.band-metrics :deep(.ledger-metric) {
+  flex: 0 0 auto;
+  min-width: 120px;
+  min-height: 64px;
+  padding: 8px 10px;
+  border-radius: 10px;
+}
+.band-metrics :deep(.ledger-metric-value) { margin-top: 4px; font-size: 16px; }
+.breach-inline {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 14px;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+}
+.breach-inline li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.breach-text { color: var(--app-text); }
+.decision-collapse { border: none; }
+.decision-collapse :deep(.el-collapse-item__header) {
+  height: auto;
+  min-height: 46px;
+  padding: 6px 2px;
+  border-bottom: 1px solid var(--app-border);
+  background: transparent;
+}
+.decision-collapse :deep(.el-collapse-item__wrap) { border: none; background: transparent; }
+.decision-collapse :deep(.el-collapse-item__content) { padding: 14px 2px 2px; }
+.observe-body .merge-card:last-child { margin-bottom: 0; }
+.decision-metrics { margin-bottom: 0; }
 .decision-headline { margin-bottom: 12px; }
 .merge-card { margin-bottom: 14px; }
-.merge-card.tight { margin-bottom: 12px; }
-.merge-pane .merge-card:last-child { margin-bottom: 0; }
 .highlight-card {
   border-color: color-mix(in srgb, var(--app-primary) 28%, var(--app-border));
   background:
@@ -821,6 +921,8 @@ onMounted(() => {
 }
 .muted { color: var(--app-soft); }
 @media (max-width: 1100px) {
-  .merge-grid { grid-template-columns: 1fr; }
+  .band-row { flex-wrap: wrap; }
+  .band-metrics { width: 100%; }
+  .breach-inline { width: 100%; }
 }
 </style>

@@ -181,31 +181,38 @@
         <el-col :span="6"><el-statistic title="银证转出" :value="Math.abs(cashAudit.bank_out || 0)" :precision="2" prefix="¥" /></el-col>
         <el-col :span="6"><el-statistic title="组合取出" :value="Math.abs(cashAudit.portfolio_out || 0)" :precision="2" prefix="¥" /></el-col>
       </el-row>
-      <div v-if="cashAudit?.unmatched_bank?.length" class="ops-hint" style="margin-bottom: 8px">未配对银证 {{ cashAudit.unmatched_bank_count }} 笔</div>
-      <el-table v-if="cashAudit?.unmatched_bank?.length" :data="cashAudit.unmatched_bank" stripe size="small" style="width: 100%; margin-bottom: 12px" aria-label="未配对银证流水">
-        <el-table-column prop="date" label="日期" width="110" />
-        <el-table-column prop="flow_type" label="类型" width="100" />
-        <el-table-column label="金额" width="130" align="right">
-          <template #default="s"><span class="num-cell">{{ formatMoney(s.row.amount, 2, true) }}</span></template>
-        </el-table-column>
-        <el-table-column prop="remark" label="备注" show-overflow-tooltip />
-      </el-table>
-      <div v-if="cashAudit?.unmatched_portfolio?.length" class="ops-hint" style="margin-bottom: 8px">未配对组合流水 {{ cashAudit.unmatched_portfolio_count }} 笔</div>
-      <el-table v-if="cashAudit?.unmatched_portfolio?.length" :data="cashAudit.unmatched_portfolio" stripe size="small" style="width: 100%" aria-label="未配对组合流水">
-        <el-table-column prop="date" label="日期" width="110" />
-        <el-table-column prop="flow_type" label="类型" width="100" />
-        <el-table-column label="金额" width="130" align="right">
-          <template #default="s"><span class="num-cell">{{ formatMoney(s.row.amount, 2, true) }}</span></template>
-        </el-table-column>
-        <el-table-column prop="remark" label="备注" show-overflow-tooltip />
-      </el-table>
+      <!-- 未配对流水：空数据整块不渲染（别常显两张空表）；有数据时保持原样 -->
+      <template v-if="hasUnmatchedRows">
+        <template v-if="unmatchedBankRows.length">
+          <div class="ops-hint" style="margin-bottom: 8px">未配对银证 {{ cashAudit.unmatched_bank_count || unmatchedBankRows.length }} 笔</div>
+          <el-table :data="unmatchedBankRows" stripe size="small" style="width: 100%; margin-bottom: 12px" aria-label="未配对银证流水">
+            <el-table-column prop="date" label="日期" width="110" />
+            <el-table-column prop="flow_type" label="类型" width="100" />
+            <el-table-column label="金额" width="130" align="right">
+              <template #default="s"><span class="num-cell">{{ formatMoney(s.row.amount, 2, true) }}</span></template>
+            </el-table-column>
+            <el-table-column prop="remark" label="备注" show-overflow-tooltip />
+          </el-table>
+        </template>
+        <template v-if="unmatchedPortfolioRows.length">
+          <div class="ops-hint" style="margin-bottom: 8px">未配对组合流水 {{ cashAudit.unmatched_portfolio_count || unmatchedPortfolioRows.length }} 笔</div>
+          <el-table :data="unmatchedPortfolioRows" stripe size="small" style="width: 100%" aria-label="未配对组合流水">
+            <el-table-column prop="date" label="日期" width="110" />
+            <el-table-column prop="flow_type" label="类型" width="100" />
+            <el-table-column label="金额" width="130" align="right">
+              <template #default="s"><span class="num-cell">{{ formatMoney(s.row.amount, 2, true) }}</span></template>
+            </el-table-column>
+            <el-table-column prop="remark" label="备注" show-overflow-tooltip />
+          </el-table>
+        </template>
+      </template>
     </el-card>
   </PageShell>
 </template>
 
 <script setup>
 import PageShell from '../components/PageShell.vue';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 const {
   dashboard, feeSettings, feeAccounts, activeFeeAccount, newFeeAccountName, feeCategories,
@@ -214,6 +221,20 @@ const {
   updateCash, queryCashFlows, resetCashFlowQuery, addCashFlow, openCashFlowEditDialog, deleteCashFlow,
   cashFlowTagType, formatMoney, fetchCashAudit,
 } = useAppCtx();
+
+// 未配对流水：后端没返回 / 返回空数组时都当空，整块不渲染（生产库 only 几行流水时别常显空表）
+const auditData = () => cashAudit?.value ?? cashAudit ?? null;
+const unmatchedBankRows = computed(() => {
+  const rows = auditData()?.unmatched_bank;
+  return Array.isArray(rows) ? rows : [];
+});
+const unmatchedPortfolioRows = computed(() => {
+  const rows = auditData()?.unmatched_portfolio;
+  return Array.isArray(rows) ? rows : [];
+});
+const hasUnmatchedRows = computed(
+  () => !!(unmatchedBankRows.value.length || unmatchedPortfolioRows.value.length),
+);
 
 // 写操作防连点：模块里没有现成的 loading ref，这里用一个 in-flight 标志包一层。
 // feeBusy 记当前在跑的费率写操作（保存/恢复默认/新增/删除账户），互斥避免并发覆盖同一份费率。
