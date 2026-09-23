@@ -4,7 +4,8 @@
 **不模拟、不自动下单**。草稿确认后才入账。
 
 变更按日见 [CHANGELOG.md](CHANGELOG.md)。VPS 步骤见 [docs/deploy-vps.md](docs/deploy-vps.md)。
-界面规范（token + 逐页区块清单，给 Figma 用）见 [docs/design/figma-handoff.md](docs/design/figma-handoff.md)。
+界面规范与 Figma 上手见 [docs/design/](docs/design/)（`figma-handoff.md` 规范与逐页清单、
+`figma-basics.md` 操作速成、`page-performance-layers.md` 图层树）。
 
 ---
 

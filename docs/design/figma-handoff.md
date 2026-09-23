@@ -1,5 +1,8 @@
 # Figma 重做交接说明
 
+先读这两份再动手：**[figma-basics.md](figma-basics.md)**（Figma 操作速成，只教要用的）、
+**[page-performance-layers.md](page-performance-layers.md)**（「收益与快照」页的图层树，照着搭）。
+
 配套文件：`docs/design/figma-tokens.tokens.json`（颜色 / 圆角 / 间距 / 字阶，含 Light · Dark 两个主题）。
 
 三件事按顺序做：**导 token → 建组件库 → 按区块组装页面**。下面是每一步的输入。
