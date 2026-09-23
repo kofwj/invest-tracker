@@ -84,9 +84,9 @@
           <div class="ov-metric-sub">结构口径，目标和偏离见「结构与目标」</div>
         </div>
         <div class="ov-metric ref">
-          <div class="ov-metric-label"><Activity :size="13" :stroke-width="2" />当日参考（盘中粗估，不入账）</div>
+          <div class="ov-metric-label"><Activity :size="13" :stroke-width="2" />当日参考</div>
           <div class="ov-metric-value" :class="todayContrib >= 0 ? 'up' : 'down'" :title="formatMoney(todayContrib, 2, true)">{{ formatMoney(todayContrib, 2, true) }}</div>
-          <div class="ov-metric-sub">盘中粗估，不入账 · 真账口径看上面的今日盈亏</div>
+          <div class="ov-metric-sub">盘中粗估，不入账</div>
         </div>
       </div>
     </section>

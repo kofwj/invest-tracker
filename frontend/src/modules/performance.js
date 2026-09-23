@@ -46,7 +46,7 @@ const createPerformanceModule = ({
         return 'info';
     });
 
-    /** 普通人核心 3 张卡 + 辅助 */
+    /** 核心 2 张卡：总资产 / 净投入（收益数字由「一句话故事」和收益尺给） */
     const perfPrimaryCards = computed(() => {
         const s = perfSummary.value;
         if (!s) return [];
@@ -56,11 +56,7 @@ const createPerformanceModule = ({
         // 后端在无起点快照且本期之前已有资金时返回 null（期间收益不可知），
         // 此时必须整组回退到全周期口径，否则会出现「本期」标签配全周期数字。
         const isPeriod = !!s.period_start_date && s.period_gain != null;
-        const mainGain = isPeriod ? (s.period_gain ?? s.total_gain) : s.total_gain;
-        const mainGainPct = isPeriod ? (s.period_gain_pct ?? s.total_gain_pct) : s.total_gain_pct;
         const mainNet = isPeriod ? (s.period_net_contribution ?? s.net_contribution) : s.net_contribution;
-
-        const gainColor = (mainGain || 0) >= 0 ? 'var(--app-up)' : 'var(--app-down)';
 
         const cards = [
             {
@@ -73,12 +69,6 @@ const createPerformanceModule = ({
                 label: isPeriod ? '本期净投入' : '累计净投入',
                 value: flowReady ? formatMoney(mainNet) : '待录入',
                 color: flowReady ? 'var(--app-text)' : 'var(--app-warn)',
-            },
-            {
-                label: isPeriod ? '这段时间赚/亏' : '累计总收益',
-                value: flowReady ? formatMoney(mainGain) : '待录入',
-                color: flowReady ? gainColor : 'var(--app-warn)',
-                main: true,
             },
         ];
         return cards;

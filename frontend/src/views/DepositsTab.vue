@@ -21,7 +21,7 @@
     </template>
 
     <!-- 存款总额单独突出（全宽 hero），彻底解决窄卡被 ellipsis 截断的问题；其他 4 个用 cols-4 -->
-    <div class="ledger-metrics deposit-total-row" style="margin-bottom: 4px;">
+    <div class="ledger-metrics" style="margin-bottom: 4px;">
       <MetricCard
         label="存款总额"
         :value="formatMoney(depositSummary.total)"

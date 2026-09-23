@@ -40,8 +40,8 @@
       <!-- 故事聚焦组合层面，个股详细贡献已移至「组合归因与风险」卡片和「持仓明细」 -->
     </el-card>
 
-    <!-- 普通人核心指标（3 张最重要） -->
-    <div class="ledger-metrics cols-3" style="margin-bottom: 8px;">
+    <!-- 核心指标：总资产 / 净投入（收益数字在「一句话故事」与收益尺） -->
+    <div class="ledger-metrics cols-2" style="margin-bottom: 8px;">
       <MetricCard
         v-for="m in perfPrimaryCards"
         :key="m.label"
@@ -78,15 +78,16 @@
           </div>
         </div>
       </div>
-      <div class="ledger-metrics cols-3">
+      <div class="ledger-metrics cols-4">
         <MetricCard
-          label="最近 7 个交易日累计"
+          label="7 日累计"
           :value="monthlyCard.recent7Text"
           :tone="monthlyCard.recent7Tone"
           :title="monthlyCard.recent7Title"
         />
-        <MetricCard label="涨 / 跌 天数（最近 7 个交易日）" :value="monthlyCard.upDownText" />
-        <MetricCard label="最好 / 最差一天（最近 7 个交易日）" :value="monthlyCard.bestWorstText" />
+        <MetricCard label="涨 / 跌 天数" :value="monthlyCard.upDownText" />
+        <MetricCard label="最好一天" :value="monthlyCard.bestText" :tone="monthlyCard.bestTone" :title="monthlyCard.bestWorstTitle" />
+        <MetricCard label="最差一天" :value="monthlyCard.worstText" :tone="monthlyCard.worstTone" :title="monthlyCard.bestWorstTitle" />
       </div>
     </el-card>
 
@@ -240,7 +241,7 @@
           <el-tag size="small">共 {{ perfFlows.length }} 笔</el-tag>
         </div>
       </div>
-      <div v-if="perfFlowSuggestions.length" class="perf-suggest-box" style="margin-bottom:12px;">
+      <div v-if="perfFlowSuggestions.length" style="margin-bottom:12px;">
         <div class="perf-contrib-sub" style="margin-bottom:8px;">建议草稿</div>
         <el-table :data="perfFlowSuggestions" size="small" stripe aria-label="资金流水建议草稿">
           <el-table-column prop="date" label="日期" width="110" />
@@ -365,9 +366,14 @@ const monthlyCard = computed(() => {
       ? `按已有快照的最近 ${s.count} 个交易日累计（已剔除转入/转出）`
       : '还没有可比较的两天快照',
     upDownText: hasRows ? `${s.upDays} / ${s.downDays}` : '—',
-    bestWorstText: s.best && s.worst
-      ? `${s.best.date.slice(5)} ${formatMoney(s.best.change, 2, true)} / ${s.worst.date.slice(5)} ${formatMoney(s.worst.change, 2, true)}`
-      : '—',
+    // 最好/最差拆成两张卡：合成一行有 35 个字符，在 3 列栅格里会被 ellipsis 切掉后半句
+    bestText: s.best ? `${s.best.date.slice(5)} ${formatMoney(s.best.change, 2, true)}` : '—',
+    bestTone: s.best ? (s.best.change >= 0 ? 'up' : 'down') : '',
+    worstText: s.worst ? `${s.worst.date.slice(5)} ${formatMoney(s.worst.change, 2, true)}` : '—',
+    worstTone: s.worst ? (s.worst.change >= 0 ? 'up' : 'down') : '',
+    bestWorstTitle: s.best && s.worst
+      ? `最好 ${s.best.date} ${formatMoney(s.best.change, 2, true)} / 最差 ${s.worst.date} ${formatMoney(s.worst.change, 2, true)}`
+      : '最近 7 个交易日不足两天',
   };
 });
 

@@ -33,7 +33,7 @@
       />
     </div>
 
-    <el-tabs v-model="seg" class="alloc-segments">
+    <el-tabs v-model="seg">
       <el-tab-pane name="overview" label="看现状">
         <el-card shadow="never" class="story-hero merge-card" v-loading="allocationStoryLoading">
           <div class="story-hero-head">
@@ -48,7 +48,7 @@
           </ul>
         </el-card>
 
-        <div class="merge-grid structure-merge">
+        <div class="merge-grid">
           <!-- 左：结构 -->
           <section class="merge-pane">
             <div class="merge-pane-title">当前结构</div>
@@ -140,7 +140,7 @@
       </el-tab-pane>
 
       <el-tab-pane name="target" label="设目标">
-        <div class="merge-grid structure-merge">
+        <div class="merge-grid">
 
           <!-- 右：目标与纪律 -->
           <section class="merge-pane">
@@ -169,7 +169,7 @@
               <div class="hint preset-guard">只改目标与安全带；优先加仓 / 禁开 / 格力上限不动</div>
 
               <div class="gap-list" style="margin-top: 12px;">
-                <div v-for="row in gapRows" :key="row.key" class="gap-row">
+                <div v-for="row in gapRows" :key="row.key">
                   <div class="gap-row-head">
                     <span class="gap-label">{{ row.label }}</span>
                     <span class="gap-nums">
@@ -192,7 +192,7 @@
             </el-card>
 
             <!-- 卫星仓进度：510880 ~6% + 159201 ~4% -->
-            <el-card shadow="never" class="merge-card satellite-card" v-if="satelliteRows.length">
+            <el-card shadow="never" class="merge-card" v-if="satelliteRows.length">
               <template #header>
                 <div>
                   <div class="section-title">卫星仓（红利 + 自由现金流）</div>
@@ -231,7 +231,7 @@
       </el-tab-pane>
 
       <el-tab-pane name="deviation" label="处理偏离">
-        <div class="merge-grid structure-merge">
+        <div class="merge-grid">
           <section class="merge-pane">
 
             <el-card shadow="never" class="merge-card" v-loading="disciplineLoading">
@@ -1031,6 +1031,20 @@ watch(
   font-weight: 500;
 }
 .gap-list { display: grid; gap: 12px; }
+/* 卫星仓进度列表 */
+.satellite-overall { font-size: 13px; margin-bottom: 8px; }
+.satellite-list { display: grid; gap: 12px; }
+.satellite-item { min-width: 0; }
+.satellite-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12.5px;
+  margin-bottom: 4px;
+}
+.satellite-name { font-weight: 600; }
+.satellite-nums { color: var(--app-muted); text-align: right; font-variant-numeric: tabular-nums; }
 .gap-row-head {
   display: flex;
   justify-content: space-between;

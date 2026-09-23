@@ -192,9 +192,11 @@ describe('模板 class 不许「有引用没定义」', () => {
 
     const missing = new Set();
     for (const f of vueFiles) {
+      // 切到 <script> 为止：不能用首个 </template>（嵌套的 <template #header> 会提前截断，
+      // 后面的区块就漏检了 —— 「观察与预警」那行就是这么漏过去的）
       const src = readFileSync(f, 'utf-8');
-      const tplEnd = src.indexOf('</template>');
-      const tpl = tplEnd === -1 ? src : src.slice(0, tplEnd);
+      const scriptAt = src.indexOf('<script');
+      const tpl = scriptAt === -1 ? src : src.slice(0, scriptAt);
       for (const m of tpl.matchAll(/\sclass="([^"]*)"/g)) {
         for (const token of m[1].split(/\s+/).filter(Boolean)) {
           if (!defined.has(token)) missing.add(`${relative(SRC, f)} → .${token}`);

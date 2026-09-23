@@ -12,10 +12,9 @@
     </div>
 
     <!-- ① 今天该看什么：默认展开，第一屏就是结论 -->
-    <section class="decision-group decision-group-today" aria-labelledby="decision-group-today">
+    <section class="decision-group" aria-labelledby="decision-group-today">
       <div class="group-head">
         <h2 id="decision-group-today" class="group-title">今天该看什么</h2>
-        <span class="group-hint">先看结论，再看行情；明细在下面两组</span>
       </div>
 
       <div class="group-block-title section-title">市场与结论</div>
@@ -137,10 +136,9 @@
     </section>
 
     <!-- ② 我的持仓今天怎么样：默认展开 -->
-    <section class="decision-group decision-group-holdings" aria-labelledby="decision-group-holdings">
+    <section class="decision-group" aria-labelledby="decision-group-holdings">
       <div class="group-head">
         <h2 id="decision-group-holdings" class="group-title">我的持仓今天怎么样</h2>
-        <span class="group-hint">本日贡献粗估，先看整体再看个股</span>
       </div>
 
       <el-card shadow="never" class="merge-card">
@@ -173,9 +171,9 @@
     </section>
 
     <!-- ③ 观察与预警：默认收起（el-collapse），功能一个不少 -->
-    <section class="decision-group decision-group-observe" aria-labelledby="decision-group-observe">
+    <section class="decision-group" aria-labelledby="decision-group-observe">
       <el-collapse v-model="observeOpen" class="decision-collapse">
-        <el-collapse-item name="observe" class="decision-collapse-item">
+        <el-collapse-item name="observe">
           <template #title>
             <div class="group-head is-in-collapse">
               <h2 id="decision-group-observe" class="group-title">观察与预警</h2>
@@ -788,6 +786,8 @@ onMounted(() => {
   padding-top: 8px;
   border-top: 1px dashed var(--app-border);
 }
+/* 破线摘要行：和其它行情行区分开 */
+.band-breach { border-left: 3px solid var(--app-warn); padding-left: 10px; }
 .band-label { flex: 0 0 auto; font-size: 12.5px; white-space: nowrap; }
 .band-metrics {
   display: flex;

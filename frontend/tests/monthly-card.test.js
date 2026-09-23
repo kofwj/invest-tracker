@@ -173,7 +173,7 @@ describe('「最近 7 个交易日」卡（原「月度概览」卡）', () => {
     await flush();
 
     const text = monthCardText(host);
-    expect(text).toContain('最近 7 个交易日累计');
+    expect(text).toContain('7 日累计');
     expect(text).toContain(formatMoney(expected.total, 2, true)); // -920.00
     expect(text).toContain(`${expected.upDays} / ${expected.downDays}`); // 4 / 3
     expect(text).toContain(`${expected.best.date.slice(5)} ${formatMoney(expected.best.change, 2, true)}`); // 03-05 +800.00
@@ -213,8 +213,45 @@ describe('「最近 7 个交易日」卡（原「月度概览」卡）', () => {
     await flush();
 
     expect(host.querySelector('.perf-month-card')).toBeTruthy();
-    expect(monthCardText(host)).toContain('最近 7 个交易日累计');
+    expect(monthCardText(host)).toContain('7 日累计');
     expect(monthCardText(host)).toContain('—');
+    app.unmount();
+  });
+
+  it('最好 / 最差拆成两张卡：单卡的值够短，不会被 ellipsis 切掉', async () => {
+    const expected = summarizeDailyPnl(DAILY_ROWS, 7);
+    const { host, app } = mountTab({ dailyRows: DAILY_ROWS, windowCards: [MONTH_CARD] });
+    await flush();
+
+    const cards = [...host.querySelectorAll('.perf-month-card .ledger-metric')];
+    const labelOf = (c) => c.querySelector('.ledger-metric-label').textContent.trim();
+    expect(cards.map(labelOf)).toEqual(['7 日累计', '涨 / 跌 天数', '最好一天', '最差一天']);
+
+    const best = cards.find((c) => labelOf(c) === '最好一天').querySelector('.ledger-metric-value');
+    const worst = cards.find((c) => labelOf(c) === '最差一天').querySelector('.ledger-metric-value');
+    expect(best.textContent).toBe(`${expected.best.date.slice(5)} ${formatMoney(expected.best.change, 2, true)}`);
+    expect(worst.textContent).toBe(`${expected.worst.date.slice(5)} ${formatMoney(expected.worst.change, 2, true)}`);
+    // 值必须短：合成一行是 35 个字符，在栅格里会被 text-overflow: ellipsis 切掉后半句
+    expect(best.textContent.length).toBeLessThanOrEqual(20);
+    expect(worst.textContent.length).toBeLessThanOrEqual(20);
+    expect(best.classList.contains('up')).toBe(true);
+    expect(worst.classList.contains('down')).toBe(true);
+    app.unmount();
+  });
+
+  it('连续下跌时「最好一天」也是负数，用 down 配色（不写死 up）', async () => {
+    const downRows = [
+      { date: '2026-03-04', prevDate: '2026-03-03', change: -300, pct: -0.3, assets: 99000, daysGap: 1, isGap: false },
+      { date: '2026-03-03', prevDate: '2026-03-02', change: -100, pct: -0.1, assets: 99300, daysGap: 1, isGap: false },
+    ];
+    const { host, app } = mountTab({ dailyRows: downRows, windowCards: [MONTH_CARD] });
+    await flush();
+
+    const cards = [...host.querySelectorAll('.perf-month-card .ledger-metric')];
+    const bestCard = cards.find((c) => c.querySelector('.ledger-metric-label').textContent.trim() === '最好一天');
+    const best = bestCard.querySelector('.ledger-metric-value');
+    expect(best.textContent).toContain('03-03');
+    expect(best.classList.contains('down')).toBe(true);
     app.unmount();
   });
 });
