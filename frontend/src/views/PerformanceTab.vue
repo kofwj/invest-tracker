@@ -154,6 +154,10 @@
       </template>
     </el-card>
 
+    <!-- 快照明细：原「资产快照」页（/snapshots）已在分析组 5→3 页收敛时并入本页 -->
+    <div class="perf-section-title" style="margin-bottom: 12px;">快照明细</div>
+    <SnapshotPanel />
+
     <!-- 未录流水强提示 -->
     <el-alert
       v-if="!hasPerfFlows"
@@ -313,6 +317,7 @@
 import PageShell from '../components/PageShell.vue';
 import MetricCard from '../components/MetricCard.vue';
 import SnapshotReminder from '../components/SnapshotReminder.vue';
+import SnapshotPanel from '../components/SnapshotPanel.vue';
 import { ref, computed, onMounted, watch } from 'vue';
 import { ElMessageBox } from 'element-plus';
 import { useAppCtx } from '../composables/useAppCtx.js';

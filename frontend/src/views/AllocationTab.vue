@@ -311,6 +311,12 @@
           </section>
         </div>
 
+        <!-- ③ 段尾：查证用的两块默认收起（上面三块才是"要动手的"） -->
+        <el-collapse v-model="deviationTailOpen" class="deviation-collapse">
+          <el-collapse-item name="category-detail">
+            <template #title>
+              <span class="section-title">细分类别明细（点开看）</span>
+            </template>
         <el-card shadow="never" class="merge-card" header="细分类别明细">
           <el-table :data="allocationAnalysis" stripe size="small" class="allocation-table" style="width: 100%" aria-label="细分类别明细">
             <el-table-column prop="category" label="资产类别" width="110" align="center" header-align="center" fixed="left" />
@@ -349,6 +355,12 @@
             </el-table-column>
           </el-table>
         </el-card>
+
+          </el-collapse-item>
+          <el-collapse-item name="discipline-drafts">
+            <template #title>
+              <span class="section-title">纪律草稿（点开看）</span>
+            </template>
 
         <el-card shadow="never" class="merge-card">
           <template #header>
@@ -395,6 +407,9 @@
             </el-table-column>
           </el-table>
         </el-card>
+
+          </el-collapse-item>
+        </el-collapse>
       </el-tab-pane>
     </el-tabs>
 
@@ -596,6 +611,9 @@ watch(seg, (value) => {
   }
 });
 
+// ③「处理偏离」段尾的两块（细分类别明细 / 纪律草稿）默认收起：先把"要动手的"三块放在最上面，
+// 需要查证细节时再点开。空数组 = 全部收起（el-collapse 的 v-model 就是展开项的 name 列表）。
+const deviationTailOpen = ref([]);
 // 草稿的 确认入账/删除 都是写操作（模块里没有 in-flight 标志），这里包一层防连点：
 // 进行中同一行按钮转圈，其余行按钮禁用。
 const draftBusy = ref('');
@@ -1074,6 +1092,21 @@ watch(
 .range-inputs .el-input-number { width: 120px; }
 .range-sep { color: var(--app-muted); }
 .chart-container { height: 260px; min-height: 220px; width: 100%; }
+/* ③ 段尾折叠（细分类别明细 / 纪律草稿）：默认收起，展开后卡片与段落其它区块同宽 */
+.deviation-collapse {
+  margin-top: 4px;
+  border-top: 0;
+}
+.deviation-collapse :deep(.el-collapse-item__header) {
+  height: auto;
+  min-height: 46px;
+  padding: 6px 2px;
+  border-bottom: 1px solid var(--app-border);
+  background: transparent;
+}
+.deviation-collapse :deep(.el-collapse-item__wrap) { border: none; background: transparent; }
+.deviation-collapse :deep(.el-collapse-item__content) { padding: 14px 2px 2px; }
+.deviation-collapse .merge-card:last-child { margin-bottom: 0; }
 @media (max-width: 960px) {
   .merge-grid { grid-template-columns: 1fr; }
   .preset-row { flex-direction: column; align-items: stretch; }

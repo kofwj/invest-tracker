@@ -65,8 +65,15 @@ describe('导航分组覆盖', () => {
     expect(dup.map(([tab, ids]) => `${tab} → ${ids.join(', ')}`)).toEqual([]);
   });
 
-  it('两个曾经失联的页面确实挂在了分组里', () => {
+  it('曾经失联的页面仍然可达（挂在分组里，或有明确的重定向）', () => {
     expect(groupOf.has('broker'), '券商对账 /broker 又变成孤儿页了').toBe(true);
-    expect(groupOf.has('snapshots'), '资产快照 /snapshots 又变成孤儿页了').toBe(true);
+    // 资产快照 / K线查询：分析组收敛后并入其它页面，只留重定向 —— 老链接仍然可达，
+    // 所以这里检查「重定向登记存在」，而不是「挂在分组里」。
+    expect(LEGACY_TAB_REDIRECT.snapshots, '资产快照 /snapshots 的重定向丢了（老链接会走错页）').toBe('performance');
+    expect(LEGACY_TAB_REDIRECT.klines, 'K线查询 /klines 的重定向丢了').toBe('holdings');
+    // 重定向目标本身必须是能点到的真页面，否则等于把页面藏起来了
+    for (const target of [LEGACY_TAB_REDIRECT.snapshots, LEGACY_TAB_REDIRECT.klines]) {
+      expect(groupOf.has(target), `重定向目标 ${target} 不在任何分组里`).toBe(true);
+    }
   });
 });

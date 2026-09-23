@@ -162,65 +162,75 @@ const pieChartOption = (title, data, t, seriesOpts = {}) => ({
 });
 
 const renderSnapshotChartsView = (snapshots = []) => {
+    // 资产快照页已并入「收益与快照」，其中「总资产趋势」图被去掉了（同一份数据在那一页
+    // 已经有「每日收益」柱状图）。所以这里**不能再要求两个容器同时存在** ——
+    // 否则剩下的「当前资产结构」饼图会跟着一起不画。两个容器各自独立判断。
     const trendDom = document.getElementById('snapshotTrendChart');
     const structDom = document.getElementById('snapshotStructureChart');
-    if (!trendDom || !structDom) return false;
-
-    snapshotTrendChart = ensureChart(snapshotTrendChart, 'snapshotTrendChart');
-    snapshotStructureChart = ensureChart(snapshotStructureChart, 'snapshotStructureChart');
-    if (!snapshotTrendChart || !snapshotStructureChart) return false;
+    if (!trendDom && !structDom) return false;
 
     const t = readTheme();
     const rowsAsc = [...snapshots].sort((a, b) => String(a.date).localeCompare(String(b.date)));
-    const dates = rowsAsc.map((r) => r.date);
-    snapshotTrendChart.setOption({
-        color: [t.primary, t.info, t.down],
-        tooltip: baseTooltip(t, { trigger: 'axis', valueFormatter: (v) => formatMoney(v) }),
-        legend: {
-            top: 0,
-            textStyle: { color: t.muted, fontSize: 11 },
-        },
-        grid: { left: 70, right: 24, top: 48, bottom: 36 },
-        xAxis: {
-            type: 'category',
-            data: dates,
-            axisLabel: { color: t.muted },
-            axisLine: { lineStyle: { color: t.border } },
-        },
-        yAxis: {
-            type: 'value',
-            axisLabel: { color: t.muted, formatter: (v) => `${(v / 10000).toFixed(0)}万` },
-            splitLine: { lineStyle: { color: t.border, type: 'dashed' } },
-        },
-        series: [
-            { name: '总资产', type: 'line', smooth: true, data: rowsAsc.map((r) => r.total_assets) },
-            { name: '投资账户市值', type: 'line', smooth: true, data: rowsAsc.map((r) => r.total_market_value) },
-            {
-                name: '现金+存款+在途',
-                type: 'line',
-                smooth: true,
-                data: rowsAsc.map(
-                    (r) => Number(r.bank_balance || 0) + Number(r.securities_cash || 0) + Number(r.pending_purchase || 0),
-                ),
-            },
-        ],
-    }, true);
 
-    const latest = rowsAsc[rowsAsc.length - 1] || {};
-    const structData = [
-        { name: '投资账户市值', value: Number(latest.total_market_value || 0) },
-        { name: '银行存款', value: Number(latest.bank_balance || 0) },
-        { name: '证券现金', value: Number(latest.securities_cash || 0) },
-        { name: '申购在途', value: Number(latest.pending_purchase || 0) },
-    ].filter((x) => x.value > 0);
+    if (trendDom) {
+        snapshotTrendChart = ensureChart(snapshotTrendChart, 'snapshotTrendChart');
+        if (snapshotTrendChart) {
+            snapshotTrendChart.setOption({
+                color: [t.primary, t.info, t.down],
+                tooltip: baseTooltip(t, { trigger: 'axis', valueFormatter: (v) => formatMoney(v) }),
+                legend: {
+                    top: 0,
+                    textStyle: { color: t.muted, fontSize: 11 },
+                },
+                grid: { left: 70, right: 24, top: 48, bottom: 36 },
+                xAxis: {
+                    type: 'category',
+                    data: rowsAsc.map((r) => r.date),
+                    axisLabel: { color: t.muted },
+                    axisLine: { lineStyle: { color: t.border } },
+                },
+                yAxis: {
+                    type: 'value',
+                    axisLabel: { color: t.muted, formatter: (v) => `${(v / 10000).toFixed(0)}万` },
+                    splitLine: { lineStyle: { color: t.border, type: 'dashed' } },
+                },
+                series: [
+                    { name: '总资产', type: 'line', smooth: true, data: rowsAsc.map((r) => r.total_assets) },
+                    { name: '投资账户市值', type: 'line', smooth: true, data: rowsAsc.map((r) => r.total_market_value) },
+                    {
+                        name: '现金+存款+在途',
+                        type: 'line',
+                        smooth: true,
+                        data: rowsAsc.map(
+                            (r) => Number(r.bank_balance || 0) + Number(r.securities_cash || 0) + Number(r.pending_purchase || 0),
+                        ),
+                    },
+                ],
+            }, true);
+        }
+    }
 
-    snapshotStructureChart.setOption(
-        pieChartOption('资产结构', structData, t, { radius: ['38%', '68%'], center: ['50%', '46%'] }),
-        true,
-    );
+    if (structDom) {
+        snapshotStructureChart = ensureChart(snapshotStructureChart, 'snapshotStructureChart');
+        if (snapshotStructureChart) {
+            const latest = rowsAsc[rowsAsc.length - 1] || {};
+            const structData = [
+                { name: '投资账户市值', value: Number(latest.total_market_value || 0) },
+                { name: '银行存款', value: Number(latest.bank_balance || 0) },
+                { name: '证券现金', value: Number(latest.securities_cash || 0) },
+                { name: '申购在途', value: Number(latest.pending_purchase || 0) },
+            ].filter((x) => x.value > 0);
+
+            snapshotStructureChart.setOption(
+                pieChartOption('资产结构', structData, t, { radius: ['38%', '68%'], center: ['50%', '46%'] }),
+                true,
+            );
+        }
+    }
+
     try {
-        snapshotTrendChart.resize();
-        snapshotStructureChart.resize();
+        snapshotTrendChart?.resize();
+        snapshotStructureChart?.resize();
     } catch (_) { /* ignore */ }
     return true;
 };

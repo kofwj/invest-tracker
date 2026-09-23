@@ -14,7 +14,8 @@ export const TAB_GROUPS = [
     { id: 'home', label: '总览', tabs: ['overview'] },
     { id: 'daily', label: '日常', tabs: ['holdings', 'transactions', 'deposits', 'broker'] },
     // P2 真合并：决策+市场 → decision；配置+纪律 → allocation
-    { id: 'analysis', label: '分析', tabs: ['decision', 'performance', 'snapshots', 'allocation', 'klines'] },
+    // 分析组按"一页只回答一个问题"收敛：收益分析吸收资产快照、K线降级为持仓页弹窗
+    { id: 'analysis', label: '分析', tabs: ['decision', 'performance', 'allocation'] },
     // 原「维护」→「设置」：推送 / 证券账户(费率+现金) / 备份
     { id: 'ops', label: '设置', tabs: ['ops_notify', 'cash', 'ops_backup'] },
 ];
@@ -28,7 +29,7 @@ export const ROUTE_META = {
     deposits: { path: '/deposits', label: '银行存款' },
     cash: { path: '/cash', label: '证券账户' },
     decision: { path: '/decision', label: '今天该看' },
-    performance: { path: '/performance', label: '收益分析' },
+    performance: { path: '/performance', label: '收益与快照' },
     allocation: { path: '/allocation', label: '结构与目标' },
     klines: { path: '/klines', label: 'K线查询' },
     snapshots: { path: '/snapshots', label: '资产快照' },
@@ -43,6 +44,8 @@ export const LEGACY_TAB_REDIRECT = {
     maintenance: 'ops_notify',
     market: 'decision',
     discipline: 'allocation',
+    snapshots: 'performance',
+    klines: 'holdings',
 };
 
 export function tabGroupOf(tab) {

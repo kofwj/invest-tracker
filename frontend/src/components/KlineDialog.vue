@@ -1,10 +1,13 @@
 <template>
-  <PageShell>
-    <template #actions>
-      <el-button size="small" @click="syncAllHoldings" :loading="loading">同步全部持仓 K 线</el-button>
-      <el-button size="small" @click="clearAll">清空</el-button>
-    </template>
-
+  <el-dialog
+    v-model="visible"
+    :title="dialogTitle"
+    width="min(1080px, 94vw)"
+    top="4vh"
+    append-to-body
+    destroy-on-close
+    class="kline-dialog"
+  >
     <div class="kline-page">
       <!-- 代码输入 + 操作 -->
       <div class="kline-controls">
@@ -158,18 +161,35 @@
       </div>
 
       <div v-if="!code && !rows.length" class="kline-hint">
-        输入代码后点击「查询」或从上方持仓快捷选择。数据优先走本地缓存，首次或点「拉取最新」会从网络更新。
+        在持仓明细里点标的名打开即可自动加载；也可以在这里直接输入代码，或从上方持仓快捷里选。数据优先走本地缓存，首次或点「拉取最新」会从网络更新。
       </div>
     </div>
-  </PageShell>
+
+    <template #footer>
+      <el-button size="small" @click="syncAllHoldings" :loading="loading">同步全部持仓 K 线</el-button>
+      <el-button size="small" @click="clearAll">清空</el-button>
+      <el-button size="small" type="primary" @click="visible = false">关闭</el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue';
-import PageShell from '../components/PageShell.vue';
+import { ref, computed, nextTick, onMounted, watch } from 'vue';
 import api from '../api/index.js';
 import { renderKlineChartView, analyzeKlineTrend } from '../charts/index.js';
 import { ElMessage } from 'element-plus';
+
+/**
+ * 从整页 KlineTab 降级来的弹窗组件（决策 D3）：持仓明细里点标的名打开。
+ *  - v-model（defineModel）控制开关，el-dialog 直接绑它；
+ *  - props.code 是「要看哪只」，打开时按它加载；弹窗里的输入框仍可换成别的代码看；
+ *  - destroy-on-close：关掉就把内容 DOM 销毁，下次打开不残留上一只股票；
+ *  - 关掉时再把 script 里的状态（当前 code / rows / loading / error / 体检）清干净。
+ */
+const props = defineProps({
+  code: { type: String, default: '' },
+});
+const visible = defineModel({ type: Boolean, default: false });
 
 const code = ref('');
 const days = ref(120);
@@ -187,7 +207,15 @@ const trend = ref(null);
 const fundProfile = ref(null);
 const fundDividends = ref([]);
 const fundDivSummary = ref(null);
+// 请求令牌：关窗或换代码后到达的旧响应一律丢掉，避免串数据
+const loadToken = ref(0);
 
+const dialogTitle = computed(() => {
+  const c = (code.value || props.code || '').trim();
+  if (!c) return 'K线查询';
+  const hit = holdings.value.find((h) => h && h.code === c);
+  return hit?.name ? `K线查询 · ${hit.name}（${c}）` : `K线查询 · ${c}`;
+});
 const latestDate = computed(() => {
   if (!rows.value.length) return '';
   const last = rows.value[rows.value.length - 1];
@@ -220,16 +248,20 @@ const holderSummary = computed(() => {
   };
 });
 
+/** 持仓快捷标签：第一次打开弹窗时才拉（不打开就不发请求） */
+let holdingsLoaded = false;
 async function loadHoldings() {
+  if (holdingsLoaded) return;
+  holdingsLoaded = true;
   try {
     const res = await api.getHoldings();
     holdings.value = Array.isArray(res.data) ? res.data : (res.data?.items || []);
   } catch (e) {
-    // 静默
+    holdingsLoaded = false; // 静默；下次打开再试
   }
 }
 
-async function loadFundamental(c) {
+async function loadFundamental(c, token = loadToken.value) {
   if (!c) {
     fundCode.value = '';
     fundSections.value = [];
@@ -245,15 +277,17 @@ async function loadFundamental(c) {
   fundSections.value = [];
   try {
     const res = await api.fundamentalCheck(c);
+    if (token !== loadToken.value) return; // 已关窗/换标的，丢掉旧响应
     fundSections.value = res.data?.sections || [];
     fundProfile.value = res.data?.profile || null;
     fundDividends.value = res.data?.dividends || [];
     fundDivSummary.value = res.data?.dividend_summary || null;
     if (res.data?.error) fundError.value = res.data.error;
   } catch (e) {
+    if (token !== loadToken.value) return;
     fundError.value = '体检拉取失败：' + (e?.response?.data?.detail || e?.message || '网络错误');
   } finally {
-    fundLoading.value = false;
+    if (token === loadToken.value) fundLoading.value = false;
   }
 }
 
@@ -263,10 +297,12 @@ async function loadKline() {
     ElMessage.warning('请输入代码');
     return;
   }
+  const token = ++loadToken.value;
   loading.value = true;
   error.value = '';
   try {
     const res = await api.getKlines(c, days.value);
+    if (token !== loadToken.value) return; // 旧响应，不往界面里写
     rows.value = res.data?.rows || [];
     info.value = {
       code: res.data?.code || c,
@@ -276,19 +312,20 @@ async function loadKline() {
     if (res.data?.is_fund) {
       error.value = '场外基金没有K线（无盘中开收高低），只有每日净值，看持仓/净值走势即可';
       trend.value = null;
-      renderChart();
+      await renderChart();
       return;
     }
     if (!rows.value.length) {
       error.value = '本地暂无缓存，点击「拉取最新」从网络获取';
     }
     trend.value = analyzeKlineTrend(rows.value);
-    renderChart();
-    loadFundamental(c);
+    await renderChart();
+    await loadFundamental(c, token);
   } catch (e) {
+    if (token !== loadToken.value) return;
     error.value = '加载失败：' + (e?.response?.data?.detail || e?.message || '未知错误');
   } finally {
-    loading.value = false;
+    if (token === loadToken.value) loading.value = false;
   }
 }
 
@@ -336,13 +373,16 @@ function onDaysChange() {
   }
 }
 
-function renderChart() {
+async function renderChart() {
+  // 弹窗内容随 destroy-on-close 重新挂载，等一帧再画，别在 DOM 还没上来时把图丢了
+  for (let i = 0; i < 3 && !chartEl.value; i += 1) await nextTick();
   if (chartEl.value) {
     renderKlineChartView(chartEl.value, rows.value);
   }
 }
 
 function clearAll() {
+  loadToken.value += 1; // 丢弃在飞的响应
   code.value = '';
   rows.value = [];
   info.value = null;
@@ -354,8 +394,45 @@ function clearAll() {
   }
 }
 
-onMounted(() => {
+/** 关闭时清空：下次打开不会先闪一下上一只股票的数据 */
+function resetState() {
+  loadToken.value += 1; // 丢弃在飞的响应
+  loading.value = false;
+  code.value = '';
+  rows.value = [];
+  info.value = null;
+  error.value = '';
+  trend.value = null;
+  fundLoading.value = false;
+  loadFundamental('');
+}
+
+/** 打开即加载：先清空，再用传入的 code 拉 K 线与体检 */
+async function openWith(c) {
+  resetState();
   loadHoldings();
+  const target = String(c || '').trim();
+  // 没传标的（例如从别处直接打开）就停在空态，等用户在输入框里填
+  if (!target) return;
+  code.value = target;
+  await nextTick(); // 等 el-dialog 把内容挂上（destroy-on-close 后是新 DOM）
+  await loadKline();
+}
+
+// 开关与 code 一起看：打开时按传入的 code 加载，开着的时候换 code 也重新加载，
+// 关掉时清空状态。合成一个 watcher 是为了避免「关窗后点另一行」时
+// visible 和 code 同 tick 变化触发两次加载。
+watch([visible, () => props.code], ([vis, c], [prevVis, prevCode]) => {
+  if (!vis) {
+    resetState();
+    return;
+  }
+  if (!prevVis || c !== prevCode) openWith(c);
+});
+
+onMounted(() => {
+  // 父组件用 v-if 惰性挂载时，挂载的这一刻 visible 可能已经是 true
+  if (visible.value) openWith(props.code);
 });
 </script>
 

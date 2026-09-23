@@ -513,9 +513,10 @@ const todoItems = computed(() => {
       tone: 'warn',
       title: `今日快照未记录（最新 ${d.latest_snapshot_date || '暂无'}）`,
       hint: '逐日收益靠它，补一条再收工',
-      action: '去资产快照',
+      action: '去收益与快照',
       run: () => {
-        if (typeof goTab === 'function') goTab('snapshots');
+        // 资产快照页已并入「收益与快照」（快照明细在那里）
+        if (typeof goTab === 'function') goTab('performance');
       },
     });
   }

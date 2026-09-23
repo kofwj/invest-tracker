@@ -14,7 +14,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createApp, h, provide, inject, computed, ref } from 'vue';
 import { APP_CTX_KEY } from '../src/composables/useAppCtx.js';
 import CashTab from '../src/views/CashTab.vue';
-import SnapshotsTab from '../src/views/SnapshotsTab.vue';
+import SnapshotPanel from '../src/components/SnapshotPanel.vue';
 import BackupOpsTab from '../src/views/BackupOpsTab.vue';
 import PerformanceTab from '../src/views/PerformanceTab.vue';
 
@@ -214,9 +214,9 @@ describe('CashTab 写按钮防连点', () => {
   });
 });
 
-// ----------------------------------------------------------- SnapshotsTab
+// ------------------------------- SnapshotPanel（原 SnapshotsTab，已并入「收益与快照」页）
 
-describe('SnapshotsTab 写按钮防连点', () => {
+describe('SnapshotPanel 写按钮防连点', () => {
   it('「压缩历史快照」连点两次只调 compactSnapshots 一次', async () => {
     const pending = deferred();
     const ctx = {
@@ -238,10 +238,19 @@ describe('SnapshotsTab 写按钮防连点', () => {
       formatMoney,
       pct: (a, b) => (b ? `${(Number(a || 0) / Number(b) * 100).toFixed(1)}%` : '—'),
     };
-    const { host, app } = mountView(SnapshotsTab, ctx);
+    const { host, app } = mountView(SnapshotPanel, ctx);
     await flush();
     const btn = findButton(host, '压缩历史快照');
     expect(btn).toBeTruthy();
+    // 组件化后不再有 PageShell 外壳，但内的四个区块必须都还在（原来靠整页挂载隐含覆盖）
+    expect(host.innerHTML).toContain('人工对账（实盘核对）');
+    expect(host.innerHTML).toContain('快照历史记录');
+    expect(host.innerHTML).toContain('区间变化明细');
+    expect(host.querySelector('[aria-label="快照历史记录"]')).toBeTruthy();
+    expect(host.querySelector('[aria-label="区间变化明细"]')).toBeTruthy();
+    // 决策 D4：组件里不再有「总资产趋势」图
+    expect(host.innerHTML).not.toContain('总资产趋势');
+    expect(host.querySelector('#snapshotTrendChart')).toBeNull();
 
     click(btn);
     click(btn);
@@ -280,7 +289,7 @@ describe('SnapshotsTab 写按钮防连点', () => {
       formatMoney,
       pct: () => '—',
     };
-    const { host, app } = mountView(SnapshotsTab, ctx);
+    const { host, app } = mountView(SnapshotPanel, ctx);
     await flush();
     const btn = findButton(host, '记录/更新今日快照');
 
@@ -471,7 +480,7 @@ describe('PerformanceTab 每日收益的价格新鲜度标记', () => {
 
 // ----------------------------------------------------------- SnapshotsTab 409
 
-describe('SnapshotsTab 记录今日快照的 409 闸门', () => {
+describe('SnapshotPanel 记录今日快照的 409 闸门', () => {
   const snapCtx = (createSnapshot) => ({
     snapshots: ref([]),
     snapshotRange: ref([]),
@@ -502,7 +511,7 @@ describe('SnapshotsTab 记录今日快照的 409 闸门', () => {
       return {};
     });
     const ctx = snapCtx(createSnapshot);
-    const { host, app } = mountView(SnapshotsTab, ctx);
+    const { host, app } = mountView(SnapshotPanel, ctx);
     await flush();
 
     click(findButton(host, '记录/更新今日快照'));
@@ -527,7 +536,7 @@ describe('SnapshotsTab 记录今日快照的 409 闸门', () => {
       return {};
     });
     const ctx = snapCtx(createSnapshot);
-    const { host, app } = mountView(SnapshotsTab, ctx);
+    const { host, app } = mountView(SnapshotPanel, ctx);
     await flush();
 
     click(findButton(host, '记录/更新今日快照'));

@@ -23,7 +23,9 @@
       <el-table-column label="标的" min-width="148" fixed="left" align="left" header-align="left">
         <template #default="scope">
           <div class="asset-cell">
-            <div class="asset-cell-name">{{ scope.row.name }}</div>
+            <div class="asset-cell-name">
+              <el-button link class="asset-name-link" :title="`查看 ${scope.row.name} 的 K 线与基本面`" @click.stop="openKline(scope.row)">{{ scope.row.name }}</el-button>
+            </div>
             <div class="asset-cell-code">{{ scope.row.code }} · {{ scope.row.category || '未分类' }}</div>
           </div>
         </template>
@@ -135,6 +137,8 @@
       </el-table-column>
     </el-table>
 
+    <!-- K线弹窗（决策 D3：从「分析」组整页降级成点标的名打开；v-if 惰性挂载，没点过就不渲染） -->
+    <KlineDialog v-if="klineMounted" v-model="klineVisible" :code="klineCode" />
   </PageShell>
 </template>
 
@@ -142,6 +146,7 @@
 import { computed, ref } from 'vue';
 import PageShell from '../components/PageShell.vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import KlineDialog from '../components/KlineDialog.vue';
 import api from '../api/index.js';
 import { useAppCtx } from '../composables/useAppCtx.js';
 import HomeDashboard from '../components/HomeDashboard.vue';
@@ -205,6 +210,19 @@ const manualPriceCodes = computed(() => {
 function isManualPrice(code) {
   return manualPriceCodes.value.includes(code);
 }
+
+// K线弹窗（决策 D3）：第一列标的名称点开看 K 线 / 走势解读 / 基本面。
+// 只把 code 传进去，加载时机交给弹窗自己（打开即加载，关掉即释放）。
+const klineVisible = ref(false);
+const klineCode = ref('');
+// 惰性挂载：没点过标的名就不渲染弹窗内容，持仓页首次渲染不被弹窗里的东西拖累
+const klineMounted = ref(false);
+
+function openKline(row) {
+  klineCode.value = row?.code || '';
+  klineMounted.value = true;
+  klineVisible.value = true;
+}
 </script>
 
 <style scoped>
@@ -222,5 +240,19 @@ function isManualPrice(code) {
 }
 .manual-price-tag {
   margin-left: 6px;
+}
+.asset-name-link {
+  /* 名称原本是普通文字，改成 link 按钮后要吃掉 el-button 的默认排版 */
+  padding: 0;
+  height: auto;
+  font-size: inherit;
+  font-weight: 650;
+  color: var(--app-text);
+  vertical-align: baseline;
+}
+.asset-name-link:hover {
+  color: var(--app-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 </style>

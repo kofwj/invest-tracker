@@ -44,7 +44,8 @@ test -f frontend/src/components/AppHeader.vue
 test -f frontend/src/components/HomeDashboard.vue
 test -f frontend/src/components/AppDialogs.vue
 test -f frontend/src/components/LoginOverlay.vue
-test -f frontend/src/views/SnapshotsTab.vue
+# 分析组收敛后「资产快照」并入「收益与快照」：这里断言"已并入"，而不是"文件还在"
+grep -q '快照明细' frontend/src/views/PerformanceTab.vue
 test -f frontend/src/views/AllocationTab.vue
 test -f frontend/src/views/PerformanceTab.vue
 test -f frontend/src/views/DecisionTab.vue

@@ -659,13 +659,14 @@ const app = createApp({
                 refreshDiscipline();
                 fetchAllocationStory();
             }
-            if (val === 'performance') fetchPerformance();
+            // 「收益与快照」= 原来的收益分析 + 资产快照两页合并，进这一页要拉两边的数据
+            if (val === 'performance') {
+                fetchPerformance();
+                fetchSnapshots().then(() => nextTick(renderSnapshotCharts));
+            }
             // 首页第一段要用「今日盈亏/本月/今年」，那几张卡的数据来自 performance 模块：
             // 停在总览时也拉一次（silent：不在首页弹「收益分析已刷新」），否则一直显示「—」。
             if (val === 'overview') fetchPerformance({ silent: true });
-            if (val === 'snapshots') {
-                fetchSnapshots().then(() => nextTick(renderSnapshotCharts));
-            }
             if (val === 'ops_notify' || val === 'maintenance') {
                 fetchNotifyPanel();
             }
@@ -698,7 +699,7 @@ const app = createApp({
         const refreshCurrentTab = async () => {
             const tab = activeTab.value;
             const jobs = [fetchData()];
-            if (tab === 'performance') jobs.push(fetchPerformance());
+            if (tab === 'performance') jobs.push(fetchPerformance(), fetchSnapshots().then(() => nextTick(renderSnapshotCharts)));
             if (tab === 'decision') jobs.push(refreshMarket(), refreshDiscipline());
             if (tab === 'allocation') {
                 jobs.push(
@@ -707,7 +708,6 @@ const app = createApp({
                     fetchDisciplineDrafts().then(() => nextTick(renderAllocationCharts)),
                 );
             }
-            if (tab === 'snapshots') jobs.push(fetchSnapshots().then(() => nextTick(renderSnapshotCharts)));
             if (tab === 'transactions') jobs.push(queryTransactions());
             if (tab === 'cash') jobs.push(queryCashFlows());
             if (tab === 'broker') jobs.push(fetchBrokerHistory());

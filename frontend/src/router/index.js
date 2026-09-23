@@ -11,15 +11,16 @@ const loaders = {
     decision: () => import('../views/DecisionTab.vue'),
     performance: () => import('../views/PerformanceTab.vue'),
     allocation: () => import('../views/AllocationTab.vue'),
-    klines: () => import('../views/KlineTab.vue'),
-    snapshots: () => import('../views/SnapshotsTab.vue'),
     ops_notify: () => import('../views/NotifyOpsTab.vue'),
     ops_backup: () => import('../views/BackupOpsTab.vue'),
 };
 
+// 分析组收敛后：snapshots 并入 performance、klines 降级成持仓页弹窗，两者只留重定向；
+// market / discipline 同理（P2 已合并）
+const REDIRECT_ONLY = ['market', 'discipline', 'snapshots', 'klines'];
+
 const routes = Object.entries(ROUTE_META)
-    // market / discipline 用 redirect，不再挂独立页
-    .filter(([name]) => name !== 'market' && name !== 'discipline')
+    .filter(([name]) => !REDIRECT_ONLY.includes(name))
     .map(([name, meta]) => ({
         path: meta.path,
         name,
@@ -41,6 +42,16 @@ routes.push({
 routes.push({
     path: '/discipline',
     redirect: { name: 'allocation' },
+});
+
+// 分析组收敛：资产快照并入「收益与快照」、K线查询降级为持仓页弹窗
+routes.push({
+    path: '/snapshots',
+    redirect: { name: 'performance' },
+});
+routes.push({
+    path: '/klines',
+    redirect: { name: 'holdings' },
 });
 
 routes.push({

@@ -278,10 +278,11 @@ describe('OverviewTab 待办聚合', () => {
 
     const item = todoItems(host).find((b) => b.textContent.includes('今日快照'));
     expect(item).toBeTruthy();
-    expect(item.textContent).toContain('去资产快照');
+    // 资产快照页已并入「收益与快照」（快照明细在那里），所以待办跳的是 performance
+    expect(item.textContent).toContain('去收益与快照');
 
     item.click();
-    expect(ctx.goTab).toHaveBeenCalledWith('snapshots');
+    expect(ctx.goTab).toHaveBeenCalledWith('performance');
     // 收盘提示组件全页最多出现一次（页面顶部那一条）
     expect(host.querySelectorAll('.snapshot-reminder').length).toBeLessThanOrEqual(1);
     app.unmount();

@@ -49,16 +49,19 @@ describe('PageShell 一行式页头', () => {
     const labels = [...host.querySelectorAll('.page-tab')].map((b) => b.textContent.trim());
     expect(labels).toEqual(analysisTabs.map((t) => tabLabel(t)));
     const active = host.querySelector('.page-tab.active');
-    expect(active.textContent.trim()).toBe('收益分析');
+    expect(active.textContent.trim()).toBe('收益与快照');
     app.unmount();
   });
 
-  it('资产快照出现在「分析」组的 tab 里，点了能跳过去', () => {
+  it('资产快照已并入「收益与快照」：不再是独立 tab，点它跳 performance', () => {
     const { host, app, goTab } = mountShell();
     const labels = [...host.querySelectorAll('.page-tab')].map((b) => b.textContent.trim());
-    expect(labels).toContain('资产快照');
-    host.querySelectorAll('.page-tab')[labels.indexOf('资产快照')].click();
-    expect(goTab).toHaveBeenCalledWith('snapshots');
+    // 分析组收敛：资产快照并入收益与快照、K 线降级为持仓页弹窗
+    expect(labels).not.toContain('资产快照');
+    expect(labels).not.toContain('K线查询');
+    expect(labels).toContain('收益与快照');
+    host.querySelectorAll('.page-tab')[labels.indexOf('收益与快照')].click();
+    expect(goTab).toHaveBeenCalledWith('performance');
     app.unmount();
   });
 
@@ -66,7 +69,7 @@ describe('PageShell 一行式页头', () => {
     const { host, app } = mountShell();
     const h1 = host.querySelector('h1');
     expect(h1).toBeTruthy();
-    expect(h1.textContent.trim()).toBe('收益分析');
+    expect(h1.textContent.trim()).toBe('收益与快照');
     expect(h1.className).toContain('visually-hidden');
     app.unmount();
   });

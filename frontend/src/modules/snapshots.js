@@ -112,8 +112,10 @@ const createSnapshotsModule = ({
 
     const renderSnapshotCharts = async () => {
         const { renderSnapshotChartsView: render, waitForChartDom } = await import('../charts/index.js');
-        // lazy tab + 异步组件：容器可能尚未挂载
-        const ready = await waitForChartDom(['snapshotTrendChart', 'snapshotStructureChart']);
+        // lazy tab + 异步组件：容器可能尚未挂载。
+        // 注意只等「资产结构」那个容器：总资产趋势图在资产快照页并入「收益与快照」时被去掉了，
+        // 继续等它只会白等 2.5s 超时（而且 renderSnapshotChartsView 现在对缺失容器是容忍的）。
+        const ready = await waitForChartDom(['snapshotStructureChart']);
         if (!ready) return;
         await new Promise((r) => requestAnimationFrame(() => r()));
         render(snapshots.value);
@@ -163,7 +165,8 @@ const createSnapshotsModule = ({
                 snapshotSummary.value = null;
             }
             buildSnapshotAnalysis();
-            if (activeTab.value === 'snapshots') nextTick(renderSnapshotCharts);
+            // 快照明细现在长在「收益与快照」（performance）页里，不再是独立 tab
+            if (activeTab.value === 'performance') nextTick(renderSnapshotCharts);
         } catch (e) { console.error('获取快照失败', e); }
         fetchReconcile();
     };
