@@ -58,6 +58,13 @@
 - `layout-static`：新增「模板 class 必须有样式定义」，切片改用 `<script>` 边界。
 - 前端 171 项、后端 259 项；`make check` 全绿。
 
+### 界面规范文档（给 Figma 用）
+
+新增 `docs/design/figma-tokens.tokens.json`（颜色 / 圆角 / 间距 / 字阶，Light · Dark 两个主题，
+可直接导进 Tokens Studio 再导出 Figma Variables）与 `docs/design/figma-handoff.md`
+（逐页区块清单、组件变体矩阵、需要收敛的字号 12→7 / 圆角 7→6 / 断点 12→3）。
+纯文档，不进构建产物，未重新部署。
+
 ---
 
 ## [未发布 · 第十轮] — 分析组收敛：5 页 → 3 页
