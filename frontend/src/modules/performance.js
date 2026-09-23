@@ -229,14 +229,18 @@ const createPerformanceModule = ({
      * 快照是每天定时任务写一条，所以逐日列表天然只到昨天为止——用户打开收益分析
      * 最想看的恰好是"今天赚了多少"。这里用 /performance/windows 的今天窗口补一行：
      * 它的基准是昨天收盘快照，口径与逐日行一致（同样已剔除外部投入/取出）。
-     * 基准不是昨天时（stale）也照常给出，但把基准日期带出去让界面标注。
+     *
+     * 今天已经有快照时返回 null：那条正式快照就是今天这一行，不能再补一行重复的
+     * （16:40 定时任务跑完就会出现这种情况）。
      */
     const perfTodayRow = computed(() => {
+        const today = todayLocalIso();
+        if (perfLatestSnapshotDate.value === today) return null;
         const win = (perfWindows.value || []).find((x) => x && x.key === 'today');
         if (!win || win.gain == null) return null;
         const staleDays = win.stale_days == null ? null : Number(win.stale_days);
         return {
-            date: todayLocalIso(),
+            date: today,
             prevDate: win.start_date || null,
             change: Number(win.gain),
             pct: win.gain_pct == null ? null : Number(win.gain_pct),
