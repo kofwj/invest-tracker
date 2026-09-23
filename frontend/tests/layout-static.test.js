@@ -171,3 +171,44 @@ describe('总览页指标栅格', () => {
     expect(small).toMatch(/\.ov-metric\.main\s*\{\s*grid-column:\s*auto/);
   });
 });
+
+/**
+ * 模板 class 不许「有引用没定义」。
+ *
+ * 起因两条，都是构建不报错、宽屏下也不显眼的问题：
+ *  1) `SnapshotPanel` 的人工对账结果区用了 .reconcile-grid / -result / -line / -label /
+ *     -muted / -empty 六个 class，样式表里一条都没有 →
+ *     被当成普通 div 挤成一行，标签和数字之间毫无分隔；
+ *  2) `KlineDialog` 里的 .cx-k 是死标记（.cx-kv 有样式、它的标签没有）。
+ * 这类问题只有肉眼在窄屏上盯才看得见，所以静态钉住：写了 class 就要么有定义、要么删掉。
+ *
+ * 只检查静态 class="…"：`:class` 绑定的名字来自数据，静态分析判不了。
+ */
+describe('模板 class 不许「有引用没定义」', () => {
+  it('src 下每个 <template> 里静态写的 class 都能在 styles.css 或某个 style 块里找到定义', () => {
+    const vueFiles = walk(SRC, '.vue');
+    const cssText = readFileSync(CSS_FILE, 'utf-8');
+    const scoped = [];
+    for (const f of vueFiles) {
+      const src = readFileSync(f, 'utf-8');
+      const i = src.indexOf('<style');
+      if (i !== -1) scoped.push(src.slice(i));
+    }
+    const defined = new Set(
+      [...[cssText, ...scoped].join('\n').matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)].map((m) => m[1]),
+    );
+
+    const missing = new Set();
+    for (const f of vueFiles) {
+      const src = readFileSync(f, 'utf-8');
+      const tplEnd = src.indexOf('</template>');
+      const tpl = tplEnd === -1 ? src : src.slice(0, tplEnd);
+      for (const m of tpl.matchAll(/\sclass="([^"]*)"/g)) {
+        for (const token of m[1].split(/\s+/).filter(Boolean)) {
+          if (!defined.has(token)) missing.add(`${relative(SRC, f)} → .${token}`);
+        }
+      }
+    }
+    expect([...missing].sort(), '这些 class 没有任何样式定义：要么补样式，要么把死标记删掉').toEqual([]);
+  });
+});

@@ -264,6 +264,28 @@ async function onCompactSnapshots() {
 
 <style scoped>
 .snapshot-panel { display: block; }
+/* 人工对账结果区：.reconcile-grid / -result / -line / -label / -muted / -empty
+   这几个 class 之前只有模板在用，样式表里一条都没有 —— 「实盘总资产 / 当日计算快照 / 误差」
+   于是被当成普通 div 挤在一行、标签和数字之间没有分隔。这里补齐（含深色主题变量）。 */
+.reconcile-grid { margin-bottom: 4px; }
+.reconcile-result {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--app-surface) 94%, var(--app-muted));
+}
+.reconcile-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.reconcile-label { color: var(--app-muted); font-size: 13px; }
+.reconcile-muted { font-size: 12.5px; color: var(--app-muted); }
+.reconcile-empty { color: var(--app-muted); font-size: 13px; padding: 6px 2px; }
 .reconcile-form-row { display: flex; gap: 20px; flex-wrap: wrap; }
 .reconcile-form-row > :deep(.el-form-item) { flex: 1 1 220px; min-width: 0; margin-bottom: 18px; }
 /* 原 PageShell 的 #actions 槽位：日期范围 + 三个写操作按钮 */

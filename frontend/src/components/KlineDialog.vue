@@ -6,7 +6,6 @@
     top="4vh"
     append-to-body
     destroy-on-close
-    class="kline-dialog"
   >
     <div class="kline-page">
       <!-- 代码输入 + 操作 -->
@@ -81,15 +80,15 @@
         <div class="cx-profile">
           <div class="cx-name">{{ fundProfile.name }} <span v-if="fundProfile.short_name" class="cx-short">({{ fundProfile.short_name }})</span></div>
           <div class="cx-kv">
-            <span class="cx-k">行业</span><b>{{ fundProfile.industry || '—' }}</b>
-            <span class="cx-k">法人</span><b>{{ fundProfile.legal_rep || '—' }}</b>
-            <span class="cx-k">上市</span><b>{{ fundProfile.listed || '—' }}</b>
-            <span class="cx-k">成立</span><b>{{ fundProfile.founded || '—' }}</b>
+            <span>行业</span><b>{{ fundProfile.industry || '—' }}</b>
+            <span>法人</span><b>{{ fundProfile.legal_rep || '—' }}</b>
+            <span>上市</span><b>{{ fundProfile.listed || '—' }}</b>
+            <span>成立</span><b>{{ fundProfile.founded || '—' }}</b>
           </div>
           <div v-if="fundProfile.main_biz" class="cx-biz">主营：{{ fundProfile.main_biz }}</div>
           <div class="cx-kv">
-            <span class="cx-k">市场</span><b>{{ fundProfile.market || '—' }}</b>
-            <span class="cx-k">官网</span><b>{{ fundProfile.website || '—' }}</b>
+            <span>市场</span><b>{{ fundProfile.market || '—' }}</b>
+            <span>官网</span><b>{{ fundProfile.website || '—' }}</b>
           </div>
         </div>
 
@@ -568,10 +567,12 @@ onMounted(() => {
   color: var(--app-muted);
   font-size: 12px;
 }
+/* gap 原来横竖都是 16px：标签→数值 和 数值→下一个标签 一样宽，
+   「行业 银行 法人 张某」看不出哪两个是一对。收紧配对、拉开组间距。 */
 .cx-kv {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 16px;
+  gap: 6px 4px;
   font-size: 12px;
   color: var(--app-muted);
 }
@@ -579,6 +580,7 @@ onMounted(() => {
   color: var(--app-text);
   font-weight: 600;
   margin-left: 2px;
+  margin-right: 14px;
 }
 .cx-biz {
   font-size: 13px;
