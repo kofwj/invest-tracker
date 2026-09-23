@@ -341,7 +341,15 @@ const createPerformanceModule = ({
     // 个 Promise，避免后到的响应覆盖先到的（表现为"刷新了但数字又跳回去"）。
     const perfInFlight = new Map();
 
-    async function fetchPerformance() {
+    /**
+     * 拉取收益分析的全部数据。
+     *
+     * @param {{silent?: boolean}} [options] silent=true 时不弹「收益分析已刷新」的成功提示
+     *   —— 首页（总览）也会调它来喂「今日盈亏/本月/今年」，那边不该弹收益分析的提示。
+     *   失败提示不受 silent 影响，始终提示。
+     */
+    async function fetchPerformance(options = {}) {
+        const silent = options?.silent === true;
         perfLoading.value = true;
         const q = timelineQuery();
         const key = JSON.stringify(q);
@@ -378,7 +386,7 @@ const createPerformanceModule = ({
                 console.error('fetchPerformance', firstErr?.reason);
                 showSyncNotice(`收益分析部分刷新失败（${failed.join('、')}）：${detail}`, 'error');
             } else {
-                showSyncNotice('收益分析已刷新', 'success');
+                if (!silent) showSyncNotice('收益分析已刷新', 'success');
             }
             return { failed: failed.length };
         })()

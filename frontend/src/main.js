@@ -659,6 +659,9 @@ const app = createApp({
                 fetchAllocationStory();
             }
             if (val === 'performance') fetchPerformance();
+            // 首页第一段要用「今日盈亏/本月/今年」，那几张卡的数据来自 performance 模块：
+            // 停在总览时也拉一次（silent：不在首页弹「收益分析已刷新」），否则一直显示「—」。
+            if (val === 'overview') fetchPerformance({ silent: true });
             if (val === 'snapshots') {
                 fetchSnapshots().then(() => nextTick(renderSnapshotCharts));
             }
@@ -675,6 +678,14 @@ const app = createApp({
                 fetchBrokerHistory();
             }
         });
+
+        // 首屏就落在总览时，上面的 watch 不会触发 → 等路由就绪后补拉一次，
+        // 否则首页第一段那几张卡会一直显示「—」。
+        if (typeof router.isReady === 'function') {
+            router.isReady().then(() => {
+                if (activeTab.value === 'overview') fetchPerformance({ silent: true });
+            });
+        }
 
         /**
          * 顶栏「刷新」= 刷新「当前页」。
