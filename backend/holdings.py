@@ -47,6 +47,8 @@ def __getattr__(name):
     market_names = {
         "eastmoney_sec_id",
         "fetch_eastmoney_prices",
+        "fetch_stock_quotes",
+        "fetch_tencent_quotes",
         "fetch_open_fund_nav",
         "calculate_trailing_return_1y",
         "ensure_holding_return_columns",

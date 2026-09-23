@@ -12,14 +12,14 @@ try:
     from .database import LOCAL_TZ, db_session
     from .holding_calculator import infer_category, recalc_holdings, validate_holding_history
     from .return_sync import calculate_trailing_return_1y, ensure_holding_return_columns
-    from .price_sync import fetch_eastmoney_prices, fetch_open_fund_nav
+    from .price_sync import fetch_stock_quotes, fetch_open_fund_nav
 except ImportError:
     from cash import set_setting
     from csv_utils import create_safety_backup
     from database import LOCAL_TZ, db_session
     from holding_calculator import infer_category, recalc_holdings, validate_holding_history
     from return_sync import calculate_trailing_return_1y, ensure_holding_return_columns
-    from price_sync import fetch_eastmoney_prices, fetch_open_fund_nav
+    from price_sync import fetch_stock_quotes, fetch_open_fund_nav
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -245,11 +245,12 @@ def _sync_prices_impl(backup: bool = False):
     now = datetime.now(LOCAL_TZ).replace(tzinfo=None)
 
     codes = [row["code"] for row in rows]
-    em_prices = {}
+    # 东财优先、腾讯兜底；返回完整报价（含 source），下面按标的标出来源
+    stock_quotes = {}
     try:
-        em_prices = fetch_eastmoney_prices(codes)
+        stock_quotes = fetch_stock_quotes(codes)
     except Exception as e:
-        logger.error(f"Eastmoney batch price sync failed: {e}")
+        logger.error(f"stock quote batch sync failed: {e}")
 
     # 阶段 2（纯网络）：把新价/来源/计数全部算到内存，不碰 DB。
     # 注意场外基金逐只调 fetch_open_fund_nav，以前这段是在写事务里的。
@@ -269,8 +270,10 @@ def _sync_prices_impl(backup: bool = False):
                 price = fetch_open_fund_nav(code)
                 source = "天天基金净值"
             else:
-                price = em_prices.get(lookup_code)
-                source = "东方财富行情"
+                quote = stock_quotes.get(lookup_code) or {}
+                price = quote.get("price")
+                # 东财实时行情整段不可用时走的是腾讯兜底，如实标出，便于排查
+                source = quote.get("source") or "东方财富行情"
 
             if price is None or price <= 0:
                 # 取不到净值/行情 → 保留旧价（不写库），语义与旧实现一致
@@ -296,16 +299,24 @@ def _sync_prices_impl(backup: bool = False):
             failed.append({"code": code, "name": row["name"], "reason": str(e)})
 
     # 阶段 3（短写事务）：批量落库。价格没变的标的也刷新 updated_at（与旧实现一致）。
-    # 只要至少抓到一只价格就记 last_price_sync_at（本地时间、与 holdings.updated_at
-    # 同格式），供快照价格闸门判断"最新价是不是今天的"；全部失败不写，保持旧值。
-    if pending:
-        with db_session() as conn:
+    #
+    # last_price_sync_at 只在**整批都成功**时刷新。这条规则是 2026-09-23 的真实事故换来的：
+    # 那天东财实时行情接口整段不可用，10 只里只有 2 只货基（走天天基金）成功，于是
+    # "至少一只成功"把当天标成"价格已更新" → 16:40 的快照用 09-22 的价写下了 09-23，
+    # 当日收益显示 +148（实际涨跌完全没进来），而且这个错数字会进 TWR / 今年 / 收益尺。
+    # 失败的标的记进 settings，供快照闸门提示，便于定位长期取不到价的代码。
+    with db_session() as conn:
+        if pending:
             conn.executemany(
                 "UPDATE holdings SET last_price = ?, updated_at = ? WHERE code = ?",
                 pending,
             )
+        if failed:
+            set_setting(conn, "last_price_sync_failed", ",".join(str(f["code"]) for f in failed))
+        else:
             set_setting(conn, "last_price_sync_at", now.strftime("%Y-%m-%d %H:%M:%S"))
-            conn.commit()
+            set_setting(conn, "last_price_sync_failed", "")
+        conn.commit()
 
     # 顺手增量同步日K缓存（失败不影响同步价结果）。
     # 注意：这里必须用「相对 + 绝对」双导入。生产是 uvicorn main:app 平铺加载

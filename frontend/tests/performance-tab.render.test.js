@@ -9,7 +9,7 @@
  * 所以下面用桩组件代替（只关心本页自己的结构，不测 Element Plus 行为）。
  */
 import { describe, it, expect, vi } from 'vitest';
-import { createApp, h, provide, ref } from 'vue';
+import { createApp, h, provide, inject, computed, ref } from 'vue';
 import PerformanceTab from '../src/views/PerformanceTab.vue';
 import { APP_CTX_KEY } from '../src/composables/useAppCtx.js';
 
@@ -34,13 +34,40 @@ const passthrough = (name) => ({
   },
 });
 // el-table-column 的插槽依赖 el-table 提供的 row scope，测试里不渲染以免噪音
-const emptyStub = (name) => ({ name, setup: () => () => null });
+// el-table / el-table-column：列插槽依赖行作用域，用 provide/inject 把当前表的 data 传下去，
+// 否则单元格内容根本不会渲染，断言「实时 / 未收盘」这类文案就没意义。
+const TABLE_ROWS = Symbol('table-rows');
+const ElTableStub = {
+  name: 'ElTable',
+  props: { data: { type: Array, default: () => [] } },
+  setup(props, { slots, attrs }) {
+    provide(TABLE_ROWS, computed(() => props.data || []));
+    return () => h('div', attrs, slots.default ? slots.default() : []);
+  },
+};
+const ElTableColumnStub = {
+  name: 'ElTableColumn',
+  props: { label: { type: String, default: '' } },
+  setup(props, { slots }) {
+    const rows = inject(TABLE_ROWS, null);
+    return () => h(
+      'div',
+      { class: 'stub-col', 'data-label': props.label },
+      (rows ? rows.value : []).map((row, $index) => h(
+        'div',
+        { class: 'stub-cell' },
+        slots.default ? slots.default({ row, $index }) : [],
+      )),
+    );
+  },
+};
 
 const STUBS = {
   ElCard: passthrough('ElCard'),
   ElAlert: passthrough('ElAlert'),
   ElButton: passthrough('ElButton'),
   ElTag: passthrough('ElTag'),
+  ElTooltip: passthrough('ElTooltip'),
   ElRadioGroup: passthrough('ElRadioGroup'),
   ElRadioButton: passthrough('ElRadioButton'),
   ElForm: passthrough('ElForm'),
@@ -52,8 +79,8 @@ const STUBS = {
   ElInput: passthrough('ElInput'),
   ElInputNumber: passthrough('ElInputNumber'),
   ElDatePicker: passthrough('ElDatePicker'),
-  ElTable: passthrough('ElTable'),
-  ElTableColumn: emptyStub('ElTableColumn'),
+  ElTable: ElTableStub,
+  ElTableColumn: ElTableColumnStub,
 };
 
 const timeline = [
@@ -62,7 +89,7 @@ const timeline = [
   { date: '2026-03-06', total_assets: 101000, daily_change: -2000, daily_pct: -1.94, prev_date: '2026-03-03', days_gap: 3 },
 ];
 
-function mountTab({ dailyRows = [], summaryLoaded = true } = {}) {
+function mountTab({ dailyRows = [], summaryLoaded = true, todayRow = null } = {}) {
   const ctx = {
     formatMoney: (v, d = 2, s = false) => (v == null ? '—' : `${s && Number(v) >= 0 ? '+' : ''}${Number(v).toFixed(d)}`),
     pct: (v) => `${v}`,
@@ -89,6 +116,7 @@ function mountTab({ dailyRows = [], summaryLoaded = true } = {}) {
     ]),
     selectPerfWindow: vi.fn(),
     perfDailyRows: ref(dailyRows),
+    perfTodayRow: ref(todayRow),
     perfDailyStats: ref({
       count: 2, total: 1000, upDays: 1, downDays: 1,
       best: { date: '2026-03-03', change: 3000 }, worst: { date: '2026-03-06', change: -2000 },
@@ -153,6 +181,62 @@ describe('PerformanceTab 每日收益区块', () => {
     const { app, ctx } = mountTab({ dailyRows: [], summaryLoaded: false });
     await flush();
     expect(ctx.fetchPerformance).toHaveBeenCalled();
+    app.unmount();
+  });
+});
+
+
+describe('PerformanceTab 每日收益里的「今日（未收盘）」行', () => {
+  const todayRow = {
+    date: '2026-03-07',
+    prevDate: '2026-03-06',
+    change: 1234.5,
+    pct: 1.23,
+    assets: 102234.5,
+    daysGap: 1,
+    isGap: false,
+    isToday: true,
+    baseDate: '2026-03-06',
+    stale: false,
+  };
+  const snapshotRow = { date: '2026-03-06', change: -2000, pct: -1.94, assets: 101000, daysGap: 3, isGap: true };
+
+  it('把今日行放在最前面，并标明「实时 / 未收盘」', async () => {
+    chartCalls.length = 0;
+    const { host, app } = mountTab({ dailyRows: [snapshotRow], todayRow });
+    await flush();
+
+    const text = host.textContent;
+    expect(text).toContain('2026-03-07');
+    expect(text).toContain('实时');
+    expect(text).toContain('未收盘');
+    expect(text).toContain('2026-03-06'); // 昨天的快照行仍在
+
+    // 图表按日期升序：今天必须在最后一根
+    const last = chartCalls[chartCalls.length - 1];
+    expect(last[last.length - 1].date).toBe('2026-03-07');
+    expect(last[last.length - 1].isToday).toBe(true);
+    expect(last[0].date).toBe('2026-03-06');
+    app.unmount();
+  });
+
+  it('基准快照不是上一交易日时，用警告色提示实际跨度', async () => {
+    const { host, app } = mountTab({
+      dailyRows: [snapshotRow],
+      todayRow: { ...todayRow, stale: true, baseDate: '2026-08-02', daysGap: 52 },
+    });
+    await flush();
+    const tooltips = host.querySelectorAll('[content]');
+    const hasCrossDayHint = [...tooltips].some((n) => (n.getAttribute('content') || '').includes('跨了 52 天'));
+    expect(hasCrossDayHint).toBe(true);
+    app.unmount();
+  });
+
+  it('拿不到今天窗口时不伪造今日行', async () => {
+    const { host, app } = mountTab({ dailyRows: [snapshotRow], todayRow: null });
+    await flush();
+    expect(host.textContent).not.toContain('实时');
+    expect(host.textContent).not.toContain('未收盘');
     app.unmount();
   });
 });

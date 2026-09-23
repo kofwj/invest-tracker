@@ -361,6 +361,7 @@ function perfCtx(overrides = {}) {
     perfWindowCards: ref([]),
     selectPerfWindow: vi.fn(),
     perfDailyRows: ref([]),
+    perfTodayRow: ref(null),
     perfDailyStats: ref({ count: 0, total: 0, upDays: 0, downDays: 0, best: null, worst: null }),
     perfLatestSnapshotDate: ref(null),
     todaySnapshotDone: ref(false),

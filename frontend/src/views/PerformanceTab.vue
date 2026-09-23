@@ -72,7 +72,12 @@
         <div id="dailyPnlChart" class="perf-daily-chart"></div>
 
         <el-table :data="dailyTableRows" size="small" stripe max-height="320" style="margin-top:10px;">
-          <el-table-column prop="date" label="日期" width="120" />
+          <el-table-column label="日期" width="140">
+            <template #default="s">
+              <span>{{ s.row.date }}</span>
+              <el-tag v-if="s.row.isToday" size="small" style="margin-left: 6px;">实时</el-tag>
+            </template>
+          </el-table-column>
           <el-table-column label="当日盈亏" width="140" align="right">
             <template #default="s">
               <span :class="s.row.change >= 0 ? 'perf-up' : 'perf-down'">{{ formatMoney(s.row.change, 2, true) }}</span>
@@ -88,9 +93,18 @@
           <el-table-column label="期末总资产" align="right">
             <template #default="s">{{ formatMoney(s.row.assets) }}</template>
           </el-table-column>
-          <el-table-column label="间隔" width="90" align="center">
+          <el-table-column label="间隔" width="100" align="center">
             <template #default="s">
-              <el-tag v-if="s.row.isGap" size="small" type="warning">{{ s.row.daysGap }}天</el-tag>
+              <el-tooltip
+                v-if="s.row.isToday"
+                :content="s.row.stale
+                  ? `基准快照是 ${s.row.baseDate}，这一行实际跨了 ${s.row.daysGap} 天`
+                  : `基准是 ${s.row.baseDate || '上一交易日'} 的收盘快照，收盘后再写成正式快照`"
+                placement="top"
+              >
+                <el-tag size="small" :type="s.row.stale ? 'warning' : 'success'">未收盘</el-tag>
+              </el-tooltip>
+              <el-tag v-else-if="s.row.isGap" size="small" type="warning">{{ s.row.daysGap }}天</el-tag>
               <span v-else class="perf-contrib-sub">1天</span>
             </template>
           </el-table-column>
@@ -291,6 +305,7 @@ const {
   perfDailyRows,
   perfDailyStats,
   perfLatestSnapshotDate,
+  perfTodayRow,
   todaySnapshotDone,
   createSnapshot,
 } = useAppCtx();
@@ -309,8 +324,25 @@ const dailyRowsForRange = computed(() => {
   const all = perfDailyRows.value || [];
   return dailyRange.value > 0 ? all.slice(0, dailyRange.value) : all;
 });
+const dailyTodayRow = computed(() => {
+  const row = perfTodayRow.value;
+  return row ? { ...row, isToday: true } : null;
+});
+const dailyTableRows = computed(() => {
+  const rows = dailyRowsForRange.value.map((row) => ({
+    ...row,
+    ...(priceFlagsByDate.value[String(row.date)] || {}),
+  }));
+  // 快照一天才写一条，列表天然只到昨天；把"今日（未收盘）"补在最前面，
+  // 否则用户打开收益分析看不到今天赚了多少。
+  return dailyTodayRow.value ? [dailyTodayRow.value, ...rows] : rows;
+});
+const dailyChartRows = computed(() => {
+  const asc = [...dailyRowsForRange.value].reverse();
+  return dailyTodayRow.value ? [...asc, dailyTodayRow.value] : asc;
+});
 // timeline 里每行的价格新鲜度（后端新增字段 price_stale / price_date / unpriced_count）。
-// buildDailyPnlRows 不搬这几个字段（utils 不在本任务范围），所以按日期在这里补上。
+// buildDailyPnlRows 不搬这几个字段，所以按日期在这里补上。
 const priceFlagsByDate = computed(() => {
   const map = {};
   for (const r of perfTimeline.value || []) {
@@ -323,11 +355,6 @@ const priceFlagsByDate = computed(() => {
   }
   return map;
 });
-const dailyTableRows = computed(() => dailyRowsForRange.value.map((row) => ({
-  ...row,
-  ...(priceFlagsByDate.value[String(row.date)] || {}),
-})));
-const dailyChartRows = computed(() => [...dailyRowsForRange.value].reverse());
 
 const dailyBestText = computed(() => {
   const b = perfDailyStats.value.best;

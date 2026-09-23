@@ -31,6 +31,97 @@ def eastmoney_sec_id(code: str) -> str:
     return f"0.{c}"
 
 
+def tencent_symbol(code: str) -> str:
+    """腾讯行情符号：sh/sz/bj + 6 位代码。
+
+    直接复用东方财富的 secid 前缀（1=沪、0=深），北交所单列。
+    """
+    raw = str(code or "").strip().lower()
+    # 场外基金（f 前缀）不走行情接口，直接判空，避免把 f002864 当成深市 002864 去查
+    if raw.startswith("f"):
+        return ""
+    c = raw
+    if not (c.isdigit() and len(c) == 6):
+        return ""
+    if c.startswith(("4", "8", "9")):
+        return f"bj{c}"
+    secid = eastmoney_sec_id(c)
+    return ("sh" if secid.startswith("1.") else "sz") + c
+
+
+def fetch_tencent_quotes(codes):
+    """腾讯行情兜底，返回结构与 fetch_eastmoney_quotes 一致。
+
+    为什么需要：东方财富的实时报价接口（push2/push2delay 的 /api/qt/*）会整段不可用
+    —— 实测 TLS 握手成功、证书正常，但请求发出后远端直接断开（RemoteDisconnected），
+    东财其他域名与它的 K 线接口（push2his）却正常；本机换网络同样失败，所以不是
+    服务器 IP 被封，是那个接口本身关掉/改了。而 qt.gtimg.cn 一直可用（K 线走的
+    就是腾讯这条线），所以拿它兜底，否则一次报价故障会让当天快照沿用旧价、
+    当日收益显示成 0 并污染后续所有指标。
+    """
+    symbol_to_code = {}
+    for c in codes:
+        sym = tencent_symbol(c)
+        if sym:
+            symbol_to_code[sym] = str(c).strip().lower().replace("f", "")
+    if not symbol_to_code:
+        return {}
+
+    quotes = {}
+    symbols = list(symbol_to_code)
+    for i in range(0, len(symbols), 60):
+        batch = symbols[i : i + 60]
+        # 整批（请求 + 解析）都兜住：兜底路径自身出问题不能反过来把抓价搞崩，
+        # 最坏就是这一批没有价格，保持"取不到价 → 保留旧价"的原有语义。
+        try:
+            res = requests.get(
+                "https://qt.gtimg.cn/q=" + ",".join(batch),
+                timeout=8,
+                headers={"Referer": "https://gu.qq.com/", "User-Agent": "Mozilla/5.0"},
+            )
+            res.raise_for_status()
+            res.encoding = "gbk"  # 腾讯返回 GBK，不设会拿到乱码名称
+            text = str(res.text or "")
+        except Exception as exc:
+            logger.warning("腾讯行情请求失败: %s", exc)
+            continue
+
+        for line in text.split(";"):
+            line = line.strip()
+            if not line.startswith("v_") or "=" not in line:
+                continue
+            head, payload = line.split("=", 1)
+            sym = head[2:].strip()
+            code = symbol_to_code.get(sym)
+            if not code:
+                continue
+            parts = payload.strip().strip('"').split("~")
+            # 0 市场标识 1 名称 2 代码 3 现价 4 昨收 5 今开 …
+            if len(parts) < 5:
+                continue
+            try:
+                price = float(parts[3])
+            except (TypeError, ValueError):
+                continue
+            if price <= 0:  # 停牌/无报价
+                continue
+            try:
+                prev_close = float(parts[4]) if parts[4] not in ("", "-") else None
+            except (TypeError, ValueError):
+                prev_close = None
+            change_pct = None
+            if prev_close and prev_close > 0:
+                change_pct = round((price / prev_close - 1.0) * 100.0, 2)
+            quotes[code] = {
+                "price": price,
+                "change_pct": change_pct,
+                "name": (parts[1] or "").strip(),
+                "prev_close": prev_close,
+                "source": "腾讯行情",
+            }
+    return quotes
+
+
 def _cache_get(keys, now: float) -> Dict[str, dict]:
     if _CACHE_TTL <= 0:
         return {}
@@ -108,14 +199,21 @@ def fetch_eastmoney_quotes(codes, secid_map=None, *, use_cache: bool = True):
             "fields": "f12,f14,f2,f3,f18",
             "secids": secids,
         }
-        res = requests.get(
-            url,
-            params=params,
-            timeout=8,
-            headers={"Referer": "https://quote.eastmoney.com/", "User-Agent": "Mozilla/5.0"},
-        )
-        res.raise_for_status()
-        data = res.json().get("data") or {}
+        # 单批失败不能拖垮整次同步：东财这个接口会整段不可用（连接被远端断开），
+        # 下面是腾讯兜底。以前这里没有 try，异常冒泡到 _sync_prices_impl 被吃掉，
+        # 结果是整批报价全部记为 failed。
+        try:
+            res = requests.get(
+                url,
+                params=params,
+                timeout=8,
+                headers={"Referer": "https://quote.eastmoney.com/", "User-Agent": "Mozilla/5.0"},
+            )
+            res.raise_for_status()
+            data = res.json().get("data") or {}
+        except Exception as exc:
+            logger.warning("东方财富行情请求失败（%s），将用腾讯行情兜底: %s", url, exc)
+            continue
         batch_quotes = {}
         for item in data.get("diff") or []:
             code = str(item.get("f12") or "").strip()
@@ -147,6 +245,7 @@ def fetch_eastmoney_quotes(codes, secid_map=None, *, use_cache: bool = True):
                 "change_pct": change_pct,
                 "name": str(item.get("f14") or "").strip(),
                 "prev_close": prev_close,
+                "source": "东方财富行情",
             }
         quotes.update(batch_quotes)
         # Cache under the resolved secid so quotes for the same numeric code
@@ -155,7 +254,28 @@ def fetch_eastmoney_quotes(codes, secid_map=None, *, use_cache: bool = True):
         no_return = [c for c in missing if c not in batch_quotes]
         if no_return:
             logger.warning("东方财富未返回报价的标的: %s", ", ".join(no_return))
+
+    # 腾讯兜底：东财缺哪些就用腾讯补哪些
+    still_missing = [c for c in numeric_codes if c not in quotes]
+    if still_missing:
+        fallback = fetch_tencent_quotes(still_missing)
+        if fallback:
+            quotes.update(fallback)
+            _cache_put(
+                {resolved_secids[c]: q for c, q in fallback.items() if c in resolved_secids},
+                now,
+            )
+            logger.info("东方财富缺 %d 个报价，已用腾讯行情补齐 %d 个", len(still_missing), len(fallback))
     return quotes
+
+
+def fetch_stock_quotes(codes):
+    """A股/场内基金报价（东财优先、腾讯兜底）。
+
+    与 fetch_eastmoney_prices 的区别：返回完整报价 dict（含 source），
+    这样同步价能如实标出某个标的的价格实际来自哪个数据源。
+    """
+    return fetch_eastmoney_quotes(codes)
 
 
 def fetch_eastmoney_prices(codes):

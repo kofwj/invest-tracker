@@ -1,5 +1,5 @@
 import api from '../api/index.js';
-import { buildDailyPnlRows, formatMoney, summarizeDailyPnl } from '../utils/index.js';
+import { buildDailyPnlRows, formatMoney, summarizeDailyPnl, todayLocalIso } from '../utils/index.js';
 import { computed } from 'vue';
 
 function shiftIsoDays(days) {
@@ -223,6 +223,31 @@ const createPerformanceModule = ({
     });
 
 
+    /**
+     * 「今日（未收盘）」行。
+     *
+     * 快照是每天定时任务写一条，所以逐日列表天然只到昨天为止——用户打开收益分析
+     * 最想看的恰好是"今天赚了多少"。这里用 /performance/windows 的今天窗口补一行：
+     * 它的基准是昨天收盘快照，口径与逐日行一致（同样已剔除外部投入/取出）。
+     * 基准不是昨天时（stale）也照常给出，但把基准日期带出去让界面标注。
+     */
+    const perfTodayRow = computed(() => {
+        const win = (perfWindows.value || []).find((x) => x && x.key === 'today');
+        if (!win || win.gain == null) return null;
+        const staleDays = win.stale_days == null ? null : Number(win.stale_days);
+        return {
+            date: todayLocalIso(),
+            prevDate: win.start_date || null,
+            change: Number(win.gain),
+            pct: win.gain_pct == null ? null : Number(win.gain_pct),
+            assets: Number(perfSummary.value?.total_assets || 0),
+            daysGap: staleDays,
+            isGap: false,
+            isToday: true,
+            baseDate: win.start_date || null,
+            stale: staleDays != null && staleDays > 1,
+        };
+    });
     const perfDailyStats = computed(() => summarizeDailyPnl(perfDailyRows.value, 30));
 
     // === 专业组合级指标（portfolio level，非个股）===
@@ -464,6 +489,7 @@ const createPerformanceModule = ({
         perfDailyRows,
         perfDailyStats,
         perfLatestSnapshotDate,
+        perfTodayRow,
     };
 };
 

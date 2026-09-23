@@ -469,6 +469,7 @@ const app = createApp({
             perfDailyRows,
             perfDailyStats,
             perfLatestSnapshotDate,
+            perfTodayRow,
         } = createPerformanceModule({
             perfSummary,
             perfTimeline,
@@ -766,7 +767,7 @@ const app = createApp({
             displayedPerfContribution, perfContributionFilter, perfContributionSort, perfContributionHeadline, perfContributionMix, perfTimelineRange,
             fetchPerformance, setPerfTimelineRange, addPerfFlow, updatePerfFlow, deletePerfFlow, loadPerfFlowSuggestions, applyPerfFlowSuggestion, contributionBarStyle, fetchMaintenance, createDbBackup, downloadBackup, restoreBackup, deleteBackup, restoreUploadedBackup,
             perfRiskMetrics, perfContributionSummary, perfWindowCards, selectPerfWindow,
-            perfDailyRows, perfDailyStats, perfLatestSnapshotDate,
+            perfDailyRows, perfDailyStats, perfLatestSnapshotDate, perfTodayRow,
             refreshCurrentTab,
             notifyStatus, notifyLogs, notifyLoading, notifyEventDraft, notifyChannelDraft, notifyChannelClear, fetchNotifyPanel, saveNotifyPanel, testNotifyPush, pushDepositDueNow, pushDisciplineNow,
             brokerResult, brokerLoading, brokerSelected, brokerAsOfDate, brokerCashInput, brokerHistory,

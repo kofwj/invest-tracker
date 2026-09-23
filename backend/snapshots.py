@@ -139,6 +139,7 @@ def resolve_unpriced_count(conn, dashboard):
 # 不能只用 holdings.updated_at 判据：用户录一笔交易会触发 recalc_holdings
 # 刷新它，价格就"看起来是新的"。
 LAST_PRICE_SYNC_KEY = "last_price_sync_at"
+LAST_PRICE_SYNC_FAILED_KEY = "last_price_sync_failed"
 
 
 def _local_today_iso():
@@ -206,6 +207,20 @@ def latest_price_sync_at(conn):
     return _normalize_timestamp(latest)
 
 
+def last_price_sync_failed_codes(conn):
+    """最近一次价格同步里取不到价的代码列表（逗号分隔存 settings），没有则空。"""
+    try:
+        row = conn.execute(
+            "SELECT value FROM settings WHERE key = ?", (LAST_PRICE_SYNC_FAILED_KEY,)
+        ).fetchone()
+    except Exception:
+        return []
+    if row is None:
+        return []
+    value = row["value"] if isinstance(row, sqlite3.Row) else row[0]
+    return [c.strip() for c in str(value or "").split(",") if c.strip()]
+
+
 def resolve_snapshot_price_state(conn, today_iso=None):
     """/snapshots 与 /cron/snapshot 共用的价格新鲜度判据。
 
@@ -223,6 +238,7 @@ def resolve_snapshot_price_state(conn, today_iso=None):
         "price_date": price_date,
         "is_stale": bool(needs and price_date != today),
         "last_price_sync_at": sync_at,
+        "failed_codes": last_price_sync_failed_codes(conn),
     }
 
 
@@ -237,7 +253,13 @@ def stale_price_detail(price_state, today_iso=None):
         head = f"最新价还没有成功同步过（{today_iso} 取不到当日价）"
     else:
         head = "最新价还没有成功同步过（基准日期未知）"
-    return f"{head}，现在记录会让这天的收益失真（快照值会沿用旧价）。先点「同步价」，或用 force=true 强制记录"
+    failed = price_state.get("failed_codes") or []
+    tail = ""
+    if failed:
+        shown = "、".join(failed[:5])
+        more = f" 等 {len(failed)} 只" if len(failed) > 5 else ""
+        tail = f"最近一次同步有 {len(failed)} 只取不到价（{shown}{more}）。"
+    return f"{head}，现在记录会让这天的收益失真（快照值会沿用旧价）。{tail}先点「同步价」，或用 force=true 强制记录"
 
 
 def create_snapshot_record(conn, today_iso, dashboard):

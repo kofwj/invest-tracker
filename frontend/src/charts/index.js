@@ -457,7 +457,10 @@ const renderDailyPnlChartView = (rows = []) => {
                 const row = data[p.dataIndex] || {};
                 const pctText = row.pct == null ? '' : `（${row.pct >= 0 ? '+' : ''}${Number(row.pct).toFixed(2)}%）`;
                 const gapText = row.isGap && row.daysGap ? `<br/>该格跨 ${row.daysGap} 天` : '';
-                return `${p.name}<br/>当日盈亏 ${formatMoney(row.change, 2, true)}${pctText}${gapText}`;
+                const todayText = row.isToday
+                    ? `<br/>今日（未收盘）${row.baseDate ? `，基准 ${row.baseDate}` : ''}`
+                    : '';
+                return `${p.name}<br/>当日盈亏 ${formatMoney(row.change, 2, true)}${pctText}${gapText}${todayText}`;
             },
         }),
         grid: { left: 78, right: 24, top: 24, bottom: 44 },
@@ -483,7 +486,16 @@ const renderDailyPnlChartView = (rows = []) => {
                 data: data.map((r) => ({
                     value: r.change,
                     // 红涨绿跌（A 股惯例，与 --app-up/--app-down 一致）
-                    itemStyle: { color: r.change >= 0 ? t.up : t.down },
+                    // 今天还没收盘：改成半透明 + 虚线描边，跟已定稿的历史柱区分开
+                    itemStyle: r.isToday
+                        ? {
+                            color: r.change >= 0 ? t.up : t.down,
+                            opacity: 0.5,
+                            borderColor: r.change >= 0 ? t.up : t.down,
+                            borderWidth: 2,
+                            borderType: 'dashed',
+                        }
+                        : { color: r.change >= 0 ? t.up : t.down },
                 })),
                 barMaxWidth: 18,
             },

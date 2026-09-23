@@ -58,13 +58,17 @@ def test_eastmoney_quotes_missing_data_returns_empty(monkeypatch):
 
 
 def test_eastmoney_prices_survives_network_error(monkeypatch):
+    """网络失败不再上抛：东财坏 + 腾讯兜底也坏 → 返回空 dict。
+
+    行为变化说明：以前东财那次请求没有 try，异常冒泡到 _sync_prices_impl 被 catch，
+    整批场内标的都会记 failed（2026-09-23 生产实况就是 8/10 全废）。现在单批失败只影响
+    该批并自动尝试腾讯兜底；兜底也失败时返回空 dict，语义仍是"取不到价 → 保留旧价"。
+    """
     import price_sync as ps
 
     with mock.patch.object(ps, "requests") as mock_req, mock.patch.object(ps, "_CACHE_TTL", 0):
         mock_req.get.side_effect = Exception("connection refused")
-        # 网络失败 → 异常上抛（由 _sync_prices_impl 顶层 catch 或跳过），不进缓存、不吞
-        with pytest.raises(Exception):
-            ps.fetch_eastmoney_prices(["600519"])
+        assert ps.fetch_eastmoney_prices(["600519"]) == {}
 
 
 # ---------- 2. 同步入口写入路径 ----------
@@ -87,15 +91,15 @@ def test_sync_prices_impl_updates_holdings(app_module, monkeypatch):
         )
         conn.commit()
 
-    def fake_eastmoney_prices(codes):
-        # _sync_prices_impl 调用 fetch_eastmoney_prices(codes)，返回扁平 {code: price}
-        # 只有普通股走这里；基金码 f002001 在下方代码走 fetch_open_fund_nav
-        return {"600519": 1050.0}
+    def fake_stock_quotes(codes):
+        # _sync_prices_impl 调 fetch_stock_quotes(codes)，返回完整报价 dict
+        # （东财优先、腾讯兜底）。普通股走这里；基金码 f002001 走 fetch_open_fund_nav
+        return {"600519": {"price": 1050.0, "source": "东方财富行情", "change_pct": 1.0, "name": "贵州茅台"}}
 
     def fake_fund_nav(code):
         return 1.10
 
-    monkeypatch.setattr("routers_holdings.fetch_eastmoney_prices", fake_eastmoney_prices)
+    monkeypatch.setattr("routers_holdings.fetch_stock_quotes", fake_stock_quotes)
     monkeypatch.setattr("routers_holdings.fetch_open_fund_nav", fake_fund_nav)
     # 尾部的 kline 增量同步是真实网络，直接 patch kline_cache 源码避免联外
     monkeypatch.setattr("kline_cache.sync_klines_for_holdings", lambda conn, *a, **k: {})
@@ -126,7 +130,7 @@ def test_sync_prices_impl_handles_missing_quotes(app_module, monkeypatch):
         )
         conn.commit()
 
-    monkeypatch.setattr("routers_holdings.fetch_eastmoney_prices", lambda codes: {})
+    monkeypatch.setattr("routers_holdings.fetch_stock_quotes", lambda codes: {})
     monkeypatch.setattr("routers_holdings.fetch_open_fund_nav", lambda code: None)
     # kline 增量同步在函数内 `from .kline_cache import sync_klines_for_holdings`，
     # 需 patch 源模块函数（函数内 import 取的是 kline_cache.sync_klines_for_holdings）

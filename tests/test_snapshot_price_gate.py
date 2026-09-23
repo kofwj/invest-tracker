@@ -277,13 +277,16 @@ def _seed_sync_holding(app_module):
 
 
 def test_price_sync_writes_last_price_sync_at_on_success(app_module, monkeypatch):
-    """至少抓到一只价格才写 last_price_sync_at，格式与 holdings.updated_at 一致。"""
+    """整批都成功才写 last_price_sync_at，格式与 holdings.updated_at 一致。"""
     from routers_holdings import _sync_prices_impl
 
     _seed_sync_holding(app_module)
     assert _settings_value(app_module, "last_price_sync_at") is None
 
-    monkeypatch.setattr("routers_holdings.fetch_eastmoney_prices", lambda codes: {"600407": 13.0})
+    monkeypatch.setattr(
+        "routers_holdings.fetch_stock_quotes",
+        lambda codes: {"600407": {"price": 13.0, "source": "东方财富行情"}},
+    )
     monkeypatch.setattr("kline_cache.sync_klines_for_holdings", lambda conn, *a, **k: {})
 
     result = _sync_prices_impl(backup=False)
@@ -308,7 +311,7 @@ def test_price_sync_all_failed_keeps_previous_last_price_sync_at(app_module, mon
     _seed_sync_holding(app_module)
     _set_price_sync_at(app_module, "2026-09-01 15:20:00")
 
-    monkeypatch.setattr("routers_holdings.fetch_eastmoney_prices", lambda codes: {})
+    monkeypatch.setattr("routers_holdings.fetch_stock_quotes", lambda codes: {})
     monkeypatch.setattr("routers_holdings.fetch_open_fund_nav", lambda code: None)
     monkeypatch.setattr("kline_cache.sync_klines_for_holdings", lambda conn, *a, **k: {})
 
@@ -330,3 +333,89 @@ def test_never_synced_price_blocks_with_baseline_hint(client, app_module, monkey
     assert "2026-09-26" in detail
     assert "force=true" in detail
     assert _snapshot_rows(app_module) == []
+
+
+def test_price_sync_partial_failure_does_not_mark_prices_fresh(app_module, monkeypatch):
+    """部分成功（例如 8/10 取不到价）不算「价格已更新」。
+
+    2026-09-23 的真实事故：东财实时行情接口整段不可用，10 只里只有 2 只货基
+    （走天天基金）成功，旧的"至少一只成功"规则把当天标成新鲜 → 16:40 的快照
+    用 09-22 的价写下了 09-23，当日收益显示 +148（真实涨跌完全没进来），
+    并会污染 TWR / 今年 / 时间轴收益尺。所以收紧为「整批都成功才刷新时间戳」，
+    同时把取不到价的代码记下来，让闸门提示能说清原因。
+    """
+    from routers_holdings import _sync_prices_impl
+
+    _seed_sync_holding(app_module)
+    conn = sqlite3.connect(app_module.DB_PATH)
+    try:
+        conn.execute(
+            "INSERT INTO holdings (code, name, category, quantity, avg_cost, diluted_cost, "
+            "total_dividend, last_price) VALUES ('f002001', '华夏成长', '债基', 1000, 1.0, 1.0, 0, 1.0)"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    _set_price_sync_at(app_module, "2026-09-22 15:20:00")
+
+    # 股票取不到价（模拟东财挂），货基正常 → 部分成功
+    monkeypatch.setattr("routers_holdings.fetch_stock_quotes", lambda codes: {})
+    monkeypatch.setattr("routers_holdings.fetch_open_fund_nav", lambda code: 1.10)
+    monkeypatch.setattr("kline_cache.sync_klines_for_holdings", lambda conn, *a, **k: {})
+
+    result = _sync_prices_impl(backup=False)
+    assert result["status"] == "success"
+    assert result["updated"] == 1                 # 货基确实更新了
+    assert [f["code"] for f in result["failed"]] == ["600407"]
+    # 关键：时间戳没被刷新，闸门仍会认为价格是旧的
+    assert _settings_value(app_module, "last_price_sync_at") == "2026-09-22 15:20:00"
+    # 失败标的被记下来，供 409 提示说明原因
+    assert _settings_value(app_module, "last_price_sync_failed") == "600407"
+
+
+def test_price_sync_clean_run_clears_failed_codes(app_module, monkeypatch):
+    """整批成功时要清掉上一次的失败记录。"""
+    from routers_holdings import _sync_prices_impl
+
+    _seed_sync_holding(app_module)
+    conn = sqlite3.connect(app_module.DB_PATH)
+    try:
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES ('last_price_sync_failed', '600999') "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    monkeypatch.setattr(
+        "routers_holdings.fetch_stock_quotes",
+        lambda codes: {"600407": {"price": 13.0, "source": "腾讯行情"}},
+    )
+    monkeypatch.setattr("kline_cache.sync_klines_for_holdings", lambda conn, *a, **k: {})
+
+    result = _sync_prices_impl(backup=False)
+    assert result["failed"] == []
+    assert _settings_value(app_module, "last_price_sync_failed") == ""
+
+
+def test_stale_detail_mentions_failed_codes(client, app_module, monkeypatch):
+    """闸门的 409 文案要说清是哪些标的取不到价。"""
+    _today(monkeypatch, "2026-09-26")
+    _seed_holdings(app_module, [("600408", 100, 8.0, 7.0, 12.0)])
+    _set_price_sync_at(app_module, "2026-09-25 15:20:00")
+    conn = sqlite3.connect(app_module.DB_PATH)
+    try:
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES ('last_price_sync_failed', '600408,159352') "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    res = client.post("/snapshots")
+    assert res.status_code == 409
+    detail = res.json()["detail"]
+    assert "2 只取不到价" in detail
+    assert "600408" in detail and "159352" in detail
