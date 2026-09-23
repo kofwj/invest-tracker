@@ -104,8 +104,13 @@ assert ('./charts/index.js' in main or '../charts/index.js' in allocation or './
 tab_nav = Path('frontend/src/modules/tabNav.js').read_text(encoding='utf-8')
 assert "'market'" in tab_nav or '"market"' in tab_nav, 'SCREENSHOT_TABS should still include market (legacy ?tab= compatibility)'
 app_vue = Path('frontend/src/App.vue').read_text(encoding='utf-8')
-for needle in ['router-view', 'AppHeader', 'AppDialogs', 'LoginOverlay', 'goTab']:
+for needle in ['router-view', 'AppHeader', 'AppDialogs', 'LoginOverlay']:
     assert needle in app_vue, f'missing shell fragment in App.vue: {needle}'
+# 子导航行在批次 1 里并进了 PageShell（页头一行式：左 tab、右 actions），
+# App.vue 不应再自己渲染一条 tab 条。
+assert 'page-nav' not in app_vue, 'tab nav should live in PageShell now'
+assert 'page-tabs' in Path('frontend/src/components/PageShell.vue').read_text(encoding='utf-8'), \
+    'PageShell should render the tab row'
 assert 'provide' in main or 'APP_CTX_KEY' in main, 'root should provide app context'
 holdings = Path('frontend/src/views/HoldingsTab.vue').read_text(encoding='utf-8')
 assert 'holdingLifetimeProfit' in holdings, 'holdings tab missing lifetime helper'

@@ -88,6 +88,21 @@ class TransactionUpdate(BaseModel):
         # Blank/whitespace-only code means "no change" in a partial update.
         return code or None
 
+def resolve_category(category, code, name):
+    """空/空白分类回落 infer_category；推不出分类时返回 None（保持原样，不写空串）。
+
+    已有非空分类原样返回（仅去除首尾空白），所以调用方永远不可能覆盖用户填过的分类。
+    code 与 name 都是空时没有可推断的信息：infer_category 会回落成"其他"，
+    但那等于凭空造一个分类，所以这里返回 None 让调用方跳过。
+    """
+    text = str(category or "").strip()
+    if text:
+        return text
+    if not str(code or "").strip() and not str(name or "").strip():
+        return None
+    inferred = str(infer_category(code, name) or "").strip()
+    return inferred or None
+
 
 def ensure_transaction_columns(conn):
     cols = [row[1] for row in conn.execute("PRAGMA table_info(transactions)").fetchall()]
@@ -233,6 +248,44 @@ async def import_transactions(file: UploadFile = File(...)):
     }
 
 
+@router.post("/transactions/backfill-category")
+def backfill_transaction_categories():
+    """一次性回填历史空分类：只填空值，绝不覆盖已有分类（重复调用幂等）。
+
+    - updated：本次真正补上分类的条数；
+    - remaining：回填后仍为空的条数（code/name 都是空、推不出分类的行会留在这里）。
+    """
+    backup_path = None
+    try:
+        backup_path = create_safety_backup("before_backfill_category")
+    except Exception:
+        # 备份失败不阻断回填，但调用方应看到 backup=None
+        backup_path = None
+    updated = 0
+    with db_session(row_factory=sqlite3.Row) as conn:
+        ensure_transaction_columns(conn)
+        empty_where = "category IS NULL OR TRIM(category) = ''"
+        rows = conn.execute(f"SELECT id, code, name FROM transactions WHERE {empty_where}").fetchall()
+        for row in rows:
+            inferred = resolve_category(None, row["code"], row["name"])
+            if not inferred:
+                # 推不出分类（代码和名称都为空）：保持原样，由 remaining 如实反映，不写空串充数。
+                continue
+            conn.execute(
+                f"UPDATE transactions SET category = ? WHERE id = ? AND ({empty_where})",
+                (inferred, row["id"]),
+            )
+            updated += 1
+        remaining = conn.execute(f"SELECT COUNT(*) FROM transactions WHERE {empty_where}").fetchone()[0]
+        conn.commit()
+    return {
+        "status": "success",
+        "updated": updated,
+        "remaining": int(remaining or 0),
+        "backup": backup_path,
+    }
+
+
 @router.get("/transactions")
 def list_transactions(
     request: Request,
@@ -302,6 +355,8 @@ def add_transaction(trans: TransactionBase, backup: bool = True):
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
+        # 手工新增和 CSV 导入同一口径：分类为空/空白时按代码+名称推断，避免写出空分类。
+        category = resolve_category(trans.category, trans.code, trans.name)
         conn.execute(
             """
             INSERT INTO transactions (date, code, name, category, account, direction, quantity, price, amount, fee, remark)
@@ -311,7 +366,7 @@ def add_transaction(trans: TransactionBase, backup: bool = True):
                 trans.date.isoformat(),
                 trans.code,
                 trans.name,
-                trans.category,
+                category,
                 trans.account or "华泰证券",
                 trans.direction,
                 trans.quantity,
@@ -354,14 +409,26 @@ def update_transaction(transaction_id: int, trans: TransactionUpdate):
         }
         updates = []
         vals = []
+        updated_fields = []
         for field in ["date", "code", "name", "category", "account", "direction", "quantity", "price", "amount", "fee", "remark"]:
             v = getattr(trans, field)
             if v is not None:
                 updates.append(f"{field} = ?")
                 vals.append(v.isoformat() if field == "date" else v)
                 merged[field] = v.isoformat() if field == "date" else v
+                updated_fields.append(field)
         if not updates:
             raise HTTPException(status_code=400, detail="No fields to update")
+        # 清空分类（显式传空）或本条本来就是空分类时，按合并后的代码+名称推断后落库，
+        # 与手工新增/CSV 导入同一口径；已有非空分类原样保留，不会被覆盖。
+        resolved_category = resolve_category(merged.get("category"), merged.get("code"), merged.get("name"))
+        if resolved_category != merged.get("category"):
+            if "category" in updated_fields:
+                vals[updated_fields.index("category")] = resolved_category
+            else:
+                updates.append("category = ?")
+                vals.append(resolved_category)
+            merged["category"] = resolved_category
         try:
             validate_transaction_payload(
                 conn,

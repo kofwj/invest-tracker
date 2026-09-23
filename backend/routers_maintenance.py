@@ -1,20 +1,23 @@
+import csv
+import io
 import os
 import sqlite3
 import tempfile
+import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 try:
-    from .csv_utils import create_safety_backup
-    from .database import BACKUP_DIR, DB_PATH, LOCAL_TZ, open_db
+    from .csv_utils import _csv_sanitize_cell, create_safety_backup
+    from .database import BACKUP_DIR, DB_PATH, LOCAL_TZ, db_session, open_db
 except ImportError:
-    from csv_utils import create_safety_backup
-    from database import BACKUP_DIR, DB_PATH, LOCAL_TZ, open_db
+    from csv_utils import _csv_sanitize_cell, create_safety_backup
+    from database import BACKUP_DIR, DB_PATH, LOCAL_TZ, db_session, open_db
 
 router = APIRouter()
 
@@ -298,3 +301,198 @@ async def restore_uploaded_backup(file: UploadFile = File(...)):
         "uploaded_backup": upload_path.name,
         "pre_restore_backup": pre_restore.name,
     }
+
+
+# ---------------------------------------------------------------------------
+# 一键全量导出
+#
+# 只读：读 6 张表流式写成 CSV + 用 sqlite3 backup API 取一份数据库一致性副本，
+# 再加一份 README，打包成一个 zip。全程不写任何业务数据。
+# ---------------------------------------------------------------------------
+
+EXPORT_CSV_SPECS = [
+    ("transactions.csv", "transactions", "ORDER BY date DESC, id DESC"),
+    ("holdings.csv", "holdings", "ORDER BY code"),
+    ("deposits.csv", "deposits", "ORDER BY COALESCE(due_date, '9999-12-31'), id"),
+    ("daily_snapshots.csv", "daily_snapshots", "ORDER BY date, id"),
+    ("portfolio_cash_flows.csv", "portfolio_cash_flows", "ORDER BY date, id"),
+    ("cash_flows.csv", "cash_flows", "ORDER BY date, id"),
+]
+
+# 每个字段一句中文说明，用于 README.txt；列名即数据库原始字段名。
+EXPORT_COLUMN_NOTES = {
+    "transactions": {
+        "id": "交易记录自增编号（仅本库内部定位用）",
+        "date": "交易日期（YYYY-MM-DD）",
+        "code": "证券/基金代码，场外基金以 f 开头（如 f004388）",
+        "name": "证券/基金名称",
+        "category": "大类分类（A股权益/A股ETF/港股ETF/债基/黄金/REITs/其他）",
+        "account": "证券账户名（默认华泰证券）",
+        "direction": "交易方向（买入/卖出/分红/分红再投资/申购待确认/待确认申购）",
+        "quantity": "数量（股数或基金份额，场外申购未确认时为 0）",
+        "price": "成交单价（场外基金为申购/确认净值）",
+        "amount": "成交金额（不含手续费）",
+        "fee": "手续费/费用",
+        "remark": "备注",
+    },
+    "holdings": {
+        "id": "持仓记录自增编号（仅本库内部定位用）",
+        "code": "证券/基金代码",
+        "name": "证券/基金名称",
+        "category": "大类分类，决定大类配置与再平衡口径",
+        "quantity": "当前持有数量（股/份）",
+        "avg_cost": "持仓均价（成本摊薄口径见程序内算法）",
+        "diluted_cost": "摊薄成本价（均价扣减累计分红后的成本）",
+        "total_dividend": "该持仓累计收到的分红金额",
+        "last_price": "最近一次同步/手工填写的市价",
+        "updated_at": "该持仓最近一次重算/更新时间",
+        "expected_return": "预期年化收益率（小数，如 0.05 表示 5%）",
+        "trailing_return_1y": "近一年实际收益率（小数），数据不足时为空",
+        "trailing_return_1y_source": "近一年收益率的来源（如 kline/akshare）",
+        "trailing_return_1y_updated_at": "近一年收益率最近更新时间",
+    },
+    "deposits": {
+        "id": "存款记录自增编号",
+        "bank_name": "银行名称",
+        "amount": "存款本金",
+        "interest_rate": "年利率（小数，如 0.025 表示 2.5%）",
+        "start_date": "起存日（YYYY-MM-DD）",
+        "due_date": "到期日（YYYY-MM-DD）",
+        "remark": "备注",
+    },
+    "daily_snapshots": {
+        "id": "快照自增编号",
+        "date": "快照日期（YYYY-MM-DD，一天一条）",
+        "total_assets": "当日总资产合计",
+        "total_market_value": "当日持仓市值合计",
+        "bank_balance": "当日银行存款余额",
+        "securities_cash": "当日证券账户可用现金",
+        "pending_purchase": "当日场外申购在途金额",
+        "total_profit": "当日累计收益（按当日成本口径计算）",
+        "lifetime_profit": "历史累计净收益（含已实现收益与分红）",
+        "holdings_count": "当日持仓只数",
+        "equity_mv": "当日权益类（A股权益/港股ETF 等）市值",
+        "bond_mv": "当日债券类（债基）市值",
+        "reit_mv": "当日 REITs 市值",
+        "created_at": "快照写入时间",
+        "unpriced_count": "当日缺市价（按 0 计市值）的持仓只数",
+        "price_date": "所用市价的价格日期（用于判断价格新鲜度）",
+        "price_stale": "市价是否过期（1=使用过期价，0=新鲜）",
+        "manual_price_count": "当日含人工填写市价的持仓只数",
+    },
+    "portfolio_cash_flows": {
+        "id": "记录自增编号",
+        "date": "资金进出发生日期（YYYY-MM-DD）",
+        "flow_type": "类型（投入=外部资金转入组合，取出=转出组合）",
+        "amount": "金额（正数；方向由 flow_type 决定）",
+        "source": "来源（手工录入/系统建议/导入等）",
+        "remark": "备注",
+        "created_at": "记录写入时间",
+    },
+    "cash_flows": {
+        "id": "记录自增编号",
+        "date": "资金变动日期（YYYY-MM-DD）",
+        "account": "证券账户名",
+        "flow_type": "类型（银证转入/银证转出）",
+        "amount": "变动金额（正数）",
+        "balance_before": "变动前账户现金余额",
+        "balance_after": "变动后账户现金余额",
+        "remark": "备注",
+        "created_at": "记录写入时间",
+    },
+}
+
+
+def export_table_csv(conn, table, order_by):
+    """把一张表流式写成 utf-8-sig 的 CSV（Excel 打开中文不乱码），返回 (列名, 字节)。"""
+    columns = [str(row[1]) for row in conn.execute(f"PRAGMA table_info({table})").fetchall()]
+    if not columns:
+        raise HTTPException(status_code=500, detail=f"导出失败：账本缺少数据表 {table}")
+    # 公式注入防护与 /transactions/export 等既有导出保持同一处理。
+    quoted = ", ".join(f'"{col}"' for col in columns)
+    out = io.StringIO()
+    writer = csv.writer(out)
+    writer.writerow(columns)
+    # 逐行写，不把整表 fetchall 进内存。
+    for row in conn.execute(f"SELECT {quoted} FROM {table} {order_by}"):
+        writer.writerow([_csv_sanitize_cell(row[col]) for col in columns])
+    return columns, ("\ufeff" + out.getvalue()).encode("utf-8")
+
+
+def export_db_snapshot_bytes(conn):
+    """用 sqlite3 backup API 取一份一致性副本（WAL 下直接复制文件会拿到半成品）。"""
+    payload = io.BytesIO()
+    with tempfile.TemporaryDirectory() as tmpdir:
+        snapshot = Path(tmpdir) / "invest.db"
+        # 显式 close：python 的 `with sqlite3.connect()` 只提交不关闭，
+        # WAL 没 checkpoint 完就按文件读会漏掉最后几次写入。
+        dst = sqlite3.connect(str(snapshot))
+        try:
+            conn.backup(dst)
+            dst.commit()
+        finally:
+            dst.close()
+        with snapshot.open("rb") as fh:
+            payload.write(fh.read())
+    payload.seek(0)
+    return payload.getvalue()
+
+
+def build_export_readme(export_ts, exported):
+    """exported: [(文件名, 表名, 列名列表)]，按各表实际列生成逐列说明。"""
+    tz_name = getattr(export_ts.tzinfo, "key", None) or str(export_ts.tzinfo or "")
+    lines = [
+        "投资账本全量导出（底稿）",
+        "=" * 60,
+        f"导出时间：{export_ts.strftime('%Y-%m-%d %H:%M:%S')}（时区 {tz_name}）",
+        "导出方式：只读导出，未修改任何账本数据。",
+        "",
+        "文件清单：",
+    ]
+    for filename, table, _columns in exported:
+        lines.append(f"  {filename:<24} 对应数据表 {table}")
+    lines += [
+        f"  {'invest.db':<24} 主库的一致性副本（sqlite3 在线 backup API，WAL 下也一致）",
+        f"  {'README.txt':<24} 本说明",
+        "",
+        "重要提示：",
+        "  这份 zip 只是底稿（备份/留档/给 Excel 看），恢复请用设置页的备份/恢复功能",
+        "  （POST /maintenance/restore 或 /maintenance/restore-upload），不要把 invest.db",
+        "  直接覆盖到 data/invest.db —— 那样会绕过版本迁移与完整性校验，容易把库弄坏。",
+        "  CSV 也不保证能被程序完整还原（缺 id 关联，且部分表没有导入入口）。",
+        "",
+        "CSV 编码：UTF-8 带 BOM（utf-8-sig），Excel/WPS 双击打开中文不乱码。",
+        "列名说明：CSV 第一行是表头，用数据库原始字段名；逐列含义见下面各节。",
+        "",
+        "各文件列含义：",
+        "",
+    ]
+    for filename, table, columns in exported:
+        notes = EXPORT_COLUMN_NOTES.get(table, {})
+        lines.append(f"[{filename}]（表 {table}）")
+        for col in columns:
+            lines.append(f"  {col:<32} {notes.get(col, '数据库原样字段')}")
+        lines.append("")
+    return "\r\n".join(lines) + "\r\n"
+
+
+@router.get("/maintenance/export-all")
+def export_all():
+    """一键全量导出：6 张表 CSV + 主库一致性副本 + README，打包成 zip 下载。"""
+    export_ts = datetime.now(LOCAL_TZ)
+    exported = []
+    payload = io.BytesIO()
+    with zipfile.ZipFile(payload, "w", zipfile.ZIP_DEFLATED) as bundle:
+        with db_session(row_factory=sqlite3.Row) as conn:
+            for filename, table, order_by in EXPORT_CSV_SPECS:
+                columns, data = export_table_csv(conn, table, order_by)
+                bundle.writestr(filename, data)
+                exported.append((filename, table, columns))
+            bundle.writestr("invest.db", export_db_snapshot_bytes(conn))
+        bundle.writestr("README.txt", build_export_readme(export_ts, exported))
+    filename = f"invest-tracker-export-{export_ts.strftime('%Y%m%d')}.zip"
+    return Response(
+        content=payload.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )

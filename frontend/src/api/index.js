@@ -126,6 +126,9 @@ const api = {
 
     // force=true 用于「最新价不是今天的」被 409 拦住后，用户确认强制记录
     createSnapshot: (force = false) => axios.post(API + '/snapshots' + (force ? '?force=true' : '')),
+    // 手动填价：数据源全挂时的兜底。后端会同时把「价格同步时间」刷成现在，
+    // 视为人工确认了今天的价（快照闸门因此放行）。
+    setHoldingPrice: (code, price, note = '') => axios.put(API + '/holdings/' + encodeURIComponent(code) + '/price', { price, note }),
     listSnapshots: (range = []) => {
         let url = API + '/snapshots';
         if (range && range.length === 2) url += `?start_date=${range[0]}&end_date=${range[1]}`;

@@ -8,6 +8,8 @@
       
     </template>
 
+    <!-- 收盘后还没记快照：提示 + 补记入口 -->
+    <SnapshotReminder />
     <!-- 加载骨架 -->
     <div v-if="perfLoading && !perfSummary" class="sk-metrics" aria-hidden="true">
       <div v-for="i in 4" :key="'sk'+i" class="sk-block sk-metric"></div>
@@ -28,6 +30,35 @@
         <div v-if="w.stale" class="perf-window-stale">基准 {{ (w.baseDate || '').slice(5) }}（{{ w.staleDays }} 天前）</div>
       </div>
     </div>
+
+    <!-- 月度：本月累计 + 最近 7 个交易日汇总 -->
+    <el-card shadow="never" class="perf-month-card">
+      <div class="perf-daily-head">
+        <div>
+          <div class="perf-section-title">月度概览</div>
+          <div class="perf-contrib-sub">
+            本月累计 = 收益尺「本月」窗口的口径（已剔除转入/转出）；
+            下面三项按已有快照的最近 7 个交易日统计（不是自然日）。
+          </div>
+        </div>
+      </div>
+      <div class="ledger-metrics cols-4">
+        <MetricCard
+          label="本月累计"
+          :value="monthlyCard.monthText"
+          :tone="monthlyCard.monthTone"
+          :title="monthlyCard.monthTitle"
+        />
+        <MetricCard
+          label="最近 7 个交易日累计"
+          :value="monthlyCard.recent7Text"
+          :tone="monthlyCard.recent7Tone"
+          :title="monthlyCard.recent7Title"
+        />
+        <MetricCard label="涨 / 跌 天数（最近 7 个交易日）" :value="monthlyCard.upDownText" />
+        <MetricCard label="最好 / 最差一天（最近 7 个交易日）" :value="monthlyCard.bestWorstText" />
+      </div>
+    </el-card>
 
     <!-- 每日收益：逐日盈亏（已剔除转入/转出） -->
     <el-card shadow="never" class="perf-daily-card">
@@ -281,10 +312,11 @@
 <script setup>
 import PageShell from '../components/PageShell.vue';
 import MetricCard from '../components/MetricCard.vue';
+import SnapshotReminder from '../components/SnapshotReminder.vue';
 import { ref, computed, onMounted, watch } from 'vue';
 import { ElMessageBox } from 'element-plus';
 import { useAppCtx } from '../composables/useAppCtx.js';
-import { formatPercent } from '../utils/index.js';
+import { formatPercent, summarizeDailyPnl } from '../utils/index.js';
 
 const {
   formatMoney, pct,
@@ -319,6 +351,38 @@ const perfSuggestionApplying = ref(false);
 // === 每日收益 ===
 const dailyRange = ref(30);
 const dailySnapshotSaving = ref(false);
+
+// === 月度概览：本月累计（收益尺的 month 窗口）+ 最近 7 个交易日汇总 ===
+/**
+ * 「最近 7 个交易日」取 perfDailyRows 的前 7 行。
+ * 注意 perfDailyRows 只有"有快照的日子"，所以这是最近 7 个**有快照的**交易日，
+ * 不是自然日；卡片副标题里也按这个口径说明，不要写成"最近 7 天"。
+ * 本月累计直接用收益尺里 key === 'month' 那张卡，口径与收益尺一致（不另算）。
+ */
+const recentTradingDays = 7;
+const recent7DailyStats = computed(() => summarizeDailyPnl(perfDailyRows.value || [], recentTradingDays));
+const monthlyCard = computed(() => {
+  const monthWin = (perfWindowCards.value || []).find((w) => w && w.key === 'month') || null;
+  const monthGain = monthWin && monthWin.gain != null ? Number(monthWin.gain) : null;
+  const s = recent7DailyStats.value;
+  const hasRows = s.count > 0;
+  return {
+    monthText: monthGain == null ? '—' : formatMoney(monthGain, 2, true),
+    monthTone: monthGain == null ? '' : (monthGain >= 0 ? 'up' : 'down'),
+    monthTitle: monthGain == null
+      ? '本月还没有可比的两天快照'
+      : `本月累计（口径同收益尺「本月」窗口）：${formatMoney(monthGain, 2, true)}`,
+    recent7Text: hasRows ? formatMoney(s.total, 2, true) : '—',
+    recent7Tone: hasRows ? (s.total >= 0 ? 'up' : 'down') : '',
+    recent7Title: hasRows
+      ? `按已有快照的最近 ${s.count} 个交易日累计（已剔除转入/转出）`
+      : '还没有可比较的两天快照',
+    upDownText: hasRows ? `${s.upDays} / ${s.downDays}` : '—',
+    bestWorstText: s.best && s.worst
+      ? `${s.best.date.slice(5)} ${formatMoney(s.best.change, 2, true)} / ${s.worst.date.slice(5)} ${formatMoney(s.worst.change, 2, true)}`
+      : '—',
+  };
+});
 
 /** 展示用：图表按日期升序，表格按日期降序 */
 const dailyRowsForRange = computed(() => {
@@ -557,6 +621,7 @@ async function onApplyPerfFlowSuggestion(row) {
 .perf-flow-alert { margin-bottom: 14px; }
 
 /* 每日收益 */
+.perf-month-card { margin-bottom: 14px; }
 .perf-daily-card { margin-bottom: 14px; }
 .perf-daily-head {
   display: flex;

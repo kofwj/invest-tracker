@@ -49,8 +49,13 @@
           <span class="num-cell" :class="Number(scope.row.diluted_cost || 0) < 0 ? 'num-down' : ''">{{ formatMoney(scope.row.diluted_cost, 4) }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="最新价" min-width="88" align="right" header-align="right">
-        <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.last_price, 4) }}</span></template>
+      <el-table-column label="最新价" min-width="118" align="right" header-align="right">
+        <template #default="scope">
+          <span class="num-cell">{{ formatMoney(scope.row.last_price, 4) }}</span>
+          <el-tooltip v-if="isManualPrice(scope.row.code)" content="价格是手动填的，还没被真实行情覆盖" placement="top">
+            <el-tag size="small" type="warning" class="manual-price-tag">人工价</el-tag>
+          </el-tooltip>
+        </template>
       </el-table-column>
       <el-table-column label="市值" min-width="110" align="right" header-align="right">
         <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.quantity * scope.row.last_price) }}</span></template>
@@ -122,9 +127,10 @@
           </el-tooltip>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="90" align="center" header-align="center" fixed="right">
+      <el-table-column label="操作" width="130" align="center" header-align="center" fixed="right">
         <template #default="scope">
           <el-button type="warning" link @click.stop="openHoldingCorrectionDialog(scope.row)">校正</el-button>
+          <el-button type="primary" link :loading="priceEditing" @click.stop="onChangePrice(scope.row)">改价</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -133,8 +139,10 @@
 </template>
 
 <script setup>
+import { computed, ref } from 'vue';
 import PageShell from '../components/PageShell.vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import api from '../api/index.js';
 import { useAppCtx } from '../composables/useAppCtx.js';
 import HomeDashboard from '../components/HomeDashboard.vue';
 
@@ -152,6 +160,7 @@ const {
   holdingLifetimeProfitRate,
   trailingSyncing,
   syncTrailingReturns,
+  fetchData,
   goTab,
 } = useAppCtx();
 
@@ -162,6 +171,40 @@ function onSyncTrailingReturns() {
   return syncTrailingReturns();
 }
 
+// 手动改价：PUT /holdings/{code}/price。数据源全挂时人工兜底 —— 后端会把
+// 「价格同步时间」一起刷成现在，所以快照闸门会放行。priceEditing 用来挡连点。
+const priceEditing = ref(false);
+
+async function onChangePrice(row) {
+  if (priceEditing.value) return;
+  priceEditing.value = true;
+  try {
+    const { value } = await ElMessageBox.prompt('填写最新价（元）', '手动改价', {
+      inputPattern: /^\s*\d+(\.\d+)?\s*$/,
+      inputErrorMessage: '请输入正数',
+    });
+    const price = Number(value);
+    await api.setHoldingPrice(row.code, price);
+    ElMessage.success(`已更新为 ${price}`);
+    await fetchData();
+  } catch (e) {
+    // 用户取消不算失败，其余（400 校验 / 404 / 网络）都要把后端 detail 透出来
+    if (e === 'cancel' || e === 'close') return;
+    ElMessage.error(e?.response?.data?.detail || e?.message);
+  } finally {
+    priceEditing.value = false;
+  }
+}
+
+// 人工价徽标：GET /dashboard 的 manual_price_codes 是当前人工价的代码数组
+const manualPriceCodes = computed(() => {
+  const dash = dashboard?.value ?? dashboard;
+  return Array.isArray(dash?.manual_price_codes) ? dash.manual_price_codes : [];
+});
+
+function isManualPrice(code) {
+  return manualPriceCodes.value.includes(code);
+}
 </script>
 
 <style scoped>
@@ -176,5 +219,8 @@ function onSyncTrailingReturns() {
   flex: 1;
   min-width: 240px;
   margin: 0 !important;
+}
+.manual-price-tag {
+  margin-left: 6px;
 }
 </style>

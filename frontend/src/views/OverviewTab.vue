@@ -1,5 +1,7 @@
 <template>
   <div class="overview-page">
+    <!-- 收盘后还没记快照：提示 + 补记入口（两个页面共用同一个组件） -->
+    <SnapshotReminder />
     <section class="overview-hero">
       <div class="overview-metrics">
         <div class="ov-metric main">
@@ -194,6 +196,7 @@ import {
   TrendingUp,
   Zap,
 } from 'lucide-vue-next';
+import SnapshotReminder from '../components/SnapshotReminder.vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 import { formatPercent, todayLocalIso } from '../utils/index.js';
 
