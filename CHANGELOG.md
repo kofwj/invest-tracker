@@ -4,6 +4,69 @@
 版本号单一来源 `backend/version.py`；发布流程：改那里 → 本文件记版本 → `git tag vX.Y.Z`。生产部署以分支 `deploy/vps` 为准。
 
 ---
+## [未发布 · 第十轮] — 分析组收敛：5 页 → 3 页
+
+按批准的《分析组重新设计》计划执行批次 A/B/C，D1–D5 全按建议。
+目标是「一页只回答一个问题」，只做合并去重，**不加功能、不动任何数据口径**。
+
+### 批次 A：资产快照并入「收益与快照」
+
+同一份 `daily_snapshots`（83 条）原本有两页各展示一半：`资产快照` 看逐日**绝对值**、
+`收益分析` 看逐日**变动**。现在合成一页「收益与快照」：
+
+- `views/SnapshotsTab.vue` → **`components/SnapshotPanel.vue`**（组件化：去掉 `PageShell` 外壳，
+  日期范围 / 记录今日快照 / 导出 / 压缩 这几个工具条内联到面板顶部）
+- 按 D4 **删掉「总资产趋势」图**：同一份数据在这一页已经有「每日收益」柱状图，
+  `快照明细`（快照历史 / 区间变化 / 当前资产结构 / 人工对账）接在「每日收益」之后
+- 导航与路由：`analysis` 组只留 `今天该看 / 收益与快照 / 结构与目标`；
+  `performance` 标签改「收益与快照」；`/snapshots` 与旧 `?tab=snapshots` 重定向到它
+- 概览页待办「今日快照」的跳转与文案改为「去收益与快照」→ performance
+
+### 批次 B：K 线查询降级为持仓页弹窗
+
+依据：`kline_cache` 的代码集合与持仓**完全一致**（8 只，没有一只是额外查过的股票），
+说明这一页从未被用于研究，而它是全站最依赖外网的一条链路。
+
+- `views/KlineTab.vue` → **`components/KlineDialog.vue`**：`el-dialog` + `v-model` + `code` prop，
+  **打开即按传进来的代码加载**，关闭清态（`destroy-on-close` + 令牌作废在飞响应），
+  内容（K 线图/参数、走势解读、基本面体检、公司简报、前十大股东、历史分红）原样保留
+- 持仓明细页**点标的名**打开弹窗（不新增操作列按钮）
+- `/klines` 与旧 `?tab=klines` 重定向到 `持仓明细`
+
+### 批次 C：结构与目标「处理偏离」段排优先级
+
+实测这一页 10 个区块**都有内容**（`health` 9 条、`issues` 4 条、`scenarios` 3 条、`satellite` 有值），
+所以不删块，只在第三段内排序：**要动手的**（纪律检查 / 问题清单 / 再平衡建议）在前，
+「细分类别明细」「纪律草稿」移到段尾并默认折叠。区块数不变。
+
+### 顺带修掉三处删图暴露的连带问题
+
+- `charts/index.js` 的 `renderSnapshotChartsView` 原来要求 `#snapshotTrendChart` 与
+  `#snapshotStructureChart` **同时存在**，否则整个函数 `return false` → 删掉趋势图后
+  「当前资产结构」饼图会跟着不画。改为两个容器各自独立判断
+- `modules/snapshots.js` 的 `waitForChartDom([...])` 去掉趋势图容器（否则每次白等 2.5s 超时）；
+  它监听的分支从 `activeTab === 'snapshots'` 改为 `'performance'`
+- `main.js`：进 `performance` 时同时拉 `fetchSnapshots()` 并渲染快照图表；
+  `refreshCurrentTab` 里已失效的 snapshots 分支并入 performance
+
+### 纠正我上一轮的两处误判（数据核对后推翻）
+
+出计划时我把两条"重复"说重了，这里更正：`持仓浮盈 / 全周期盈亏` 在其它页是**语义不同的表格列**
+（当前逐只 / 按类别汇总 / 逐日快照），不是重复展示；`help_notes`（后端 5 条）**前端根本没引用**。
+所以「结构与目标」不该删块 —— 已按此执行。
+
+### 测试
+
+- 前端 **167** 项（+10）：新增 `performance-snapshots-merged`（4）与 `kline-dialog`（3）；
+  `views-write-guards` 里挂旧 `SnapshotsTab` 的 4 个用例**改挂新组件、断言一条没删**（另补 8 条
+  结构断言钉住"趋势图已删"）；`nav-coverage` 里 snapshots 的断言改为
+  「重定向登记存在 + 重定向目标本身可达」；`pageshell-header` / `overview-sections` 同步改名与跳转目标
+- 后端 259 项（未变）；`make check` 全绿（含改过的 `check.sh` 断言：改为检查
+  `PerformanceTab.vue` 里含「快照明细」，而不是检查已不存在的 `SnapshotsTab.vue`）
+- `README.md` 的页面清单与「旧地址仍跳转」一并更新
+
+---
+
 ## [未发布 · 第九轮] — 修「今日盈亏」不显示 + 总览指标栅格
 
 ### 修复：首页「今日盈亏」每天快照一写就变成「—」
