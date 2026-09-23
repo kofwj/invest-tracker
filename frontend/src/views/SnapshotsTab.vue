@@ -207,6 +207,7 @@
 import PageShell from '../components/PageShell.vue';
 import MetricCard from '../components/MetricCard.vue';
 import { ref } from 'vue';
+import { ElMessageBox } from 'element-plus';
 import { useAppCtx } from '../composables/useAppCtx.js';
 const { snapshots, snapshotRange, snapshotMetrics, snapshotChangeRows, snapshotInsights, snapshotSummary, snapshotLoading, reconcileData, reconcileForm, reconcileSaving, createSnapshot, fetchSnapshots, exportSnapshots, compactSnapshots, saveReconcile, formatMoney, pct } = useAppCtx();
 
@@ -214,9 +215,35 @@ const { snapshots, snapshotRange, snapshotMetrics, snapshotChangeRows, snapshotI
 // 压缩快照模块里没有标志，本页用一个本地 ref。
 const compacting = ref(false);
 
+/**
+ * 记录/更新今日快照。
+ *
+ * 后端在「最新价不是今天的」时候会返回 409（模块会把 409 继续往外抛，
+ * 不会自己吞掉），这里必须接住：否则就是一个 unhandled rejection，
+ * 用户只会看到「点了没反应」。
+ */
 async function onCreateSnapshot() {
   if (snapshotLoading?.value) return;
-  await createSnapshot();
+  const post = async (force) => {
+    try {
+      await createSnapshot(force);
+      return true;
+    } catch (e) {
+      if (e?.response?.status !== 409) throw e;
+      try {
+        await ElMessageBox.confirm(
+          e.response.data?.detail || '最新价不是今天的，现在记录会让这天的收益失真。',
+          '价格未更新',
+          { confirmButtonText: '强制记录', cancelButtonText: '取消', type: 'warning' },
+        );
+      } catch {
+        return false; // 用户取消
+      }
+      await createSnapshot(true);
+      return true;
+    }
+  };
+  await post(false).catch((err) => console.error('createSnapshot', err));
 }
 
 async function onCompactSnapshots() {

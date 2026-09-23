@@ -467,3 +467,73 @@ describe('PerformanceTab 每日收益的价格新鲜度标记', () => {
     app.unmount();
   });
 });
+
+// ----------------------------------------------------------- SnapshotsTab 409
+
+describe('SnapshotsTab 记录今日快照的 409 闸门', () => {
+  const snapCtx = (createSnapshot) => ({
+    snapshots: ref([]),
+    snapshotRange: ref([]),
+    snapshotMetrics: ref([]),
+    snapshotChangeRows: ref([]),
+    snapshotInsights: ref([]),
+    snapshotSummary: ref(null),
+    snapshotLoading: ref(false),
+    reconcileData: ref(null),
+    reconcileForm: ref({ date: '', amount: 0, note: '' }),
+    reconcileSaving: ref(false),
+    createSnapshot,
+    fetchSnapshots: vi.fn(async () => {}),
+    exportSnapshots: vi.fn(async () => {}),
+    compactSnapshots: vi.fn(async () => {}),
+    saveReconcile: vi.fn(async () => {}),
+    formatMoney,
+    pct: () => '—',
+  });
+
+  it('409 → 弹确认（用后端 detail）→ 带 force 重试；不会变成 unhandled rejection', async () => {
+    elMock.messageBox.confirm.mockClear();
+    const err409 = Object.assign(new Error('价格未更新'), {
+      response: { status: 409, data: { detail: '最新价还是 2026-09-22 的，确认后仍要记录吗？' } },
+    });
+    const createSnapshot = vi.fn(async (force) => {
+      if (force !== true) throw err409;
+      return {};
+    });
+    const ctx = snapCtx(createSnapshot);
+    const { host, app } = mountView(SnapshotsTab, ctx);
+    await flush();
+
+    click(findButton(host, '记录/更新今日快照'));
+    await flush();
+
+    expect(createSnapshot).toHaveBeenCalledTimes(2);
+    expect(createSnapshot.mock.calls[0]).toEqual([false]);
+    expect(createSnapshot.mock.calls[1]).toEqual([true]);
+    expect(elMock.messageBox.confirm).toHaveBeenCalledTimes(1);
+    expect(elMock.messageBox.confirm.mock.calls[0][0]).toContain('2026-09-22');
+    app.unmount();
+  });
+
+  it('用户取消确认时不带 force 重试', async () => {
+    elMock.messageBox.confirm.mockClear();
+    elMock.messageBox.confirm.mockRejectedValueOnce('cancel');
+    const err409 = Object.assign(new Error('价格未更新'), {
+      response: { status: 409, data: { detail: '最新价不是今天的' } },
+    });
+    const createSnapshot = vi.fn(async (force) => {
+      if (force !== true) throw err409;
+      return {};
+    });
+    const ctx = snapCtx(createSnapshot);
+    const { host, app } = mountView(SnapshotsTab, ctx);
+    await flush();
+
+    click(findButton(host, '记录/更新今日快照'));
+    await flush();
+
+    expect(createSnapshot).toHaveBeenCalledTimes(1);
+    expect(createSnapshot.mock.calls.every((c) => c[0] !== true)).toBe(true);
+    app.unmount();
+  });
+});
