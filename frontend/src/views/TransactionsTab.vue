@@ -1,7 +1,5 @@
 <template>
-  <PageShell
-    title="交易录入 / 管理"
-  >
+  <PageShell>
                 <el-card header="新增交易记录">
                     <el-form :model="transForm" label-width="100px">
                         <el-row :gutter="20">
@@ -212,7 +210,7 @@
                     
                     <!-- 交易记录表格 -->
                     <el-table :data="filteredTransactions" stripe size="small" class="transaction-table" style="width: 100%" max-height="500" aria-label="交易流水">
-                        <el-table-column prop="date" label="日期" width="108" sortable align="left" header-align="left"></el-table-column>
+                        <el-table-column prop="date" label="日期" width="108" sortable align="left" header-align="left" fixed="left"></el-table-column>
                         <el-table-column label="标的" min-width="148" align="left" header-align="left">
                             <template #default="scope">
                                 <div class="asset-cell">

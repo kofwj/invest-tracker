@@ -1,7 +1,5 @@
 <template>
-  <PageShell
-    title="持仓明细"
-  >
+  <PageShell>
     <template #actions>
       <el-button type="warning" plain :loading="trailingSyncing" @click="onSyncTrailingReturns">
         同步近一年收益率

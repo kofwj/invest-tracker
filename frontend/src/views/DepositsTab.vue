@@ -1,7 +1,5 @@
 <template>
-  <PageShell
-    title="银行存款"
-  >
+  <PageShell>
     <template #actions>
       <el-space wrap>
 
@@ -95,7 +93,7 @@
                     </el-row>
 
                     <el-table :data="depositRows" stripe size="small" class="deposit-table" style="width: 100%" aria-label="存款明细">
-                        <el-table-column prop="bank_name" label="银行" min-width="100" align="left" header-align="left"></el-table-column>
+                        <el-table-column prop="bank_name" label="银行" min-width="100" align="left" header-align="left" fixed="left"></el-table-column>
                         <el-table-column label="金额" min-width="110" align="right" header-align="right">
                             <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.amount) }}</span></template>
                         </el-table-column>

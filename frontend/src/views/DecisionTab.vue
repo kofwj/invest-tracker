@@ -1,7 +1,5 @@
 <template>
-  <PageShell
-    title="今天该看"
-  >
+  <PageShell>
     <template #actions>
       <el-tag v-if="marketUpdatedAt" size="small" type="info">更新 {{ marketUpdatedAt }}</el-tag>
       <el-tag v-if="quoteCacheSeconds != null" size="small" type="info">行情缓存 {{ quoteCacheSeconds }}s</el-tag>

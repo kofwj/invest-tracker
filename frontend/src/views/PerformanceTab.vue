@@ -1,7 +1,5 @@
 <template>
-  <PageShell
-    title="收益分析"
-  >
+  <PageShell>
     <template #actions>
         <el-tag :type="perfSummary?.xirr_status === 'ok' ? 'success' : (hasPerfFlows ? 'info' : 'warning')" size="small">
           {{ perfSummary?.xirr_status === 'ok' ? '年化已算' : (hasPerfFlows ? (perfSummary?.xirr_message || '年化暂不可用') : '外部流水未录入') }}

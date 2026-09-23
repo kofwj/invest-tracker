@@ -1,7 +1,5 @@
 <template>
-  <PageShell
-    title="消息推送"
-  >
+  <PageShell>
     <template #actions>
       <el-space wrap>
         <el-button size="small" @click="fetchNotifyPanel" :loading="notifyLoading">刷新</el-button>

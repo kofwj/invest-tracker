@@ -1,12 +1,20 @@
 try:
     from .portfolio_totals import compute_portfolio_totals
-    from .snapshots import latest_price_sync_at
+    from .snapshots import latest_price_sync_at, manual_price_codes as _manual_price_codes
 except ImportError:
     from portfolio_totals import compute_portfolio_totals
-    from snapshots import latest_price_sync_at
+    from snapshots import latest_price_sync_at, manual_price_codes as _manual_price_codes
 
 # Re-export for older imports / tests that may reference this name.
 PENDING_DIRECTIONS = ("申购待确认", "待确认申购")
+
+
+def _safe_manual_price_codes(conn):
+    """人工填价代码列表；任何异常都回落空列表（dashboard 不能因为读不到它而 500）。"""
+    try:
+        return list(_manual_price_codes(conn) or [])
+    except Exception:
+        return []
 
 
 def build_dashboard(conn):
@@ -56,6 +64,9 @@ def build_dashboard(conn):
         # 缺价持仓计数（市值按 0 计），供快照打标记与前端提示
         "unpriced_count": totals.get("unpriced_count", 0),
         "unpriced_codes": totals.get("unpriced_codes", []),
+        # 当前用「人工填价」兜底的持仓（手动改过价、还没被真实行情覆盖），
+        # 供前端在持仓页打标记，也便于排查"这个数是我自己填的"
+        "manual_price_codes": _safe_manual_price_codes(conn),
         # 最近一次「成功同步到至少一只价格」的时间（settings.last_price_sync_at，
         # 老库回落 MAX(holdings.updated_at)）；快照价格闸门的判据来源。
         "last_price_sync_at": latest_price_sync_at(conn),

@@ -1,7 +1,5 @@
 <template>
-  <PageShell
-    title="券商对账单"
-  >
+  <PageShell>
 <el-alert
       title="怎么用"
       type="info"
@@ -95,7 +93,7 @@
           aria-label="券商与系统持仓差异明细"
           empty-text="无差异"
         >
-          <el-table-column prop="code" label="代码" width="90" />
+          <el-table-column prop="code" label="代码" width="90" fixed="left" />
           <el-table-column prop="name" label="名称" min-width="110" show-overflow-tooltip />
           <el-table-column label="状态" width="100">
             <template #default="s">
@@ -137,7 +135,7 @@
             aria-label="券商对账校正建议明细"
             @selection-change="onBrokerSelectionChange"
           >
-            <el-table-column type="selection" width="42" />
+            <el-table-column type="selection" width="42" fixed="left" />
             <el-table-column prop="code" label="代码" width="90" />
             <el-table-column prop="name" label="名称" min-width="100" show-overflow-tooltip />
             <el-table-column prop="date" label="校正日" width="110" />
@@ -166,7 +164,7 @@
         </div>
       </template>
       <el-table :data="brokerHistory" stripe size="small" empty-text="还没有对账记录" style="width: 100%" aria-label="券商对账历史记录">
-        <el-table-column label="时间" width="170">
+        <el-table-column label="时间" width="170" fixed="left">
           <template #default="s">{{ s.row.created_at || '—' }}</template>
         </el-table-column>
         <el-table-column label="类型" width="80">

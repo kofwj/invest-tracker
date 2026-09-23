@@ -1,12 +1,25 @@
 <template>
   <div class="page-shell" :class="{ 'is-flush': flush, 'is-compact': compact }">
     <div v-if="showHeader" class="page-shell-header">
-      <div class="page-shell-heading">
-        <slot name="heading">
-          <h3 v-if="title" class="page-shell-title">{{ title }}</h3>
-        </slot>
+      <!-- 页面标题只留给屏幕阅读器：可见标题文字与子导航 tab 完全重复 -->
+      <h1 class="page-shell-title visually-hidden">{{ headingText }}</h1>
+
+      <nav v-if="tabs.length > 1" class="page-tabs" aria-label="页面导航">
+        <button
+          v-for="t in tabs"
+          :key="t"
+          type="button"
+          class="page-tab"
+          :class="{ active: currentTab === t }"
+          @click="goTab(t)"
+        >{{ tabLabel(t) }}</button>
+      </nav>
+
+      <div v-if="slots.heading" class="page-shell-heading">
+        <slot name="heading" />
       </div>
-      <div v-if="$slots.actions" class="page-shell-actions">
+
+      <div v-if="slots.actions" class="page-shell-actions">
         <slot name="actions" />
       </div>
     </div>
@@ -18,6 +31,8 @@
 
 <script setup>
 import { computed, useSlots } from 'vue';
+import { useAppCtx } from '../composables/useAppCtx.js';
+import { tabLabel } from '../modules/tabNav.js';
 
 const props = defineProps({
   title: { type: String, default: '' },
@@ -28,5 +43,32 @@ const props = defineProps({
 });
 
 const slots = useSlots();
-const showHeader = computed(() => !!(props.title || slots.heading || slots.actions));
+
+// 测试里挂载这些 view 时提供的 ctx 可能没有导航字段（tabGroups / goTab 等），
+// 这里一律兜底：拿不到就当成「没有子导航」，不抛错。
+let ctx = {};
+try {
+  ctx = useAppCtx() || {};
+} catch {
+  ctx = {};
+}
+const { tabGroups, tabGroup, activeTab, goTab } = ctx;
+
+/** ref / computed / 裸值都兼容 */
+const unwrap = (v) => (v && typeof v === 'object' && 'value' in v ? v.value : v);
+
+const currentTab = computed(() => unwrap(activeTab));
+const currentGroupId = computed(() => unwrap(tabGroup));
+const tabs = computed(() => {
+  const groups = unwrap(tabGroups);
+  const hit = (groups || []).find((g) => g.id === currentGroupId.value);
+  return (hit && hit.tabs) || [];
+});
+
+/** 没有 title 时回退成当前 tab 的名字，别让 h1 空着 */
+const headingText = computed(() => props.title || tabLabel(currentTab.value));
+
+const showHeader = computed(
+  () => !!(props.title || slots.heading || slots.actions || tabs.value.length > 1),
+);
 </script>

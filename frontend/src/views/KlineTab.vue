@@ -1,7 +1,5 @@
 <template>
-  <PageShell
-    title="K线查询"
-  >
+  <PageShell>
     <template #actions>
       <el-button size="small" @click="syncAllHoldings" :loading="loading">同步全部持仓 K 线</el-button>
       <el-button size="small" @click="clearAll">清空</el-button>

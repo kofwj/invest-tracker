@@ -1,7 +1,5 @@
 <template>
-  <PageShell
-    title="资产快照"
-  >
+  <PageShell>
     <template #actions>
 
                             <el-date-picker
@@ -151,7 +149,7 @@
 
                     <el-card shadow="never" header="快照历史记录">
                         <el-table :data="snapshots" stripe size="small" class="snapshot-table" style="width: 100%" empty-text="暂无快照记录" aria-label="快照历史记录">
-                            <el-table-column prop="date" label="日期" width="108" sortable align="left" header-align="left"></el-table-column>
+                            <el-table-column prop="date" label="日期" width="108" sortable align="left" header-align="left" fixed="left"></el-table-column>
                             <el-table-column label="总资产" min-width="120" align="right" header-align="right">
                                 <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.total_assets) }}</span></template>
                             </el-table-column>

@@ -1,7 +1,8 @@
 import logging
+import math
 import sqlite3
 from datetime import date as dt_date, datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -11,15 +12,17 @@ try:
     from .csv_utils import create_safety_backup
     from .database import LOCAL_TZ, db_session
     from .holding_calculator import infer_category, recalc_holdings, validate_holding_history
+    from .price_sync import fetch_open_fund_nav, fetch_stock_quotes
     from .return_sync import calculate_trailing_return_1y, ensure_holding_return_columns
-    from .price_sync import fetch_stock_quotes, fetch_open_fund_nav
+    from .snapshots import clear_manual_price_codes, mark_manual_price_code
 except ImportError:
     from cash import set_setting
     from csv_utils import create_safety_backup
     from database import LOCAL_TZ, db_session
     from holding_calculator import infer_category, recalc_holdings, validate_holding_history
+    from price_sync import fetch_open_fund_nav, fetch_stock_quotes
     from return_sync import calculate_trailing_return_1y, ensure_holding_return_columns
-    from price_sync import fetch_stock_quotes, fetch_open_fund_nav
+    from snapshots import clear_manual_price_codes, mark_manual_price_code
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -45,6 +48,18 @@ class HoldingUpdate(BaseModel):
     expected_return: Optional[float] = None
     name: Optional[str] = None
     category: Optional[str] = None
+
+
+class ManualPriceUpdate(BaseModel):
+    """手动填某只持仓的现价。
+
+    price 故意不声明成 float：pydantic 校验失败会走 FastAPI 的 422，
+    而用户要的是「中文 400」。所以这里收下任意类型，在下面逐条给出
+    给人看的报错。
+    """
+
+    price: Any = None
+    note: Optional[str] = None
 
 
 class HoldingCorrectionBase(BaseModel):
@@ -96,6 +111,55 @@ def update_holding(code: str, payload: HoldingUpdate):
             raise HTTPException(status_code=404, detail="Holding not found")
         conn.commit()
     return {"status": "success", "code": code}
+
+
+@router.put("/holdings/{code}/price")
+def set_manual_holding_price(code: str, payload: ManualPriceUpdate):
+    """人工填某只持仓的现价（所有行情源都挂时的兜底）。
+
+    语义：用户明确确认了「今天的价就是这个」，所以
+    - holdings.last_price / updated_at 按用户给的价刷新；
+    - settings.last_price_sync_at 同时刷新 → 快照闸门（resolve_snapshot_price_state）
+      放行，不需要再 force=true 记录一个用旧价算出来的错快照；
+    - code 记进 settings.manual_price_codes，快照据此落 manual_price_count，
+      下一次真实行情同步成功时自动撤掉标记。
+    校验失败一律 400 + 给人看的中文；code 不在 holdings 表里则 404。
+    """
+    code = str(code or "").strip()
+    if not code:
+        raise HTTPException(status_code=400, detail="代码不能为空")
+
+    raw_price = payload.price
+    # bool 是 int 的子类，True/False 不能当价格用
+    if raw_price is None or isinstance(raw_price, bool) or not isinstance(raw_price, (int, float)):
+        raise HTTPException(status_code=400, detail="价格必须是一个数字，例如 38.36")
+    price = float(raw_price)
+    if not math.isfinite(price):
+        raise HTTPException(status_code=400, detail="价格必须是有限数字（不能是 NaN 或无穷大）")
+    if price <= 0:
+        raise HTTPException(status_code=400, detail="价格必须大于 0")
+
+    now = datetime.now(LOCAL_TZ).replace(tzinfo=None)
+    now_text = now.strftime("%Y-%m-%d %H:%M:%S")
+    with db_session(row_factory=sqlite3.Row) as conn:
+        exists = conn.execute("SELECT code FROM holdings WHERE code = ?", (code,)).fetchone()
+        if not exists:
+            raise HTTPException(status_code=404, detail=f"持仓里没有 {code} 这只标的")
+        conn.execute(
+            "UPDATE holdings SET last_price = ?, updated_at = ? WHERE code = ?",
+            (price, now, code),
+        )
+        # 手动价 = 用户确认过的「今天的价」→ 闸门放行（与一次成功的同步同语义）
+        set_setting(conn, "last_price_sync_at", now_text)
+        codes = mark_manual_price_code(conn, code)
+        conn.commit()
+    return {
+        "status": "success",
+        "code": code,
+        "price": price,
+        "updated_at": now_text,
+        "manual_price_codes": codes,
+    }
 
 
 @router.get("/holding-corrections")
@@ -311,6 +375,10 @@ def _sync_prices_impl(backup: bool = False):
                 "UPDATE holdings SET last_price = ?, updated_at = ? WHERE code = ?",
                 pending,
             )
+            # 真实行情覆盖了人工价 → 撤掉这些 code 的「人工」标记（同一个短事务里写）。
+            # 整批成功时 pending 覆盖全部持仓 → 标记列表自然清空；部分成功时
+            # 未成功那些标的的标记原样保留，快照据此继续如实标 manual_price_count。
+            clear_manual_price_codes(conn, [row[2] for row in pending])
         if failed:
             set_setting(conn, "last_price_sync_failed", ",".join(str(f["code"]) for f in failed))
         else:

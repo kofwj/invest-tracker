@@ -303,14 +303,14 @@
                 @selection-change="onDividendSelectionChange"
                 empty-text="暂无草稿，请先扫描"
             >
-                <el-table-column type="selection" width="48" :selectable="isDividendDraftSelectable"></el-table-column>
+                <el-table-column type="selection" width="48" fixed="left" :selectable="isDividendDraftSelectable"></el-table-column>
                 <el-table-column label="状态" width="110" align="center">
                     <template #default="scope">
                         <el-tag :type="dividendStatusType(scope.row.status)" size="small">{{ dividendStatusLabel(scope.row.status) }}</el-tag>
                     </template>
                 </el-table-column>
                 <el-table-column prop="event_date" label="除权/事件日" width="115" align="center"></el-table-column>
-                <el-table-column label="标的" min-width="150">
+                <el-table-column label="标的" min-width="150" fixed="left">
                     <template #default="scope">
                         <div>{{ scope.row.name }}</div>
                         <div style="color:var(--app-muted);font-size:12px;">{{ scope.row.code }} · {{ scope.row.category || '未分类' }}</div>

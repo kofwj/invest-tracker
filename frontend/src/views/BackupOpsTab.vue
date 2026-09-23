@@ -1,7 +1,5 @@
 <template>
-  <PageShell
-    title="数据备份"
-  >
+  <PageShell>
     <template #actions>
       <el-space wrap>
         <el-button size="small" @click="fetchMaintenance" :loading="maintenanceLoading">刷新列表</el-button>

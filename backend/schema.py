@@ -25,7 +25,7 @@ except ImportError:
     from snapshots import ensure_snapshot_columns, ensure_portfolio_cash_flows_table, ensure_reconcile_table
 
 
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = 16
 SCHEMA_VERSION_KEY = "schema_version"
 
 
@@ -328,6 +328,15 @@ def migrate_to_v15_snapshot_price_columns(conn):
     ensure_snapshot_columns(conn)
 
 
+def migrate_to_v16_snapshot_manual_price_column(conn):
+    """快照人工价列：manual_price_count（该快照含人工价的持仓只数）。
+
+    走 ensure_snapshot_columns 补列（幂等、不改已有数字），老库升级自动补；
+    历史快照该列为 NULL，读出来回落成 0。
+    """
+    ensure_snapshot_columns(conn)
+
+
 MIGRATIONS = [
     (1, migrate_to_v1_core_compat),
     (2, migrate_to_v2_holdings_and_snapshots),
@@ -344,6 +353,7 @@ MIGRATIONS = [
     (13, migrate_to_v13_broker_reconcile_history),
     (14, migrate_to_v14_query_indexes),
     (15, migrate_to_v15_snapshot_price_columns),
+    (16, migrate_to_v16_snapshot_manual_price_column),
 ]
 
 

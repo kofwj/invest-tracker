@@ -485,6 +485,8 @@ def build_performance_timeline(conn, start_date=None, end_date=None):
                 # 记录时最新价不是当天的（低置信）；老快照没有这两列 → 回落 0/None
                 "price_stale": int(snap.get("price_stale") or 0),
                 "price_date": snap.get("price_date"),
+                # 这一天有几只持仓用的是人工填的价（用户手动确认过）
+                "manual_price_count": int(snap.get("manual_price_count") or 0),
             }
         )
         prev_date = snap_date

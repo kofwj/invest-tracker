@@ -1,7 +1,5 @@
 <template>
-  <PageShell
-    title="证券账户"
-  >
+  <PageShell>
     <template #actions>
       <el-space wrap>
         <el-button size="small" type="primary" :loading="feeBusy === 'save'" :disabled="!!feeBusy && feeBusy !== 'save'" @click="onSaveFeeSettings">保存费率</el-button>
@@ -136,7 +134,7 @@
         <el-button @click="resetCashFlowQuery">重置</el-button>
       </div>
       <el-table :data="cashFlows" stripe size="small" class="cash-table" style="width: 100%" aria-label="证券资金流水">
-        <el-table-column prop="date" label="日期" width="108" align="left" header-align="left"></el-table-column>
+        <el-table-column prop="date" label="日期" width="108" align="left" header-align="left" fixed="left"></el-table-column>
         <el-table-column prop="account" label="账户" width="100" align="left" header-align="left"></el-table-column>
         <el-table-column prop="flow_type" label="类型" width="100" align="left" header-align="left">
           <template #default="scope">

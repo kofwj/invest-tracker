@@ -12,9 +12,9 @@ export const SCREENSHOT_TABS = [
 /** @type {{ id: string, label: string, tabs: string[] }[]} */
 export const TAB_GROUPS = [
     { id: 'home', label: '总览', tabs: ['overview'] },
-    { id: 'daily', label: '日常', tabs: ['holdings', 'transactions', 'deposits'] },
+    { id: 'daily', label: '日常', tabs: ['holdings', 'transactions', 'deposits', 'broker'] },
     // P2 真合并：决策+市场 → decision；配置+纪律 → allocation
-    { id: 'analysis', label: '分析', tabs: ['decision', 'performance', 'allocation', 'klines'] },
+    { id: 'analysis', label: '分析', tabs: ['decision', 'performance', 'snapshots', 'allocation', 'klines'] },
     // 原「维护」→「设置」：推送 / 证券账户(费率+现金) / 备份
     { id: 'ops', label: '设置', tabs: ['ops_notify', 'cash', 'ops_backup'] },
 ];

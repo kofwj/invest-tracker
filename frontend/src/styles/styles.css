@@ -182,6 +182,11 @@ body {
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 0 0 1px color-mix(in srgb, var(--app-primary) 18%, transparent);
 }
 .header-nav-btn:focus-visible { outline: 2px solid color-mix(in srgb, var(--app-primary) 35%, transparent); outline-offset: 1px; }
+/* 顶栏 ≤960px：品牌副标题与主题文字先退场，保住一行里的按钮 */
+@media (max-width: 960px) {
+  .header-subtitle { display: none; }
+  .header-theme-label { display: none; }
+}
 @media (max-width: 900px) {
   .header {
     flex-wrap: wrap;
@@ -364,12 +369,21 @@ html.dark .stat-label::after { background: rgba(255,255,255,0.08); }
   box-shadow: var(--app-shadow-sm);
 }
 .page-view { margin-top: 4px; min-height: 240px; }
-.page-nav {
+/* 子导航（tab 行）：现在是页头的一部分，左 tab 右 actions */
+.page-tabs {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
-  margin: 0 0 14px;
-  padding-bottom: 2px;
+  min-width: 0;
+}
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 /* 统一页面壳 */
@@ -379,8 +393,9 @@ html.dark .stat-label::after { background: rgba(255,255,255,0.08); }
 .page-shell-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
+  align-items: center;
+  gap: 10px 12px;
+  /* 窄屏 tab 多了一行放不下就换行（tab 行掉到第二行） */
   flex-wrap: wrap;
   margin-bottom: 14px;
 }
@@ -406,6 +421,7 @@ html.dark .stat-label::after { background: rgba(255,255,255,0.08); }
   gap: 8px;
   align-items: center;
   flex-wrap: wrap;
+  margin-left: auto;
 }
 .page-shell-body > .el-card {
   border-radius: var(--app-radius-sm);
@@ -627,7 +643,8 @@ html.dark .stat-label::after { background: rgba(255,255,255,0.08); }
   align-items: center;
   flex-wrap: wrap;
 }
-.page-nav-btn {
+/* 页头里的组内 tab 按钮（原 .page-nav-btn） */
+.page-tab {
   border: 1px solid var(--app-border);
   background: var(--app-chip-bg);
   color: var(--app-muted);
@@ -636,17 +653,19 @@ html.dark .stat-label::after { background: rgba(255,255,255,0.08); }
   font-size: 13px;
   line-height: 1.3;
   cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
   transition: background .15s ease, color .15s ease, border-color .15s ease;
 }
-.page-nav-btn:hover { border-color: color-mix(in srgb, var(--app-primary) 35%, var(--app-border)); color: var(--app-primary); background: var(--app-primary-soft); }
-.page-nav-btn.active {
+.page-tab:hover { border-color: color-mix(in srgb, var(--app-primary) 35%, var(--app-border)); color: var(--app-primary); background: var(--app-primary-soft); }
+.page-tab.active {
   border-color: color-mix(in srgb, var(--app-primary) 45%, var(--app-border));
   background: var(--app-primary-soft);
   color: var(--app-primary);
   font-weight: 650;
   box-shadow: inset 0 -2px 0 var(--app-primary);
 }
-.page-nav-btn:focus-visible {
+.page-tab:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--app-primary) 40%, transparent);
   outline-offset: 2px;
 }
@@ -1025,7 +1044,7 @@ html.screenshot-mask .login-overlay *,
 .header-nav-btn:focus-visible,
 .header-icon-btn:focus-visible,
 .header-btn:focus-visible,
-.page-nav-btn:focus-visible {
+.page-tab:focus-visible {
     outline: 2px solid var(--app-primary);
     outline-offset: 2px;
 }
@@ -1281,11 +1300,45 @@ html.dark .asset-cell-code { color: var(--app-muted); }
 }
 .empty-hint strong { color: var(--app-text); font-weight: 650; }
 
-/* mobile header: hide theme text */
+/* 窄屏顶栏：第 1 行 品牌 + 操作按钮，第 2 行 分组导航（横向可滚动，不换行、不显示滚动条） */
 @media (max-width: 720px) {
   .header-theme-label { display: none; }
   .header-brand-text .header-subtitle { display: none; }
-  .header { gap: 8px; padding: 10px 10px; }
+  .header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    align-items: center;
+    gap: 8px 10px;
+    padding: 10px 10px;
+  }
+  .header-brand {
+    grid-column: 1;
+    grid-row: 1;
+    width: auto;
+  }
+  .header-actions {
+    grid-column: 2;
+    grid-row: 1;
+    width: auto;
+    margin-left: 0;
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+  }
+  .header-nav {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    order: 0;
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; /* Firefox */
+  }
+  .header-nav::-webkit-scrollbar { display: none; }
+  .header-nav-btn { flex: 0 0 auto; padding: 7px 10px; font-size: 12px; text-align: center; }
   .header-btn { padding: 0 10px; }
 }
 

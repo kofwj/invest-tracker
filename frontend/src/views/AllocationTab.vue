@@ -1,7 +1,5 @@
 <template>
-  <PageShell
-    title="结构与目标"
-  >
+  <PageShell>
     <template #actions>
       <el-tag type="info" effect="plain">总资产 {{ formatMoney(dashboard.total_assets) }}</el-tag>
       <el-button size="small" :loading="allocationStoryLoading || disciplineLoading" @click="refreshAll">刷新诊断</el-button>
@@ -301,7 +299,7 @@
 
     <el-card shadow="never" class="merge-card" header="细分类别明细">
       <el-table :data="allocationAnalysis" stripe size="small" class="allocation-table" style="width: 100%" aria-label="细分类别明细">
-        <el-table-column prop="category" label="资产类别" width="110" align="center" header-align="center" />
+        <el-table-column prop="category" label="资产类别" width="110" align="center" header-align="center" fixed="left" />
         <el-table-column label="市值/金额" min-width="120" align="right" header-align="right">
           <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.market_value) }}</span></template>
         </el-table-column>
@@ -360,11 +358,11 @@
         v-loading="disciplineDraftLoading"
         @selection-change="onDraftSelectionChange"
       >
-        <el-table-column type="selection" width="44" />
+        <el-table-column type="selection" width="44" fixed="left" />
         <el-table-column label="方向" width="72">
           <template #default="s">{{ s.row.side === 'sell' ? '卖出' : '买入' }}</template>
         </el-table-column>
-        <el-table-column prop="name" label="名称" min-width="100" />
+        <el-table-column prop="name" label="名称" min-width="100" fixed="left" />
         <el-table-column prop="code" label="代码" width="90" />
         <el-table-column label="金额" width="100" align="right" header-align="right">
           <template #default="s"><span class="num-cell">{{ formatMoney(s.row.amount) }}</span></template>

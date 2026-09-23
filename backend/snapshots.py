@@ -32,6 +32,11 @@ def ensure_snapshot_columns(conn):
     if "price_stale" not in cols:
         # 1 表示记录时最新价不是当天的（低置信快照）
         conn.execute("ALTER TABLE daily_snapshots ADD COLUMN price_stale INTEGER DEFAULT 0")
+    if "manual_price_count" not in cols:
+        # 该快照所含的人工价持仓只数（用户手动填的价，只记录、不阻断快照）
+        conn.execute(
+            "ALTER TABLE daily_snapshots ADD COLUMN manual_price_count INTEGER DEFAULT 0"
+        )
 
 
 def ensure_portfolio_cash_flows_table(conn):
@@ -140,6 +145,95 @@ def resolve_unpriced_count(conn, dashboard):
 # 刷新它，价格就"看起来是新的"。
 LAST_PRICE_SYNC_KEY = "last_price_sync_at"
 LAST_PRICE_SYNC_FAILED_KEY = "last_price_sync_failed"
+# 用户手动填过价、还没被真实行情覆盖的持仓代码（逗号分隔、排序去重）。
+MANUAL_PRICE_CODES_KEY = "manual_price_codes"
+
+
+def _write_setting(conn, key, value):
+    """写 settings。set_setting 是唯一写入口，这里延迟导入避免模块级循环。"""
+    try:
+        from .cash import set_setting
+    except ImportError:
+        from cash import set_setting
+    set_setting(conn, key, value)
+
+
+def parse_manual_price_codes(value):
+    """把 settings 里的逗号分隔串规整成排序去重的代码列表。"""
+    codes = []
+    for raw in str(value or "").split(","):
+        code = raw.strip()
+        if code and code not in codes:
+            codes.append(code)
+    return sorted(codes)
+
+
+def manual_price_codes(conn):
+    """当前仍标着「人工价」的持仓代码（排序去重）；没有则空列表。"""
+    try:
+        row = conn.execute(
+            "SELECT value FROM settings WHERE key = ?", (MANUAL_PRICE_CODES_KEY,)
+        ).fetchone()
+    except Exception:
+        return []
+    if row is None:
+        return []
+    value = row["value"] if isinstance(row, sqlite3.Row) else row[0]
+    return parse_manual_price_codes(value)
+
+
+def set_manual_price_codes(conn, codes):
+    """整表覆盖人工价标记（排序去重后写库），返回落库后的列表。"""
+    normalized = sorted({str(c).strip() for c in (codes or []) if str(c).strip()})
+    _write_setting(conn, MANUAL_PRICE_CODES_KEY, ",".join(normalized))
+    return normalized
+
+
+def mark_manual_price_code(conn, code):
+    """把某个 code 记成「当前价是人工填的」（幂等，不会产生重复项）。"""
+    code = str(code or "").strip()
+    current = manual_price_codes(conn)
+    if code and code not in current:
+        current.append(code)
+    return set_manual_price_codes(conn, current)
+
+
+def clear_manual_price_codes(conn, codes):
+    """真实行情覆盖了人工价 → 撤掉这些 code 的标记，返回剩余的标记列表。"""
+    cleared = {str(c).strip() for c in (codes or []) if str(c).strip()}
+    if not cleared:
+        return manual_price_codes(conn)
+    return set_manual_price_codes(
+        conn, [c for c in manual_price_codes(conn) if c not in cleared]
+    )
+
+
+def resolve_manual_price_count(conn, codes=None):
+    """本次快照里含人工价的持仓只数：标记里且仍在持仓（quantity > 0）的代码个数。
+
+    已清仓的标的即便还留着标记也不计数（与 unpriced_count 一样只统计在持仓）。
+    只记录、不阻断快照 —— 人工价是用户明确确认过的价，比缺价/旧价可信。
+    """
+    if codes is None:
+        codes = manual_price_codes(conn)
+    codes = [str(c).strip() for c in (codes or []) if str(c).strip()]
+    if not codes:
+        return 0
+    placeholders = ",".join("?" * len(codes))
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) AS cnt FROM holdings "
+            f"WHERE quantity > 0 AND code IN ({placeholders})",
+            codes,
+        ).fetchone()
+    except Exception:
+        return 0
+    try:
+        if isinstance(row, sqlite3.Row):
+            return int(row["cnt"] or 0)
+        return int((row[0] if row else 0) or 0)
+    except (TypeError, ValueError, IndexError):
+        return 0
 
 
 def _local_today_iso():
@@ -267,6 +361,8 @@ def create_snapshot_record(conn, today_iso, dashboard):
     now = datetime.now(LOCAL_TZ).replace(tzinfo=None)
     lifetime = dashboard.get("lifetime_profit", 0)
     unpriced_count = resolve_unpriced_count(conn, dashboard)
+    # 含人工价的持仓只数（只记录/暴露，不阻断快照）
+    manual_price_count = resolve_manual_price_count(conn)
     # 价格新鲜度用共享判据（不要从 dashboard 的 price_stale/updated_at 猜）：
     # force 记录时这里自然落成 price_stale=1 + 旧价日期。
     price_state = resolve_snapshot_price_state(conn, today_iso)
@@ -279,7 +375,7 @@ def create_snapshot_record(conn, today_iso, dashboard):
             SET total_assets = ?, total_market_value = ?, bank_balance = ?, securities_cash = ?,
                 pending_purchase = ?, total_profit = ?, lifetime_profit = ?, holdings_count = ?,
                 equity_mv = ?, bond_mv = ?, reit_mv = ?, created_at = ?, unpriced_count = ?,
-                price_date = ?, price_stale = ?
+                price_date = ?, price_stale = ?, manual_price_count = ?
             WHERE date = ?
         """, (
             dashboard['total_assets'],
@@ -297,6 +393,7 @@ def create_snapshot_record(conn, today_iso, dashboard):
             unpriced_count,
             price_date,
             price_stale,
+            manual_price_count,
             today_iso,
         ))
         return existing['id'], 'updated'
@@ -305,8 +402,8 @@ def create_snapshot_record(conn, today_iso, dashboard):
         INSERT INTO daily_snapshots
         (date, total_assets, total_market_value, bank_balance, securities_cash, pending_purchase,
          total_profit, lifetime_profit, holdings_count, equity_mv, bond_mv, reit_mv, created_at,
-         unpriced_count, price_date, price_stale)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         unpriced_count, price_date, price_stale, manual_price_count)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         today_iso,
         dashboard['total_assets'],
@@ -324,6 +421,7 @@ def create_snapshot_record(conn, today_iso, dashboard):
         unpriced_count,
         price_date,
         price_stale,
+        manual_price_count,
     ))
     snapshot_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
     return snapshot_id, 'created'
