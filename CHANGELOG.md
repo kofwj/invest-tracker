@@ -65,7 +65,6 @@
 组件变体矩阵、要收敛的字号 12→7 / 圆角 7→6 / 断点 12→3）、`docs/design/figma-basics.md`
 （Figma 操作速成）、`docs/design/page-performance-layers.md`（「收益与快照」页图层树）。
 纯文档，不进构建产物，未重新部署。
-纯文档，不进构建产物，未重新部署。
 
 ---
 
