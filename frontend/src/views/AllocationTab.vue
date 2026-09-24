@@ -7,30 +7,24 @@
       <el-button size="small" type="primary" :loading="draftsGenerating" @click="onGenerateDrafts">建议→草稿</el-button>
     </template>
 
-    <div class="ledger-metrics cols-4">
-      <MetricCard
-        label="权益资产占比"
-        :value="`${Number(displayEquityPct).toFixed(1)}%`"
-        :tone="equityTone"
-        main
-        :title="`${Number(displayEquityPct).toFixed(1)}%`"
-      />
-      <MetricCard
-        label="防守占比"
-        :value="`${Number(displayDefensivePct).toFixed(1)}%`"
-        color="var(--app-primary)"
-        :title="`${Number(displayDefensivePct).toFixed(1)}%`"
-      />
-      <MetricCard
-        label="组合预计年化"
-        :value="`${Number(portfolioExpectedReturn || 0).toFixed(2)}%`"
-        color="var(--app-warn)"
-      />
-      <MetricCard
-        label="需关注问题"
-        :value="String(issueWarnCount)"
-        :tone="issueWarnCount ? 'warn' : 'ok'"
-      />
+    <!-- 四个数：一行、发丝线分格（新版排版） -->
+    <div class="app-stat-row cols-4">
+      <div class="app-stat-cell">
+        <div class="k">权益资产占比</div>
+        <div class="v" :class="equityTone" :title="`${Number(displayEquityPct).toFixed(1)}%`">{{ Number(displayEquityPct).toFixed(1) }}%</div>
+      </div>
+      <div class="app-stat-cell">
+        <div class="k">防守占比</div>
+        <div class="v" :title="`${Number(displayDefensivePct).toFixed(1)}%`">{{ Number(displayDefensivePct).toFixed(1) }}%</div>
+      </div>
+      <div class="app-stat-cell">
+        <div class="k">组合预计年化</div>
+        <div class="v">{{ Number(portfolioExpectedReturn || 0).toFixed(2) }}%</div>
+      </div>
+      <div class="app-stat-cell">
+        <div class="k">需关注问题</div>
+        <div class="v" :class="issueWarnCount ? 'warn' : 'ok'">{{ String(issueWarnCount) }}</div>
+      </div>
     </div>
 
     <el-tabs v-model="seg">
@@ -535,7 +529,6 @@
 
 <script setup>
 import PageShell from '../components/PageShell.vue';
-import MetricCard from '../components/MetricCard.vue';
 import { formatPercent } from '../utils/index.js';
 import { computed, onMounted, watch, nextTick, ref } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';

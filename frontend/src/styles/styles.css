@@ -586,6 +586,7 @@ html.dark .stat-label::after { background: rgba(255,255,255,0.08); }
 }
 .app-stat-cell .v.up, .app-brief-cell .v.up { color: var(--app-up); }
 .app-stat-cell .v.down, .app-brief-cell .v.down { color: var(--app-down); }
+.app-stat-cell .v.muted, .app-brief-cell .v.muted { color: var(--app-muted); }
 .app-stat-cell .v.warn, .app-brief-cell .v.warn { color: var(--app-warn); }
 .app-stat-cell .v.ok, .app-brief-cell .v.ok { color: var(--app-ok); }
 @media (max-width: 900px) {

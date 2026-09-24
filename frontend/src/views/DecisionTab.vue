@@ -47,71 +47,56 @@
       <div class="market-band">
         <div class="band-row">
           <div class="band-label section-title">关键指标</div>
-          <div class="ledger-metrics band-metrics decision-metrics">
-            <MetricCard
-              label="今日贡献粗估"
-              :value="formatMoney(signals.today_contrib_estimate || 0, 2, true)"
-              :tone="Number(signals.today_contrib_estimate || 0) >= 0 ? 'up' : 'down'"
-              main
-              :title="formatMoney(signals.today_contrib_estimate || 0, 2, true)"
-            />
-            <MetricCard
-              label="组合涨跌粗估"
-              :value="pctText(signals.portfolio_change_pct_estimate)"
-              :tone="toneFromNum(signals.portfolio_change_pct_estimate)"
-            />
-            <MetricCard
-              label="vs 沪深300"
-              :value="vsHs300Text"
-              :tone="toneFromNum(vsHs300Diff)"
-            />
-            <MetricCard
-              label="vs 中证A500"
-              :value="vsA500Text"
-              :tone="toneFromNum(vsA500Diff)"
-            />
-            <MetricCard
-              label="总资产"
-              :value="formatMoney(totalAssetsNow)"
-              :title="formatMoney(totalAssetsNow)"
-            />
-            <MetricCard
-              label="权益仓位"
-              :value="equityPctText"
-              :tone="equityTone"
-            />
-            <MetricCard
-              label="纪律破线"
-              :value="String(breachCount)"
-              :tone="breachCount ? 'warn' : 'ok'"
-            />
-            <MetricCard
-              label="存款 30 天内到期"
-              :value="`${dueSoonCount} 笔`"
-              :tone="dueSoonCount ? 'warn' : ''"
-            />
-            <MetricCard
-              label="今日最强"
-              :value="topMoverName"
-              :tone="toneFromNum(topMover?.day_contrib ?? topMover?.change_pct)"
-              :title="topMoverTitle"
-            />
-            <MetricCard
-              label="今日最弱"
-              :value="bottomMoverName"
-              :tone="toneFromNum(bottomMover?.day_contrib ?? bottomMover?.change_pct)"
-              :title="bottomMoverTitle"
-            />
-            <MetricCard
-              label="启用预警"
-              :value="`${enabledAlertCount} 条`"
-              :tone="enabledAlertCount ? 'ok' : 'muted'"
-            />
-            <MetricCard
-              label="指数情绪"
-              :value="indexBreadthText"
-              :tone="indexBreadthTone"
-            />
+          <!-- 12 个粗估指标：新版排版（发丝线简报网格），不再是一排卡片 -->
+          <div class="app-brief cols-4 band-brief">
+            <div class="app-brief-cell">
+              <div class="k">今日贡献粗估</div>
+              <div class="v" :class="Number(signals.today_contrib_estimate || 0) >= 0 ? 'up' : 'down'" :title="formatMoney(signals.today_contrib_estimate || 0, 2, true)">{{ formatMoney(signals.today_contrib_estimate || 0, 2, true) }}</div>
+            </div>
+            <div class="app-brief-cell">
+              <div class="k">组合涨跌粗估</div>
+              <div class="v" :class="toneFromNum(signals.portfolio_change_pct_estimate)">{{ pctText(signals.portfolio_change_pct_estimate) }}</div>
+            </div>
+            <div class="app-brief-cell">
+              <div class="k">vs 沪深300</div>
+              <div class="v" :class="toneFromNum(vsHs300Diff)">{{ vsHs300Text }}</div>
+            </div>
+            <div class="app-brief-cell">
+              <div class="k">vs 中证A500</div>
+              <div class="v" :class="toneFromNum(vsA500Diff)">{{ vsA500Text }}</div>
+            </div>
+            <div class="app-brief-cell">
+              <div class="k">总资产</div>
+              <div class="v" :title="formatMoney(totalAssetsNow)">{{ formatMoney(totalAssetsNow) }}</div>
+            </div>
+            <div class="app-brief-cell">
+              <div class="k">权益仓位</div>
+              <div class="v" :class="equityTone">{{ equityPctText }}</div>
+            </div>
+            <div class="app-brief-cell">
+              <div class="k">纪律破线</div>
+              <div class="v" :class="breachCount ? 'warn' : 'ok'">{{ String(breachCount) }}</div>
+            </div>
+            <div class="app-brief-cell">
+              <div class="k">存款 30 天内到期</div>
+              <div class="v" :class="dueSoonCount ? 'warn' : ''">{{ `${dueSoonCount} 笔` }}</div>
+            </div>
+            <div class="app-brief-cell">
+              <div class="k">今日最强</div>
+              <div class="v" :class="toneFromNum(topMover?.day_contrib ?? topMover?.change_pct)" :title="topMoverTitle">{{ topMoverName }}</div>
+            </div>
+            <div class="app-brief-cell">
+              <div class="k">今日最弱</div>
+              <div class="v" :class="toneFromNum(bottomMover?.day_contrib ?? bottomMover?.change_pct)" :title="bottomMoverTitle">{{ bottomMoverName }}</div>
+            </div>
+            <div class="app-brief-cell">
+              <div class="k">启用预警</div>
+              <div class="v" :class="enabledAlertCount ? 'ok' : 'muted'">{{ `${enabledAlertCount} 条` }}</div>
+            </div>
+            <div class="app-brief-cell">
+              <div class="k">指数情绪</div>
+              <div class="v" :class="indexBreadthTone">{{ indexBreadthText }}</div>
+            </div>
           </div>
         </div>
 
@@ -411,7 +396,6 @@
 
 <script setup>
 import PageShell from '../components/PageShell.vue';
-import MetricCard from '../components/MetricCard.vue';
 import { computed, onMounted, ref } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 import { formatPercent } from '../utils/index.js';
@@ -789,23 +773,7 @@ onMounted(() => {
 /* 破线摘要行：和其它行情行区分开 */
 .band-breach { border-left: 3px solid var(--app-warn); padding-left: 10px; }
 .band-label { flex: 0 0 auto; font-size: 12.5px; white-space: nowrap; }
-.band-metrics {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 8px;
-  margin-bottom: 0;
-  overflow-x: auto;
-  padding-bottom: 2px;
-  min-width: 0;
-}
-.band-metrics :deep(.ledger-metric) {
-  flex: 0 0 auto;
-  min-width: 120px;
-  min-height: 64px;
-  padding: 8px 10px;
-  border-radius: 10px;
-}
-.band-metrics :deep(.ledger-metric-value) { margin-top: 4px; font-size: 16px; }
+.band-brief { flex: 1 1 auto; min-width: 0; }
 .breach-inline {
   display: flex;
   flex-wrap: nowrap;
@@ -836,7 +804,6 @@ onMounted(() => {
 .decision-collapse :deep(.el-collapse-item__wrap) { border: none; background: transparent; }
 .decision-collapse :deep(.el-collapse-item__content) { padding: 14px 2px 2px; }
 .observe-body .merge-card:last-child { margin-bottom: 0; }
-.decision-metrics { margin-bottom: 0; }
 .decision-headline { margin-bottom: 12px; }
 .merge-card { margin-bottom: 14px; }
 .highlight-card {
@@ -922,7 +889,7 @@ onMounted(() => {
 .muted { color: var(--app-soft); }
 @media (max-width: 1100px) {
   .band-row { flex-wrap: wrap; }
-  .band-metrics { width: 100%; }
+  .band-brief { width: 100%; }
   .breach-inline { width: 100%; }
 }
 </style>

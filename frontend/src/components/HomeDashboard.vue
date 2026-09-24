@@ -21,20 +21,9 @@
       </div>
     </div>
 
-    <!-- 价格与状态：一行简报（原来是三张状态卡） -->
-    <div class="app-brief cols-3 status-brief">
-      <div class="app-brief-cell">
-        <div class="k">最新价同步</div>
-        <div class="v" :class="dash.price_stale ? 'warn' : ''">{{ latestPriceStatusText }}</div>
-      </div>
-      <div class="app-brief-cell">
-        <div class="k">今日快照</div>
-        <div class="v" :class="todaySnapshotDone ? 'ok' : 'warn'">{{ todaySnapshotDone ? '已记录' : '未记录' }}</div>
-      </div>
-      <div class="app-brief-cell">
-        <div class="k">最近备份</div>
-        <div class="v">{{ latestBackupText }}</div>
-      </div>
+    <!-- 这一页只留价格时效：今日快照 / 最近备份 都在总览的「同步与备份」里 -->
+    <div class="price-line" :class="dash.price_stale ? 'is-warn' : ''">
+      最新价 {{ latestPriceStatusText }}
     </div>
 
     <el-alert
@@ -60,9 +49,7 @@ import { useAppCtx } from '../composables/useAppCtx.js';
 
 const {
   dashboard,
-  todaySnapshotDone,
   latestPriceStatusText,
-  latestBackupText,
   pendingTransactions,
   goPendingTransactions,
   formatMoney,
@@ -83,5 +70,7 @@ const signTone = (v) => {
 
 <style scoped>
 /* 这一页专用的一点间距：状态简报与在途提示之间 */
-.status-brief { margin-bottom: 4px; }
+/* 这一页只留价格时效（今日快照 / 最近备份 在总览的「同步与备份」里） */
+.price-line { font-size: 12.5px; color: var(--app-soft); margin-bottom: 14px; }
+.price-line.is-warn { color: var(--app-warn); }
 </style>
