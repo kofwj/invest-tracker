@@ -64,6 +64,21 @@ const ElTableColumnStub = {
   },
 };
 
+/**
+ * el-collapse-item：title 渲染成 .perf-section-title（折叠标题在视觉上就是区块标题），
+ * 内容照常渲染 —— 否则折叠里的表格 / 快照明细在 DOM 里根本不存在，断言会假绿。
+ */
+const ElCollapseItemStub = {
+  name: 'ElCollapseItem',
+  props: { title: { type: String, default: '' }, name: { type: String, default: '' } },
+  setup(props, { slots, attrs }) {
+    return () => h('div', attrs, [
+      h('div', { class: 'perf-section-title' }, props.title),
+      slots.default ? slots.default() : [],
+    ]);
+  },
+};
+
 const STUBS = {
   ElCard: passthrough('ElCard'),
   ElAlert: passthrough('ElAlert'),
@@ -83,6 +98,8 @@ const STUBS = {
   ElDatePicker: passthrough('ElDatePicker'),
   ElTable: ElTableStub,
   ElTableColumn: ElTableColumnStub,
+  ElCollapse: passthrough('ElCollapse'),
+  ElCollapseItem: ElCollapseItemStub,
 };
 
 const formatMoney = (v, d = 2, s = false) => (
@@ -174,17 +191,17 @@ const sectionTitleEl = (host, label) => [...host.querySelectorAll('.perf-section
   .find((el) => el.textContent.trim() === label);
 
 describe('「收益与快照」合并页：每日收益 + 快照明细', () => {
-  it('「每日收益」与「快照明细」两块标题同时出现在同一页', async () => {
+  it('走势块与「快照明细」折叠块同时出现在同一页', async () => {
     const { host, app } = mountMerged();
     await flush();
 
     const titles = sectionTitles(host);
-    expect(titles).toContain('每日收益');
+    expect(titles).toContain('最近 30 个交易日');
     expect(titles).toContain('快照明细');
 
-    // 每日收益仍在原来的卡片里，快照明细是新增的区块（内含 SnapshotPanel）
+    // 走势仍在原来的卡片里，快照明细收进折叠项（内含 SnapshotPanel）
     expect(host.querySelector('.perf-daily-card')).toBeTruthy();
-    expect(sectionTitleEl(host, '每日收益')).toBeTruthy();
+    expect(sectionTitleEl(host, '最近 30 个交易日')).toBeTruthy();
     expect(host.querySelector('.snapshot-panel')).toBeTruthy();
     app.unmount();
   });
@@ -235,15 +252,15 @@ describe('「收益与快照」合并页：每日收益 + 快照明细', () => {
     app.unmount();
   });
 
-  it('快照明细排在「每日收益」之后（DOM 顺序）', async () => {
+  it('快照明细排在走势块之后（DOM 顺序）', async () => {
     const { host, app } = mountMerged();
     await flush();
 
-    const dailyTitle = sectionTitleEl(host, '每日收益');
+    const dailyTitle = sectionTitleEl(host, '最近 30 个交易日');
     const snapshotTitle = sectionTitleEl(host, '快照明细');
     const titles = sectionTitles(host);
-    expect(titles.indexOf('每日收益')).toBeLessThan(titles.indexOf('快照明细'));
-    // 「每日收益」标题在「快照明细」之前
+    expect(titles.indexOf('最近 30 个交易日')).toBeLessThan(titles.indexOf('快照明细'));
+    // 走势标题在「快照明细」之前
     expect(dailyTitle.compareDocumentPosition(snapshotTitle) & Node.DOCUMENT_POSITION_FOLLOWING)
       .toBeTruthy();
     expect(dailyTitle.compareDocumentPosition(snapshotTitle) & Node.DOCUMENT_POSITION_PRECEDING)
@@ -257,19 +274,16 @@ describe('「收益与快照」合并页：每日收益 + 快照明细', () => {
  */
 describe('「收益与快照」区块顺序：结论在前、明细在后', () => {
   const steps = (host) => [
-    { label: '核心指标', el: host.querySelector('.ledger-metrics') },
+    { label: '结论', el: host.querySelector('.perf-lede-card') },
+    { label: '核心两数', el: host.querySelector('.perf-num-row') },
     { label: '收益尺', el: host.querySelector('.perf-window-strip') },
-    { label: '最近 7 个交易日', el: host.querySelector('.perf-month-card') },
-    { label: '每日收益', el: host.querySelector('.perf-daily-card') },
+    { label: '走势', el: host.querySelector('.perf-daily-card') },
+    { label: '风险与归因', el: host.querySelector('.perf-risk-card') },
     { label: '快照明细', el: host.querySelector('.snapshot-panel') },
-    {
-      label: '风险一览',
-      el: [...host.querySelectorAll('.perf-contrib-title')].find((e) => e.textContent.includes('风险一览')),
-    },
     { label: '组合资金流水', el: host.querySelector('#perf-flow-section') },
   ];
 
-  it('核心指标 → 收益尺 → 最近 7 日 → 每日收益 → 快照明细 → 风险 → 流水', async () => {
+  it('结论 → 核心两数 → 收益尺 → 走势 → 风险与归因 → 快照明细 → 流水', async () => {
     const { host, app } = mountMerged();
     await flush();
 

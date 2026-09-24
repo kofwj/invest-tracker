@@ -31,72 +31,57 @@
       </template>
     </el-alert>
 
-    <!-- 一句话故事 -->
-    <el-card v-if="perfStory?.headline" shadow="never" class="perf-story-card" style="margin-bottom: 14px;">
-      <div class="perf-story-head">
-        <div class="perf-story-headline" :class="'is-' + (perfStory.tone || 'neutral')">{{ perfStory.headline }}</div>
-        <el-tag :type="perfStoryToneType" size="small">{{ perfStory.as_of_date || '今日' }}</el-tag>
+    <!-- 结论：一行数字 + 日期（原「一句话故事」那句长文案不再显示） -->
+    <el-card shadow="never" class="perf-lede-card">
+      <div class="perf-lede-eyebrow">整户相对净投入</div>
+      <div class="perf-lede-line">
+        <span class="perf-lede-num" :class="ledeToneText ? 'perf-' + ledeToneText : ''">
+          {{ formatMoney(perfSummary?.total_gain, 2, true) }} 元
+        </span>
+        <span class="perf-lede-pct" :class="ledeToneText ? 'perf-' + ledeToneText : ''">
+          （{{ formatPercent(perfSummary?.total_gain_pct, 2) }}）
+        </span>
+        <span class="perf-lede-date">{{ perfSummary?.as_of_date || '今日' }}</span>
       </div>
-      <!-- 故事聚焦组合层面，个股详细贡献已移至「组合归因与风险」卡片和「持仓明细」 -->
     </el-card>
 
-    <!-- 核心指标：总资产 / 净投入（收益数字在「一句话故事」与收益尺） -->
-    <div class="ledger-metrics cols-2" style="margin-bottom: 8px;">
-      <MetricCard
-        v-for="m in perfPrimaryCards"
-        :key="m.label"
-        :label="m.label"
-        :value="m.value"
-        :color="m.color"
-        :main="!!m.main"
-        :title="m.value"
-      />
+    <!-- 核心两数：发丝线分格，不是两张独立卡片 -->
+    <div class="perf-num-row">
+      <div v-for="m in perfPrimaryCards" :key="m.label" class="perf-num-cell">
+        <div class="k">{{ m.label }}</div>
+        <div class="v" :class="{ 'is-warn': String(m.color || '').includes('warn') }" :title="String(m.value)">{{ m.value }}</div>
+      </div>
     </div>
-    <!-- 时间轴收益尺：今天/本月/今年/近一年/开仓至今 -->
+    <!-- 收益尺：分段控件 + 当前窗口的大数字 -->
     <div class="perf-window-strip" :class="{ 'is-loading': perfLoading && !perfSummary }">
-      <div
-        v-for="w in perfWindowCards"
-        :key="w.key"
-        class="perf-window-card"
-        :class="[w.active ? 'is-active' : '', 'is-' + w.tone, { 'is-disabled': w.disabled }]"
-        @click="!w.disabled && selectPerfWindow(w.key)"
-      >
-        <div class="perf-window-label">{{ w.label }}</div>
-        <div class="perf-window-gain">{{ w.gain != null ? formatMoney(w.gain, 0, true) : '—' }}</div>
-        <div class="perf-window-pct">{{ w.gainPct != null ? formatPercent(w.gainPct, 1) : '无快照' }}</div>
-        <div v-if="w.stale" class="perf-window-stale">基准 {{ (w.baseDate || '').slice(5) }}（{{ w.staleDays }} 天前）</div>
+      <div class="perf-seg" role="tablist" aria-label="收益尺时间范围">
+        <button
+          v-for="w in perfWindowCards"
+          :key="w.key"
+          type="button"
+          role="tab"
+          class="perf-seg-btn"
+          :class="{ 'is-active': w.active }"
+          :aria-selected="!!w.active"
+          :disabled="w.disabled"
+          @click="selectPerfWindow(w.key)"
+        >{{ w.label }}</button>
+      </div>
+      <div class="perf-seg-out">
+        <span class="perf-seg-big" :class="windowTone ? 'perf-' + windowTone : ''">{{ windowGainText }}</span>
+        <span class="perf-seg-sub">{{ windowSubText }}</span>
       </div>
     </div>
 
-    <!-- 最近 7 个交易日汇总 -->
-    <el-card shadow="never" class="perf-month-card">
-      <div class="perf-daily-head">
-        <div>
-          <div class="perf-section-title">最近 7 个交易日</div>
-          <div class="perf-contrib-sub">
-            按已有快照的最近 7 个交易日统计（不是自然日）；本月 / 今年看上方收益尺。
-          </div>
-        </div>
-      </div>
-      <div class="ledger-metrics cols-4">
-        <MetricCard
-          label="7 日累计"
-          :value="monthlyCard.recent7Text"
-          :tone="monthlyCard.recent7Tone"
-          :title="monthlyCard.recent7Title"
-        />
-        <MetricCard label="涨 / 跌 天数" :value="monthlyCard.upDownText" />
-        <MetricCard label="最好一天" :value="monthlyCard.bestText" :tone="monthlyCard.bestTone" :title="monthlyCard.bestWorstTitle" />
-        <MetricCard label="最差一天" :value="monthlyCard.worstText" :tone="monthlyCard.worstTone" :title="monthlyCard.bestWorstTitle" />
-      </div>
-    </el-card>
 
-    <!-- 每日收益：逐日盈亏（已剔除转入/转出） -->
+    <!-- 走势 + 两行简报：红涨绿跌，已剔除转入转出 -->
     <el-card shadow="never" class="perf-daily-card">
       <div class="perf-daily-head">
         <div>
-          <div class="perf-section-title">每日收益</div>
-          <div class="perf-contrib-sub">按每日快照逐日计算，已剔除转入/转出；<span v-if="perfLatestSnapshotDate">最近一次快照 {{ perfLatestSnapshotDate }}</span><span v-else>还没有任何快照</span></div>
+          <div class="perf-section-title">最近 30 个交易日</div>
+          <div class="perf-contrib-sub">
+            红涨绿跌 · 已剔除转入/转出；<span v-if="perfLatestSnapshotDate">最近一次快照 {{ perfLatestSnapshotDate }}</span><span v-else>还没有任何快照</span>
+          </div>
         </div>
         <div class="perf-daily-actions">
           <el-radio-group v-model="dailyRange" size="small">
@@ -118,18 +103,50 @@
       />
 
       <template v-else>
-        <div class="ledger-metrics cols-4" style="margin-bottom:10px;">
-          <MetricCard
-            label="近30天累计"
-            :value="formatMoney(perfDailyStats.total, 2, true)"
-            :tone="perfDailyStats.total >= 0 ? 'up' : 'down'"
-          />
-          <MetricCard label="涨 / 跌 天数" :value="`${perfDailyStats.upDays} / ${perfDailyStats.downDays}`" />
-          <MetricCard label="最好一天" :value="dailyBestText" tone="up" />
-          <MetricCard label="最差一天" :value="dailyWorstText" tone="down" />
+        <div id="dailyPnlChart" class="perf-daily-chart"></div>
+
+        <div class="perf-brief">
+          <div class="perf-brief-cell">
+            <div class="k">近 7 个交易日累计</div>
+            <div class="v" :class="monthlyCard.recent7Tone ? 'perf-' + monthlyCard.recent7Tone : ''" :title="monthlyCard.recent7Title">{{ monthlyCard.recent7Text }}</div>
+          </div>
+          <div class="perf-brief-cell">
+            <div class="k">涨 / 跌 天数</div>
+            <div class="v">{{ monthlyCard.upDownText }}</div>
+          </div>
+          <div class="perf-brief-cell">
+            <div class="k">最好一天</div>
+            <div class="v" :class="monthlyCard.bestTone ? 'perf-' + monthlyCard.bestTone : ''" :title="monthlyCard.bestWorstTitle">{{ monthlyCard.bestText }}</div>
+          </div>
+          <div class="perf-brief-cell">
+            <div class="k">最差一天</div>
+            <div class="v" :class="monthlyCard.worstTone ? 'perf-' + monthlyCard.worstTone : ''" :title="monthlyCard.bestWorstTitle">{{ monthlyCard.worstText }}</div>
+          </div>
         </div>
 
-        <div id="dailyPnlChart" class="perf-daily-chart"></div>
+        <div class="perf-hairline"></div>
+
+        <div class="perf-brief">
+          <div class="perf-brief-cell">
+            <div class="k">近 30 日累计</div>
+            <div class="v" :class="perfDailyStats.total >= 0 ? 'perf-up' : 'perf-down'">{{ formatMoney(perfDailyStats.total, 2, true) }}</div>
+          </div>
+          <div class="perf-brief-cell">
+            <div class="k">涨 / 跌 天数</div>
+            <div class="v">{{ perfDailyStats.upDays }} / {{ perfDailyStats.downDays }}</div>
+          </div>
+          <div class="perf-brief-cell">
+            <div class="k">最好一天</div>
+            <div class="v perf-up">{{ dailyBestText }}</div>
+          </div>
+          <div class="perf-brief-cell">
+            <div class="k">最差一天</div>
+            <div class="v perf-down">{{ dailyWorstText }}</div>
+          </div>
+        </div>
+
+        <el-collapse class="perf-detail-collapse">
+          <el-collapse-item name="daily" title="每日明细（逐日盈亏）">
 
         <el-table :data="dailyTableRows" size="small" stripe max-height="320" style="margin-top:10px;" aria-label="每日收益">
           <el-table-column label="日期" width="140">
@@ -182,65 +199,53 @@
             </template>
           </el-table-column>
         </el-table>
+          </el-collapse-item>
+        </el-collapse>
       </template>
     </el-card>
 
-    <!-- 快照明细（原「资产快照」页） -->
-    <div class="perf-section-title" style="margin-bottom: 12px;">快照明细</div>
-    <SnapshotPanel />
-
-    <!-- 辅助小信息 -->
-    <div class="ledger-metrics cols-2" style="margin-bottom: 12px;">
-      <MetricCard
-        v-for="m in perfSecondaryCards"
-        :key="m.label"
-        :label="m.label"
-        :value="m.value"
-        :color="m.color"
-        secondary
-        :title="m.value"
-      />
-    </div>
-
-        <!-- 组合风险（精简 3 张核心） -->
-    <el-card shadow="never" style="margin-bottom: 14px;">
-      <div style="margin-bottom:8px;">
-        <div class="perf-contrib-title">风险一览</div>
-        <div class="perf-contrib-sub">最大回撤 = 历史最高点到最低点的跌幅；年化波动 = 日常波动幅度。</div>
-      </div>
-
-      <div class="ledger-metrics cols-3" style="margin-bottom:8px;">
-        <MetricCard
-          label="最大回撤"
-          :value="((perfRiskMetrics?.maxDrawdownPct) || 0) + '%'"
-          :tone="(perfRiskMetrics?.maxDrawdown || 0) > 0.05 ? 'down' : 'neutral'"
-        />
-        <MetricCard
-          v-if="perfSummary?.underwater"
-          label="当前离峰值"
-          :value="(perfSummary.underwater.underwater_pct || 0) + '%'"
-          :tone="(perfSummary.underwater.underwater_pct || 0) > 5 ? 'down' : 'neutral'"
-        />
-        <MetricCard
-          label="年化波动"
-          :value="(perfRiskMetrics?.approxVol) != null ? (perfRiskMetrics.approxVol) + '%' : '—'"
-          :tone="(perfRiskMetrics?.approxVol || 0) > 15 ? 'down' : 'neutral'"
-        />
-      </div>
-      </el-card>
-
-      <!-- 流水 -->
-    <el-card id="perf-flow-section" shadow="never" style="margin-bottom: 14px;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px;flex-wrap:wrap;">
+    <!-- 风险与归因：不折叠，放在明细之前 -->
+    <el-card shadow="never" class="perf-risk-card">
+      <div class="perf-daily-head">
         <div>
-          <div class="perf-section-title">组合资金流水（外部投入/取出）</div>
-          <div class="perf-contrib-sub">仅记录组合外部投入/取出；买卖、银证互转不在此记录。</div>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-          <el-button size="small" @click="onLoadFlowSuggest" :loading="perfSuggestLoading">从银证生成建议</el-button>
-          <el-tag size="small">共 {{ perfFlows.length }} 笔</el-tag>
+          <div class="perf-section-title">风险与归因</div>
+          <div class="perf-contrib-sub">总收益 = 当前总资产 − 累计净投入；贡献只算现在还持有的</div>
         </div>
       </div>
+      <div class="perf-brief perf-brief--flush">
+        <div class="perf-brief-cell"><div class="k">最大回撤</div><div class="v">{{ riskItems.maxDrawdown }}</div></div>
+        <div class="perf-brief-cell"><div class="k">当前离峰值</div><div class="v perf-down">{{ riskItems.underwater }}</div></div>
+        <div class="perf-brief-cell"><div class="k">年化波动</div><div class="v">{{ riskItems.vol }}</div></div>
+        <div class="perf-brief-cell"><div class="k">滚动 3M / 6M / 1Y</div><div class="v">{{ riskItems.rolling }}</div></div>
+        <div class="perf-brief-cell"><div class="k">贡献最多</div><div class="v perf-up" :title="riskItems.topWin">{{ riskItems.topWin }}</div></div>
+        <div class="perf-brief-cell"><div class="k">拖累最多</div><div class="v perf-down" :title="riskItems.topLose">{{ riskItems.topLose }}</div></div>
+        <div class="perf-brief-cell"><div class="k">权益贡献</div><div class="v perf-up">{{ riskItems.equity }}</div></div>
+        <div class="perf-brief-cell"><div class="k">分红占收益</div><div class="v">{{ riskItems.dividendShare }}</div></div>
+        <div class="perf-brief-cell"><div class="k">对国债</div><div class="v perf-up">{{ riskItems.vsBond }}</div></div>
+        <div class="perf-brief-cell"><div class="k">对货币 ETF</div><div class="v perf-up">{{ riskItems.vsCash }}</div></div>
+        <div class="perf-brief-cell"><div class="k">TWR（时间加权）</div><div class="v">{{ riskItems.twr }}</div></div>
+        <div class="perf-brief-cell"><div class="k">年化 vs 4% 目标</div><div class="v perf-up">{{ riskItems.vsTarget }}</div></div>
+      </div>
+    </el-card>
+
+    <!-- 快照明细：默认收起 -->
+    <el-collapse class="perf-detail-collapse">
+      <el-collapse-item name="snapshots" title="快照明细">
+        <SnapshotPanel />
+      </el-collapse-item>
+    </el-collapse>
+
+    <!-- 资金流水：默认收起；点「去录流水」会自动展开 -->
+    <div id="perf-flow-section">
+      <el-collapse v-model="flowOpen" class="perf-detail-collapse">
+        <el-collapse-item name="flow" title="组合资金流水（外部投入/取出）">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px;flex-wrap:wrap;">
+            <div class="perf-contrib-sub">仅记录组合外部投入/取出；买卖、银证互转不在此记录。</div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <el-button size="small" @click="onLoadFlowSuggest" :loading="perfSuggestLoading">从银证生成建议</el-button>
+              <el-tag size="small">共 {{ perfFlows.length }} 笔</el-tag>
+            </div>
+          </div>
       <div v-if="perfFlowSuggestions.length" style="margin-bottom:12px;">
         <div class="perf-contrib-sub" style="margin-bottom:8px;">建议草稿</div>
         <el-table :data="perfFlowSuggestions" size="small" stripe aria-label="资金流水建议草稿">
@@ -300,14 +305,15 @@
           </template>
         </el-table-column>
       </el-table>
-    </el-card>
+        </el-collapse-item>
+      </el-collapse>
+    </div>
 
   </PageShell>
 </template>
 
 <script setup>
 import PageShell from '../components/PageShell.vue';
-import MetricCard from '../components/MetricCard.vue';
 import SnapshotReminder from '../components/SnapshotReminder.vue';
 import SnapshotPanel from '../components/SnapshotPanel.vue';
 import { ref, computed, onMounted, watch } from 'vue';
@@ -318,8 +324,8 @@ import { formatPercent, summarizeDailyPnl } from '../utils/index.js';
 const {
   formatMoney, pct,
   perfSummary, perfTimeline, perfContribution, perfFlows, perfStory, perfLoading, perfFlowForm,
-  hasPerfFlows, perfStoryToneType,
-  perfPrimaryCards, perfSecondaryCards,
+  hasPerfFlows,
+  perfPrimaryCards,
   fetchPerformance, addPerfFlow, updatePerfFlow, deletePerfFlow,
   loadPerfFlowSuggestions, applyPerfFlowSuggestion,
   showTransactions, goTab,
@@ -526,8 +532,12 @@ const categorySummary = computed(() => {
 });
 
 const scrollToFlows = () => {
-  const el = document.getElementById('perf-flow-section');
-  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // 流水已收进折叠区：先展开，等 DOM 更新后再滚过去
+  flowOpen.value = ['flow'];
+  setTimeout(() => {
+    const el = document.getElementById('perf-flow-section');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 60);
 };
 
 const startPerfFlowEdit = (row) => {
@@ -608,12 +618,78 @@ async function onApplyPerfFlowSuggestion(row) {
     perfSuggestionApplying.value = false;
   }
 }
+
+// === 结论带 / 收益尺 / 风险归因（新版排版） ===
+const flowOpen = ref([]);
+
+const ledeToneText = computed(() => {
+  const g = Number(perfSummary.value?.total_gain ?? 0);
+  return g > 0 ? 'up' : g < 0 ? 'down' : '';
+});
+
+const currentWindow = computed(() => {
+  const list = perfWindowCards.value || [];
+  return list.find((w) => w.active) || list[list.length - 1] || null;
+});
+const windowGainText = computed(() => {
+  const w = currentWindow.value;
+  return w && w.gain != null ? formatMoney(w.gain, 2, true) : '—';
+});
+const windowTone = computed(() => {
+  const g = currentWindow.value ? currentWindow.value.gain : null;
+  if (g == null || Number(g) === 0) return '';
+  return Number(g) > 0 ? 'up' : 'down';
+});
+const windowSubText = computed(() => {
+  const w = currentWindow.value;
+  if (!w) return '暂无快照';
+  // 基准快照不是上一交易日时必须写明，不能默认它等于「今天」
+  const staleText = w.stale ? `基准 ${String(w.baseDate || '').slice(5)}（${w.staleDays} 天前）` : '';
+  const main = w.key === 'all'
+    ? `开仓至今 · 距目标收益缺口 ${perfSummary.value?.target_gap == null ? '—' : formatMoney(perfSummary.value.target_gap, 2, true)}`
+    : `${w.label || ''} · ${w.gainPct == null ? '无快照' : formatPercent(w.gainPct, 2)}`;
+  return [main, staleText].filter(Boolean).join(' · ');
+});
+
+/** 风险与归因的 12 个数：取不到就显示 —，不编数 */
+const riskItems = computed(() => {
+  const s = perfSummary.value || {};
+  const rm = perfRiskMetrics.value || {};
+  const story = perfStory.value || {};
+  const uw = s.underwater || {};
+  const roll = s.rolling_returns || {};
+  const bench = s.benchmark_relative || {};
+  const win = (story.winners || [])[0];
+  const lose = (story.losers || [])[0];
+  const equityCat = (story.category_contrib || []).find((c) => c && c.name === '权益');
+  const pctText = (v) => (v == null ? '—' : Number(v) >= 0 ? '+' + Number(v).toFixed(2) + '%' : Number(v).toFixed(2) + '%');
+  const rollText = (roll['3M'] == null && roll['6M'] == null && roll['1Y'] == null)
+    ? '—'
+    : `${pctText(roll['3M'])} / ${pctText(roll['6M'])} / ${pctText(roll['1Y'])}`;
+  const xirr = s.xirr;
+  const target = s.target_return_pct;
+  return {
+    maxDrawdown: rm.maxDrawdownPct == null ? '—' : `${rm.maxDrawdownPct}%`,
+    underwater: uw.underwater_pct == null ? '—' : `-${Number(uw.underwater_pct).toFixed(2)}%`,
+    vol: rm.approxVol == null ? '—' : `${rm.approxVol}%`,
+    rolling: rollText,
+    topWin: win ? `${win.name} ${formatMoney(win.amount, 0, true)}` : '—',
+    topLose: lose ? `${lose.name} ${formatMoney(lose.amount, 0, true)}` : '—',
+    equity: equityCat ? formatMoney(equityCat.amount, 0, true) : '—',
+    dividendShare: s.dividend_contrib_pct == null ? '—' : `${Number(s.dividend_contrib_pct).toFixed(1)}%`,
+    vsBond: bench.bond ? pctText(bench.bond.relative) : '—',
+    vsCash: bench.cash ? pctText(bench.cash.relative) : '—',
+    twr: pctText(s.twr),
+    vsTarget: (xirr == null || target == null)
+      ? '—'
+      : `${Number(xirr).toFixed(2)}% · ${Number(xirr) - Number(target) >= 0 ? '+' : ''}${(Number(xirr) - Number(target)).toFixed(2)}pt`,
+  };
+});
 </script>
 
 <style scoped>
 .perf-flow-alert { margin-bottom: 14px; }
 
-/* 每日收益 */
 .perf-month-card { margin-bottom: 14px; }
 .perf-daily-card { margin-bottom: 14px; }
 .perf-daily-head {
@@ -649,59 +725,77 @@ async function onApplyPerfFlowSuggestion(row) {
 .perf-cat-fill.is-pos { background: linear-gradient(90deg, color-mix(in srgb, var(--app-up) 55%, transparent), var(--app-up)); }
 .perf-cat-fill.is-neg { background: linear-gradient(90deg, color-mix(in srgb, var(--app-down) 55%, transparent), var(--app-down)); }
 .perf-cat-amt { text-align: right; font-weight: 650; font-variant-numeric: tabular-nums; font-size: 13px; }
-.perf-help-collapse { border: none; }
-.perf-help-collapse :deep(.el-collapse-item__header) {
-  font-weight: 600;
-  color: var(--app-muted);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--app-surface) 90%, var(--app-bg0));
-  padding: 0 12px;
-  height: 44px;
-  border: 1px solid var(--app-border);
-}
-.perf-help-collapse :deep(.el-collapse-item__wrap) { border: none; background: transparent; }
-.perf-help-collapse :deep(.el-collapse-item__content) {
-  padding: 12px 2px 4px;
-  color: var(--app-text);
-}
 .perf-contrib-table { cursor: pointer; }
 
-/* 时间轴收益尺 */
+/* 收益尺：一张卡里的分段控件 */
 .perf-window-strip {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 10px;
-  margin-bottom: 14px;
-}
-.perf-window-card {
   background: var(--app-surface, #fff);
-  border: 1px solid var(--app-border, #e5e7eb);
-  border-radius: 10px;
-  padding: 10px 12px;
-  cursor: pointer;
-  transition: border-color .15s, box-shadow .15s, transform .12s;
-  user-select: none;
+  border: 1px solid var(--app-border);
+  border-radius: 16px;
+  box-shadow: var(--app-shadow-sm);
+  padding: 18px 22px;
+  margin-bottom: 22px;
 }
-.perf-window-card:hover { border-color: var(--app-primary, #409eff); transform: translateY(-1px); }
-.perf-window-card.is-active {
-  border-color: var(--app-primary, #409eff);
-  box-shadow: 0 0 0 1px var(--app-primary, #409eff);
-  background: color-mix(in srgb, var(--app-primary, #409eff) 7%, var(--app-surface, #fff));
-}
-.perf-window-card.is-disabled { cursor: default; opacity: .6; }
-.perf-window-card.is-disabled:hover { border-color: var(--app-border, #e5e7eb); transform: none; }
-.perf-window-label { font-size: 12px; color: var(--app-muted, #6b7280); margin-bottom: 4px; }
-.perf-window-gain { font-size: 15px; font-weight: 700; color: var(--app-text, #111); }
-.perf-window-card.is-up .perf-window-gain { color: var(--app-up, #e74c3c); }
-.perf-window-card.is-down .perf-window-gain { color: var(--app-down, #07c160); }
-.perf-window-pct { font-size: 12px; color: var(--app-soft, #9ca3af); margin-top: 2px; }
-.perf-window-card.is-up .perf-window-pct { color: var(--app-up, #e74c3c); }
-.perf-window-card.is-down .perf-window-pct { color: var(--app-down, #07c160); }
+.perf-seg { display: inline-flex; gap: 2px; padding: 3px; max-width: 100%; overflow-x: auto;
+  background: color-mix(in srgb, var(--app-bg0) 70%, var(--app-surface));
+  border: 1px solid var(--app-border); border-radius: 10px; }
+.perf-seg-btn { font: inherit; font-size: 13px; color: var(--app-muted); background: transparent;
+  border: 0; border-radius: 7px; padding: 7px 13px; cursor: pointer; white-space: nowrap; }
+.perf-seg-btn.is-active { color: var(--app-text); font-weight: 600; background: var(--app-surface); box-shadow: var(--app-shadow-sm); }
+.perf-seg-btn:disabled { opacity: .5; cursor: not-allowed; }
+.perf-seg-out { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; margin-top: 18px; }
+.perf-seg-big { font-size: 34px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums;
+  font-family: "SF Mono", Menlo, Consolas, ui-monospace, monospace; letter-spacing: -.02em; }
+.perf-seg-sub { font-size: 13px; color: var(--app-muted); padding-bottom: 5px; }
 .perf-window-strip.is-loading { opacity: .5; pointer-events: none; }
 
 @media (max-width: 640px) {
-  .perf-window-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .perf-cat-row { grid-template-columns: 64px 1fr 90px; }
+  .perf-seg-big { font-size: 28px; }
+  .perf-lede-num { font-size: 26px; }
 }
-.perf-window-stale { font-size: 11px; color: var(--app-warn, #c98a2e); margin-top: 2px; }
+
+/* 结论带 */
+.perf-lede-card { margin-bottom: 22px; }
+.perf-lede-eyebrow { font-size: 12px; font-weight: 600; color: var(--app-soft); margin-bottom: 8px; }
+.perf-lede-line { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.perf-lede-num { font-size: 30px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums;
+  font-family: "SF Mono", Menlo, Consolas, ui-monospace, monospace; }
+.perf-lede-pct { font-size: 18px; font-weight: 600; }
+.perf-lede-date { font-size: 13px; color: var(--app-muted); }
+
+/* 核心两数：发丝线分格 */
+.perf-num-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  background: var(--app-surface); border: 1px solid var(--app-border); border-radius: 16px;
+  box-shadow: var(--app-shadow-sm); margin-bottom: 22px; }
+.perf-num-cell { padding: 18px 22px; min-width: 0; }
+.perf-num-cell + .perf-num-cell { border-left: 1px solid var(--app-hairline); }
+.perf-num-cell .k { font-size: 12px; color: var(--app-muted); margin-bottom: 6px; }
+.perf-num-cell .v { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -.02em;
+  font-family: "SF Mono", Menlo, Consolas, ui-monospace, monospace; overflow-wrap: anywhere; }
+.perf-num-cell .v.is-warn { color: var(--app-warn); }
+
+/* 简报网格：走势两行 + 风险与归因 */
+.perf-brief { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;
+  margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--app-hairline); }
+.perf-brief--flush { margin-top: 0; padding-top: 0; border-top: 0; }
+.perf-brief-cell { min-width: 0; }
+.perf-brief-cell .k { font-size: 12px; color: var(--app-muted); margin-bottom: 5px; }
+.perf-brief-cell .v { font-size: 16px; font-weight: 640; font-variant-numeric: tabular-nums; white-space: nowrap;
+  font-family: "SF Mono", Menlo, Consolas, ui-monospace, monospace; overflow: hidden; text-overflow: ellipsis; }
+.perf-hairline { height: 1px; background: var(--app-hairline); margin-top: 16px; }
+.perf-risk-card { margin-bottom: 22px; }
+
+/* 明细折叠区 */
+.perf-detail-collapse { margin-bottom: 14px; }
+.perf-detail-collapse :deep(.el-collapse) { border-top: 0; border-bottom: 0; }
+.perf-detail-collapse :deep(.el-collapse-item__header) { font-size: 14px; font-weight: 600; padding-left: 2px; }
+.perf-detail-collapse :deep(.el-collapse-item__wrap) { border-bottom: 0; }
+.perf-detail-collapse :deep(.el-collapse-item__content) { padding-bottom: 8px; }
+
+@media (max-width: 800px) {
+  .perf-num-row { grid-template-columns: 1fr; }
+  .perf-num-cell + .perf-num-cell { border-left: 0; border-top: 1px solid var(--app-hairline); }
+  .perf-brief { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 </style>

@@ -66,12 +66,36 @@ def _snapshot_row(app_module, date_iso):
 
 
 def _today(monkeypatch, day_iso):
-    """固定「今天」（/snapshots 走 database 模块属性，cron 是 import 绑定）。"""
+    """固定「今天」，三处一起固定。
+
+    - /snapshots 走 database 模块属性；
+    - cron 是 import 绑定；
+    - 手动填价的 PUT 用 routers_holdings 里 import 进来的 datetime.now()，
+      而 /snapshots 的价格闸门读 snapshots._local_today_iso()。
+
+    只固定前两处的话，写进库的日期（真实今天）与被当成「今天」的日期会不一致，
+    闸门就误判成「价格陈旧」返回 409 —— 这个测试只在机器日期恰好等于 day_iso
+    时才碰巧通过（2026-09-24 起就一直红）。
+    """
+    from datetime import datetime as _dt
+
     import database as db
     import routers_cron
+    import routers_holdings
+    import snapshots
 
     monkeypatch.setattr(db, "local_today_iso", lambda: day_iso)
     monkeypatch.setattr(routers_cron, "local_today_iso", lambda: day_iso)
+    monkeypatch.setattr(snapshots, "_local_today_iso", lambda: day_iso)
+
+    frozen = _dt.fromisoformat(f"{day_iso}T19:30:00")
+
+    class _FrozenDatetime(_dt):
+        @classmethod
+        def now(cls, tz=None):
+            return frozen
+
+    monkeypatch.setattr(routers_holdings, "datetime", _FrozenDatetime)
 
 
 def test_manual_price_updates_holding_and_response(client, app_module, monkeypatch):

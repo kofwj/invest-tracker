@@ -143,8 +143,8 @@ describe('PerformanceTab 每日收益区块', () => {
 
     expect(host.querySelector('.perf-daily-card')).toBeTruthy();
     expect(host.querySelector('#dailyPnlChart')).toBeTruthy();
-    expect(host.textContent).toContain('每日收益');
-    expect(host.textContent).toContain('近30天累计');
+    expect(host.querySelector('[aria-label="每日收益"]')).toBeTruthy();
+    expect(host.textContent).toContain('近 30 日累计');
     expect(host.textContent).toContain('涨 / 跌 天数');
     expect(host.textContent).toContain('1 / 1');
     // 图表被真正调用，拿到的是升序数据（柱状图从左到右）
@@ -170,10 +170,11 @@ describe('PerformanceTab 每日收益区块', () => {
     const { host, app } = mountTab({ dailyRows: [{ date: '2026-03-06', change: -2000, pct: -1.94, assets: 101000, daysGap: 3, isGap: true }] });
     await flush();
 
-    const stale = host.querySelector('.perf-window-stale');
-    expect(stale).toBeTruthy();
-    expect(stale.textContent).toContain('08-02');
-    expect(stale.textContent).toContain('52');
+    // 陈旧基准写在收益尺副行里（「今天 · +0.00% · 基准 08-02（52 天前）」），不能假装是今天
+    const sub = host.querySelector('.perf-seg-sub');
+    expect(sub).toBeTruthy();
+    expect(sub.textContent).toContain('08-02');
+    expect(sub.textContent).toContain('52');
     app.unmount();
   });
 

@@ -1,9 +1,10 @@
 /**
- * 「最近 7 个交易日」卡的取数与文案回归测试。
+ * 「收益与快照」页里「近 7 个交易日」简报的取数与文案回归测试。
  *
- * 取数只有一处：perfDailyRows 的前 7 行 + summarizeDailyPnl，不新增接口。
- * 它只包含有快照的日子，所以文案写「最近 7 个交易日」而不是「最近 7 天」。
- * 「本月 / 今年」只在上方收益尺显示，这张卡不重复。
+ * 这张简报住在走势卡的 `.perf-brief` 第一行（第二行是近 30 日），取数只有一处：
+ * perfDailyRows 的前 7 行 + summarizeDailyPnl，不新增接口。
+ * 它只包含有快照的日子，所以标签写「近 7 个交易日」而不是「最近 7 天」。
+ * 「本月 / 今年」只在收益尺（分段控件）显示，这张简报不重复。
  *
  * 注：生产构建里 el-* 由 unplugin-vue-components 自动注册，测试环境没有这层，
  * 所以用桩组件代替（只关心本页自己的结构、事件）。
@@ -151,91 +152,87 @@ function mountTab({ dailyRows = [], windowCards = [] } = {}) {
   return { host, app, ctx };
 }
 
-const monthCardText = (host) => host.querySelector('.perf-month-card').textContent;
+/** 走势卡里的两行简报 */
+const briefGrid = (host, i = 0) => [...host.querySelectorAll('.perf-daily-card .perf-brief')][i];
+const briefCell = (host, label) => [...briefGrid(host).querySelectorAll('.perf-brief-cell')]
+  .find((c) => c.querySelector('.k').textContent.trim() === label);
+const briefValue = (host, label) => briefCell(host, label).querySelector('.v');
 
-describe('「最近 7 个交易日」卡（原「月度概览」卡）', () => {
-  it('本月数字不再重复：这张卡不含「本月累计」，月窗口的值只留在收益尺上', async () => {
+describe('「收益与快照」里的近 7 个交易日简报', () => {
+  it('月窗口的值不再在这一页重复：没有「本月累计」，收益尺上仍有「本月」', async () => {
     const { host, app } = mountTab({ dailyRows: DAILY_ROWS, windowCards: [{ key: 'today', label: '今天', gain: 1, gainPct: 1 }, MONTH_CARD] });
     await flush();
 
-    const text = monthCardText(host);
-    expect(text).not.toContain('本月累计');
-    // month 窗口的值不该在这张卡上出现第二遍
-    expect(text).not.toContain(formatMoney(MONTH_CARD.gain, 2, true));
-    // 但收益尺上仍然有「本月」这张卡（数字没被藏起来，只是不再重复）
+    expect(host.textContent).not.toContain('本月累计');
+    expect(briefGrid(host).textContent).not.toContain(formatMoney(MONTH_CARD.gain, 2, true));
+    // 收益尺（分段控件）上仍然有「本月」这张
     expect(host.querySelector('.perf-window-strip').textContent).toContain('本月');
     app.unmount();
   });
 
-  it('最近 7 个交易日 = perfDailyRows 前 7 行：累计 / 涨跌天数 / 最好最差一致', async () => {
+  it('近 7 个交易日 = perfDailyRows 前 7 行：累计 / 涨跌天数 / 最好最差一致', async () => {
     const expected = summarizeDailyPnl(DAILY_ROWS, 7);
     const { host, app } = mountTab({ dailyRows: DAILY_ROWS, windowCards: [MONTH_CARD] });
     await flush();
 
-    const text = monthCardText(host);
-    expect(text).toContain('7 日累计');
-    expect(text).toContain(formatMoney(expected.total, 2, true)); // -920.00
-    expect(text).toContain(`${expected.upDays} / ${expected.downDays}`); // 4 / 3
-    expect(text).toContain(`${expected.best.date.slice(5)} ${formatMoney(expected.best.change, 2, true)}`); // 03-05 +800.00
-    expect(text).toContain(`${expected.worst.date.slice(5)} ${formatMoney(expected.worst.change, 2, true)}`); // 03-06 -2000.00
+    expect(briefValue(host, '近 7 个交易日累计').textContent).toContain(formatMoney(expected.total, 2, true));
+    expect(briefValue(host, '涨 / 跌 天数').textContent.trim()).toBe(`${expected.upDays} / ${expected.downDays}`);
+    expect(briefValue(host, '最好一天').textContent).toContain(`${expected.best.date.slice(5)} ${formatMoney(expected.best.change, 2, true)}`);
+    expect(briefValue(host, '最差一天').textContent).toContain(`${expected.worst.date.slice(5)} ${formatMoney(expected.worst.change, 2, true)}`);
 
-    // 第 8 个交易日（2026-02-25，+99999）既没进累计也没当上"最好一天"
-    expect(text).not.toContain('02-25');
-    expect(text).not.toContain(formatMoney(99999, 2, true));
+    // 第 8 个交易日（2026-02-25，+99999）既没进累计也没当上「最好一天」
+    expect(briefGrid(host).textContent).not.toContain('02-25');
+    expect(briefGrid(host).textContent).not.toContain(formatMoney(99999, 2, true));
     expect(expected.best.date).not.toBe('2026-02-25');
     app.unmount();
   });
 
-  it('文案如实说明是"按已有快照的最近 7 个交易日"，不承诺自然日', async () => {
+  it('文案不承诺自然日：写「近 7 个交易日」，口径说明挂在 title 上', async () => {
     const { host, app } = mountTab({ dailyRows: DAILY_ROWS, windowCards: [MONTH_CARD] });
     await flush();
 
-    const text = monthCardText(host);
-    expect(text).toContain('最近 7 个交易日');
-    expect(text).toContain('已有快照');
-    expect(text).not.toContain('最近 7 天');
+    expect(host.textContent).toContain('近 7 个交易日累计');
+    expect(host.textContent).not.toContain('最近 7 天');
+    // 「按已有快照统计」这层说明还在（悬停可见）
+    expect(briefValue(host, '近 7 个交易日累计').getAttribute('title')).toContain('已有快照');
     app.unmount();
   });
 
-  it('卡的位置在「每日收益」区块上方', async () => {
+  it('近 7 日那一行排在近 30 日那一行之前', async () => {
     const { host, app } = mountTab({ dailyRows: DAILY_ROWS, windowCards: [MONTH_CARD] });
     await flush();
 
-    const blocks = [...host.querySelectorAll('.perf-month-card, .perf-daily-card')];
-    expect(blocks.length).toBe(2);
-    expect(blocks[0].className).toContain('perf-month-card');
-    expect(blocks[1].className).toContain('perf-daily-card');
+    const labels = [0, 1].map((i) => briefGrid(host, i).querySelector('.k').textContent.trim());
+    expect(labels).toEqual(['近 7 个交易日累计', '近 30 日累计']);
+    expect(briefGrid(host, 0).compareDocumentPosition(briefGrid(host, 1)) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy();
     app.unmount();
   });
 
-  it('没有月窗口 / 没有快照时显示 —，卡片仍然在', async () => {
+  it('没有快照时不渲染这些数字，只显示空态（不编数、不崩）', async () => {
     const { host, app } = mountTab({ dailyRows: [], windowCards: [] });
     await flush();
 
-    expect(host.querySelector('.perf-month-card')).toBeTruthy();
-    expect(monthCardText(host)).toContain('7 日累计');
-    expect(monthCardText(host)).toContain('—');
+    expect(host.querySelector('.perf-daily-card')).toBeTruthy();
+    expect(host.querySelectorAll('.perf-daily-card .perf-brief-cell').length).toBe(0);
+    expect(host.querySelector('.perf-daily-card').innerHTML).toContain('还没有可比较的两天快照');
     app.unmount();
   });
 
-  it('最好 / 最差拆成两张卡：单卡的值够短，不会被 ellipsis 切掉', async () => {
+  it('最好 / 最差是两个格子，各自的值够短（合回一张长串就红）', async () => {
     const expected = summarizeDailyPnl(DAILY_ROWS, 7);
     const { host, app } = mountTab({ dailyRows: DAILY_ROWS, windowCards: [MONTH_CARD] });
     await flush();
 
-    const cards = [...host.querySelectorAll('.perf-month-card .ledger-metric')];
-    const labelOf = (c) => c.querySelector('.ledger-metric-label').textContent.trim();
-    expect(cards.map(labelOf)).toEqual(['7 日累计', '涨 / 跌 天数', '最好一天', '最差一天']);
-
-    const best = cards.find((c) => labelOf(c) === '最好一天').querySelector('.ledger-metric-value');
-    const worst = cards.find((c) => labelOf(c) === '最差一天').querySelector('.ledger-metric-value');
-    expect(best.textContent).toBe(`${expected.best.date.slice(5)} ${formatMoney(expected.best.change, 2, true)}`);
-    expect(worst.textContent).toBe(`${expected.worst.date.slice(5)} ${formatMoney(expected.worst.change, 2, true)}`);
-    // 值必须短：合成一行是 35 个字符，在栅格里会被 text-overflow: ellipsis 切掉后半句
-    expect(best.textContent.length).toBeLessThanOrEqual(20);
-    expect(worst.textContent.length).toBeLessThanOrEqual(20);
-    expect(best.classList.contains('up')).toBe(true);
-    expect(worst.classList.contains('down')).toBe(true);
+    const best = briefValue(host, '最好一天');
+    const worst = briefValue(host, '最差一天');
+    expect(best.textContent.trim()).toBe(`${expected.best.date.slice(5)} ${formatMoney(expected.best.change, 2, true)}`);
+    expect(worst.textContent.trim()).toBe(`${expected.worst.date.slice(5)} ${formatMoney(expected.worst.change, 2, true)}`);
+    // 值必须短：合成一行是 35 个字符，会被 text-overflow: ellipsis 切掉后半句
+    expect(best.textContent.trim().length).toBeLessThanOrEqual(20);
+    expect(worst.textContent.trim().length).toBeLessThanOrEqual(20);
+    expect(best.classList.contains('perf-up')).toBe(true);
+    expect(worst.classList.contains('perf-down')).toBe(true);
     app.unmount();
   });
 
@@ -247,11 +244,9 @@ describe('「最近 7 个交易日」卡（原「月度概览」卡）', () => {
     const { host, app } = mountTab({ dailyRows: downRows, windowCards: [MONTH_CARD] });
     await flush();
 
-    const cards = [...host.querySelectorAll('.perf-month-card .ledger-metric')];
-    const bestCard = cards.find((c) => c.querySelector('.ledger-metric-label').textContent.trim() === '最好一天');
-    const best = bestCard.querySelector('.ledger-metric-value');
+    const best = briefValue(host, '最好一天');
     expect(best.textContent).toContain('03-03');
-    expect(best.classList.contains('down')).toBe(true);
+    expect(best.classList.contains('perf-down')).toBe(true);
     app.unmount();
   });
 });

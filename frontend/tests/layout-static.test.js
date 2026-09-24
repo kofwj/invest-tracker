@@ -148,27 +148,35 @@ describe('页头不再和 tab 重复', () => {
  * 起因：`.overview-metrics` 原来写死 3 列、主卡 `grid-column: 1 / -1` 独占一整行，
  * 而「今天」有 3 张卡、「资产与仓位」有 5 张 → 两段的行尾都会空出格子
  * （今天空 1 格、资产空 2 格），主卡还占满 1240px 只放一个数字。
- * 改成按段指定列数（4 轨 / 5 轨）后行行填满 —— 这三条不变量得钉住。
+ *
+ * 按原型重排后：「资产」段 = 四个等权数字一行（发丝线分格，没有主卡），
+ * 「今天」不再是指标栅格而是左右两栏的卡（左今日盈亏 / 右待办）。
+ * 两条不变量照旧钉住：**列数按段指定** + **每档断点用同特异性选择器覆盖**。
  */
 describe('总览页指标栅格', () => {
   const src = readFileSync(join(VIEWS_DIR, 'OverviewTab.vue'), 'utf-8');
 
-  it('列数按段指定，且够填满（今天 4 轨、资产 5 轨：主卡各占 2 轨）', () => {
-    expect(src, '「今天」段应为 4 轨（主卡 2 + 本月 + 今年）')
-      .toMatch(/\[data-section="today"\]\s+\.overview-metrics\s*\{[^}]*repeat\(4/);
-    expect(src, '「资产与仓位」段应为 5 轨（主卡 2 + 浮盈 + 现金 + 占比）')
-      .toMatch(/\[data-section="assets"\]\s+\.overview-metrics\s*\{[^}]*repeat\(5/);
+  it('列数按段指定（资产 4 个数字一行；今天卡左右两栏）', () => {
+    expect(src, '「资产」段应为 4 轨（总资产 / 持仓浮盈 / 现金+存款 / 权益·防御）')
+      .toMatch(/\[data-section="assets"\]\s+\.overview-metrics\s*\{[^}]*repeat\(4/);
+    expect(src, '「今天」卡应为左右两栏（左今日盈亏 / 右待办）')
+      .toMatch(/\.ov-today\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(0,\s*1fr\)/);
   });
 
   it('每档断点用同特异性选择器覆盖，否则桌面规则会压住媒体查询', () => {
     const mq = src.slice(src.indexOf('@media (max-width: 1100px)'));
-    expect(mq, '≤1100px 必须用 [data-section=…] 选择器').toContain('[data-section="today"] .overview-metrics');
     expect(mq, '≤1100px 必须用 [data-section=…] 选择器').toContain('[data-section="assets"] .overview-metrics');
+    expect(mq, '≤1100px 今天卡要塌成一列').toContain('.ov-today');
   });
 
-  it('单列时主卡不跨列（跨 2 轨会在单列栅格里撑出一个隐式列）', () => {
+  it('窄屏发丝线不在行首：单列时左侧分隔线全部去掉', () => {
     const small = src.slice(src.indexOf('@media (max-width: 640px)'));
-    expect(small).toMatch(/\.ov-metric\.main\s*\{\s*grid-column:\s*auto/);
+    expect(small, '单列必须真的塌成一列').toMatch(
+      /\[data-section="assets"\]\s+\.overview-metrics\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/,
+    );
+    expect(small, '单列时左侧发丝线会挂在行首，必须去掉').toMatch(
+      /\[data-section="assets"\]\s+\.ov-metric\s*\+\s*\.ov-metric\s*\{[^}]*border-left:\s*0/,
+    );
   });
 });
 
