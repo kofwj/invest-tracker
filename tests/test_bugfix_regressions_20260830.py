@@ -332,10 +332,14 @@ def test_trading_day_invalid_date_returns_400(app_module, client):
 def test_confirm_dividends_rejects_future_event_date(app_module, client):
     from datetime import date as dt_date, timedelta
 
-    from database import db_session
+    from database import db_session, local_today_iso
 
-    tomorrow = (dt_date.today() + timedelta(days=1)).isoformat()
-    yesterday = (dt_date.today() - timedelta(days=1)).isoformat()
+    # 必须用应用时区的"今天"：CI runner 是 UTC，而接口按 APP_TIMEZONE 判定未来日期。
+    # 用 date.today()（系统时区）会在 UTC 16:00–24:00（= 上海 00:00–08:00）这段窗口里错判，
+    # 表现出"未来的那条也被入账"（created_count 2 != 1）。
+    today_local = dt_date.fromisoformat(local_today_iso())
+    tomorrow = (today_local + timedelta(days=1)).isoformat()
+    yesterday = (today_local - timedelta(days=1)).isoformat()
     payload = {
         "backup": False,
         "drafts": [
