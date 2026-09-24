@@ -82,6 +82,12 @@ def clear_backend_module_cache():
         'routers_cron',
         'kline_cache',
         'routers_klines',
+        'ai_client',
+        'routers_ai',
+        'ai_payload',
+        'ai_brief',
+        'reason_sources',
+        'reason_cache',
     ]
     for name in module_names:
         sys.modules.pop(name, None)

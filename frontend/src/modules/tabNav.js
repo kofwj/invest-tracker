@@ -4,7 +4,7 @@ export const SCREENSHOT_TABS = [
     'overview',
     'decision', 'snapshots', 'allocation', 'performance', 'klines', 'market', 'discipline',
     'holdings', 'deposits', 'transactions', 'broker', 'cash',
-    'ops_notify', 'ops_backup',
+    'ops_notify', 'ops_ai', 'ops_backup',
     // 旧名兼容（截图/书签）
     'maintenance',
 ];
@@ -17,7 +17,7 @@ export const TAB_GROUPS = [
     // 分析组按"一页只回答一个问题"收敛：收益分析吸收资产快照、K线降级为持仓页弹窗
     { id: 'analysis', label: '分析', tabs: ['decision', 'performance', 'allocation'] },
     // 原「维护」→「设置」：推送 / 证券账户(费率+现金) / 备份
-    { id: 'ops', label: '设置', tabs: ['ops_notify', 'cash', 'ops_backup'] },
+    { id: 'ops', label: '设置', tabs: ['ops_notify', 'ops_ai', 'cash', 'ops_backup'] },
 ];
 
 /** 路由元信息：path 与中文标签 */
@@ -36,6 +36,7 @@ export const ROUTE_META = {
     market: { path: '/market', label: '市场摘要' },
     discipline: { path: '/discipline', label: '纪律与再平衡' },
     ops_notify: { path: '/ops/notify', label: '消息推送' },
+    ops_ai: { path: '/ops/ai', label: 'AI 设置' },
     ops_backup: { path: '/ops/backup', label: '数据备份' },
 };
 

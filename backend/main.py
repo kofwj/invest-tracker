@@ -37,6 +37,7 @@ try:
     from .routers_broker_reconcile import router as broker_reconcile_router
     from .routers_cron import router as cron_router
     from .routers_notify import router as notify_router
+    from .routers_ai import router as ai_router
     from .routers_snapshots import router as snapshots_router
     from .routers_transactions import router as transactions_router
     from .schema import initialize_database, run_startup_migrations  # noqa: F401  (initialize_database is loaded by tests as module attr)
@@ -67,6 +68,7 @@ except ImportError:  # Allows tests to load this file directly via importlib.
     from routers_broker_reconcile import router as broker_reconcile_router
     from routers_cron import router as cron_router
     from routers_notify import router as notify_router
+    from routers_ai import router as ai_router
     from routers_snapshots import router as snapshots_router
     from routers_transactions import router as transactions_router
     from schema import initialize_database, run_startup_migrations  # noqa: F401  (initialize_database is loaded by tests as module attr)
@@ -123,6 +125,7 @@ app.include_router(discipline_router, dependencies=[Depends(require_auth)])
 app.include_router(allocation_router, dependencies=[Depends(require_auth)])
 app.include_router(broker_reconcile_router, dependencies=[Depends(require_auth)])
 app.include_router(notify_router, dependencies=[Depends(require_auth)])
+app.include_router(ai_router, dependencies=[Depends(require_auth)])
 app.include_router(cron_router, dependencies=[Depends(require_cron_token)])
 
 

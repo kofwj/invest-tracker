@@ -202,6 +202,10 @@ const api = {
     pushNotifyDiscipline: (force = false) => axios.post(API + '/notify/discipline?force=' + (force ? 'true' : 'false') + '&only_if_breaches=' + (force ? 'false' : 'true')),
     runNotifyScheduled: (payload = {}) => axios.post(API + '/notify/run', payload || {}),
 
+    getAiStatus: () => axios.get(API + '/ai/status'),
+    saveAiConfig: (payload) => axios.put(API + '/ai/config', payload || {}),
+    testAi: () => axios.post(API + '/ai/test', {}, { timeout: 125000 }),
+
     getDisciplineReport: () => axios.get(API + '/discipline/report', { timeout: 60000 }),
     getDisciplinePolicy: () => axios.get(API + '/discipline/policy'),
     saveDisciplinePolicy: (payload) => axios.put(API + '/discipline/policy', payload || {}),

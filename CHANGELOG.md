@@ -4,6 +4,46 @@
 版本号单一来源 `backend/version.py`；发布流程：改那里 → 本文件记版本 → `git tag vX.Y.Z`。生产部署以分支 `deploy/vps` 为准。
 
 ---
+## [未发布 · 第十三轮] — AI 层第一批（A1/A2/R1/R2）+ A3 晚报归因
+
+默认关闭。OpenAI 兼容 `POST /v1/chat/completions`，无厂商 SDK。schema 升到 v19
+（v18：`ai_call_log` + 新闻/公告/市场新闻/异动四张缓存表；v19：`ai_call_log.warnings_json`）。
+
+### 配置与调用（A1）
+
+- 设置页 `/ops/ai`：总开关、影子模式、Base URL / 模型 / 密钥、日上限、三个用例外开关。
+- 密钥只打码出现在 `GET /ai/status`；空串不改已存密钥，勾选「清除」才删（库里空串优先于 `.env`）。
+- 裸 host 自动补 `/v1`；`POST /ai/test` 回显真实请求 URL。测试连接不覆盖未保存表单，
+  也不计入日上限。用例开关关闭时 `call_ai` 返回 `feature_disabled` 且不发请求。
+- 日上限只数当天 `ok=1` 且 `feature != 'test'` 的成功调用（`today_used`）；界面按此显示，
+  `cap=0` 为「不限」。触顶写审计 `reason=budget`。
+
+### 载荷白名单（A2）
+
+- `build_payload` 只拷白名单字段（计划保留 title/level/code，不含金额/仓位占比）。金额四舍五入到千。
+- 输出校验：来源标题、数字可溯、禁止推测措辞；6 位金额不再跳过。
+
+### 原因缓存（R1/R2）
+
+- 公告传给 akshare 的日期是 `YYYYMMDD`，每次回看最近 3 天，次日能补上晚间公告。
+- 先全部抓到内存再短事务落库；公告与财联社分开打戳；异动全失败不写 15 分钟节流。
+- 公告每天独立 150s、整批总预算 300s，超时不再开新的一天；缓存 30 天。
+- AI 审计清理走 `/cron/refresh-reasons` 的提交路径，GET `/ai/status` 不写库。
+- cron：`POST /cron/refresh-reasons` 超时 720s；有 `CRON_API_TOKEN` 时不走 docker 再抓一遍。
+
+### 晚报归因段（A3）
+
+- 注入点在 `send_evening_brief`：`GET /evening-brief` 只读当日缓存，未命中显示「（今日 AI 段未生成）」，绝不调模型。
+- `ai_enabled=0` 或 `features.brief=0` 时正文与关 AI 前逐字节一致；影子模式模板照发，AI 段只写日志与缓存。预览在影子模式下追加「仅预览，不随推送发送」。
+- reasons/moves 全空不调模型，固定句「未找到相关公告或新闻」；timeout 20s、不重试，失败省略 AI 段。
+- `mode=empty` 的当日缓存只在 16:40（`APP_TIMEZONE`，不是容器 UTC）前有效，公告 refill 之后允许再生成一次。成功/被拦/超时/空数据都写 `ai_brief_YYYY-MM-DD`（30 天）。
+- `counts` 用全量 `_holding_price_map`（涨跌只数有行情的，缺行情不算平盘），不用截断后的 `holdings_day`。
+- 公告 refill 与空数据重试共用 16:40 分钟判定；缺行情时禁止「全部持平」这类结论。
+- 输出校验增加因果词（因为/由于/导致/原因在于/拖累），warnings 去重；`call_ai` 可覆盖 timeout，warnings 落 `warnings_json`。
+
+---
+
+
 ## [未发布 · 第十二轮] — 按原型重排「收益与快照」与「总览」
 
 视觉与结构规格来自已确认的两份单文件原型（`docs/design/prototype/performance.html`、

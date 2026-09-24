@@ -12,6 +12,8 @@ try:
     from .notify import ensure_notify_tables
     from .broker_reconcile import ensure_broker_reconcile_history_table
     from .snapshots import ensure_snapshot_columns, ensure_portfolio_cash_flows_table, ensure_reconcile_table
+    from .ai_client import ensure_ai_tables
+    from .reason_cache import ensure_reason_tables
 except ImportError:
     from cash import ensure_cash_base, set_setting, ensure_cash_flow_indexes
     from database import open_db
@@ -23,9 +25,11 @@ except ImportError:
     from notify import ensure_notify_tables
     from broker_reconcile import ensure_broker_reconcile_history_table
     from snapshots import ensure_snapshot_columns, ensure_portfolio_cash_flows_table, ensure_reconcile_table
+    from ai_client import ensure_ai_tables
+    from reason_cache import ensure_reason_tables
 
 
-SCHEMA_VERSION = 17
+SCHEMA_VERSION = 19
 SCHEMA_VERSION_KEY = "schema_version"
 
 
@@ -149,6 +153,8 @@ def ensure_app_tables(conn):
     ensure_broker_reconcile_history_table(conn)
     ensure_cash_flow_indexes(conn)
     ensure_holding_correction_indexes(conn)
+    ensure_ai_tables(conn)
+    ensure_reason_tables(conn)
 
 
 def migrate_to_v1_core_compat(conn):
@@ -358,6 +364,16 @@ def migrate_to_v17_alert_rule_types(conn):
         conn.execute("ALTER TABLE alert_events ADD COLUMN value REAL")
 
 
+def migrate_to_v18_ai_and_reason_cache(conn):
+    """AI 审计表 + 原因缓存四表，合并升到 v18。"""
+    ensure_ai_tables(conn)
+    ensure_reason_tables(conn)
+
+
+def migrate_to_v19_ai_call_log_warnings(conn):
+    """ai_call_log.warnings_json，影子模式一周要分项计数。"""
+    ensure_ai_tables(conn)
+
 MIGRATIONS = [
     (1, migrate_to_v1_core_compat),
     (2, migrate_to_v2_holdings_and_snapshots),
@@ -376,6 +392,8 @@ MIGRATIONS = [
     (15, migrate_to_v15_snapshot_price_columns),
     (16, migrate_to_v16_snapshot_manual_price_column),
     (17, migrate_to_v17_alert_rule_types),
+    (18, migrate_to_v18_ai_and_reason_cache),
+    (19, migrate_to_v19_ai_call_log_warnings),
 ]
 
 

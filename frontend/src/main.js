@@ -712,6 +712,7 @@ const app = createApp({
             if (tab === 'cash') jobs.push(queryCashFlows());
             if (tab === 'broker') jobs.push(fetchBrokerHistory());
             if (tab === 'ops_notify' || tab === 'maintenance') jobs.push(fetchNotifyPanel());
+            if (tab === 'ops_ai') window.dispatchEvent(new CustomEvent('invest-tab-refresh'));
             if (tab === 'ops_backup') jobs.push(fetchMaintenance());
 
             const results = await Promise.allSettled(jobs);

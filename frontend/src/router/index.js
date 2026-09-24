@@ -12,6 +12,7 @@ const loaders = {
     performance: () => import('../views/PerformanceTab.vue'),
     allocation: () => import('../views/AllocationTab.vue'),
     ops_notify: () => import('../views/NotifyOpsTab.vue'),
+    ops_ai: () => import('../views/AiOpsTab.vue'),
     ops_backup: () => import('../views/BackupOpsTab.vue'),
 };
 

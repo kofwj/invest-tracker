@@ -54,6 +54,7 @@ test -f frontend/src/views/DepositsTab.vue
 test -f frontend/src/views/TransactionsTab.vue
 test -f frontend/src/views/CashTab.vue
 test -f frontend/src/views/NotifyOpsTab.vue
+test -f frontend/src/views/AiOpsTab.vue
 test -f frontend/src/views/BackupOpsTab.vue
 test -f frontend/src/modules/market.js
 test -f backend/market.py
@@ -126,6 +127,8 @@ assert 'market_router' in backend_main, 'backend should register market router'
 schema = Path('backend/schema.py').read_text(encoding='utf-8')
 assert 'migrate_to_v5_market_alerts' in schema, 'schema missing v5 market alerts migration'
 assert 'migrate_to_v6_snapshot_lifetime_and_watchlist' in schema, 'schema missing v6 snapshot lifetime migration'
+assert 'migrate_to_v18_ai_and_reason_cache' in schema, 'schema missing v18 AI/reason cache migration'
+assert 'migrate_to_v19_ai_call_log_warnings' in schema, 'schema missing v19 AI audit warnings column'
 assert 'lifetime_profit' in Path('backend/snapshots.py').read_text(encoding='utf-8'), 'snapshots should store lifetime_profit'
 assert 'is_a_share_trading_day' in Path('backend/trading_calendar.py').read_text(encoding='utf-8'), 'trading calendar missing'
 PY
@@ -208,6 +211,13 @@ required_backend_files=(
   backend/routers_dashboard.py
   backend/routers_performance.py
   backend/schema.py
+  backend/ai_client.py
+  backend/routers_ai.py
+  backend/ai_payload.py
+  backend/reason_sources.py
+  backend/reason_cache.py
+  backend/ai_brief.py
+  backend/routers_cron.py
 )
 for file in "${required_backend_files[@]}"; do
   test -f "$file"
@@ -239,6 +249,10 @@ required_routes = {
     "/cron/check-alerts",
     "/cron/notify-events",
     "/cron/trading-day",
+    "/cron/refresh-reasons",
+    "/ai/status",
+    "/ai/config",
+    "/ai/test",
 }
 routes = {getattr(route, "path", "") for route in module.app.routes}
 missing = sorted(required_routes - routes)

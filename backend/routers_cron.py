@@ -17,6 +17,7 @@ try:
     from .database import db_session, local_today_iso
     from .market import check_alerts
     from .notify import run_scheduled_events
+    from .reason_cache import refresh_reasons
     from .routers_holdings import _sync_prices_impl
     from .snapshots import create_snapshot_record, resolve_snapshot_price_state
     from .trading_calendar import trading_day_status
@@ -25,6 +26,7 @@ except ImportError:
     from database import db_session, local_today_iso
     from market import check_alerts
     from notify import run_scheduled_events
+    from reason_cache import refresh_reasons
     from routers_holdings import _sync_prices_impl
     from snapshots import create_snapshot_record, resolve_snapshot_price_state
     from trading_calendar import trading_day_status
@@ -102,5 +104,17 @@ def cron_notify_events(body: CronNotifyBody = CronNotifyBody()):
             discipline=body.discipline,
             force=body.force,
         )
+        conn.commit()
+    return {"status": "success", **result}
+
+
+class CronRefreshReasonsBody(BaseModel):
+    force: bool = False
+
+
+@router.post("/cron/refresh-reasons")
+def cron_refresh_reasons(body: CronRefreshReasonsBody = CronRefreshReasonsBody()):
+    with db_session() as conn:
+        result = refresh_reasons(conn, force=bool(body.force))
         conn.commit()
     return {"status": "success", **result}

@@ -176,6 +176,23 @@ def build_evening_brief(conn, *, check_price_alerts: bool = True) -> Dict[str, A
 
 def send_evening_brief(conn, *, webhook: Optional[str] = None, notify: bool = True) -> Dict[str, Any]:
     brief = build_evening_brief(conn, check_price_alerts=True)
+    template = brief.get("text") or "（空简报）"
+    text = template
+    ai_meta: Dict[str, Any] = {"mode": "disabled", "append": False}
+    try:
+        try:
+            from .ai_brief import resolve_evening_ai
+        except ImportError:
+            from ai_brief import resolve_evening_ai
+
+        ai_meta = resolve_evening_ai(conn, notify=notify)
+        extra = str(ai_meta.get("text") or "").strip()
+        if ai_meta.get("append") and extra:
+            text = template + "\n" + extra
+    except Exception as exc:
+        logger.exception("evening_brief: AI segment failed: %s", exc)
+        ai_meta = {"mode": "error", "append": False, "text": ""}
+
     sent: Dict[str, Any] = {"sent": False, "reason": "skipped"}
     if notify:
         try:
@@ -184,9 +201,7 @@ def send_evening_brief(conn, *, webhook: Optional[str] = None, notify: bool = Tr
             except ImportError:
                 from notify import notify_evening_brief
 
-            text = brief.get("text") or "（空简报）"
             if webhook:
-                # legacy one-off Feishu webhook override
                 import requests
 
                 payload = {"msg_type": "text", "content": {"text": text}}
@@ -201,4 +216,4 @@ def send_evening_brief(conn, *, webhook: Optional[str] = None, notify: bool = Tr
                 sent = notify_evening_brief(text, conn=conn, force=True)
         except Exception as exc:
             sent = {"sent": False, "reason": str(exc)}
-    return {**brief, "notify": sent}
+    return {**brief, "text": text, "ai_brief": ai_meta, "notify": sent}

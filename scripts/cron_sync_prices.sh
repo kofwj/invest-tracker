@@ -84,13 +84,14 @@ export CRON_API_TOKEN="${CRON_API_TOKEN:-}"
 
 cron_http() {
   # GET or POST a /cron/* path with X-Cron-Token. Prints body on success.
-  local method="$1" path="$2" body="${3:-}"
+  local method="$1" path="$2" body="${3:-}" timeout="${4:-180}"
   if [ -z "${CRON_API_TOKEN}" ]; then
     return 1
   fi
-  python3 - "$method" "$path" "$body" <<'PY'
+  python3 - "$method" "$path" "$body" "$timeout" <<'PY'
 import json, os, sys, urllib.error, urllib.request
 method, path, body = sys.argv[1], sys.argv[2], sys.argv[3] if len(sys.argv) > 3 else ""
+timeout = float(sys.argv[4]) if len(sys.argv) > 4 else 180
 base = os.environ.get("CRON_API_BASE", "http://127.0.0.1:8080/api").rstrip("/")
 token = os.environ.get("CRON_API_TOKEN", "").strip()
 headers = {"Accept": "application/json", "X-Cron-Token": token}
@@ -100,7 +101,7 @@ if method.upper() == "POST":
     data = (body or "{}").encode("utf-8")
 req = urllib.request.Request(base + path, data=data, headers=headers, method=method.upper())
 try:
-    with urllib.request.urlopen(req, timeout=180) as resp:
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
         print(resp.read().decode("utf-8", errors="replace"))
 except urllib.error.HTTPError as e:
     detail = e.read().decode("utf-8", errors="replace")
@@ -371,6 +372,33 @@ else
   echo "[$(ts)] HTTP sync ok: ${SYNC_OUT}"
 fi
 
+# 原因缓存：有 CRON_API_TOKEN 时不走 docker 兜底，避免 HTTP 超时后再抓一遍。
+# 超时 720s ≈ 公告总预算 300s + 异动/新闻余量；客户端断开不杀 uvicorn。
+if [ -n "${CRON_API_TOKEN}" ]; then
+  if REASON_OUT="$(cron_http POST /cron/refresh-reasons "{}" 720)"; then
+    echo "[$(ts)] cron-http refresh-reasons ok: ${REASON_OUT}"
+  else
+    echo "[$(ts)] cron-http refresh-reasons fail: ${REASON_OUT:-timeout/error}" >&2
+  fi
+elif REASON_OUT="$(
+  docker compose -f "$COMPOSE_FILE" exec -T backend python - <<'PY'
+import json, sys
+try:
+    from database import db_session
+    from reason_cache import refresh_reasons
+except Exception as e:
+    print(json.dumps({"status": "error", "stage": "import_reasons", "detail": str(e)}), file=sys.stderr)
+    sys.exit(2)
+with db_session() as conn:
+    result = refresh_reasons(conn)
+    conn.commit()
+print(json.dumps(result, ensure_ascii=False, default=str))
+PY
+  2>&1)"; then
+  echo "[$(ts)] docker refresh-reasons ok: ${REASON_OUT}"
+else
+  echo "[$(ts)] refresh-reasons skipped/fail: ${REASON_OUT:-no token/docker}" >&2
+fi
 if [ "$WITH_SNAPSHOT" = "1" ]; then
   if should_write_snapshot; then
     if [ -n "${CRON_API_TOKEN}" ] && SNAP_OUT="$(cron_http POST /cron/snapshot)"; then
