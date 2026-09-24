@@ -57,9 +57,8 @@
   .pad { padding: 20px 22px; }
   .eyebrow { font-size: 12px; font-weight: 600; color: var(--soft); margin: 0 0 10px; }
   h1.lede { font-size: 21px; line-height: 1.5; font-weight: 700; margin: 0; letter-spacing: -.01em; }
-  .lede-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-  .stamp { font-size: 12px; color: var(--muted); white-space: nowrap; border: 1px solid var(--border);
-    border-radius: 999px; padding: 3px 10px; }
+  .lede-line { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .date { font-size: 13px; font-weight: 500; color: var(--muted); }
 
   .kpis { display: grid; grid-template-columns: repeat(3, 1fr); }
   .kpi { padding: 20px 22px; }
@@ -84,6 +83,15 @@
   .chart-head .note { font-size: 12px; color: var(--soft); }
   .chart svg { display: block; width: 100%; height: 116px; overflow: visible; }
   .axis { display: flex; justify-content: space-between; margin-top: 8px; font-size: 11px; color: var(--soft); }
+  .chart-wrap { position: relative; }
+  .bar { transition: opacity .12s; }
+  .chart svg:hover .bar:not(.on) { opacity: .42; }
+  .tip {
+    position: absolute; top: -8px; transform: translateX(-50%); display: none;
+    padding: 5px 9px; border-radius: 8px; white-space: nowrap; font-size: 12px;
+    background: var(--text); color: var(--surface); pointer-events: none;
+    box-shadow: 0 8px 20px -10px rgba(0,0,0,.55);
+  }
   .brief { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
   .brief .k { font-size: 12px; color: var(--muted); margin-bottom: 5px; }
   .brief .v { font-size: 16px; font-weight: 640; }
@@ -126,7 +134,6 @@
     .brief { grid-template-columns: repeat(2, 1fr); }
     .grid2 { grid-template-columns: 1fr; }
     .range-out .big { font-size: 28px; }
-    .lede-row { flex-direction: column; }
   }
 </style>
 </head>
@@ -144,10 +151,10 @@
   </div>
 
   <section class="card pad">
-    <p class="eyebrow">结论</p>
-    <div class="lede-row">
-      <h1 class="lede up">整户相对净投入赚了 <span class="num">456,539</span> 元（<span class="num">+18.48%</span>）</h1>
-      <span class="stamp">2026-09-23</span>
+    <p class="eyebrow">整户相对净投入</p>
+    <div class="lede-line">
+      <h1 class="lede up"><span class="num">+456,539</span> 元（<span class="num">+18.48%</span>）</h1>
+      <span class="date">2026-09-23</span>
     </div>
   </section>
 
@@ -189,7 +196,10 @@
       <h2>最近 30 个交易日</h2>
       <span class="note">红涨绿跌 · 已剔除转入转出</span>
     </div>
-    <div class="chart" id="chart"></div>
+    <div class="chart-wrap">
+      <div class="chart" id="chart"></div>
+      <div class="tip" id="tip"></div>
+    </div>
     <div class="axis"><span>08-13</span><span>08-27</span><span>09-09</span><span>09-23</span></div>
     <div class="brief a">
       <div><div class="k">近 30 日累计</div><div class="v num up">+¥12,655.00</div></div>
@@ -205,6 +215,23 @@
       <div><div class="k">涨 / 跌 天数</div><div class="v num">2 / 5</div></div>
       <div><div class="k">最好一天</div><div class="v num up">09-18 +¥7,494.00</div></div>
       <div><div class="k">最差一天</div><div class="v num down">09-15 -¥16,669.42</div></div>
+    </div>
+  </section>
+
+  <section class="card pad">
+    <div class="chart-head">
+      <h2>风险与归因</h2>
+      <span class="note">距峰值 -1.57%</span>
+    </div>
+    <div class="brief">
+      <div><div class="k">距峰值</div><div class="v num down">-1.57%</div></div>
+      <div><div class="k">峰值</div><div class="v num">2,973,372.75 · 07-30</div></div>
+      <div><div class="k">滚动 3M / 6M / 1Y</div><div class="v num">+2.76% / +0.59% / +0.59%</div></div>
+      <div><div class="k">最好 / 最差月</div><div class="v num">+4.06% / -1.70%</div></div>
+      <div><div class="k">正收益月占比</div><div class="v num">25%（4 个月）</div></div>
+      <div><div class="k">对国债 / 对货币</div><div class="v num up">+6.36% / +0.20%</div></div>
+      <div><div class="k">当前仓浮盈</div><div class="v num up">+¥55,992.23</div></div>
+      <div><div class="k">累计分红</div><div class="v num up">+¥101,463.17</div></div>
     </div>
   </section>
 
@@ -243,23 +270,6 @@
       </div>
     </details>
 
-    <details>
-      <summary>风险与归因 <span class="cnt">离峰值 -1.57%</span><span class="chev">▶</span></summary>
-      <div class="body">
-        <div class="grid2">
-          <div>
-            <div class="row"><span class="k">距峰值</span><span class="v num down">-1.57%</span></div>
-            <div class="row"><span class="k">峰值</span><span class="v num">2,973,372.75（2026-07-30）</span></div>
-            <div class="row"><span class="k">滚动 3M / 6M / 1Y</span><span class="v num">+2.76% / +0.59% / +0.59%</span></div>
-          </div>
-          <div>
-            <div class="row"><span class="k">最好 / 最差月</span><span class="v num">+4.06% / -1.70%</span></div>
-            <div class="row"><span class="k">正收益月占比</span><span class="v num">25%（4 个月）</span></div>
-            <div class="row"><span class="k">对国债 / 对货币</span><span class="v num up">+6.36% / +0.20%</span></div>
-          </div>
-        </div>
-      </div>
-    </details>
 
     <details>
       <summary>组合资金流水 <span class="cnt">累计转入 2,470,169.40 · 6 笔</span><span class="chev">▶</span></summary>
@@ -293,6 +303,7 @@
   function paint(k) {
     const w = WINDOWS[k];
     big.textContent = fmt(w.gain);
+    big.className = 'big num' + (w.gain > 0 ? ' up' : w.gain < 0 ? ' down' : '');
     sub.innerHTML = w.sub + (w.pct == null ? '' : ' · ' + fmt(w.pct) + '%');
     for (const b of seg.children) b.classList.toggle('on', b.dataset.k === k);
   }
@@ -323,8 +334,8 @@
       const h = Math.max(2, Math.round((Math.abs(v) / peak) * MAX));
       const x = i * step + (step - bw) / 2;
       const y = v >= 0 ? MID - h : MID;
-      bars += '<rect x="' + x.toFixed(1) + '" y="' + y + '" width="' + bw.toFixed(1) + '" height="' + h +
-        '" rx="2.5" fill="' + (v >= 0 ? cUp : cDown) + '"><title>' + date + '　' + fmt(v) + '</title></rect>';
+      bars += '<rect class="bar" data-i="' + i + '" x="' + x.toFixed(1) + '" y="' + y + '" width="' + bw.toFixed(1) +
+        '" height="' + h + '" rx="2.5" fill="' + (v >= 0 ? cUp : cDown) + '"></rect>';
     });
     document.getElementById('chart').innerHTML =
       '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" ' +
@@ -333,6 +344,26 @@
       bars + '</svg>';
   }
   drawChart();
+
+  const chartEl = document.getElementById('chart');
+  const tip = document.getElementById('tip');
+
+  // 悬停看当天金额：按横坐标定位柱子，不必正好点到细柱上
+  chartEl.addEventListener('mousemove', (e) => {
+    const r = chartEl.getBoundingClientRect();
+    const i = Math.min(DATA.length - 1, Math.max(0, Math.floor(((e.clientX - r.left) / r.width) * DATA.length)));
+    const [date, v] = DATA[i];
+    tip.textContent = date + '　' + fmt(v) + ' 元';
+    tip.style.display = 'block';
+    tip.style.left = Math.min(Math.max(e.clientX - r.left, 58), r.width - 58) + 'px';
+    for (const b of chartEl.querySelectorAll('.bar')) {
+      b.classList.toggle('on', b.getAttribute('data-i') === String(i));
+    }
+  });
+  chartEl.addEventListener('mouseleave', () => {
+    tip.style.display = 'none';
+    for (const b of chartEl.querySelectorAll('.bar')) b.classList.remove('on');
+  });
 
   // 主题切换：柱子颜色取自 CSS 变量，切主题要重画
   const themeBtn = document.getElementById('theme');
