@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>收益与快照 · 排版原型</title>
+<style>
+  /* 颜色取自 frontend/src/styles/styles.css 的 token（浅色 :root / 深色 html.dark） */
+  :root {
+    --bg0:#EEF2F4; --bg1:#F6F8F9; --surface:#FFFFFF; --border:#E4E9EE; --hairline:#EDF1F4;
+    --text:#161D26; --muted:#667085; --soft:#98A2B3;
+    --primary:#2F6F7E; --primary-soft:#2F6F7E1F;
+    --up:#D64545; --down:#3D9A5F;
+    --shadow:0 1px 2px rgba(16,24,40,.04), 0 10px 26px -14px rgba(16,24,40,.14);
+    --shadow-sm:0 1px 2px rgba(16,24,40,.05);
+    --r-lg:16px; --r-md:12px; --r-sm:10px;
+  }
+  html.dark {
+    --bg0:#0A0D0F; --bg1:#0D1114; --surface:#14191D; --border:#FFFFFF14; --hairline:#FFFFFF0F;
+    --text:#F3F5F7; --muted:#8B949E; --soft:#6B7280;
+    --primary:#5AA8B8; --primary-soft:#5AA8B829;
+    --up:#F07178; --down:#6ECF8E;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 16px 40px -20px rgba(0,0,0,.55);
+    --shadow-sm:0 1px 2px rgba(0,0,0,.3);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font: 14px/1.55 "Noto Sans SC","PingFang SC","Microsoft YaHei",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    color: var(--text);
+    background: radial-gradient(900px 380px at 12% -10%, var(--primary-soft), transparent 60%),
+                linear-gradient(180deg, var(--bg1), var(--bg0));
+    min-height: 100vh; -webkit-font-smoothing: antialiased;
+  }
+  .num { font-family: ui-monospace,"SF Mono",Menlo,Consolas,monospace; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+  .up { color: var(--up); } .down { color: var(--down); }
+  .container { max-width: 1080px; margin: 0 auto; padding: 20px 24px 64px; }
+
+  .topbar {
+    display: flex; align-items: center; gap: 14px; padding: 10px 14px; margin-bottom: 22px;
+    background: color-mix(in srgb, var(--surface) 86%, transparent);
+    border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow-sm);
+    backdrop-filter: blur(10px); position: sticky; top: 12px; z-index: 10;
+  }
+  .brand { font-size: 15px; font-weight: 700; }
+  .nav { display: flex; gap: 4px; margin-left: 6px; }
+  .nav button { font: inherit; font-size: 13px; color: var(--muted); background: transparent;
+    border: 1px solid transparent; border-radius: 9px; padding: 6px 11px; cursor: pointer; }
+  .nav button.on { color: var(--text); background: var(--surface); border-color: var(--border); box-shadow: var(--shadow-sm); }
+  .spacer { flex: 1; }
+  .icon-btn { font: inherit; font-size: 13px; color: var(--muted); background: transparent;
+    border: 1px solid var(--border); border-radius: 9px; padding: 6px 10px; cursor: pointer; }
+  .icon-btn:hover { color: var(--text); }
+
+  section { margin-bottom: 22px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); box-shadow: var(--shadow); }
+  .pad { padding: 20px 22px; }
+  .eyebrow { font-size: 12px; font-weight: 600; color: var(--soft); margin: 0 0 10px; }
+  h1.lede { font-size: 21px; line-height: 1.5; font-weight: 700; margin: 0; letter-spacing: -.01em; }
+  .lede-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+  .stamp { font-size: 12px; color: var(--muted); white-space: nowrap; border: 1px solid var(--border);
+    border-radius: 999px; padding: 3px 10px; }
+
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); }
+  .kpi { padding: 20px 22px; }
+  .kpi + .kpi { border-left: 1px solid var(--hairline); }
+  .kpi .k { font-size: 12px; color: var(--muted); margin-bottom: 7px; }
+  .kpi .v { font-size: 25px; font-weight: 650; }
+  .kpi .s { font-size: 12px; color: var(--soft); margin-top: 5px; }
+
+  .seg { display: inline-flex; gap: 2px; padding: 3px; max-width: 100%; overflow-x: auto;
+    background: color-mix(in srgb, var(--bg0) 70%, var(--surface));
+    border: 1px solid var(--border); border-radius: var(--r-sm); }
+  .seg button { font: inherit; font-size: 13px; color: var(--muted); white-space: nowrap;
+    background: transparent; border: 0; border-radius: 7px; padding: 7px 13px; cursor: pointer; }
+  .seg button.on { color: var(--text); font-weight: 600; background: var(--surface); box-shadow: var(--shadow-sm); }
+  .range-out { display: flex; align-items: flex-end; gap: 14px; flex-wrap: wrap; margin-top: 18px; }
+  .range-out .big { font-size: 34px; font-weight: 700; line-height: 1; }
+  .range-out .sub { font-size: 13px; color: var(--muted); padding-bottom: 5px; }
+  .divider { height: 1px; background: var(--hairline); margin: 20px 0 16px; }
+
+  .chart-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+  .chart-head h2 { font-size: 15px; font-weight: 650; margin: 0; }
+  .chart-head .note { font-size: 12px; color: var(--soft); }
+  .chart svg { display: block; width: 100%; height: 116px; overflow: visible; }
+  .axis { display: flex; justify-content: space-between; margin-top: 8px; font-size: 11px; color: var(--soft); }
+  .brief { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .brief .k { font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+  .brief .v { font-size: 16px; font-weight: 640; }
+  .brief.a { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--hairline); }
+
+  details { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md);
+    margin-bottom: 10px; overflow: hidden; }
+  details > summary { list-style: none; cursor: pointer; user-select: none; display: flex;
+    align-items: center; gap: 10px; padding: 14px 18px; font-size: 14px; font-weight: 600; }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary .cnt { font-size: 12px; font-weight: 400; color: var(--soft); }
+  details > summary .chev { margin-left: auto; color: var(--soft); font-size: 11px; transition: transform .18s; }
+  details[open] > summary .chev { transform: rotate(90deg); }
+  details[open] > summary { border-bottom: 1px solid var(--hairline); }
+  .body { padding: 18px; }
+  .grid2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 28px; }
+  .row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+    padding: 7px 0; border-bottom: 1px solid var(--hairline); }
+  .row:last-child { border-bottom: 0; }
+  .row .k { font-size: 13px; color: var(--muted); }
+  .row .v { font-size: 14px; font-weight: 600; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; font-size: 12px; font-weight: 600; color: var(--muted); padding: 8px 10px;
+    border-bottom: 1px solid var(--border); white-space: nowrap; }
+  td { padding: 9px 10px; border-bottom: 1px solid var(--hairline); white-space: nowrap; }
+  th.r, td.r { text-align: right; }
+  tbody tr:hover td { background: color-mix(in srgb, var(--bg0) 45%, transparent); }
+  .scroll-x { overflow-x: auto; }
+
+  .foot { font-size: 12px; color: var(--soft); text-align: center; margin-top: 28px; line-height: 1.8; }
+
+  @media (max-width: 800px) {
+    .container { padding: 12px 16px 48px; }
+    .nav { display: none; }
+    .kpis { grid-template-columns: 1fr; }
+    .kpi { padding: 16px 18px; }
+    .kpi + .kpi { border-left: 0; border-top: 1px solid var(--hairline); }
+    .kpi .v { font-size: 22px; }
+    .brief { grid-template-columns: repeat(2, 1fr); }
+    .grid2 { grid-template-columns: 1fr; }
+    .range-out .big { font-size: 28px; }
+    .lede-row { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="topbar">
+    <span class="brand">真仓账本</span>
+    <nav class="nav">
+      <button>日常</button><button class="on">分析</button><button>设置</button>
+    </nav>
+    <span class="spacer"></span>
+    <button class="icon-btn" id="theme">暗色</button>
+    <button class="icon-btn">刷新</button>
+  </div>
+
+  <section class="card pad">
+    <p class="eyebrow">结论</p>
+    <div class="lede-row">
+      <h1 class="lede up">整户相对净投入赚了 <span class="num">456,539</span> 元（<span class="num">+18.48%</span>）</h1>
+      <span class="stamp">2026-09-23</span>
+    </div>
+  </section>
+
+  <section class="card kpis">
+    <div class="kpi">
+      <div class="k">现在总资产</div>
+      <div class="v num">¥2,926,708.51</div>
+      <div class="s">含银行存款 672,118.00</div>
+    </div>
+    <div class="kpi">
+      <div class="k">累计净投入</div>
+      <div class="v num">¥2,470,169.40</div>
+      <div class="s">6 笔外部流水</div>
+    </div>
+    <div class="kpi">
+      <div class="k">累计收益</div>
+      <div class="v num up">+¥456,539.11</div>
+      <div class="s up">+18.48% · XIRR 10.96%</div>
+    </div>
+  </section>
+
+  <section class="card pad">
+    <p class="eyebrow">收益尺（点一段，下面的数字跟着变）</p>
+    <div class="seg" id="seg">
+      <button data-k="today">今天</button>
+      <button data-k="month">本月</button>
+      <button data-k="ytd">今年</button>
+      <button data-k="1y">近一年</button>
+      <button data-k="all" class="on">开仓至今</button>
+    </div>
+    <div class="range-out">
+      <div class="big num up" id="ro-big">+456,539.11</div>
+      <div class="sub" id="ro-sub">开仓至今 · 距目标收益缺口 <span class="num">-357,732.33</span></div>
+    </div>
+  </section>
+
+  <section class="card pad">
+    <div class="chart-head">
+      <h2>最近 30 个交易日</h2>
+      <span class="note">红涨绿跌 · 已剔除转入转出</span>
+    </div>
+    <div class="chart" id="chart"></div>
+    <div class="axis"><span>08-13</span><span>08-27</span><span>09-09</span><span>09-23</span></div>
+    <div class="brief a">
+      <div><div class="k">近 30 日累计</div><div class="v num up">+¥12,655.00</div></div>
+      <div><div class="k">涨 / 跌 天数</div><div class="v num">16 / 14</div></div>
+      <div><div class="k">最好一天</div><div class="v num up">08-28 +¥18,125.65</div></div>
+      <div><div class="k">最差一天</div><div class="v num down">08-27 -¥24,381.61</div></div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="brief">
+      <div><div class="k">近 7 个交易日累计</div><div class="v num down">-¥16,465.59</div></div>
+      <div><div class="k">涨 / 跌 天数</div><div class="v num">2 / 5</div></div>
+      <div><div class="k">最好一天</div><div class="v num up">09-18 +¥7,494.00</div></div>
+      <div><div class="k">最差一天</div><div class="v num down">09-15 -¥16,669.42</div></div>
+    </div>
+  </section>
+
+  <section>
+    <details>
+      <summary>快照明细 <span class="cnt">83 条 · 2026-05-10 至 2026-09-23（136 天）</span><span class="chev">▶</span></summary>
+      <div class="body">
+        <div class="grid2" style="margin-bottom: 16px;">
+          <div>
+            <div class="row"><span class="k">总资产</span><span class="v num">2,909,622.49 → 2,926,708.51　<span class="up">+17,086.02</span></span></div>
+            <div class="row"><span class="k">投资市值</span><span class="v num">1,953,004.49 → 2,242,968.58　<span class="up">+289,964.09</span></span></div>
+          </div>
+          <div>
+            <div class="row"><span class="k">银行存款</span><span class="v num">872,118.00 → 672,118.00　<span class="down">-200,000.00</span></span></div>
+            <div class="row"><span class="k">证券现金</span><span class="v num">84,500.00 → 11,621.93　<span class="down">-72,878.07</span></span></div>
+          </div>
+        </div>
+        <div class="scroll-x">
+          <table>
+            <thead><tr>
+              <th>日期</th><th class="r">投资市值</th><th class="r">银行存款</th><th class="r">证券现金</th>
+              <th class="r">持仓浮盈</th><th class="r">全周期盈亏</th><th class="r">持仓</th>
+            </tr></thead>
+            <tbody>
+              <tr><td class="num">09-23</td><td class="r num">2,242,968.58</td><td class="r num">672,118.00</td><td class="r num">11,621.93</td><td class="r num">157,455.40</td><td class="r num">346,860.85</td><td class="r num">10</td></tr>
+              <tr><td class="num">09-22</td><td class="r num">2,245,880.33</td><td class="r num">672,118.00</td><td class="r num">11,621.93</td><td class="r num">160,367.15</td><td class="r num">349,772.60</td><td class="r num">10</td></tr>
+              <tr><td class="num">09-21</td><td class="r num">2,248,430.31</td><td class="r num">672,118.00</td><td class="r num">11,621.93</td><td class="r num">162,917.13</td><td class="r num">352,322.58</td><td class="r num">10</td></tr>
+              <tr><td class="num">09-18</td><td class="r num">2,242,368.50</td><td class="r num">672,118.00</td><td class="r num">11,621.93</td><td class="r num">156,855.32</td><td class="r num">346,260.77</td><td class="r num">10</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="row" style="margin-top: 14px; border-bottom: 0;">
+          <span class="k">人工对账</span>
+          <span class="v" style="font-weight: 400; color: var(--muted);">还没有记录 —— 每周对照券商实际余额录一次</span>
+        </div>
+      </div>
+    </details>
+
+    <details>
+      <summary>风险与归因 <span class="cnt">离峰值 -1.57%</span><span class="chev">▶</span></summary>
+      <div class="body">
+        <div class="grid2">
+          <div>
+            <div class="row"><span class="k">距峰值</span><span class="v num down">-1.57%</span></div>
+            <div class="row"><span class="k">峰值</span><span class="v num">2,973,372.75（2026-07-30）</span></div>
+            <div class="row"><span class="k">滚动 3M / 6M / 1Y</span><span class="v num">+2.76% / +0.59% / +0.59%</span></div>
+          </div>
+          <div>
+            <div class="row"><span class="k">最好 / 最差月</span><span class="v num">+4.06% / -1.70%</span></div>
+            <div class="row"><span class="k">正收益月占比</span><span class="v num">25%（4 个月）</span></div>
+            <div class="row"><span class="k">对国债 / 对货币</span><span class="v num up">+6.36% / +0.20%</span></div>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <details>
+      <summary>组合资金流水 <span class="cnt">累计转入 2,470,169.40 · 6 笔</span><span class="chev">▶</span></summary>
+      <div class="body">
+        <div class="row"><span class="k">累计转入</span><span class="v num">2,470,169.40</span></div>
+        <div class="row"><span class="k">累计取出</span><span class="v num">0.00</span></div>
+        <div class="row"><span class="k">建议草稿</span><span class="v" style="font-weight:400; color:var(--muted);">无（银证流水已勾稽上）</span></div>
+      </div>
+    </details>
+  </section>
+
+  <p class="foot">
+    排版原型，不是真页面。数字取自 2026-09-23 生产库的真实数据，只用于比较排版与层次。<br>
+    右上角「暗色」可切主题（两套配色都取自现有 token）。把窗口拉窄可看手机版。
+  </p>
+</div>
+
+<script>
+  // 收益尺：值取自 /performance/windows
+  const WINDOWS = {
+    today: { gain: 0,         pct: null,  sub: '今天（基准 09-23，尚未产生今日变化）' },
+    month: { gain: -36614.16, pct: -1.22, sub: '本月' },
+    ytd:   { gain: 17086.02,  pct: 0.59,  sub: '今年' },
+    '1y':  { gain: 17086.02,  pct: 0.59,  sub: '近一年' },
+    all:   { gain: 456539.11, pct: null,  sub: '开仓至今 · 距目标收益缺口 <span class="num">-357,732.33</span>' },
+  };
+  const fmt = (v, d = 2) => (v >= 0 ? '+' : '-') + Math.abs(v).toLocaleString('zh-CN', { minimumFractionDigits: d, maximumFractionDigits: d });
+  const seg = document.getElementById('seg');
+  const big = document.getElementById('ro-big');
+  const sub = document.getElementById('ro-sub');
+  function paint(k) {
+    const w = WINDOWS[k];
+    big.textContent = fmt(w.gain);
+    sub.innerHTML = w.sub + (w.pct == null ? '' : ' · ' + fmt(w.pct) + '%');
+    for (const b of seg.children) b.classList.toggle('on', b.dataset.k === k);
+  }
+  seg.addEventListener('click', (e) => { if (e.target.dataset.k) paint(e.target.dataset.k); });
+  paint('all');
+
+  // 30 天柱状图：数据取自 /performance/timeline
+  const DATA = [
+    ['08-13', 299.90], ['08-14', -4207.53], ['08-17', 4847.15], ['08-18', 10452.89],
+    ['08-19', 15218.88], ['08-20', 10260.85], ['08-21', 1449.78], ['08-24', 12192.06],
+    ['08-25', -1110.32], ['08-26', 2306.10], ['08-27', -24381.61], ['08-28', 18125.65],
+    ['08-31', 1481.69], ['09-01', 2333.67], ['09-02', -10915.29], ['09-03', -2367.61],
+    ['09-04', 8677.72], ['09-07', -11435.76], ['09-08', -2806.86], ['09-09', 10848.60],
+    ['09-10', 1752.77], ['09-11', -7303.11], ['09-14', -6599.03], ['09-15', -16669.42],
+    ['09-16', -1615.28], ['09-17', -6274.97], ['09-18', 7494.00], ['09-21', 6061.81],
+    ['09-22', -2549.98], ['09-23', -2911.75],
+  ];
+
+  function drawChart() {
+    const H = 116, MID = 58, MAX = 48;             // 零线在中间，单边最大 48px
+    const n = DATA.length, W = 1000, step = W / n, bw = step * 0.62;
+    const peak = Math.max(...DATA.map((d) => Math.abs(d[1])));
+    const cs = getComputedStyle(document.documentElement);
+    const cUp = cs.getPropertyValue('--up').trim(), cDown = cs.getPropertyValue('--down').trim();
+    const cLine = cs.getPropertyValue('--hairline').trim(), cSoft = cs.getPropertyValue('--soft').trim();
+    let bars = '';
+    DATA.forEach(([date, v], i) => {
+      const h = Math.max(2, Math.round((Math.abs(v) / peak) * MAX));
+      const x = i * step + (step - bw) / 2;
+      const y = v >= 0 ? MID - h : MID;
+      bars += '<rect x="' + x.toFixed(1) + '" y="' + y + '" width="' + bw.toFixed(1) + '" height="' + h +
+        '" rx="2.5" fill="' + (v >= 0 ? cUp : cDown) + '"><title>' + date + '　' + fmt(v) + '</title></rect>';
+    });
+    document.getElementById('chart').innerHTML =
+      '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" ' +
+      'aria-label="最近 30 个交易日每日盈亏柱状图">' +
+      '<line x1="0" y1="' + MID + '" x2="' + W + '" y2="' + MID + '" stroke="' + cLine + '" stroke-width="1"/>' +
+      bars + '</svg>';
+  }
+  drawChart();
+
+  // 主题切换：柱子颜色取自 CSS 变量，切主题要重画
+  const themeBtn = document.getElementById('theme');
+  themeBtn.addEventListener('click', () => {
+    const dark = document.documentElement.classList.toggle('dark');
+    themeBtn.textContent = dark ? '浅色' : '暗色';
+    drawChart();
+  });
+</script>
+</body>
+</html>
