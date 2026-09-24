@@ -204,3 +204,23 @@ def test_chain_handles_empty_input():
     assert fetch_eastmoney_quotes([]) == {}
     assert fetch_sina_quotes([]) == {}
     assert fetch_stock_quotes([]) == {}
+
+
+def test_otc_fund_codes_never_hit_any_quote_source(monkeypatch):
+    """场外基金（f 前缀）走天天基金净值，不该被当成场内代码去查行情。
+
+    回归护栏：这里以前把 "f" 剥掉再判断，f004388 会被当成深市股票 004388 去请求，
+    既白打一次又让日志多一条"未返回报价"的噪声。
+    """
+    import price_sync as ps
+
+    ps.clear_quote_cache()
+    urls = []
+
+    def fake_get(url, **kwargs):
+        urls.append(url)
+        raise AssertionError(f"不该为场外基金请求行情: {url}")
+
+    monkeypatch.setattr(ps.requests, "get", fake_get)
+    assert ps.fetch_eastmoney_quotes(["f002864", "f004388"]) == {}
+    assert urls == []

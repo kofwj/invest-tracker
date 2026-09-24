@@ -243,7 +243,14 @@ def fetch_eastmoney_quotes(codes, secid_map=None, *, use_cache: bool = True):
     numeric_codes = []
     skipped = []
     for c in codes:
-        raw = str(c).strip().lower().replace("f", "")
+        raw = str(c).strip().lower()
+        # 场外基金（f 前缀，如 f002864）走天天基金净值，没有场内报价。
+        # 以前这里把 "f" 剥掉再判断，f004388 会被当成深市股票 004388 去查 ——
+        # 既白打一次请求，又让日志里多一条"未返回报价"的噪声。
+        # tencent_symbol 早就对 f 前缀判空，这里对齐同一个判断。
+        if raw.startswith("f"):
+            skipped.append(str(c).strip())
+            continue
         if raw.isdigit() and len(raw) == 6:
             numeric_codes.append(raw)
         elif str(c).strip():
