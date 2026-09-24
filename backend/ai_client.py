@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import socket
 import sqlite3
 import urllib.error
@@ -20,9 +21,11 @@ logger = logging.getLogger(__name__)
 try:
     from .cash import set_setting
     from .database import LOCAL_TZ, local_today_iso
+    from .version import APP_VERSION
 except ImportError:
     from cash import set_setting
     from database import LOCAL_TZ, local_today_iso
+    from version import APP_VERSION
 
 SETTING_ENABLED = "ai_enabled"
 SETTING_BASE_URL = "ai_base_url"
@@ -37,6 +40,9 @@ DEFAULT_FEATURES = {"brief": False, "alert_note": False, "nl_rule": False}
 DEFAULT_TIMEOUT = 8
 DEFAULT_CAP = 30
 AI_LOG_KEEP_DAYS = 30
+# 供应方前面常挂 Cloudflare：urllib 默认 UA "Python-urllib/x.y" 会命中 CF 1010 被 403
+# （2026-09-25 实测 api.anemy.org：Python-urllib → 403 error code: 1010；下面这个 → 200）
+USER_AGENT = "invest-tracker/%s (+https://github.com/kofwj/invest-tracker)" % APP_VERSION
 
 ENV_MAP = {
     SETTING_ENABLED: "AI_ENABLED",
@@ -193,6 +199,17 @@ def normalize_chat_url(base_url: str) -> str:
     if not url.lower().endswith("/chat/completions"):
         url = url + "/chat/completions"
     return url
+
+
+def normalize_models_url(base_url: str) -> str:
+    """base_url → …/v1/models（与 chat 用同一套补全规则）。"""
+    chat_url = normalize_chat_url(base_url)
+    if not chat_url:
+        return ""
+    suffix = "/chat/completions"
+    if chat_url.endswith(suffix):
+        return chat_url[: -len(suffix)] + "/models"
+    return chat_url.rstrip("/") + "/models"
 
 
 def _parse_features(raw: Optional[str]) -> Dict[str, bool]:
@@ -377,16 +394,75 @@ def ai_budget_ok(conn, cfg: AiConfig, now=None) -> bool:
     return _count_today_calls(conn, day, used_only=True) < cfg.daily_call_cap
 
 
+def _headers(api_key: str) -> Dict[str, str]:
+    return {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Authorization": "Bearer " + str(api_key or ""),
+        "User-Agent": USER_AGENT,
+    }
+
+
+_TAG_RE = re.compile(r"<[^>]+>")
+
+
+def _provider_error(raw: str) -> str:
+    """供应方给的可读原因：JSON 的 error.message / 纯文本 / HTML 去标签，截 160 字。"""
+    text = str(raw or "").strip()
+    if not text:
+        return ""
+    data = None
+    try:
+        data = json.loads(text)
+    except Exception:
+        data = None
+    if isinstance(data, dict):
+        err = data.get("error")
+        if isinstance(err, dict):
+            msg = err.get("message") or err.get("type") or ""
+            if msg:
+                return str(msg)[:160]
+        elif isinstance(err, str) and err.strip():
+            return err.strip()[:160]
+        for key in ("message", "detail", "msg"):
+            if data.get(key):
+                return str(data[key])[:160]
+    plain = _TAG_RE.sub(" ", text) if "<" in text else text
+    return " ".join(plain.split())[:160]
+
+
+def _get_raw(url: str, api_key: str, timeout: int):
+    """GET JSON. Returns (status_code, body_text). Raises TimeoutError on timeout."""
+    req = urllib.request.Request(url, headers=_headers(api_key), method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=max(1, int(timeout))) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
+            return int(getattr(resp, "status", 200) or 200), raw
+    except urllib.error.HTTPError as exc:
+        raw = ""
+        try:
+            raw = exc.read().decode("utf-8", errors="replace")
+        except Exception:
+            raw = str(exc)
+        return int(exc.code or 0), raw
+    except TimeoutError:
+        raise
+    except socket.timeout as exc:
+        raise TimeoutError(str(exc)) from exc
+    except urllib.error.URLError as exc:
+        reason = getattr(exc, "reason", None)
+        if isinstance(reason, socket.timeout) or "timed out" in str(exc).lower():
+            raise TimeoutError(str(exc)) from exc
+        raise
+
+
 def _post_chat(url: str, api_key: str, payload: Dict[str, Any], timeout: int):
     """POST JSON. Returns (status_code, body_text). Raises TimeoutError on timeout."""
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     req = urllib.request.Request(
         url,
         data=body,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": "Bearer " + str(api_key or ""),
-        },
+        headers=_headers(api_key),
         method="POST",
     )
     try:
@@ -434,7 +510,11 @@ def chat(
         return {"ok": False, "reason": str(exc)[:200], "status": None}
 
     if status >= 400:
-        return {"ok": False, "reason": "http_%s" % status, "status": status}
+        detail = _provider_error(raw)
+        reason = "http_%s" % status
+        if detail:
+            reason = "%s: %s" % (reason, detail)
+        return {"ok": False, "reason": reason, "status": status, "provider_error": detail}
 
     try:
         data = json.loads(raw)
@@ -620,3 +700,60 @@ def ai_status(conn) -> Dict[str, Any]:
     cfg = load_ai_config(conn)
     return _public_config(cfg, conn)
 
+
+
+def fetch_models(cfg: AiConfig, *, timeout_seconds: Optional[int] = None) -> Dict[str, Any]:
+    """GET {base}/models —— 设置页据此列真实模型名。Never raises，不计额度、不写审计。"""
+    url = normalize_models_url(cfg.base_url)
+    out: Dict[str, Any] = {
+        "ok": False,
+        "request_url": url,
+        "ids": [],
+        "display": {},
+        "status": None,
+        "error": "",
+    }
+    if not url:
+        out["error"] = "base_url 未配置"
+        return out
+    if not str(cfg.api_key or "").strip():
+        out["error"] = "api_key 未配置"
+        return out
+    timeout = _as_int(str(timeout_seconds or cfg.timeout_seconds), DEFAULT_TIMEOUT)
+    try:
+        status, raw = _get_raw(url, cfg.api_key, timeout)
+    except TimeoutError:
+        out["error"] = "timeout"
+        return out
+    except Exception as exc:
+        out["error"] = str(exc)[:160]
+        return out
+    out["status"] = status
+    if status >= 400:
+        out["error"] = _provider_error(raw) or ("http_%s" % status)
+        return out
+    try:
+        data = json.loads(raw)
+    except Exception:
+        out["error"] = "invalid_json"
+        return out
+    rows = data.get("data") if isinstance(data, dict) else None
+    if not isinstance(rows, list):
+        out["error"] = "no_models_field"
+        return out
+    for item in rows:
+        if isinstance(item, dict) and item.get("id"):
+            mid = str(item["id"]).strip()
+            if not mid:
+                continue
+            out["ids"].append(mid)
+            label = item.get("display_name") or item.get("name")
+            if label:
+                out["display"][mid] = str(label)[:80]
+        elif isinstance(item, str) and item.strip():
+            out["ids"].append(item.strip())
+    out["ids"] = sorted(set(out["ids"]))
+    out["ok"] = bool(out["ids"])
+    if not out["ok"]:
+        out["error"] = "empty"
+    return out

@@ -69,7 +69,22 @@
           </el-col>
           <el-col :xs="24" :md="12">
             <el-form-item label="模型">
-              <el-input v-model="form.model" clearable placeholder="deepseek-chat" />
+              <el-space wrap>
+                <el-select
+                  v-model="form.model"
+                  filterable
+                  allow-create
+                  default-first-option
+                  clearable
+                  placeholder="deepseek-chat"
+                  style="min-width: 200px;"
+                >
+                  <el-option v-for="m in modelOptions" :key="m" :label="m" :value="m" />
+                </el-select>
+                <el-button size="small" :loading="modelsLoading" @click="fetchModels">拉取模型</el-button>
+              </el-space>
+              <div class="ops-hint">模型名要和供应方 /models 里的 id 完全一致（区分大小写、不能带空格）；先保存 base_url + 密钥再拉取</div>
+              <div v-if="modelsHint" class="ops-hint" :class="{ 'ops-warn': !!modelsError || modelUnknown }">{{ modelsHint }}</div>
             </el-form-item>
           </el-col>
           <el-col :xs="24" :md="12">
@@ -113,6 +128,7 @@
         </div>
       </template>
       <div class="ops-hint">{{ lastTest.ok ? '成功' : ('失败 ' + (lastTest.reason || '')) }} · {{ lastTest.duration_ms || 0 }} ms · HTTP {{ lastTest.status == null ? '—' : lastTest.status }}</div>
+      <div v-if="lastTest.provider_error" class="ops-hint ops-warn">供应方原文：{{ lastTest.provider_error }}</div>
       <div class="ops-url">{{ lastTest.request_url || '（未配置 base_url）' }}</div>
     </el-card>
 
@@ -200,6 +216,43 @@ async function loadStatus({ writeForm = true } = {}) {
   }
 }
 
+const modelsLoading = ref(false);
+const modelOptions = ref([]);
+const modelsError = ref('');
+
+const modelUnknown = computed(
+  () => !!form.model && modelOptions.value.length > 0 && !modelOptions.value.includes(form.model),
+);
+const modelsHint = computed(() => {
+  if (modelsError.value) return `拉取模型失败：${modelsError.value}`;
+  if (!modelOptions.value.length) return '';
+  if (modelUnknown.value) {
+    return `已拉取 ${modelOptions.value.length} 个模型，但当前填的「${form.model}」不在列表里 —— 供应方会按 model_not_found 处理`;
+  }
+  return `已拉取 ${modelOptions.value.length} 个模型`;
+});
+
+async function fetchModels() {
+  if (modelsLoading.value) return;
+  modelsLoading.value = true;
+  modelsError.value = '';
+  try {
+    const { data } = await api.getAiModels();
+    modelOptions.value = Array.isArray(data?.ids) ? data.ids : [];
+    if (!data?.ok) {
+      modelsError.value = data?.error || `HTTP ${data?.status}`;
+      ElMessage.error('拉取模型失败：' + modelsError.value);
+    } else {
+      ElMessage.success(`已拉取 ${modelOptions.value.length} 个模型`);
+    }
+  } catch (e) {
+    modelsError.value = e?.response?.data?.detail || e?.message || '拉取失败';
+    ElMessage.error('拉取模型失败：' + modelsError.value);
+  } finally {
+    modelsLoading.value = false;
+  }
+}
+
 async function onSave() {
   if (saving.value) return;
   saving.value = true;
@@ -272,6 +325,9 @@ onUnmounted(() => {
   margin-top: 2px;
   font-size: 12px;
   color: var(--app-soft);
+}
+.ops-warn {
+  color: var(--el-color-danger);
 }
 .ops-url {
   margin-top: 8px;

@@ -205,6 +205,7 @@ const api = {
     getAiStatus: () => axios.get(API + '/ai/status'),
     saveAiConfig: (payload) => axios.put(API + '/ai/config', payload || {}),
     testAi: () => axios.post(API + '/ai/test', {}, { timeout: 125000 }),
+    getAiModels: () => axios.get(API + '/ai/models', { timeout: 30000 }),
 
     getDisciplineReport: () => axios.get(API + '/discipline/report', { timeout: 60000 }),
     getDisciplinePolicy: () => axios.get(API + '/discipline/policy'),

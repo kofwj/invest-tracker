@@ -10,6 +10,7 @@ try:
     from .ai_client import (
         ai_status,
         call_ai,
+        fetch_models,
         load_ai_config,
         normalize_chat_url,
         save_ai_config,
@@ -19,6 +20,7 @@ except ImportError:
     from ai_client import (
         ai_status,
         call_ai,
+        fetch_models,
         load_ai_config,
         normalize_chat_url,
         save_ai_config,
@@ -76,4 +78,22 @@ def post_ai_test():
         "model": cfg.model,
         "text": result.get("text"),
         "reason": result.get("reason"),
+        "provider_error": result.get("provider_error") or "",
+    }
+
+
+@router.get("/ai/models")
+def get_ai_models():
+    """列出供应方 /models 里的真实模型 id（只读，不计日额度、不写审计）。"""
+    with db_session() as conn:
+        cfg = load_ai_config(conn)
+    data = fetch_models(cfg)
+    return {
+        "ok": bool(data.get("ok")),
+        "request_url": data.get("request_url"),
+        "status": data.get("status"),
+        "ids": data.get("ids") or [],
+        "display": data.get("display") or {},
+        "error": data.get("error") or "",
+        "model_current": cfg.model,
     }

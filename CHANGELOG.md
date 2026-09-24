@@ -41,6 +41,15 @@
 - 公告 refill 与空数据重试共用 16:40 分钟判定；缺行情时禁止「全部持平」这类结论。
 - 输出校验增加因果词（因为/由于/导致/原因在于/拖累），warnings 去重；`call_ai` 可覆盖 timeout，warnings 落 `warnings_json`。
 
+### 供应商连通性（A1 修补 · 2026-09-25）
+
+- 请求带自己的 `User-Agent`：urllib 默认 `Python-urllib/x.y` 会命中 Cloudflare 1010 直接 403
+  （实测 api.anemy.org：同一请求只换 UA 就 200），并补 `Accept: application/json`。
+- 4xx/5xx 不再只报 `http_403`：把供应方原文（`error.message` / 纯文本 / HTML 去标签，截 160 字）
+  写进审计 `reason` 与 `last_error`，`POST /ai/test` 一并返回 `provider_error`，设置页直接显示。
+- 新增 `GET /ai/models` + 设置页「拉取模型」：模型名必须与供应方 `/models` 的 id 完全一致
+  （实测踩过：填 `Grok 4.6`，真实 id 是 `grok-4.6`）。只读、不计日额度、不写审计。
+
 ---
 
 
