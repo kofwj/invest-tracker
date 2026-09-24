@@ -280,19 +280,24 @@ const createMarketModule = ({
             const data = res.data || {};
             triggeredAlerts.value = data.triggered || [];
             const n = data.trigger_count || 0;
-            const skipped = (data.skipped_cooldown || []).length;
+            // 把"命中但被拦下"的条数都说出来：否则界面显示"未触发预警"，
+            // 用户会以为规则坏了 —— 实际是冷却/未升级/取不到数据在正常拦截。
+            const parts = [];
+            const skippedCooldown = (data.skipped_cooldown || []).length;
+            const skippedEscalation = (data.skipped_no_escalation || []).length;
+            const skippedNoData = (data.skipped_no_data || []).length;
+            if (skippedCooldown) parts.push(`冷却跳过 ${skippedCooldown}`);
+            if (skippedEscalation) parts.push(`未升级 ${skippedEscalation}`);
+            if (skippedNoData) parts.push(`无数据 ${skippedNoData}`);
+            const detail = `已检查 ${data.checked_count || 0} 条规则` +
+                (parts.length ? `，${parts.join('、')}` : '');
             if (n > 0) {
-                ElMessage.warning(
-                    `触发 ${n} 条预警（已检查 ${data.checked_count || 0} 条规则` +
-                    (skipped ? `，冷却跳过 ${skipped}` : '') +
-                    `）`,
-                );
+                ElMessage.warning(`触发 ${n} 条预警（${detail}）`);
+            } else if (skippedEscalation || skippedNoData) {
+                // 有命中但没到推送线：用 info 而不是 success，别让人以为无事发生
+                ElMessage.info(`未推送（${detail}）`);
             } else {
-                ElMessage.success(
-                    `未触发预警（已检查 ${data.checked_count || 0} 条规则` +
-                    (skipped ? `，冷却跳过 ${skipped}` : '') +
-                    `）`,
-                );
+                ElMessage.success(`未触发预警（${detail}）`);
             }
             await fetchAlertEvents();
         } catch (e) {

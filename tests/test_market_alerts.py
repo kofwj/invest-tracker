@@ -578,3 +578,242 @@ def test_daily_cap_does_not_block_manual_check(client, app_module, monkeypatch):
     ).json()
     assert body["skipped_daily_cap"] == []
     assert body["trigger_count"] == 1
+
+
+def _set_escalation(app_module, value):
+    with app_module.get_db_connection(app_module.DB_PATH) as conn:
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES ('alert_escalation_pct', ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (str(value),),
+        )
+        conn.commit()
+
+
+def _seed_prior_event(
+    app_module,
+    rule_id,
+    value,
+    *,
+    minutes_ago=30,
+    days_ago=0,
+    threshold=-2.0,
+    rule_type="change_pct",
+):
+    """塞一条"已经推送过"的历史事件（默认今天、30 分钟前）。
+
+    时间必须按**应用时区**造：check_alerts 比的是 datetime.now(LOCAL_TZ)，
+    而 CI/容器里进程本地时间是 UTC —— 用 datetime.now() 会差 8 小时，
+    让"30 分钟前"变成"8 小时前"，断言在本地绿、在 CI 红。
+    """
+    import datetime as _dt
+    from zoneinfo import ZoneInfo
+
+    base = _dt.datetime.now(ZoneInfo("Asia/Shanghai")).replace(tzinfo=None)
+    when = (base - _dt.timedelta(days=days_ago, minutes=minutes_ago)).isoformat(
+        sep=" ", timespec="seconds"
+    )
+    with app_module.get_db_connection(app_module.DB_PATH) as conn:
+        conn.execute(
+            "INSERT INTO alert_events "
+            "(rule_id, trigger_time, target_code, triggered_price, threshold, "
+            " message, rule_type, value) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (rule_id, when, "600000", None, threshold, "seed", rule_type, value),
+        )
+        conn.commit()
+
+
+def _make_change_pct_rule(client, code="600000", threshold=-2.0, condition="below"):
+    res = client.post(
+        "/market/alert-rules",
+        json={
+            "target_type": "holding",
+            "code": code,
+            "condition": condition,
+            "threshold": threshold,
+            "rule_type": "change_pct",
+        },
+    )
+    assert res.status_code == 200
+    return res.json()["rule"]["id"]
+
+
+def _check(client):
+    return client.post(
+        "/market/alerts/check", json={"notify": False, "respect_cooldown": True}
+    ).json()
+
+
+def test_pct_rule_first_touch_notifies(client, app_module, monkeypatch):
+    """今天第一次触及阈值就推（没有基线）。"""
+    _seed_holding(client, "600000", "浦发银行", qty=100, price=10.0)
+    _patch_quotes(monkeypatch, {"600000": (9.8, 10.0)})  # -2%
+    _make_change_pct_rule(client)
+
+    body = _check(client)
+    assert body["trigger_count"] == 1
+    assert body["skipped_no_escalation"] == []
+
+
+def test_pct_rule_flat_move_does_not_renotify(client, app_module, monkeypatch):
+    """升级式的核心：跌了 10% 推过一次，一直在 10% 附近晃就不再打扰。"""
+    _seed_holding(client, "600000", "浦发银行", qty=100, price=10.0)
+    _patch_quotes(monkeypatch, {"600000": (9.0, 10.0)})  # -10%
+    rule_id = _make_change_pct_rule(client)
+    _seed_prior_event(app_module, rule_id, -10.0)
+
+    body = _check(client)
+    assert body["trigger_count"] == 0
+    assert len(body["skipped_no_escalation"]) == 1
+    assert "未升级" in body["skipped_no_escalation"][0]["reason"]
+
+
+def test_pct_rule_small_worsening_still_suppressed(client, app_module, monkeypatch):
+    """步长默认 2 个百分点：只多跌 1 个点还不该再推。"""
+    _seed_holding(client, "600000", "浦发银行", qty=100, price=10.0)
+    _patch_quotes(monkeypatch, {"600000": (8.9, 10.0)})  # -11%
+    rule_id = _make_change_pct_rule(client)
+    _seed_prior_event(app_module, rule_id, -10.0)
+
+    body = _check(client)
+    assert body["trigger_count"] == 0
+    assert len(body["skipped_no_escalation"]) == 1
+
+
+def test_pct_rule_renotifies_when_move_worsens(client, app_module, monkeypatch):
+    """恶化够多就再推 —— 这正是"午后二次下跌"的场景。"""
+    _seed_holding(client, "600000", "浦发银行", qty=100, price=10.0)
+    _patch_quotes(monkeypatch, {"600000": (9.2, 10.0)})  # -8%
+    rule_id = _make_change_pct_rule(client)
+    _seed_prior_event(app_module, rule_id, -5.0)  # 今天推过 -5%，现在 -8% → 差 3 >= 2
+
+    body = _check(client)
+    assert body["trigger_count"] == 1
+    assert body["triggered"][0]["value"] == -8.0
+    assert body["skipped_no_escalation"] == []
+
+
+def test_escalation_baseline_resets_daily(client, app_module, monkeypatch):
+    """基线必须按日重置 —— 这是回归护栏。
+
+    不带 date() 过滤时，昨天的极值会让今天整体失声：昨天跌到 -3% 推过，
+    今天 -1.5% 明明触及了 -1% 阈值，却因为 `-3 - (-1.5) = -1.5 < 2` 被静默，
+    必须跌到 -5% 才响。对"每天都要盯"的盘中预警来说这是致命的。
+    """
+    _seed_holding(client, "600000", "浦发银行", qty=100, price=10.0)
+    _patch_quotes(monkeypatch, {"600000": (9.85, 10.0)})  # -1.5%
+    rule_id = _make_change_pct_rule(client, threshold=-1.0)
+    # 昨天的 -3%（同阈值、同类型，只是隔了一天）
+    _seed_prior_event(app_module, rule_id, -3.0, days_ago=1, threshold=-1.0)
+
+    body = _check(client)
+    assert body["trigger_count"] == 1, "昨天的基线不该压住今天"
+    assert body["skipped_no_escalation"] == []
+
+
+def test_escalation_ignores_history_from_a_different_rule_type(
+    client, app_module, monkeypatch
+):
+    """规则被改过类型时，历史 value 的语义不同，不能拿来比大小。
+
+    历史是 price 类型、value = 38.5（价格）；现在是 change_pct、value = -10（百分比）。
+    不做类型校验的话 `38.5 - (-10) = 48.5` 会被当成"恶化 48.5 个点"。
+    """
+    _seed_holding(client, "600000", "浦发银行", qty=100, price=10.0)
+    _patch_quotes(monkeypatch, {"600000": (9.0, 10.0)})  # -10%
+    rule_id = _make_change_pct_rule(client)
+    _seed_prior_event(app_module, rule_id, 38.5, rule_type="price")
+
+    body = _check(client)
+    assert body["trigger_count"] == 1
+    assert body["skipped_no_escalation"] == []
+
+
+def test_escalation_baseline_invalidated_by_threshold_change(
+    client, app_module, monkeypatch
+):
+    """放宽阈值后旧基线作废：否则"想更早收到提醒"会被旧极值压住。
+
+    今天在 below -5 下推过 -6%，用户把阈值放宽到 -2，现在 -3% 命中新阈值 ——
+    若沿用旧基线（-6），`-6 - (-3) = -3 < 2` 会静默，必须跌到 -8% 才响。
+    """
+    _seed_holding(client, "600000", "浦发银行", qty=100, price=10.0)
+    _patch_quotes(monkeypatch, {"600000": (9.7, 10.0)})  # -3%
+    rule_id = _make_change_pct_rule(client, threshold=-2.0)
+    _seed_prior_event(app_module, rule_id, -6.0, threshold=-5.0)  # 旧阈值下的历史
+
+    body = _check(client)
+    assert body["trigger_count"] == 1
+    assert body["skipped_no_escalation"] == []
+
+
+def test_pct_rule_rise_escalation_direction(client, app_module, monkeypatch):
+    """涨的规则看"又涨了多少"，方向不能搞反。"""
+    _seed_holding(client, "600000", "浦发银行", qty=100, price=10.0)
+    _patch_quotes(monkeypatch, {"600000": (10.5, 10.0)})  # +5%
+    rule_id = _make_change_pct_rule(client, threshold=2.0, condition="above")
+    # 今天推过 +3%，现在 +5% → 又涨了 2 个点，应该再推
+    _seed_prior_event(app_module, rule_id, 3.0, threshold=2.0)
+
+    assert _check(client)["trigger_count"] == 1
+
+    # 今天已推的最高是 +8%（3 和 8 取 MAX），现在 +5% 回落了 → 不该再推
+    _seed_prior_event(app_module, rule_id, 8.0, threshold=2.0)
+    body2 = _check(client)
+    assert body2["trigger_count"] == 0
+    assert len(body2["skipped_no_escalation"]) == 1
+
+
+def test_escalation_disabled_when_step_is_zero(client, app_module, monkeypatch):
+    """步长设为 0 = 关掉升级门槛（只留阈值本身）。"""
+    _set_escalation(app_module, 0)
+    _seed_holding(client, "600000", "浦发银行", qty=100, price=10.0)
+    _patch_quotes(monkeypatch, {"600000": (9.0, 10.0)})
+    rule_id = _make_change_pct_rule(client)
+    _seed_prior_event(app_module, rule_id, -10.0)
+
+    body = _check(client)
+    assert body["trigger_count"] == 1
+    assert body["escalation_pct"] == 0
+
+
+def test_price_rule_keeps_time_cooldown_not_escalation(client, app_module, monkeypatch):
+    """价格类是离散事件：保持时间冷却，不该被"当日极值"逻辑影响。"""
+    _seed_holding(client, "600000", "浦发银行", qty=100, price=10.0)
+    _patch_quotes(monkeypatch, {"600000": (9.0, 10.0)})
+    res = client.post(
+        "/market/alert-rules",
+        json={
+            "target_type": "holding",
+            "code": "600000",
+            "condition": "below",
+            "threshold": 9.5,
+            "rule_type": "price",
+        },
+    )
+    rule_id = res.json()["rule"]["id"]
+    # 30 分钟前推过；价格类默认冷却 240 分钟 → 仍在冷却里
+    _seed_prior_event(app_module, rule_id, 9.0, threshold=9.5, rule_type="price")
+
+    body = _check(client)
+    assert body["trigger_count"] == 0
+    assert len(body["skipped_cooldown"]) == 1
+    assert "冷却中" in body["skipped_cooldown"][0]["reason"]
+
+
+def test_manual_check_bypasses_escalation_and_cooldown(
+    client, app_module, monkeypatch
+):
+    """手动「立即检查」要看到当前全部命中，不受升级/冷却约束。"""
+    _seed_holding(client, "600000", "浦发银行", qty=100, price=10.0)
+    _patch_quotes(monkeypatch, {"600000": (9.0, 10.0)})
+    rule_id = _make_change_pct_rule(client)
+    _seed_prior_event(app_module, rule_id, -10.0)  # 同样的值，正常会被升级门槛挡下
+
+    body = client.post(
+        "/market/alerts/check", json={"notify": False, "respect_cooldown": False}
+    ).json()
+    assert body["trigger_count"] == 1
+    assert body["skipped_no_escalation"] == []
+    assert body["skipped_cooldown"] == []

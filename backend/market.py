@@ -47,6 +47,24 @@ COOLDOWN_SETTING_KEY = "alert_cooldown_minutes"
 DAILY_CAP_SETTING_KEY = "alert_daily_cap"
 DEFAULT_DAILY_CAP = 10
 
+# 百分比类规则（涨跌幅 / 组合盈亏）走**升级式**提醒，而不是时间冷却：
+# 日内波动是连续量，用固定冷却会让"整个下午都跌 2%"反复推同一条消息。
+#
+# 基线取"该规则**今天**已推送过的极值"（below 取最小、above 取最大），
+# 只有比它再恶化 escalation_pct 个百分点才再推。
+#
+# 为什么是"当日极值"而不是"上次推送时的值 + 时间窗"：后者要算跨日边界和时钟，
+# 一旦忘了按日重置，昨天的基线会让今天整体失声（跌 3% 推过，今天要跌 4% 才响）。
+# 当日极值天然按日重置，而且单调，2%/3% 的小步震荡不会再触发，
+# 但 9:33 −2% → 9:36 −9% 会立刻发 —— 这正是最该第一时间知道的情况。
+#
+# 价格类规则保持原有时间冷却：上穿/下穿是离散事件，越过去通知一次就够了。
+PCT_RULE_TYPES = {"change_pct", "portfolio_pnl"}
+ESCALATION_SETTING_KEY = "alert_escalation_pct"
+# 默认 2 个百分点：阈值是 ±2%，于是序列是 2% / 4% / 6% / 8% —— 自限，
+# 单只标的一天最多几条，不至于把每日上限（默认 10 条）一个人吃光。
+DEFAULT_ESCALATION_PCT = 2.0
+
 
 def ensure_alert_tables(conn) -> None:
     conn.execute(
@@ -154,6 +172,51 @@ def _alert_events_today(conn, now: datetime) -> int:
     if row is None:
         return 0
     return int((row["n"] if isinstance(row, sqlite3.Row) else row[0]) or 0)
+
+
+
+def get_alert_escalation_pct(conn) -> float:
+    """百分比类规则的**升级步长**（个百分点）：比当日已推极值再恶化这么多才再推。"""
+    raw = os.environ.get("ALERT_ESCALATION_PCT") or _get_setting(
+        conn, ESCALATION_SETTING_KEY, str(DEFAULT_ESCALATION_PCT)
+    )
+    try:
+        return max(0.0, float(raw))
+    except (TypeError, ValueError):
+        return DEFAULT_ESCALATION_PCT
+
+
+def _today_notified_extreme(
+    conn,
+    rule_id: int,
+    cond: str,
+    rule_type: str,
+    threshold: float,
+    now: datetime,
+) -> Optional[float]:
+    """该规则**今天**已推送过的极值：below 取最小、above 取最大；没有则 None。
+
+    按日过滤是这里的要害 —— 不带 date() 过滤的话，升级基线会跨日生效：
+    昨天跌 3% 推过，今天要跌到 5% 才响（步长 2），等于次日整体失声。
+
+    同时要求 rule_type 与 threshold 一致：规则被改过定义时，旧基线不可比
+    （price 的历史 value 是价格、涨跌幅是百分比；阈值放宽后旧极值会压住新阈值）。
+    不一致就当没有基线 —— 先推一次建立新基线，比静默合理。
+    """
+    agg = {"below": "MIN", "above": "MAX"}.get(cond)
+    if agg is None:
+        return None
+    row = conn.execute(
+        f"SELECT {agg}(value) AS v FROM alert_events "
+        "WHERE rule_id = ? AND date(trigger_time) = date(?) "
+        "AND value IS NOT NULL AND rule_type = ? AND threshold = ?",
+        (rule_id, now.date().isoformat(), rule_type, float(threshold)),
+    ).fetchone()
+    if not row:
+        return None
+    val = row["v"] if isinstance(row, sqlite3.Row) else row[0]
+    return None if val is None else float(val)
+
 
 
 def list_alert_rules(conn) -> List[Dict[str, Any]]:
@@ -802,6 +865,10 @@ def build_market_summary(conn) -> Dict[str, Any]:
         "index_error": index_err,
         "quote_cache_seconds": int(cache_ttl) if str(cache_ttl).isdigit() else 120,
         "alert_cooldown_minutes": get_alert_cooldown_minutes(conn),
+        # 百分比类规则用的是另一套尺子（升级式），一并暴露出来，
+        # 免得界面上只看到 240 分钟冷却、以为改它就能影响涨跌幅规则。
+        "alert_escalation_pct": get_alert_escalation_pct(conn),
+        "alert_daily_cap": get_alert_daily_cap(conn),
         "last_updated": now.isoformat(sep=" ", timespec="seconds"),
     }
 
@@ -930,6 +997,9 @@ def check_alerts(
         if int(r.get("enabled") or 0) == 1
     ]
     cooldown_minutes = get_alert_cooldown_minutes(conn) if respect_cooldown else 0
+    # 百分比类规则的两把尺子（见 PCT_RULE_TYPES 上方注释）
+    escalation_pct = get_alert_escalation_pct(conn)
+    escalation_pct = get_alert_escalation_pct(conn)
     if not rules:
         return {
             "triggered": [],
@@ -937,6 +1007,7 @@ def check_alerts(
             "checked_count": 0,
             "trigger_count": 0,
             "cooldown_minutes": cooldown_minutes,
+            "escalation_pct": escalation_pct,
             "message": "没有启用的预警规则",
             "notify": {"sent": False, "reason": "no_rules"},
         }
@@ -968,6 +1039,9 @@ def check_alerts(
     # 用户和日志都看不出"这条规则根本没跑"（停牌、源不返回昨收、整只行情失败）。
     skipped_no_data = []
     skipped_daily_cap = []
+    # 命中了但"没比上次更糟"而不推的（升级式提醒的另一半出口）——
+    # 不留痕的话，用户看到"命中却没消息"会以为规则坏了。
+    skipped_no_escalation = []
     now = datetime.now(LOCAL_TZ).replace(tzinfo=None)
 
     # 每日上限只约束**定时推送**（notify=True）。手动「立即检查」是用户主动想看当前
@@ -1006,7 +1080,33 @@ def check_alerts(
         hit = (cond == "above" and value >= thr) or (cond == "below" and value <= thr)
         if not hit:
             continue
-        if respect_cooldown and _rule_in_cooldown(conn, int(r["id"]), cooldown_minutes, now):
+        if respect_cooldown and rule_type in PCT_RULE_TYPES:
+            # 升级式：只有比"今天已推过的极值"再恶化 escalation_pct 才再推。
+            # 当日极值天然按日重置且单调 —— 小步震荡不再触发，但急速下挫立刻发。
+            extreme = (
+                _today_notified_extreme(conn, int(r["id"]), cond, rule_type, thr, now)
+                if escalation_pct > 0
+                else None
+            )
+            if extreme is not None:
+                # 跌的规则比谁更低，涨的规则比谁更高
+                worsened = extreme - value if cond == "below" else value - extreme
+                if worsened < escalation_pct:
+                    skipped_no_escalation.append(
+                        {
+                            "rule_id": r["id"],
+                            "code": r.get("code"),
+                            "reason": (
+                                f"未升级（今日已推 {extreme:+.2f}% → 现在 {value:+.2f}%，"
+                                f"需再恶化 {escalation_pct:.2f} 个百分点）"
+                            ),
+                        }
+                    )
+                    continue
+        elif respect_cooldown and _rule_in_cooldown(
+            conn, int(r["id"]), cooldown_minutes, now
+        ):
+            # 价格类：上穿/下穿是离散事件，越过去通知一次就够，保持时间冷却。
             skipped_cooldown.append(
                 {
                     "rule_id": r["id"],
@@ -1113,9 +1213,11 @@ def check_alerts(
         "skipped_cooldown": skipped_cooldown,
         "skipped_no_data": skipped_no_data,
         "skipped_daily_cap": skipped_daily_cap,
+        "skipped_no_escalation": skipped_no_escalation,
         "daily_cap": daily_cap,
         "checked_count": len(rules),
         "trigger_count": len(triggered),
         "cooldown_minutes": cooldown_minutes,
+        "escalation_pct": escalation_pct,
         "notify": notify_result,
     }
