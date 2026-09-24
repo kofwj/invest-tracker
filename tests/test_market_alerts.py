@@ -496,3 +496,85 @@ def test_rule_type_validation_rejects_unknown(client, app_module):
         },
     )
     assert bad.status_code == 400
+
+
+def _mute_notifier(monkeypatch):
+    """把真正的推送换掉：上限测试只关心"记了几条"，不该真发消息。"""
+    import notify
+
+    monkeypatch.setattr(
+        notify,
+        "notify_price_alerts",
+        lambda triggered, conn=None: {"sent": False, "reason": "muted", "count": len(triggered)},
+    )
+
+
+def test_daily_cap_limits_scheduled_pushes(client, app_module, monkeypatch):
+    """每日上限只约束定时推送：超过上限的规则进 skipped_daily_cap，不再记录。"""
+    import sqlite3 as _sqlite3
+
+    _mute_notifier(monkeypatch)
+    _seed_holding(client, "600000", "浦发银行", qty=100, price=10.0)
+    _seed_holding(client, "600001", "邯郸钢铁", qty=100, price=10.0)
+    # 两只都 -10%，各建一条 -5% 的规则 → 都会命中
+    _patch_quotes(monkeypatch, {"600000": (9.0, 10.0), "600001": (9.0, 10.0)})
+    for code in ("600000", "600001"):
+        client.post(
+            "/market/alert-rules",
+            json={
+                "target_type": "holding",
+                "code": code,
+                "condition": "below",
+                "threshold": -5.0,
+                "rule_type": "change_pct",
+            },
+        )
+
+    with app_module.get_db_connection(app_module.DB_PATH) as conn:
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES ('alert_daily_cap', '1') "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+        )
+        conn.commit()
+
+    body = client.post(
+        "/market/alerts/check", json={"notify": True, "respect_cooldown": False}
+    ).json()
+    assert body["daily_cap"] == 1
+    assert body["trigger_count"] == 1
+    assert len(body["skipped_daily_cap"]) == 1
+
+    # 记录也确实只落了一条
+    conn = _sqlite3.connect(app_module.DB_PATH)
+    n = conn.execute("SELECT COUNT(*) FROM alert_events").fetchone()[0]
+    conn.close()
+    assert n == 1
+
+
+def test_daily_cap_does_not_block_manual_check(client, app_module, monkeypatch):
+    """手动「立即检查」（notify=False）不受上限约束，否则会以为规则坏了。"""
+    _mute_notifier(monkeypatch)
+    _seed_holding(client, "600000", "浦发银行", qty=100, price=10.0)
+    _patch_quotes(monkeypatch, {"600000": (9.0, 10.0)})
+    client.post(
+        "/market/alert-rules",
+        json={
+            "target_type": "holding",
+            "code": "600000",
+            "condition": "below",
+            "threshold": -5.0,
+            "rule_type": "change_pct",
+        },
+    )
+    with app_module.get_db_connection(app_module.DB_PATH) as conn:
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES ('alert_daily_cap', '1') "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+        )
+        conn.commit()
+
+    body = client.post(
+        "/market/alerts/check", json={"notify": False, "respect_cooldown": False}
+    ).json()
+    assert body["skipped_daily_cap"] == []
+    assert body["trigger_count"] == 1

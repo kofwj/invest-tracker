@@ -42,6 +42,10 @@ PORTFOLIO_RULE_CODE = "PORTFOLIO"
 DEFAULT_COOLDOWN_MINUTES = 240
 WATCHLIST_SETTING_KEY = "market_watchlist"
 COOLDOWN_SETTING_KEY = "alert_cooldown_minutes"
+# 每日推送上限：盘中 3 分钟一轮、规则又是"多个标的各一条"，没有上限会炸屏。
+# 只约束定时推送，手动「立即检查」不受限。
+DAILY_CAP_SETTING_KEY = "alert_daily_cap"
+DEFAULT_DAILY_CAP = 10
 
 
 def ensure_alert_tables(conn) -> None:
@@ -128,6 +132,28 @@ def get_alert_cooldown_minutes(conn) -> int:
         return max(0, int(float(raw)))
     except (TypeError, ValueError):
         return DEFAULT_COOLDOWN_MINUTES
+
+
+
+def get_alert_daily_cap(conn) -> int:
+    """每日推送条数上限（0 = 不限）。只约束**定时推送**，手动检查不受限。"""
+    raw = os.environ.get("ALERT_DAILY_CAP") or _get_setting(
+        conn, DAILY_CAP_SETTING_KEY, str(DEFAULT_DAILY_CAP)
+    )
+    try:
+        return max(0, int(float(raw)))
+    except (TypeError, ValueError):
+        return DEFAULT_DAILY_CAP
+
+
+def _alert_events_today(conn, now: datetime) -> int:
+    row = conn.execute(
+        "SELECT COUNT(*) AS n FROM alert_events WHERE date(trigger_time) = date(?)",
+        (now.date().isoformat(),),
+    ).fetchone()
+    if row is None:
+        return 0
+    return int((row["n"] if isinstance(row, sqlite3.Row) else row[0]) or 0)
 
 
 def list_alert_rules(conn) -> List[Dict[str, Any]]:
@@ -941,7 +967,15 @@ def check_alerts(
     # 取不到数据而没被评估的规则要留痕：否则 checked_count 照算、triggered 为空，
     # 用户和日志都看不出"这条规则根本没跑"（停牌、源不返回昨收、整只行情失败）。
     skipped_no_data = []
+    skipped_daily_cap = []
     now = datetime.now(LOCAL_TZ).replace(tzinfo=None)
+
+    # 每日上限只约束**定时推送**（notify=True）。手动「立即检查」是用户主动想看当前
+    # 状态，被上限挡住只会让人以为规则坏了，所以那种情况下不启用上限。
+    daily_cap = get_alert_daily_cap(conn)
+    cap_active = bool(notify) and daily_cap > 0
+    sent_today = _alert_events_today(conn, now) if cap_active else 0
+
     for r in rules:
         rule_type = str(r.get("rule_type") or "price").strip().lower() or "price"
         price, name, change_pct, prev_close = _resolve_price(r, holding_map, index_map)
@@ -978,6 +1012,16 @@ def check_alerts(
                     "rule_id": r["id"],
                     "code": r.get("code"),
                     "reason": f"冷却中（{cooldown_minutes} 分钟内已触发过）",
+                }
+            )
+            continue
+
+        if cap_active and sent_today >= daily_cap:
+            skipped_daily_cap.append(
+                {
+                    "rule_id": r["id"],
+                    "code": r.get("code"),
+                    "reason": f"已达今日上限（{daily_cap} 条），本条不再推送",
                 }
             )
             continue
@@ -1046,6 +1090,7 @@ def check_alerts(
                 # 显示成"价格 0.0000"，和"某标的真的跌到 0"分不开。
                 (r["id"], now, r.get("code"), price, thr, msg, rule_type, float(value)),
             )
+            sent_today += 1
 
     notify_result = {"sent": False, "reason": "skipped"}
     if notify:
@@ -1067,6 +1112,8 @@ def check_alerts(
         "triggered": triggered,
         "skipped_cooldown": skipped_cooldown,
         "skipped_no_data": skipped_no_data,
+        "skipped_daily_cap": skipped_daily_cap,
+        "daily_cap": daily_cap,
         "checked_count": len(rules),
         "trigger_count": len(triggered),
         "cooldown_minutes": cooldown_minutes,
