@@ -84,15 +84,6 @@
   .chart-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
   .chart-head h2 { font-size: 15px; font-weight: 650; margin: 0; }
   .chart-head .note { font-size: 12px; color: var(--soft); }
-  .chart-wrap { position: relative; }
-  .chart svg { display: block; width: 100%; height: 150px; overflow: visible; }
-  .tip {
-    position: absolute; top: -10px; transform: translateX(-50%); display: none;
-    padding: 5px 9px; border-radius: 8px; white-space: nowrap; font-size: 12px;
-    background: var(--text); color: var(--surface); pointer-events: none;
-    box-shadow: 0 8px 20px -10px rgba(0,0,0,.55);
-  }
-  .axis { display: flex; justify-content: space-between; margin-top: 8px; font-size: 11px; color: var(--soft); }
   .brief { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
   .brief .k { font-size: 12px; color: var(--muted); margin-bottom: 5px; }
   .brief .v { font-size: 16px; font-weight: 640; }
@@ -163,11 +154,16 @@
         </div>
       </div>
       <div class="today-side">
-        <div class="todo-head">1 项要动手</div>
+        <div class="todo-head">2 项要动手</div>
         <button class="todo-item">
           <span class="t">今日快照未记录</span>
           <span class="h">最新 09-23 · 逐日收益靠它</span>
           <span class="go">去记录 →</span>
+        </button>
+        <button class="todo-item" style="margin-top: 8px;">
+          <span class="t">还没做过人工对账</span>
+          <span class="h">每周对照券商实际余额录一次</span>
+          <span class="go">去对账 →</span>
         </button>
       </div>
     </div>
@@ -196,23 +192,6 @@
     </div>
   </section>
 
-  <section class="card pad">
-    <div class="chart-head">
-      <h2>近半月资产</h2>
-      <span class="note">2026-09-02 → 09-23 · 16 个交易日</span>
-    </div>
-    <div class="chart-wrap">
-      <div class="chart" id="chart"></div>
-      <div class="tip" id="tip"></div>
-    </div>
-    <div class="axis"><span>09-02</span><span>09-09</span><span>09-16</span><span>09-23</span></div>
-    <div class="brief a">
-      <div><div class="k">区间变化</div><div class="v num down">-¥25,698.87</div></div>
-      <div><div class="k">区间涨跌</div><div class="v num down">-0.87%</div></div>
-      <div><div class="k">期初（09-02）</div><div class="v num">2,952,407.38</div></div>
-      <div><div class="k">最新（09-23）</div><div class="v num">2,926,708.51</div></div>
-    </div>
-  </section>
 
   <section class="card pad">
     <div class="chart-head">
@@ -229,34 +208,34 @@
     </div>
   </section>
 
-  <section>
-    <details>
-      <summary>组合脉搏 <span class="cnt">权益 67.9% · 防御 32.1% · 目标年化 4.00%</span><span class="chev">▶</span></summary>
-      <div class="body">
-        <div class="brief">
-          <div><div class="k">权益仓位</div><div class="v num">67.9%</div></div>
-          <div><div class="k">防御资产</div><div class="v num">32.1%</div></div>
-          <div><div class="k">持仓市值</div><div class="v num">¥2,242,968.58</div></div>
-          <div><div class="k">在途申购</div><div class="v num">0 笔</div></div>
-          <div><div class="k">全周期盈亏</div><div class="v num up">+¥346,860.85</div></div>
-          <div><div class="k">目标年化</div><div class="v num">4.00%</div></div>
-          <div><div class="k">累计收益</div><div class="v num up">+¥456,539.11</div></div>
-          <div><div class="k">累计净投入</div><div class="v num">¥2,470,169.40</div></div>
-        </div>
-      </div>
-    </details>
+  <section class="card pad">
+    <div class="chart-head">
+      <h2>组合脉搏</h2>
+      <span class="note">市值口径 · 结构目标见「结构与目标」</span>
+    </div>
+    <div class="brief">
+      <div><div class="k">权益仓位</div><div class="v num">67.9%</div></div>
+      <div><div class="k">防御资产</div><div class="v num">32.1%</div></div>
+      <div><div class="k">现金 + 存款占比</div><div class="v num">23.4%</div></div>
+      <div><div class="k">在途申购</div><div class="v num">0 笔</div></div>
+      <div><div class="k">持仓市值</div><div class="v num">¥2,242,968.58</div></div>
+      <div><div class="k">持仓只数</div><div class="v num">10 只</div></div>
+      <div><div class="k">全周期盈亏</div><div class="v num up">+¥346,860.85</div></div>
+      <div><div class="k">目标年化</div><div class="v num">4.00%</div></div>
+    </div>
+  </section>
 
-    <details>
-      <summary>同步与备份 <span class="cnt">最新价 09-23 19:30 · 快照 09-23</span><span class="chev">▶</span></summary>
-      <div class="body">
-        <div class="brief">
-          <div><div class="k">最新价同步</div><div class="v num">09-23 19:30</div></div>
-          <div><div class="k">价格时效</div><div class="v num">13.7 小时前 · 未过期</div></div>
-          <div><div class="k">最近快照</div><div class="v num">2026-09-23</div></div>
-          <div><div class="k">未定价 / 手动价</div><div class="v num">0 只 / 0 只</div></div>
-        </div>
-      </div>
-    </details>
+  <section class="card pad">
+    <div class="chart-head">
+      <h2>同步与备份</h2>
+      <span class="note">价格与快照的时效</span>
+    </div>
+    <div class="brief">
+      <div><div class="k">最新价同步</div><div class="v num">09-23 19:30</div></div>
+      <div><div class="k">价格时效</div><div class="v num">13.7 小时前 · 未过期</div></div>
+      <div><div class="k">最近快照</div><div class="v num">2026-09-23</div></div>
+      <div><div class="k">未定价 / 手动价</div><div class="v num">0 只 / 0 只</div></div>
+    </div>
   </section>
 
   <p class="foot">
@@ -265,7 +244,6 @@
   </p>
 </div>
 <script>
-  const money = (v) => (v < 0 ? '-' : '') + '¥' + Math.abs(v).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const cls = (v) => (v > 0 ? 'up' : v < 0 ? 'down' : '');
 
   // 持仓速览：取自 /performance/contribution
@@ -288,69 +266,11 @@
     '<td class="r num ' + cls(pnl) + '">' + (pnl >= 0 ? '+' : '-') + Math.abs(pnl).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</td>' +
     '<td class="r num">' + div.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</td></tr>').join('');
 
-  // 近半月总资产：取自 /snapshots 最后 16 条
-  const DATA = [
-    ['09-02', 2952407.38], ['09-03', 2950039.77], ['09-04', 2958717.49], ['09-07', 2947281.73],
-    ['09-08', 2944474.87], ['09-09', 2955323.47], ['09-10', 2957076.24], ['09-11', 2949773.13],
-    ['09-14', 2943174.10], ['09-15', 2926504.69], ['09-16', 2924889.40], ['09-17', 2918614.43],
-    ['09-18', 2926108.43], ['09-21', 2932170.24], ['09-22', 2929620.26], ['09-23', 2926708.51],
-  ];
-  const chartEl = document.getElementById('chart');
-  const tip = document.getElementById('tip');
-
-  function drawChart() {
-    const H = 150, PAD = 16, W = 1000;
-    const vals = DATA.map((d) => d[1]);
-    const min = Math.min(...vals), span = (Math.max(...vals) - min) || 1;
-    const px = (i) => (i / (DATA.length - 1)) * W;
-    const py = (v) => PAD + (1 - (v - min) / span) * (H - PAD * 2);
-    const cs = getComputedStyle(document.documentElement);
-    const cPrimary = cs.getPropertyValue('--primary').trim();
-    const cSoft = cs.getPropertyValue('--primary-soft').trim();
-    const cLine = cs.getPropertyValue('--hairline').trim();
-    const pts = DATA.map((d, i) => px(i).toFixed(1) + ',' + py(d[1]).toFixed(1)).join(' ');
-    let dots = '';
-    DATA.forEach((d, i) => {
-      dots += '<circle class="dot" data-i="' + i + '" cx="' + px(i).toFixed(1) + '" cy="' + py(d[1]).toFixed(1) +
-        '" r="2.6" fill="' + cPrimary + '"></circle>';
-    });
-    chartEl.innerHTML =
-      '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="近半月总资产曲线">' +
-      '<polygon points="0,' + H + ' ' + pts + ' ' + W + ',' + H + '" fill="' + cSoft + '"></polygon>' +
-      '<polyline points="' + pts + '" fill="none" stroke="' + cPrimary + '" stroke-width="2.5" ' +
-      'stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"></polyline>' +
-      '<line id="vline" x1="0" y1="0" x2="0" y2="' + H + '" stroke="' + cLine + '" stroke-width="1" opacity="0"></line>' +
-      dots + '</svg>';
-  }
-  drawChart();
-
-  // 悬停看某一天的总资产
-  chartEl.addEventListener('mousemove', (e) => {
-    const r = chartEl.getBoundingClientRect();
-    const i = Math.min(DATA.length - 1, Math.max(0, Math.round(((e.clientX - r.left) / r.width) * (DATA.length - 1))));
-    const [date, v] = DATA[i];
-    tip.textContent = date + '　' + money(v);
-    tip.style.display = 'block';
-    tip.style.left = Math.min(Math.max(e.clientX - r.left, 66), r.width - 66) + 'px';
-    document.getElementById('vline').setAttribute('x1', (i / (DATA.length - 1)) * 1000);
-    document.getElementById('vline').setAttribute('x2', (i / (DATA.length - 1)) * 1000);
-    document.getElementById('vline').setAttribute('opacity', '1');
-    for (const d of chartEl.querySelectorAll('.dot')) {
-      d.setAttribute('r', d.getAttribute('data-i') === String(i) ? '4.5' : '2.6');
-    }
-  });
-  chartEl.addEventListener('mouseleave', () => {
-    tip.style.display = 'none';
-    document.getElementById('vline').setAttribute('opacity', '0');
-    for (const d of chartEl.querySelectorAll('.dot')) d.setAttribute('r', '2.6');
-  });
-
   // 主题切换
   const themeBtn = document.getElementById('theme');
   themeBtn.addEventListener('click', () => {
     const dark = document.documentElement.classList.toggle('dark');
     themeBtn.textContent = dark ? '浅色' : '暗色';
-    drawChart();
   });
 </script>
 </body>
