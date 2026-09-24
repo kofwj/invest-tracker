@@ -40,7 +40,10 @@ except ImportError:
         reasons_for_holdings,
     )
 
-BRIEF_TIMEOUT_S = 20
+BRIEF_TIMEOUT_S = 120
+# 供应方慢：实测 grok-4.6 一句中文要 40s+（ping 21s）。20s 会让当天简报静默省略 AI 段，
+# 而 mode=timeout 的当日缓存当天不再重试 —— 所以给足预算（一天一次、结果缓存）。
+# 前端推送请求的超时（180s）必须大于这里。
 BRIEF_MAX_CHARS = 200
 BRIEF_MAX_TOKENS = 200
 EMPTY_LINE = "未找到相关公告或新闻"

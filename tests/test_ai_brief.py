@@ -516,3 +516,24 @@ def test_prompt_forbids_flat_when_counts_zero():
     from ai_brief import SYSTEM_PROMPT
 
     assert "缺行情不是平盘" in SYSTEM_PROMPT
+
+
+def test_brief_timeout_budget_passed_to_call_ai(app_module):
+    """供应方慢（grok-4.6 实测 40s+）：brief 预算从 20s 调大过，断言真的传给了 call_ai。"""
+    from ai_brief import BRIEF_TIMEOUT_S, generate_brief_segment
+
+    assert BRIEF_TIMEOUT_S >= 60
+    with app_module.get_db_connection(app_module.DB_PATH) as conn:
+        _enable_brief(conn, shadow=False)
+        with patch("ai_brief.build_market_summary", return_value=_summary()), \
+             patch("ai_brief._holding_price_map", return_value={}), \
+             patch("ai_brief._portfolio_day_pnl", return_value={"amount": -32000}), \
+             patch("ai_brief.build_discipline_report", return_value={"breaches": [], "plans": []}), \
+             patch("ai_brief.reasons_for_holdings", return_value=_packed()), \
+             patch(
+                 "ai_brief.call_ai",
+                 return_value={"ok": True, "text": "同期有这些信息 [农行人事公告]", "status": 200},
+             ) as mock_call:
+            rec = generate_brief_segment(conn, as_of="2026-09-24")
+    assert mock_call.call_args.kwargs["timeout_seconds"] == BRIEF_TIMEOUT_S
+    assert rec["mode"] == "ok"

@@ -129,6 +129,13 @@ assert 'migrate_to_v5_market_alerts' in schema, 'schema missing v5 market alerts
 assert 'migrate_to_v6_snapshot_lifetime_and_watchlist' in schema, 'schema missing v6 snapshot lifetime migration'
 assert 'migrate_to_v18_ai_and_reason_cache' in schema, 'schema missing v18 AI/reason cache migration'
 assert 'migrate_to_v19_ai_call_log_warnings' in schema, 'schema missing v19 AI audit warnings column'
+import re as _re
+_brief_src = Path('backend/ai_brief.py').read_text(encoding='utf-8')
+_api_src = Path('frontend/src/api/index.js').read_text(encoding='utf-8')
+_brief_t = _re.search(r'BRIEF_TIMEOUT_S = (\d+)', _brief_src)
+_push_t = _re.search(r"evening-brief/notify', null, \{ timeout: (\d+) \}", _api_src)
+assert _brief_t and _push_t, 'brief 预算 / 前端推送超时未找到（换了写法就同步改这条断言）'
+assert int(_push_t.group(1)) > int(_brief_t.group(1)), '前端推送超时必须大于 AI brief 预算，否则界面先超时'
 assert 'lifetime_profit' in Path('backend/snapshots.py').read_text(encoding='utf-8'), 'snapshots should store lifetime_profit'
 assert 'is_a_share_trading_day' in Path('backend/trading_calendar.py').read_text(encoding='utf-8'), 'trading calendar missing'
 PY

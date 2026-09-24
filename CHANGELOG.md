@@ -35,7 +35,10 @@
 
 - 注入点在 `send_evening_brief`：`GET /evening-brief` 只读当日缓存，未命中显示「（今日 AI 段未生成）」，绝不调模型。
 - `ai_enabled=0` 或 `features.brief=0` 时正文与关 AI 前逐字节一致；影子模式模板照发，AI 段只写日志与缓存。预览在影子模式下追加「仅预览，不随推送发送」。
-- reasons/moves 全空不调模型，固定句「未找到相关公告或新闻」；timeout 20s、不重试，失败省略 AI 段。
+- reasons/moves 全空不调模型，固定句「未找到相关公告或新闻」；brief 预算 **120s**（原 20s ——
+  实测 grok-4.6 一句中文要 40s+，20s 会让当天简报静默省略 AI 段，且 `mode=timeout` 的缓存当天
+  不再重试）、不重试、失败省略 AI 段；前端推送请求超时 180s（必须大于后端预算，
+  `scripts/check.sh` 里加了断言兜底）。
 - `mode=empty` 的当日缓存只在 16:40（`APP_TIMEZONE`，不是容器 UTC）前有效，公告 refill 之后允许再生成一次。成功/被拦/超时/空数据都写 `ai_brief_YYYY-MM-DD`（30 天）。
 - `counts` 用全量 `_holding_price_map`（涨跌只数有行情的，缺行情不算平盘），不用截断后的 `holdings_day`。
 - 公告 refill 与空数据重试共用 16:40 分钟判定；缺行情时禁止「全部持平」这类结论。
@@ -49,6 +52,14 @@
   写进审计 `reason` 与 `last_error`，`POST /ai/test` 一并返回 `provider_error`，设置页直接显示。
 - 新增 `GET /ai/models` + 设置页「拉取模型」：模型名必须与供应方 `/models` 的 id 完全一致
   （实测踩过：填 `Grok 4.6`，真实 id 是 `grok-4.6`）。只读、不计日额度、不写审计。
+
+### 工程（CI 与 Node 版本 · 2026-09-25）
+
+- CI 前端 job 与 `frontend/Dockerfile` 构建阶段统一升到 Node 22：`jsdom@30` 依赖 `undici@8`，
+  后者声明 `engines: node >=22.19`。原 CI 跑 Node 20，vitest 的 21 个文件在启动阶段就
+  `TypeError: webidl.util.markAsUncloneable is not a function`（表现为「0 用例 + 21 errors」，
+  后端 job 一直正常），前端 job 因此长期红。
+- `frontend/package.json` 增 `engines.node >=22.19.0`，让这类版本漂移在安装阶段就能看见。
 
 ---
 

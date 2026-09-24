@@ -160,7 +160,7 @@ const api = {
     deletePortfolioCashFlow: (id) => axios.delete(API + '/portfolio-cash-flows/' + id),
     portfolioCashFlowSuggest: () => axios.get(API + '/portfolio-cash-flows/suggest'),
     eveningBrief: () => axios.get(API + '/evening-brief'),
-    eveningBriefNotify: () => axios.post(API + '/evening-brief/notify'),
+    eveningBriefNotify: () => axios.post(API + '/evening-brief/notify', null, { timeout: 180000 }),
 
     brokerReconcilePreview: (formData) => axios.post(API + '/broker-reconcile/preview', formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 120000 }),
     brokerReconcileApply: (payload) => axios.post(API + '/broker-reconcile/apply', payload || {}, { timeout: 120000 }),
