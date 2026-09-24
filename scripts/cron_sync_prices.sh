@@ -4,9 +4,13 @@
 # 回退 1：docker compose exec 直接调后端实现（旧部署未配 token）。
 # 回退 2：Python urllib 登录后 POST。
 #
-# 建议 crontab（交易日 15:20 / 16:40 各一次）：
-#   20 15 * * 1-5 /home/kofwj/invest-tracker/scripts/cron_sync_prices.sh >> /home/kofwj/invest-tracker/backups/cron_sync_prices.log 2>&1
-#   40 16 * * 1-5 /home/kofwj/invest-tracker/scripts/cron_sync_prices.sh --snapshot --check-alerts >> /home/kofwj/invest-tracker/backups/cron_sync_prices.log 2>&1
+# 建议 crontab（交易日）：15:20 / 16:40 各一次做日终，盘中每 3 分钟轮询一次。
+#   20 15 * * 1-5 /home/kofwj/invest-tracker/scripts/cron_sync_prices.sh --check-alerts --notify-alerts >> /home/kofwj/invest-tracker/backups/cron_sync_prices.log 2>&1
+#   40 16 * * 1-5 /home/kofwj/invest-tracker/scripts/cron_sync_prices.sh --snapshot --check-alerts --notify-alerts --notify-events >> /home/kofwj/invest-tracker/backups/cron_sync_prices.log 2>&1
+#   */3 9-11,13-14 * * 1-5 /home/kofwj/invest-tracker/scripts/cron_sync_prices.sh --intraday --check-alerts --notify-alerts >> /home/kofwj/invest-tracker/backups/cron_sync_prices.log 2>&1
+#
+# 盘中那行不需要自己算交易时段边界：脚本内部的守卫会再按 9:30/11:30/13:00/15:00
+# 精确判断并跳过，crontab 的范围只是先把请求量压下来。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -18,6 +22,7 @@ WITH_ALERTS=0
 ALERTS_NOTIFY=0
 FORCE_SNAPSHOT=0
 WITH_NOTIFY_EVENTS=0
+INTRADAY=0
 for arg in "$@"; do
   case "$arg" in
     --snapshot|-s) WITH_SNAPSHOT=1 ;;
@@ -25,15 +30,18 @@ for arg in "$@"; do
     --notify-alerts) ALERTS_NOTIFY=1 ;;
     --force-snapshot) FORCE_SNAPSHOT=1 ;;
     --notify-events) WITH_NOTIFY_EVENTS=1 ;;
+    --intraday) INTRADAY=1 ;;
     -h|--help)
       cat <<'EOF'
-Usage: cron_sync_prices.sh [--snapshot] [--check-alerts] [--notify-alerts] [--notify-events] [--force-snapshot]
+Usage: cron_sync_prices.sh [--snapshot] [--check-alerts] [--notify-alerts] [--notify-events] [--force-snapshot] [--intraday]
 
   --snapshot         同步价格后记录/更新今日资产快照（默认跳过非交易日）
   --check-alerts     同步（及可选快照）后检查价格预警规则
   --notify-alerts    检查时若触发则多通道推送（飞书/钉钉/企微/TG，见 .env NOTIFY_*）
   --notify-events    跑存款到期 + 纪律破线摘要推送（POST /notify/run）
   --force-snapshot   强制写快照（忽略交易日历）
+  --intraday         盘中轮询：只在交易时段(9:30-11:30 / 13:00-15:00)运行，
+                     自带 flock 防重叠，且**绝不写快照**（daily_snapshots 是日频账本）
 
 环境变量：
   NOTIFY_FEISHU_WEBHOOK / FEISHU_ALERT_WEBHOOK  飞书（兼容旧名）
@@ -320,6 +328,37 @@ run_alerts_curl() {
     run_api_post "/market/alerts/check" '{"notify":false}'
   fi
 }
+
+# --- 盘中模式守卫 -----------------------------------------------------------
+# 放在所有函数定义之后：这里要用 should_write_snapshot（交易日判据），
+# 提前调用会拿到未定义的函数。
+#
+# 盘中轮询有三个前提，任一不满足就直接退出（cron 每 3 分钟会再来一次）：
+#   1) 不能写快照 —— daily_snapshots 是日频账本，是收益曲线与所有派生指标的
+#      基准，盘中频繁改价会把它污染掉；盘中只更新 holdings.last_price。
+#   2) 必须在交易时段 —— 盘外抓价既没意义又白耗对方接口。
+#   3) 上一轮必须已经结束 —— 抓价单次超时 8s，叠加多源兜底后极端情况会超过
+#      3 分钟，用 flock 挡住重叠，否则两轮同时写库。
+if [ "$INTRADAY" = "1" ]; then
+  WITH_SNAPSHOT=0
+  INTRADAY_LOCK="${INTRADAY_LOCK:-/tmp/invest-tracker-intraday.lock}"
+  exec 9>"$INTRADAY_LOCK"
+  if ! flock -n 9; then
+    echo "[$(ts)] intraday skip: 上一轮尚未结束"
+    exit 0
+  fi
+  # 10# 强制十进制：date 给出的是 "0930" 这种带前导零的串，
+  # 直接拿去比较会被当成八进制（0930 非法）而算错。
+  HM=$((10#$(date '+%H%M')))
+  if [ "$HM" -lt 930 ] || { [ "$HM" -gt 1130 ] && [ "$HM" -lt 1300 ]; } || [ "$HM" -gt 1500 ]; then
+    echo "[$(ts)] intraday skip: 非交易时段（$(date '+%H:%M')）"
+    exit 0
+  fi
+  if ! should_write_snapshot >/dev/null 2>&1; then
+    echo "[$(ts)] intraday skip: 非交易日"
+    exit 0
+  fi
+fi
 
 SYNC_OUT=""
 if [ -n "${CRON_API_TOKEN}" ] && SYNC_OUT="$(cron_http POST /cron/sync-prices)"; then

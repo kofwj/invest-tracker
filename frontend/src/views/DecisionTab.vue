@@ -255,8 +255,12 @@
                 </div>
               </template>
               <el-table :data="alertRules" stripe size="small" empty-text="暂无规则" aria-label="价格预警规则">
-                <el-table-column label="类型" width="80">
-                  <template #default="scope">{{ scope.row.target_type === 'index' ? '指数' : '持仓' }}</template>
+                <el-table-column label="监控" width="118">
+                  <template #default="scope">{{
+                    scope.row.rule_type === 'portfolio_pnl' ? '组合盈亏'
+                      : scope.row.rule_type === 'change_pct' ? '日内涨跌%'
+                        : (scope.row.target_type === 'index' ? '指数价' : '持仓价')
+                  }}</template>
                 </el-table-column>
                 <el-table-column prop="name" label="名称" min-width="110" show-overflow-tooltip />
                 <el-table-column prop="code" label="代码" width="90" />
@@ -264,7 +268,12 @@
                   <template #default="scope">{{ scope.row.condition === 'below' ? '≤ 下穿' : '≥ 上穿' }}</template>
                 </el-table-column>
                 <el-table-column label="阈值" width="100" align="right" header-align="right">
-                  <template #default="scope">{{ Number(scope.row.threshold).toFixed(4) }}</template>
+                  <!-- 百分比类规则带符号，按 2 位显示；价格类仍是 4 位 -->
+                  <template #default="scope">
+                    {{ scope.row.rule_type && scope.row.rule_type !== 'price'
+                      ? `${Number(scope.row.threshold).toFixed(2)}%`
+                      : Number(scope.row.threshold).toFixed(4) }}
+                  </template>
                 </el-table-column>
                 <el-table-column label="启用" width="72" align="center">
                   <template #default="scope">
@@ -361,13 +370,20 @@
 
     <el-dialog v-model="alertEditDialog" :title="alertForm.id ? '编辑预警' : '添加预警'" width="460px" destroy-on-close>
       <el-form label-width="88px">
-        <el-form-item label="类型">
+        <el-form-item label="监控">
+          <el-select v-model="alertForm.rule_type" style="width:100%">
+            <el-option label="价格（绝对价）" value="price" />
+            <el-option label="日内涨跌幅 %" value="change_pct" />
+            <el-option label="组合当日盈亏 %" value="portfolio_pnl" />
+          </el-select>
+        </el-form-item>
+        <el-form-item v-if="alertForm.rule_type !== 'portfolio_pnl'" label="类型">
           <el-select v-model="alertForm.target_type" style="width:100%">
             <el-option label="持仓" value="holding" />
             <el-option label="指数" value="index" />
           </el-select>
         </el-form-item>
-        <el-form-item label="代码">
+        <el-form-item v-if="alertForm.rule_type !== 'portfolio_pnl'" label="代码">
           <el-input v-model="alertForm.code" placeholder="如 159352 或 000300" />
         </el-form-item>
         <el-form-item label="名称">
@@ -380,7 +396,16 @@
           </el-select>
         </el-form-item>
         <el-form-item label="阈值">
-          <el-input-number v-model="alertForm.threshold" :min="0" :step="0.01" :precision="4" style="width:100%" />
+          <!-- 百分比类阈值是带符号的（below −2 = 跌到 −2%）；:min 必须放开，
+               否则 element-plus 会把 −2 clamp 成 0，规则变成"任何下跌日都触发"。 -->
+          <el-input-number
+            v-model="alertForm.threshold"
+            :min="alertForm.rule_type === 'price' ? 0 : -100"
+            :max="alertForm.rule_type === 'price' ? undefined : 100"
+            :step="alertForm.rule_type === 'price' ? 0.01 : 0.5"
+            :precision="alertForm.rule_type === 'price' ? 4 : 2"
+            style="width:100%"
+          />
         </el-form-item>
         <el-form-item label="启用">
           <el-switch v-model="alertForm.enabled" />

@@ -25,7 +25,7 @@ except ImportError:
     from snapshots import ensure_snapshot_columns, ensure_portfolio_cash_flows_table, ensure_reconcile_table
 
 
-SCHEMA_VERSION = 16
+SCHEMA_VERSION = 17
 SCHEMA_VERSION_KEY = "schema_version"
 
 
@@ -337,6 +337,27 @@ def migrate_to_v16_snapshot_manual_price_column(conn):
     ensure_snapshot_columns(conn)
 
 
+def migrate_to_v17_alert_rule_types(conn):
+    """预警规则的种类与判定值：alert_rules.rule_type + alert_events.rule_type/value。
+
+    老库里的规则全是绝对价格阈值，回填成 'price' → 行为完全不变；新类型
+    （涨跌幅、组合当日盈亏）由用户自己新建。alert_events 那两列是为了让预警历史能
+    区分"某标的价 12.5"和"组合当日盈亏 -1.5%" —— 光看 triggered_price 分不出。
+    create table 里也带了同样的列，所以这条迁移只对已有库起作用。
+    """
+    ensure_alert_tables(conn)
+    if "rule_type" not in table_columns(conn, "alert_rules"):
+        conn.execute("ALTER TABLE alert_rules ADD COLUMN rule_type TEXT DEFAULT 'price'")
+    conn.execute(
+        "UPDATE alert_rules SET rule_type = 'price' WHERE rule_type IS NULL OR rule_type = ''"
+    )
+    event_cols = table_columns(conn, "alert_events")
+    if "rule_type" not in event_cols:
+        conn.execute("ALTER TABLE alert_events ADD COLUMN rule_type TEXT")
+    if "value" not in event_cols:
+        conn.execute("ALTER TABLE alert_events ADD COLUMN value REAL")
+
+
 MIGRATIONS = [
     (1, migrate_to_v1_core_compat),
     (2, migrate_to_v2_holdings_and_snapshots),
@@ -354,6 +375,7 @@ MIGRATIONS = [
     (14, migrate_to_v14_query_indexes),
     (15, migrate_to_v15_snapshot_price_columns),
     (16, migrate_to_v16_snapshot_manual_price_column),
+    (17, migrate_to_v17_alert_rule_types),
 ]
 
 

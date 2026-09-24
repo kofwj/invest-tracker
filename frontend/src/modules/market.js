@@ -18,8 +18,13 @@ const createMarketModule = ({
     watchlistDraft,
     watchlistSaving,
 }) => {
+    // rule_type：price=绝对价格 / change_pct=日内涨跌幅% / portfolio_pnl=组合当日盈亏%。
+    // 后两者的阈值是**带符号**的（below −2 表示"跌到 −2%"），所以阈值输入框的
+    // :min 必须跟着类型走 —— 否则 element-plus 会把 −2 clamp 成 0，
+    // "跌 2% 提醒"会退化成"任何下跌日都提醒"。
     const defaultAlertForm = () => ({
         target_type: 'holding',
+        rule_type: 'price',
         code: '',
         name: '',
         condition: 'above',
@@ -188,7 +193,9 @@ const createMarketModule = ({
 
     const saveAlertRule = async () => {
         const f = alertForm.value || {};
-        if (!f.code) {
+        // 组合规则没有标的代码：后端会归一成 PORTFOLIO 哨兵，这里不该拦。
+        const isPortfolio = f.rule_type === 'portfolio_pnl';
+        if (!f.code && !isPortfolio) {
             ElMessage.warning('请填写代码');
             return;
         }
@@ -198,8 +205,9 @@ const createMarketModule = ({
         }
         try {
             const payload = {
-                target_type: f.target_type || 'holding',
-                code: String(f.code).trim(),
+                target_type: isPortfolio ? 'portfolio' : f.target_type || 'holding',
+                rule_type: f.rule_type || 'price',
+                code: String(f.code || '').trim(),
                 name: (f.name || '').trim(),
                 condition: f.condition || 'above',
                 threshold: Number(f.threshold),
@@ -229,6 +237,7 @@ const createMarketModule = ({
         alertForm.value = {
             id: row.id,
             target_type: row.target_type || 'holding',
+            rule_type: row.rule_type || 'price',
             code: row.code,
             name: row.name || '',
             condition: row.condition || 'above',

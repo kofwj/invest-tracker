@@ -42,12 +42,13 @@ router = APIRouter()
 
 
 class AlertRuleCreate(BaseModel):
-    target_type: str = Field(..., description="holding | index")
+    target_type: str = Field(..., description="holding | index | portfolio")
     code: str
     name: Optional[str] = ""
     condition: str = Field(..., description="above | below")
     threshold: float
     enabled: bool = True
+    rule_type: str = Field("price", description="price | change_pct | portfolio_pnl")
 
 
 class AlertRuleUpdate(BaseModel):
@@ -57,6 +58,7 @@ class AlertRuleUpdate(BaseModel):
     condition: Optional[str] = None
     threshold: Optional[float] = None
     enabled: Optional[bool] = None
+    rule_type: Optional[str] = None
 
 
 class AlertCheckRequest(BaseModel):
@@ -130,6 +132,7 @@ def post_alert_rule(body: AlertRuleCreate):
                 threshold=body.threshold,
                 name=body.name or "",
                 enabled=body.enabled,
+                rule_type=body.rule_type,
             )
             conn.commit()
         return {"status": "success", "rule": rule}

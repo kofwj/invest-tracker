@@ -121,6 +121,86 @@ def fetch_tencent_quotes(codes):
             }
     return quotes
 
+def fetch_sina_quotes(codes):
+    """新浪行情兜底（第二数据源），返回结构与 fetch_tencent_quotes 一致。
+
+    为什么需要：东方财富 push2 / push2delay 的 /api/qt/* 从**这台服务器**的出口
+    访问不了（两者都直接 RemoteDisconnected；同一时刻在别的网络上是通的，所以不是
+    接口下线，是这条线路走不通）。结果是 `fetch_eastmoney_quotes` 内部那层腾讯兜底
+    成了唯一实际生效的路径 —— 生产只剩腾讯一条线。腾讯一旦抽风，盘中提醒与日终
+    快照会同时失明，所以在这里再补一路独立的源。
+
+    新浪返回的是 GBK 文本：``var hq_str_sz000651="名称,今开,昨收,现价,最高,最低,...";``
+    字段 0=名称 1=今开 2=昨收 3=现价。与腾讯不同，新浪没有现成涨跌幅，这里自己按
+    昨收算，口径与腾讯保持一致。
+    """
+    symbol_to_code = {}
+    for c in codes:
+        sym = tencent_symbol(c)
+        if sym:
+            symbol_to_code[sym] = str(c).strip().lower().replace("f", "")
+    if not symbol_to_code:
+        return {}
+
+    quotes = {}
+    symbols = list(symbol_to_code)
+    for i in range(0, len(symbols), 60):
+        batch = symbols[i : i + 60]
+        # 兜底路径自身出问题不能反过来把抓价搞崩：整批（请求 + 解析）都兜住，
+        # 最坏就是这一批没有价格，保持"取不到价 → 保留旧价"的原有语义。
+        try:
+            res = requests.get(
+                "https://hq.sinajs.cn/list=" + ",".join(batch),
+                timeout=8,
+                headers={
+                    "Referer": "https://finance.sina.com.cn/",
+                    "User-Agent": "Mozilla/5.0",
+                },
+            )
+            res.raise_for_status()
+            res.encoding = "gbk"  # 新浪返回 GBK，不设会拿到乱码名称
+            text = str(res.text or "")
+        except Exception as exc:
+            logger.warning("新浪行情请求失败: %s", exc)
+            continue
+
+        for line in text.split(";"):
+            line = line.strip()
+            if not line.startswith("var hq_str_") or "=" not in line:
+                continue
+            head, payload = line.split("=", 1)
+            sym = head[len("var hq_str_") :].strip()
+            code = symbol_to_code.get(sym)
+            if not code:
+                continue
+            parts = payload.strip().strip('"').split(",")
+            # 0 名称 1 今开 2 昨收 3 现价 4 最高 5 最低 …
+            if len(parts) < 4:
+                continue
+            try:
+                price = float(parts[3])
+            except (TypeError, ValueError):
+                continue
+            if price <= 0:  # 停牌/无报价
+                continue
+            try:
+                prev_close = float(parts[2]) if parts[2] not in ("", "-") else None
+            except (TypeError, ValueError):
+                prev_close = None
+            if prev_close is not None and prev_close <= 0:
+                prev_close = None
+            change_pct = None
+            if prev_close:
+                change_pct = round((price / prev_close - 1.0) * 100.0, 2)
+            quotes[code] = {
+                "price": price,
+                "change_pct": change_pct,
+                "name": (parts[0] or "").strip(),
+                "prev_close": prev_close,
+                "source": "新浪行情",
+            }
+    return quotes
+
 
 def _cache_get(keys, now: float) -> Dict[str, dict]:
     if _CACHE_TTL <= 0:
@@ -255,10 +335,17 @@ def fetch_eastmoney_quotes(codes, secid_map=None, *, use_cache: bool = True):
         if no_return:
             logger.warning("东方财富未返回报价的标的: %s", ", ".join(no_return))
 
-    # 腾讯兜底：东财缺哪些就用腾讯补哪些
+    # 腾讯兜底：东财缺哪些就用腾讯补哪些。
+    # 必须自己兜住异常：fetch_tencent_quotes 内部虽然按批 try/except，但一旦它整体
+    # 抛出（改版、依赖问题、mock 场景），异常会直接冒到调用方 —— 后面的新浪那一层
+    # 就永远走不到，"多源冗余"名存实亡。宁可这一层空手，也要让下一层有机会补。
     still_missing = [c for c in numeric_codes if c not in quotes]
     if still_missing:
-        fallback = fetch_tencent_quotes(still_missing)
+        try:
+            fallback = fetch_tencent_quotes(still_missing)
+        except Exception as exc:
+            logger.warning("腾讯行情兜底失败: %s", exc)
+            fallback = {}
         if fallback:
             quotes.update(fallback)
             _cache_put(
@@ -266,14 +353,33 @@ def fetch_eastmoney_quotes(codes, secid_map=None, *, use_cache: bool = True):
                 now,
             )
             logger.info("东方财富缺 %d 个报价，已用腾讯行情补齐 %d 个", len(still_missing), len(fallback))
+
+    # 新浪再兜底：东财与腾讯都拿不到的才走这里。
+    # 为什么加这一层：push2/push2delay 从生产服务器的出口访问不了（RemoteDisconnected），
+    # 于是"腾讯兜底"成了唯一实际生效的路径 —— 腾讯一抽风，抓价与预警同时失明。
+    # 把它放在 fetch_eastmoney_quotes 内部而不是新增一个入口，是为了让**所有**已有
+    # 调用点（持仓同步、预警、指数、自选）自动获得这一路冗余，不必逐个改接线。
+    still_missing = [c for c in numeric_codes if c not in quotes]
+    if still_missing:
+        try:
+            sina = fetch_sina_quotes(still_missing)
+        except Exception as exc:
+            logger.warning("新浪行情兜底失败: %s", exc)
+            sina = {}
+        if sina:
+            quotes.update(sina)
+            logger.info("腾讯也未取到 %d 个报价，已用新浪行情补齐 %d 个", len(still_missing), len(sina))
     return quotes
 
 
 def fetch_stock_quotes(codes):
-    """A股/场内基金报价（东财优先、腾讯兜底）。
+    """A股/场内基金报价（东财 → 腾讯 → 新浪，逐层兜底）。
 
     与 fetch_eastmoney_prices 的区别：返回完整报价 dict（含 source），
     这样同步价能如实标出某个标的的价格实际来自哪个数据源。
+
+    兜底链在 fetch_eastmoney_quotes 内部，这里不重复接线：抓价是日终快照与盘中提醒
+    的共同上游，任何绕过它的入口都会丢掉那两路冗余。
     """
     return fetch_eastmoney_quotes(codes)
 

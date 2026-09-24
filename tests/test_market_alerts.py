@@ -261,3 +261,238 @@ def test_snapshot_stores_lifetime_profit(client, app_module, monkeypatch):
     assert rows
     assert "lifetime_profit" in rows[0]
     assert float(rows[0]["lifetime_profit"] or 0) != 0 or rows[0]["total_profit"] is not None
+
+
+def _seed_holding(client, code, name, qty=100, price=10.0):
+    """通过交易接口建一条持仓，返回后由调用方改 last_price。"""
+    client.post(
+        "/transactions",
+        json={
+            "date": "2026-01-02",
+            "code": code,
+            "name": name,
+            "category": "A股权益",
+            "account": "华泰证券",
+            "direction": "买入",
+            "quantity": qty,
+            "price": price,
+            "amount": qty * price,
+            "fee": 0,
+            "remark": "",
+        },
+    )
+
+
+def _patch_quotes(monkeypatch, table, seen=None):
+    """table: {code: (price, prev_close)}；seen 会记录被请求过的 code。"""
+
+    def fake_quotes(codes, secid_map=None, use_cache=True):
+        out = {}
+        for c in codes:
+            code = str(c).strip()
+            if seen is not None:
+                seen.append(code)
+            if code in table:
+                price, prev = table[code]
+                out[code] = {
+                    "price": price,
+                    "change_pct": round((price / prev - 1) * 100, 2) if prev else None,
+                    "name": code,
+                    "prev_close": prev,
+                }
+            else:
+                out[code] = {"price": 100.0, "change_pct": 0.0, "name": code}
+        return out
+
+    monkeypatch.setattr("market.fetch_eastmoney_quotes", fake_quotes)
+    monkeypatch.setattr("price_sync.fetch_eastmoney_quotes", fake_quotes)
+
+
+def test_change_pct_rule_triggers_on_intraday_move(client, app_module, monkeypatch):
+    """涨跌幅规则比的是日内涨跌（相对昨收），不是绝对价格。"""
+    _seed_holding(client, "600000", "浦发银行", qty=100, price=10.0)
+    # 现价 9.7 / 昨收 10.0 → 日内 -3.0%
+    _patch_quotes(monkeypatch, {"600000": (9.7, 10.0)})
+
+    # 价格规则不允许负阈值（回归护栏）
+    bad = client.post(
+        "/market/alert-rules",
+        json={
+            "target_type": "holding",
+            "code": "600000",
+            "condition": "below",
+            "threshold": -2.0,
+            "rule_type": "price",
+        },
+    )
+    assert bad.status_code == 400
+
+    created = client.post(
+        "/market/alert-rules",
+        json={
+            "target_type": "holding",
+            "code": "600000",
+            "name": "浦发银行",
+            "condition": "below",
+            "threshold": -2.0,
+            "rule_type": "change_pct",
+        },
+    )
+    assert created.status_code == 200
+    assert created.json()["rule"]["rule_type"] == "change_pct"
+
+    body = client.post(
+        "/market/alerts/check", json={"notify": False, "respect_cooldown": False}
+    ).json()
+    assert body["trigger_count"] == 1
+    hit = body["triggered"][0]
+    assert hit["rule_type"] == "change_pct"
+    assert hit["value"] == -3.0
+    assert "日内" in hit["message"]
+    assert "阈值 -2.00%" in hit["message"]
+
+
+def test_change_pct_rule_not_triggered_when_move_small(client, app_module, monkeypatch):
+    """日内只跌 1% 时，-2% 的阈值不该报。"""
+    _seed_holding(client, "600000", "浦发银行", qty=100, price=10.0)
+    _patch_quotes(monkeypatch, {"600000": (9.9, 10.0)})
+    client.post(
+        "/market/alert-rules",
+        json={
+            "target_type": "holding",
+            "code": "600000",
+            "condition": "below",
+            "threshold": -2.0,
+            "rule_type": "change_pct",
+        },
+    )
+    body = client.post(
+        "/market/alerts/check", json={"notify": False, "respect_cooldown": False}
+    ).json()
+    assert body["trigger_count"] == 0
+
+
+def test_portfolio_pnl_rule_uses_weighted_move(client, app_module, monkeypatch):
+    """组合规则按 (现价-昨收)*数量 汇总，且不拿 PORTFOLIO 去请求行情。"""
+    _seed_holding(client, "600000", "浦发银行", qty=100, price=10.0)
+    _seed_holding(client, "600001", "邯郸钢铁", qty=100, price=10.0)
+    seen = []
+    # A: 9.8/10.0 ×100 = -20；B: 9.9/10.0 ×100 = -10 → 合计 -30 / 基准 2000 = -1.5%
+    _patch_quotes(monkeypatch, {"600000": (9.8, 10.0), "600001": (9.9, 10.0)}, seen=seen)
+
+    created = client.post(
+        "/market/alert-rules",
+        json={
+            "target_type": "portfolio",
+            "code": "",
+            "condition": "below",
+            "threshold": -1.0,
+            "rule_type": "portfolio_pnl",
+        },
+    )
+    assert created.status_code == 200
+    rule = created.json()["rule"]
+    assert rule["code"] == "PORTFOLIO"
+    assert rule["rule_type"] == "portfolio_pnl"
+
+    body = client.post(
+        "/market/alerts/check", json={"notify": False, "respect_cooldown": False}
+    ).json()
+    assert body["trigger_count"] == 1
+    hit = body["triggered"][0]
+    assert hit["code"] == "PORTFOLIO"
+    assert hit["name"] == "组合当日盈亏"
+    assert hit["value"] == -1.5
+    assert "组合当日盈亏 -1.50%" in hit["message"]
+    assert "-30" in hit["message"]
+
+    # 组合规则不该把哨兵当代码去查行情
+    assert "PORTFOLIO" not in seen
+
+
+def test_portfolio_pnl_skips_holdings_without_prev_close(client, app_module, monkeypatch):
+    """缺昨收的持仓跳过：取不到就不猜，宁可少算也不错算。"""
+    _seed_holding(client, "600000", "浦发银行", qty=100, price=10.0)
+    _seed_holding(client, "600001", "邯郸钢铁", qty=100, price=10.0)
+
+    def fake_quotes(codes, secid_map=None, use_cache=True):
+        out = {}
+        for c in codes:
+            code = str(c).strip()
+            if code == "600000":
+                out[code] = {
+                    "price": 9.0,
+                    "change_pct": -10.0,
+                    "name": code,
+                    "prev_close": 10.0,
+                }
+            else:
+                # 没有昨收 → 应被 _portfolio_day_pnl 跳过
+                out[code] = {
+                    "price": 20.0,
+                    "change_pct": None,
+                    "name": code,
+                    "prev_close": None,
+                }
+        return out
+
+    monkeypatch.setattr("market.fetch_eastmoney_quotes", fake_quotes)
+    monkeypatch.setattr("price_sync.fetch_eastmoney_quotes", fake_quotes)
+
+    client.post(
+        "/market/alert-rules",
+        json={
+            "target_type": "portfolio",
+            "code": "",
+            "condition": "below",
+            "threshold": -5.0,
+            "rule_type": "portfolio_pnl",
+        },
+    )
+    body = client.post(
+        "/market/alerts/check", json={"notify": False, "respect_cooldown": False}
+    ).json()
+    # 只算得到昨收的那只：-100/1000 = -10%
+    assert body["trigger_count"] == 1
+    assert body["triggered"][0]["value"] == -10.0
+
+
+def test_existing_price_rules_default_to_price_type(client, app_module, monkeypatch):
+    """老调用方不传 rule_type 时落到 price，行为与以前一致。"""
+    _seed_holding(client, "600000", "浦发银行", qty=100, price=10.0)
+    _patch_quotes(monkeypatch, {"600000": (12.5, 12.35)})
+
+    created = client.post(
+        "/market/alert-rules",
+        json={
+            "target_type": "holding",
+            "code": "600000",
+            "condition": "above",
+            "threshold": 12.0,
+        },
+    )
+    assert created.status_code == 200
+    assert created.json()["rule"]["rule_type"] == "price"
+
+    body = client.post(
+        "/market/alerts/check", json={"notify": False, "respect_cooldown": False}
+    ).json()
+    assert body["trigger_count"] == 1
+    hit = body["triggered"][0]
+    assert hit["rule_type"] == "price"
+    assert hit["price"] == 12.5
+    assert hit["value"] == 12.5
+
+
+def test_rule_type_validation_rejects_unknown(client, app_module):
+    bad = client.post(
+        "/market/alert-rules",
+        json={
+            "target_type": "holding",
+            "code": "600000",
+            "condition": "above",
+            "threshold": 12.0,
+            "rule_type": "moon_phase",
+        },
+    )
+    assert bad.status_code == 400

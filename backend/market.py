@@ -33,8 +33,12 @@ DEFAULT_INDICES = [
     {"code": "000510", "name": "中证A500", "secid": "1.000510"},
 ]
 
-ALLOWED_TARGET_TYPES = {"holding", "index"}
+ALLOWED_TARGET_TYPES = {"holding", "index", "portfolio"}
 ALLOWED_CONDITIONS = {"above", "below"}
+# price：绝对价格；change_pct：单标的日内涨跌幅（相对昨收）%; portfolio_pnl：组合当日盈亏 %
+# 后两者的 threshold 是**带符号**的（above=涨到 +2，below=跌到 −2）。
+ALLOWED_RULE_TYPES = {"price", "change_pct", "portfolio_pnl"}
+PORTFOLIO_RULE_CODE = "PORTFOLIO"
 DEFAULT_COOLDOWN_MINUTES = 240
 WATCHLIST_SETTING_KEY = "market_watchlist"
 COOLDOWN_SETTING_KEY = "alert_cooldown_minutes"
@@ -51,9 +55,14 @@ def ensure_alert_tables(conn) -> None:
             threshold REAL NOT NULL,
             enabled INTEGER DEFAULT 1,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME
+            updated_at DATETIME,
+            rule_type TEXT DEFAULT 'price'
         )"""
     )
+    # 老库没有 rule_type：在请求路径上幂等补列，与 schema v17 迁移同义。
+    rule_cols = [row[1] for row in conn.execute("PRAGMA table_info(alert_rules)").fetchall()]
+    if "rule_type" not in rule_cols:
+        conn.execute("ALTER TABLE alert_rules ADD COLUMN rule_type TEXT DEFAULT 'price'")
     conn.execute(
         """CREATE TABLE IF NOT EXISTS alert_events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -62,9 +71,17 @@ def ensure_alert_tables(conn) -> None:
             target_code TEXT,
             triggered_price REAL,
             threshold REAL,
-            message TEXT
+            message TEXT,
+            rule_type TEXT,
+            value REAL
         )"""
     )
+    # 老库补列（与 schema v17 迁移同义）。rule_type/value 让预警历史能区分
+    # "某标的价 12.5" 与"组合当日盈亏 -1.5%"—— 光看 triggered_price 是分不出的。
+    event_cols = [row[1] for row in conn.execute("PRAGMA table_info(alert_events)").fetchall()]
+    for col, decl in (("rule_type", "TEXT"), ("value", "REAL")):
+        if col not in event_cols:
+            conn.execute(f"ALTER TABLE alert_events ADD COLUMN {col} {decl}")
     # 冷却判断按 (rule_id, id DESC) 取最新一条；事件表随每日检查增长，无索引即全表扫。
     # 老库/测试里的 legacy alert_events 可能没有 rule_id 列，缺列时跳过（不在请求路径上尝试改表）。
     alert_event_cols = [row[1] for row in conn.execute("PRAGMA table_info(alert_events)").fetchall()]
@@ -230,6 +247,64 @@ def export_alert_events_csv(
     return buf.getvalue()
 
 
+def _normalize_rule_fields(
+    *,
+    target_type: str,
+    code: str,
+    condition: str,
+    threshold: Any,
+    rule_type: str = "price",
+    name: str = "",
+) -> Dict[str, Any]:
+    """校验并归一化一条规则；create 与 update 共用，避免两处语义漂移。"""
+    target_type = str(target_type or "").strip().lower()
+    rule_type = str(rule_type or "price").strip().lower() or "price"
+    code = str(code or "").strip()
+    condition = str(condition or "").strip().lower()
+    name = str(name or "").strip()
+
+    if rule_type not in ALLOWED_RULE_TYPES:
+        raise ValueError("rule_type 必须是 price、change_pct 或 portfolio_pnl")
+    if target_type not in ALLOWED_TARGET_TYPES:
+        raise ValueError("target_type 必须是 holding、index 或 portfolio")
+    if condition not in ALLOWED_CONDITIONS:
+        raise ValueError("condition 必须是 above 或 below")
+
+    # 组合层规则没有具体标的，统一用 PORTFOLIO 哨兵，避免 code 为空。
+    #
+    # 这里只接受明确声明过的组合规则：如果调用方说 target_type=portfolio 却带着
+    # rule_type=price（典型来源是"PUT {"target_type":"portfolio"}" 打到一条老价格规则上，
+    # rule_type 从库里读回来还是 price），静默翻成 portfolio_pnl 会留下一条
+    # threshold 仍是价格（如 12.0）的组合规则 —— 返回 200，但永远不会触发。
+    # 宁可 400 让调用方讲清楚。
+    if target_type == "portfolio" and rule_type != "portfolio_pnl":
+        raise ValueError("target_type=portfolio 时 rule_type 必须是 portfolio_pnl")
+    if rule_type == "portfolio_pnl":
+        target_type = "portfolio"
+        code = PORTFOLIO_RULE_CODE
+        name = name or "组合当日盈亏"
+    elif not code:
+        raise ValueError("code 不能为空")
+
+    try:
+        threshold = float(threshold)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("threshold 必须是数字") from exc
+
+    # 价格阈值不允许为负；涨跌幅/组合盈亏是带符号的（below −2 即"跌到 −2%"）。
+    if rule_type == "price" and threshold < 0:
+        raise ValueError("价格阈值不能为负")
+
+    return {
+        "target_type": target_type,
+        "rule_type": rule_type,
+        "code": code,
+        "name": name or code,
+        "condition": condition,
+        "threshold": threshold,
+    }
+
+
 def create_alert_rule(
     conn,
     *,
@@ -239,41 +314,36 @@ def create_alert_rule(
     threshold: float,
     name: str = "",
     enabled: bool = True,
+    rule_type: str = "price",
 ) -> Dict[str, Any]:
     ensure_alert_tables(conn)
-    target_type = str(target_type or "").strip().lower()
-    code = str(code or "").strip()
-    condition = str(condition or "").strip().lower()
-    name = str(name or "").strip()
-    if target_type not in ALLOWED_TARGET_TYPES:
-        raise ValueError("target_type 必须是 holding 或 index")
-    if not code:
-        raise ValueError("code 不能为空")
-    if condition not in ALLOWED_CONDITIONS:
-        raise ValueError("condition 必须是 above 或 below")
-    try:
-        threshold = float(threshold)
-    except (TypeError, ValueError) as exc:
-        raise ValueError("threshold 必须是数字") from exc
-    if threshold < 0:
-        raise ValueError("threshold 不能为负")
+    fields = _normalize_rule_fields(
+        target_type=target_type,
+        code=code,
+        condition=condition,
+        threshold=threshold,
+        rule_type=rule_type,
+        name=name,
+    )
 
     now = datetime.now(LOCAL_TZ).replace(tzinfo=None)
     cur = conn.execute(
         """
         INSERT INTO alert_rules
-            (target_type, code, name, condition, threshold, enabled, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (target_type, code, name, condition, threshold, enabled,
+             created_at, updated_at, rule_type)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
-            target_type,
-            code,
-            name or code,
-            condition,
-            threshold,
+            fields["target_type"],
+            fields["code"],
+            fields["name"],
+            fields["condition"],
+            fields["threshold"],
             1 if enabled else 0,
             now,
             now,
+            fields["rule_type"],
         ),
     )
     rule_id = int(cur.lastrowid)
@@ -288,40 +358,38 @@ def update_alert_rule(conn, rule_id: int, payload: Dict[str, Any]) -> Dict[str, 
         raise KeyError("规则不存在")
     ex = _row_to_dict(existing)
 
-    target_type = str(payload.get("target_type", ex["target_type"]) or "").strip().lower()
-    code = str(payload.get("code", ex["code"]) or "").strip()
-    condition = str(payload.get("condition", ex["condition"]) or "").strip().lower()
-    name = str(payload.get("name", ex.get("name") or "") or "").strip()
-    if "threshold" in payload:
-        try:
-            threshold = float(payload["threshold"])
-        except (TypeError, ValueError) as exc:
-            raise ValueError("threshold 必须是数字") from exc
-    else:
-        threshold = float(ex["threshold"])
+    fields = _normalize_rule_fields(
+        target_type=payload.get("target_type", ex["target_type"]),
+        code=payload.get("code", ex["code"]),
+        condition=payload.get("condition", ex["condition"]),
+        threshold=payload.get("threshold", ex["threshold"]),
+        rule_type=payload.get("rule_type", ex.get("rule_type") or "price"),
+        name=payload.get("name", ex.get("name") or ""),
+    )
     if "enabled" in payload:
         enabled = 1 if payload["enabled"] else 0
     else:
         enabled = int(ex.get("enabled") or 0)
-
-    if target_type not in ALLOWED_TARGET_TYPES:
-        raise ValueError("target_type 必须是 holding 或 index")
-    if not code:
-        raise ValueError("code 不能为空")
-    if condition not in ALLOWED_CONDITIONS:
-        raise ValueError("condition 必须是 above 或 below")
-    if threshold < 0:
-        raise ValueError("threshold 不能为负")
 
     now = datetime.now(LOCAL_TZ).replace(tzinfo=None)
     conn.execute(
         """
         UPDATE alert_rules
         SET target_type = ?, code = ?, name = ?, condition = ?, threshold = ?,
-            enabled = ?, updated_at = ?
+            enabled = ?, updated_at = ?, rule_type = ?
         WHERE id = ?
         """,
-        (target_type, code, name or code, condition, threshold, enabled, now, rule_id),
+        (
+            fields["target_type"],
+            fields["code"],
+            fields["name"],
+            fields["condition"],
+            fields["threshold"],
+            enabled,
+            now,
+            fields["rule_type"],
+            rule_id,
+        ),
     )
     row = conn.execute("SELECT * FROM alert_rules WHERE id = ?", (rule_id,)).fetchone()
     return _row_to_dict(row)
@@ -436,6 +504,29 @@ def _holding_price_map(conn) -> Dict[str, Dict[str, Any]]:
             "source": "live" if q.get("price") not in (None, 0) else "db",
         }
     return out
+
+
+def _portfolio_day_pnl(holding_map: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    """组合当日盈亏：Σ(现价 − 昨收) × 数量，以及相对昨收市值的百分比。
+
+    与"持仓浮盈"（对**成本**）严格区分 —— 这个只衡量**今天**的变动，是盘中
+    波动提醒的基准。缺昨收的持仓直接跳过（取不到就不猜，宁可少算也不错算）。
+    """
+    pnl = 0.0
+    base = 0.0
+    for h in holding_map.values():
+        prev = h.get("prev_close")
+        price = h.get("price")
+        qty = float(h.get("quantity") or 0)
+        if not prev or float(prev) <= 0 or not price or qty <= 0:
+            continue
+        base += float(prev) * qty
+        pnl += (float(price) - float(prev)) * qty
+    return {
+        "amount": pnl,
+        "base": base,
+        "change_pct": (pnl / base * 100.0) if base > 0 else None,
+    }
 
 
 def _build_today_highlights(
@@ -697,6 +788,10 @@ def _resolve_price(
     """Return price, name, change_pct, prev_close."""
     code = str(rule.get("code") or "").strip()
     ttype = str(rule.get("target_type") or "").strip().lower()
+    if ttype == "portfolio":
+        # 组合层规则没有单一标的，价格与涨跌幅由 _portfolio_day_pnl 汇总；
+        # 这里直接短路，避免拿 "PORTFOLIO" 去行情接口白跑一次请求。
+        return None, rule.get("name") or "组合当日盈亏", None, None
     if ttype == "index":
         q = index_map.get(code) or {}
         price = q.get("price")
@@ -840,16 +935,41 @@ def check_alerts(
                 logger.warning("拉取指数 %s 行情失败", code, exc_info=True)
 
     holding_map = _holding_price_map(conn)
+    portfolio = _portfolio_day_pnl(holding_map)
     triggered = []
     skipped_cooldown = []
+    # 取不到数据而没被评估的规则要留痕：否则 checked_count 照算、triggered 为空，
+    # 用户和日志都看不出"这条规则根本没跑"（停牌、源不返回昨收、整只行情失败）。
+    skipped_no_data = []
     now = datetime.now(LOCAL_TZ).replace(tzinfo=None)
     for r in rules:
+        rule_type = str(r.get("rule_type") or "price").strip().lower() or "price"
         price, name, change_pct, prev_close = _resolve_price(r, holding_map, index_map)
-        if price is None:
-            continue
         cond = str(r.get("condition") or "").lower()
         thr = float(r.get("threshold") or 0)
-        hit = (cond == "above" and price >= thr) or (cond == "below" and price <= thr)
+
+        # 三种规则比的是不同的量：绝对价格 / 日内涨跌幅 / 组合当日盈亏。
+        # 归一成 value 之后，判定与文案都只剩一套分支。
+        if rule_type == "portfolio_pnl":
+            value = portfolio["change_pct"]
+            name = "组合当日盈亏"
+        elif rule_type == "change_pct":
+            value = None if change_pct is None else float(change_pct)
+        else:
+            value = price
+
+        if value is None:
+            reason = {
+                "portfolio_pnl": "今日没有任何持仓能算出昨收，组合当日盈亏未知",
+                "change_pct": "取不到昨收，日内涨跌幅未知（停牌或数据源未返回）",
+            }.get(rule_type, "取不到现价")
+            skipped_no_data.append(
+                {"rule_id": r["id"], "code": r.get("code"), "rule_type": rule_type, "reason": reason}
+            )
+            continue
+
+
+        hit = (cond == "above" and value >= thr) or (cond == "below" and value <= thr)
         if not hit:
             continue
         if respect_cooldown and _rule_in_cooldown(conn, int(r["id"]), cooldown_minutes, now):
@@ -862,28 +982,52 @@ def check_alerts(
             )
             continue
 
-        chg_part = ""
-        if change_pct is not None:
-            chg_part = f"，涨跌 {float(change_pct):+.2f}%"
-        prev_part = ""
-        if prev_close is not None:
-            try:
-                prev_part = f"，昨收 {float(prev_close):.4f}"
-            except (TypeError, ValueError):
-                prev_part = ""
-        msg = (
-            f"{name}({r.get('code')}) 现价 {price:.4f} "
-            f"{'≥' if cond == 'above' else '≤'} 阈值 {thr:.4f}"
-            f"{chg_part}{prev_part}"
-        )
+        comparator = "≥" if cond == "above" else "≤"
+        if rule_type == "portfolio_pnl":
+            amount = portfolio["amount"]
+            msg = (
+                f"组合当日盈亏 {value:+.2f}% {comparator} 阈值 {thr:+.2f}%"
+                f"（约 {amount:+,.0f} 元）"
+            )
+        elif rule_type == "change_pct":
+            msg = (
+                f"{name}({r.get('code')}) 日内 {value:+.2f}% {comparator} 阈值 {thr:+.2f}%"
+            )
+            # 涨跌幅规则靠昨收就能判定，极少数情况下拿不到现价（停牌瞬间/源只回昨收），
+            # 此时不能按价格格式化，否则整轮 /alerts/check 直接 500。
+            if price is not None:
+                msg += f"，现价 {price:.4f}"
+            if prev_close is not None:
+                try:
+                    msg += f"，昨收 {float(prev_close):.4f}"
+                except (TypeError, ValueError):
+                    pass
+        else:
+            chg_part = ""
+            if change_pct is not None:
+                chg_part = f"，涨跌 {float(change_pct):+.2f}%"
+            prev_part = ""
+            if prev_close is not None:
+                try:
+                    prev_part = f"，昨收 {float(prev_close):.4f}"
+                except (TypeError, ValueError):
+                    prev_part = ""
+            msg = (
+                f"{name}({r.get('code')}) 现价 {price:.4f} "
+                f"{comparator} 阈值 {thr:.4f}"
+                f"{chg_part}{prev_part}"
+            )
+
         item = {
             "rule_id": r["id"],
+            "rule_type": rule_type,
             "target_type": r.get("target_type"),
             "code": r.get("code"),
             "name": name,
             "condition": cond,
             "threshold": thr,
             "price": price,
+            "value": round(float(value), 4),
             "change_pct": None if change_pct is None else round(float(change_pct), 4),
             "prev_close": prev_close,
             "message": msg,
@@ -894,10 +1038,13 @@ def check_alerts(
             conn.execute(
                 """
                 INSERT INTO alert_events
-                    (rule_id, trigger_time, target_code, triggered_price, threshold, message)
-                VALUES (?, ?, ?, ?, ?, ?)
+                    (rule_id, trigger_time, target_code, triggered_price, threshold,
+                     message, rule_type, value)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (r["id"], now, r.get("code"), price, thr, msg),
+                # 组合规则没有单一标的价，写 NULL 而不是 0 —— 写 0 会让预警历史
+                # 显示成"价格 0.0000"，和"某标的真的跌到 0"分不开。
+                (r["id"], now, r.get("code"), price, thr, msg, rule_type, float(value)),
             )
 
     notify_result = {"sent": False, "reason": "skipped"}
@@ -919,6 +1066,7 @@ def check_alerts(
     return {
         "triggered": triggered,
         "skipped_cooldown": skipped_cooldown,
+        "skipped_no_data": skipped_no_data,
         "checked_count": len(rules),
         "trigger_count": len(triggered),
         "cooldown_minutes": cooldown_minutes,
