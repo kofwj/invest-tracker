@@ -1008,22 +1008,45 @@ def check_discipline_summary(conn) -> Dict[str, Any]:
 
     breaches = report.get("breaches") or []
     summary = report.get("summary") or report.get("summary_text") or ""
+    actions = report.get("actions") or []
+
+    # breaches 里混着 level="ok" 的“体检正常”项（权益适中 / 防守充足），它们不是破线。
+    # 不过滤的话每次都会推一条“破线条数：2”，通道很快就被无视。
+    def _level(item: Any) -> str:
+        if not isinstance(item, dict):
+            return ""
+        return str(item.get("level") or "").strip().lower()
+
+    real_breaches = [b for b in breaches if _level(b) not in ("ok", "")]
+
     lines = []
     if summary:
         lines.append(str(summary)[:300])
-    if breaches:
-        lines.append(f"破线条数：{len(breaches)}")
-        for b in breaches[:8]:
-            if isinstance(b, dict):
-                lines.append(f"· {b.get('title') or b.get('message') or b.get('text') or b}")
-            else:
-                lines.append(f"· {b}")
+    if real_breaches:
+        lines.append(f"破线条数：{len(real_breaches)}")
+        for b in real_breaches[:8]:
+            lines.append(f"· {b.get('title') or b.get('message') or b.get('text') or b}")
     else:
         lines.append("当前无破线。")
 
+    # 只说“有几条破线”却不说什么该做，等于没提醒；把再平衡建议一并带上。
+    for a in actions[:5]:
+        if not isinstance(a, dict):
+            continue
+        side = "买入" if str(a.get("side")) == "buy" else "卖出"
+        label = a.get("name") or a.get("code") or ""
+        try:
+            amount = float(a.get("amount") or 0)
+        except (TypeError, ValueError):
+            amount = 0.0
+        lines.append(f"· 建议{side} {label} 约 {amount:,.0f} 元")
+
+    # 待办型建议（权益偏离目标需要再平衡）也算“有事要做”，否则不会推送。
+    # 执行完落到目标区间内就会自动安静；不想收就别把 discipline 路由到通道。
     return {
-        "has_breaches": len(breaches) > 0,
-        "breach_count": len(breaches),
+        "has_breaches": bool(real_breaches) or bool(actions),
+        "breach_count": len(real_breaches),
+        "action_count": len(actions),
         "text": "\n".join(lines),
         "summary": summary,
     }

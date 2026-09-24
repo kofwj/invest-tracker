@@ -288,3 +288,94 @@ def test_channel_credentials_db_beats_env(app_module, monkeypatch):
         cfg = channel_config(conn)
         assert cfg["feishu"]["webhook"] == "https://example.com/from-db"
         assert cfg["feishu"]["source"] == "db"
+
+
+def _fake_discipline(monkeypatch, payload):
+    """把 build_discipline_report 换成固定返回，隔离真实持仓。"""
+    import discipline
+
+    monkeypatch.setattr(discipline, "build_discipline_report", lambda conn: payload)
+
+
+def test_discipline_summary_ignores_ok_rows(app_module, monkeypatch):
+    """level="ok" 的体检项（权益适中/防守充足）不是破线，不能算进条数。"""
+    from notify import check_discipline_summary
+
+    _fake_discipline(
+        monkeypatch,
+        {
+            "breaches": [
+                {"level": "ok", "code": "equity_ok", "title": "权益适中", "text": "…"},
+                {"level": "ok", "code": "defensive_ok", "title": "防守充足", "text": "…"},
+            ],
+            "actions": [],
+            "summary": "纪律与目标比例都大致合适。",
+        },
+    )
+
+    with app_module.get_db_connection(app_module.DB_PATH) as conn:
+        info = check_discipline_summary(conn)
+
+    assert info["breach_count"] == 0
+    assert info["has_breaches"] is False
+    assert "破线条数" not in info["text"]
+    assert "权益适中" not in info["text"]
+    assert "当前无破线" in info["text"]
+
+
+def test_discipline_summary_pushes_pending_actions(app_module, monkeypatch):
+    """没破线但有未执行的再平衡建议时，要推出去并且说清该做什么。"""
+    from notify import check_discipline_summary
+
+    _fake_discipline(
+        monkeypatch,
+        {
+            "breaches": [{"level": "ok", "code": "equity_ok", "title": "权益适中", "text": "…"}],
+            "actions": [
+                {
+                    "side": "sell",
+                    "code": "000651",
+                    "name": "格力电器",
+                    "amount": 136981.0,
+                    "reason": "权益高于目标",
+                }
+            ],
+            "summary": "按目标比例有 1 条再平衡建议。",
+        },
+    )
+
+    with app_module.get_db_connection(app_module.DB_PATH) as conn:
+        info = check_discipline_summary(conn)
+
+    assert info["breach_count"] == 0
+    assert info["action_count"] == 1
+    assert info["has_breaches"] is True
+    assert "格力电器" in info["text"]
+    assert "136,981" in info["text"]
+
+
+def test_discipline_summary_counts_real_breaches(app_module, monkeypatch):
+    """真破线要计数，且带上建议动作。"""
+    from notify import check_discipline_summary
+
+    _fake_discipline(
+        monkeypatch,
+        {
+            "breaches": [
+                {"level": "ok", "code": "equity_ok", "title": "权益适中", "text": "…"},
+                {"level": "warning", "title": "格力电器 过重", "text": "约占 24%（上限 20%）"},
+            ],
+            "actions": [],
+            "summary": "有 1 条破线。",
+        },
+    )
+
+    with app_module.get_db_connection(app_module.DB_PATH) as conn:
+        info = check_discipline_summary(conn)
+
+    assert info["breach_count"] == 1
+    assert info["has_breaches"] is True
+    assert "破线条数：1" in info["text"]
+    assert "格力电器 过重" in info["text"]
+    assert "权益适中" not in info["text"]
+
