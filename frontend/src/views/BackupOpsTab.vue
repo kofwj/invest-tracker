@@ -15,28 +15,24 @@
       </el-space>
     </template>
 
-    <div class="ledger-metrics cols-4">
-      <MetricCard
-        label="数据库"
-        :value="maintenanceStatus.db_exists ? '正常' : '未找到'"
-        :tone="maintenanceStatus.db_exists ? 'ok' : 'warn'"
-        main
-        :title="dbSizeText"
-      />
-      <MetricCard
-        label="备份数量"
-        :value="String(backupCount)"
-        :tone="backupCount ? 'ok' : 'warn'"
-      />
-      <MetricCard
-        label="最近备份"
-        :value="latestBackupShort"
-        :title="String(maintenanceStatus.latest_backup || latestBackupText || '')"
-      />
-      <MetricCard
-        label="建议"
-        value="先下本地"
-      />
+    <!-- 四个状态数：一行、发丝线分格（新版排版） -->
+    <div class="app-stat-row cols-4">
+      <div class="app-stat-cell">
+        <div class="k">数据库</div>
+        <div class="v" :class="maintenanceStatus.db_exists ? 'ok' : 'warn'" :title="dbSizeText">{{ maintenanceStatus.db_exists ? '正常' : '未找到' }}</div>
+      </div>
+      <div class="app-stat-cell">
+        <div class="k">备份数量</div>
+        <div class="v" :class="backupCount ? 'ok' : 'warn'">{{ String(backupCount) }}</div>
+      </div>
+      <div class="app-stat-cell">
+        <div class="k">最近备份</div>
+        <div class="v" :title="String(maintenanceStatus.latest_backup || latestBackupText || '')">{{ latestBackupShort }}</div>
+      </div>
+      <div class="app-stat-cell">
+        <div class="k">建议</div>
+        <div class="v">先下本地</div>
+      </div>
     </div>
 
     <el-alert
@@ -79,7 +75,6 @@
 
 <script setup>
 import PageShell from '../components/PageShell.vue';
-import MetricCard from '../components/MetricCard.vue';
 import { computed, ref } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 

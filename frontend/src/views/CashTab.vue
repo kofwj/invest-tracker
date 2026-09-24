@@ -113,12 +113,25 @@
           <el-input v-model="cashFlowForm.remark" placeholder="如：银行卡转入、转出到银行、券商余额校准"></el-input>
         </el-form-item>
       </el-form>
-      <el-row :gutter="16" style="margin-bottom: 14px;">
-        <el-col :span="6"><el-statistic title="区间转入" :value="cashFlowSummary.inflow" :precision="2" prefix="¥"></el-statistic></el-col>
-        <el-col :span="6"><el-statistic title="区间转出" :value="cashFlowSummary.outflowAbs" :precision="2" prefix="¥"></el-statistic></el-col>
-        <el-col :span="6"><el-statistic title="区间净额" :value="cashFlowSummary.net" :precision="2" prefix="¥"></el-statistic></el-col>
-        <el-col :span="6"><el-statistic title="当前证券现金" :value="dashboard.securities_cash || 0" :precision="2" prefix="¥"></el-statistic></el-col>
-      </el-row>
+      <!-- 区间四个数：一行发丝线分格（原来是 el-statistic 四列） -->
+      <div class="app-brief cols-4" style="margin-bottom: 14px;">
+        <div class="app-brief-cell">
+          <div class="k">区间转入</div>
+          <div class="v">{{ formatMoney(cashFlowSummary.inflow, 2) }}</div>
+        </div>
+        <div class="app-brief-cell">
+          <div class="k">区间转出</div>
+          <div class="v">{{ formatMoney(cashFlowSummary.outflowAbs, 2) }}</div>
+        </div>
+        <div class="app-brief-cell">
+          <div class="k">区间净额</div>
+          <div class="v">{{ formatMoney(cashFlowSummary.net, 2) }}</div>
+        </div>
+        <div class="app-brief-cell">
+          <div class="k">当前证券现金</div>
+          <div class="v">{{ formatMoney(dashboard.securities_cash || 0, 2) }}</div>
+        </div>
+      </div>
       <div class="cash-filter-bar">
         <el-date-picker v-model="cashFlowQuery.dateRange" type="daterange" range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期" value-format="YYYY-MM-DD" style="width:260px" @change="queryCashFlows"></el-date-picker>
         <el-select v-model="cashFlowQuery.account" placeholder="账户" clearable style="width:150px" @change="queryCashFlows">
@@ -175,12 +188,24 @@
         style="margin-bottom: 12px"
       />
       <el-empty v-else description="打开本页或查询流水后会自动勾稽" />
-      <el-row v-if="cashAudit" :gutter="16" style="margin-bottom: 12px">
-        <el-col :span="6"><el-statistic title="银证转入" :value="cashAudit.bank_in || 0" :precision="2" prefix="¥" /></el-col>
-        <el-col :span="6"><el-statistic title="组合投入" :value="cashAudit.portfolio_in || 0" :precision="2" prefix="¥" /></el-col>
-        <el-col :span="6"><el-statistic title="银证转出" :value="Math.abs(cashAudit.bank_out || 0)" :precision="2" prefix="¥" /></el-col>
-        <el-col :span="6"><el-statistic title="组合取出" :value="Math.abs(cashAudit.portfolio_out || 0)" :precision="2" prefix="¥" /></el-col>
-      </el-row>
+      <div v-if="cashAudit" class="app-brief cols-4" style="margin-bottom: 12px;">
+        <div class="app-brief-cell">
+          <div class="k">银证转入</div>
+          <div class="v">{{ formatMoney(cashAudit.bank_in || 0, 2) }}</div>
+        </div>
+        <div class="app-brief-cell">
+          <div class="k">组合投入</div>
+          <div class="v">{{ formatMoney(cashAudit.portfolio_in || 0, 2) }}</div>
+        </div>
+        <div class="app-brief-cell">
+          <div class="k">银证转出</div>
+          <div class="v">{{ formatMoney(Math.abs(cashAudit.bank_out || 0), 2) }}</div>
+        </div>
+        <div class="app-brief-cell">
+          <div class="k">组合取出</div>
+          <div class="v">{{ formatMoney(Math.abs(cashAudit.portfolio_out || 0), 2) }}</div>
+        </div>
+      </div>
       <!-- 未配对流水：空数据整块不渲染（别常显两张空表）；有数据时保持原样 -->
       <template v-if="hasUnmatchedRows">
         <template v-if="unmatchedBankRows.length">

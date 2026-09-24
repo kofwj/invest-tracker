@@ -8,26 +8,24 @@
       </el-space>
     </template>
 
-    <div class="ledger-metrics cols-4">
-      <MetricCard
-        label="总开关"
-        :value="notifyOn ? '已开启' : '已关闭'"
-        :tone="notifyOn ? 'ok' : 'warn'"
-        main
-      />
-      <MetricCard
-        label="已配置通道"
-        :value="`${configuredCount} / ${channelRows.length}`"
-        :tone="configuredCount ? 'ok' : 'warn'"
-      />
-      <MetricCard
-        label="正文模板"
-        :value="templateLabel"
-      />
-      <MetricCard
-        label="同事件冷却"
-        :value="`${Number(notifyStatus.cooldown_minutes || 0)} 分`"
-      />
+    <!-- 四个状态数：一行、发丝线分格（新版排版） -->
+    <div class="app-stat-row cols-4">
+      <div class="app-stat-cell">
+        <div class="k">总开关</div>
+        <div class="v" :class="notifyOn ? 'ok' : 'warn'">{{ notifyOn ? '已开启' : '已关闭' }}</div>
+      </div>
+      <div class="app-stat-cell">
+        <div class="k">已配置通道</div>
+        <div class="v" :class="configuredCount ? 'ok' : 'warn'">{{ `${configuredCount} / ${channelRows.length}` }}</div>
+      </div>
+      <div class="app-stat-cell">
+        <div class="k">正文模板</div>
+        <div class="v">{{ templateLabel }}</div>
+      </div>
+      <div class="app-stat-cell">
+        <div class="k">同事件冷却</div>
+        <div class="v">{{ `${Number(notifyStatus.cooldown_minutes || 0)} 分` }}</div>
+      </div>
     </div>
 
     <el-card shadow="never" class="ops-card">
@@ -325,7 +323,6 @@
 
 <script setup>
 import PageShell from '../components/PageShell.vue';
-import MetricCard from '../components/MetricCard.vue';
 import { computed, ref, watch } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 

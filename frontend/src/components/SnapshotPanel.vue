@@ -76,15 +76,12 @@
       </el-form>
     </el-card>
 
-    <div class="ledger-metrics cols-4">
-      <MetricCard
-        v-for="(m, idx) in snapshotMetrics"
-        :key="m.key"
-        :label="m.label"
-        :value="m.value"
-        :color="m.color"
-        :main="idx === 0"
-      />
+    <!-- 四个快照数：一行发丝线分格（与全站其它页同一套共用件） -->
+    <div class="app-stat-row cols-4">
+      <div v-for="m in snapshotMetrics" :key="m.key" class="app-stat-cell">
+        <div class="k">{{ m.label }}</div>
+        <div class="v" :class="toneFromColor(m.color)">{{ m.value }}</div>
+      </div>
     </div>
 
     <div class="snapshot-insights" v-if="snapshotInsights.length">
@@ -186,7 +183,6 @@
 </template>
 
 <script setup>
-import MetricCard from '../components/MetricCard.vue';
 import { ref } from 'vue';
 import { ElMessageBox } from 'element-plus';
 import { useAppCtx } from '../composables/useAppCtx.js';
@@ -213,6 +209,14 @@ const {
   formatMoney,
   pct,
 } = useAppCtx();
+
+/** 旧的 :color 传的是 CSS 颜色变量，新版共用件只认 tone 类名 */
+const toneFromColor = (color) => {
+  const c = String(color || '');
+  if (c.includes('-up')) return 'up';
+  if (c.includes('-down')) return 'down';
+  return '';
+};
 
 // 写操作防连点。快照用模块里现成的 snapshotLoading（模块内的 createSnapshot 会把它置位），
 // 压缩快照模块里没有标志，本组件用一个本地 ref。
