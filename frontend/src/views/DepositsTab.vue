@@ -20,39 +20,30 @@
       </el-space>
     </template>
 
-    <!-- 存款总额单独突出（全宽 hero），彻底解决窄卡被 ellipsis 截断的问题；其他 4 个用 cols-4 -->
-    <div class="ledger-metrics" style="margin-bottom: 4px;">
-      <MetricCard
-        label="存款总额"
-        :value="formatMoney(depositSummary.total)"
-        main
-        :title="formatMoney(depositSummary.total)"
-      />
+    <!-- 存款总额单独突出（全宽 hero），其他 4 个一行 4 格：新版排版，发丝线分格 -->
+    <div class="app-stat-row">
+      <div class="app-stat-cell">
+        <div class="k">存款总额</div>
+        <div class="v is-hero" :title="formatMoney(depositSummary.total)">{{ formatMoney(depositSummary.total) }}</div>
+      </div>
     </div>
-    <div class="ledger-metrics cols-4">
-      <MetricCard
-        label="加权平均利率"
-        :value="`${Number(depositSummary.weightedRate || 0).toFixed(2)}%`"
-        color="var(--app-primary)"
-        :title="`${Number(depositSummary.weightedRate || 0).toFixed(2)}%`"
-      />
-      <MetricCard
-        label="预计年利息"
-        :value="formatMoney(depositSummary.annualInterest)"
-        color="var(--app-warn)"
-        :title="formatMoney(depositSummary.annualInterest)"
-      />
-      <MetricCard
-        label="到期前预计利息"
-        :value="formatMoney(depositSummary.remainingInterest)"
-        color="var(--app-down)"
-        :title="formatMoney(depositSummary.remainingInterest)"
-      />
-      <MetricCard
-        label="下一笔到期"
-        :value="depositSummary.nextDue ? depositSummary.nextDue.due_date : '—'"
-        :title="depositSummary.nextDue ? `${depositSummary.nextDue.bank_name} ${formatMoney(depositSummary.nextDue.amount)}` : ''"
-      />
+    <div class="app-stat-row cols-4">
+      <div class="app-stat-cell">
+        <div class="k">加权平均利率</div>
+        <div class="v">{{ `${Number(depositSummary.weightedRate || 0).toFixed(2)}%` }}</div>
+      </div>
+      <div class="app-stat-cell">
+        <div class="k">预计年利息</div>
+        <div class="v up" :title="formatMoney(depositSummary.annualInterest)">{{ formatMoney(depositSummary.annualInterest) }}</div>
+      </div>
+      <div class="app-stat-cell">
+        <div class="k">到期前预计利息</div>
+        <div class="v up" :title="formatMoney(depositSummary.remainingInterest)">{{ formatMoney(depositSummary.remainingInterest) }}</div>
+      </div>
+      <div class="app-stat-cell">
+        <div class="k">下一笔到期</div>
+        <div class="v" :title="depositSummary.nextDue ? `${depositSummary.nextDue.bank_name} ${formatMoney(depositSummary.nextDue.amount)}` : ''">{{ depositSummary.nextDue ? depositSummary.nextDue.due_date : '—' }}</div>
+      </div>
     </div>
 
                     <el-alert
@@ -157,7 +148,6 @@
 
 <script setup>
 import PageShell from '../components/PageShell.vue';
-import MetricCard from '../components/MetricCard.vue';
 import { ref } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 const { dashboard, depositRows, depositSummary, depositBankBreakdown, depositMaturityBuckets, downloadDepositsTemplate, exportDeposits, importDeposits, openDepositDialog, deleteDeposit, formatMoney, pct } = useAppCtx();
@@ -187,3 +177,8 @@ async function onImportDeposits(file) {
   }
 }
 </script>
+
+<style scoped>
+/* 存款总额是这一页的主数字，比共用件默认的 22px 再大一档 */
+.app-stat-cell .v.is-hero { font-size: 30px; }
+</style>

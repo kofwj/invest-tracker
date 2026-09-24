@@ -427,9 +427,11 @@ html.dark .stat-label::after { background: rgba(255,255,255,0.08); }
   margin-left: auto;
 }
 .page-shell-body > .el-card {
-  border-radius: var(--app-radius-sm);
+  /* 新版卡片：圆角 16 + 极淡阴影（全站 12 个 PageShell 页面统一） */
+  border-radius: 16px;
   border-color: var(--app-border);
   background: var(--app-surface);
+  box-shadow: var(--app-shadow-sm);
 }
 .page-shell-body > .el-alert { border-radius: 12px; }
 .page-section-card {
@@ -439,7 +441,7 @@ html.dark .stat-label::after { background: rgba(255,255,255,0.08); }
   box-shadow: none;
 }
 .page-section-card + .page-section-card,
-.page-shell-body .el-card + .el-card { margin-top: 14px; }
+.page-shell-body .el-card + .el-card { margin-top: 22px; }
 
 /* 总览语言指标卡（分析/持仓等页共用，跟随主题，不全页暗底） */
 .ledger-metrics {
@@ -543,32 +545,61 @@ html.dark .stat-label::after { background: rgba(255,255,255,0.08); }
   color: var(--app-text);
   margin-bottom: 10px;
 }
-.ledger-status-strip {
+/* 新版排版共用件：一行数字（发丝线分格）+ 简报网格。
+   总览 / 收益与快照 / 日常各页共用，别再各页抄一份 scoped 样式。 */
+.app-stat-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin: 12px 0 4px;
-}
-.ledger-status-card {
-  border: 1px solid var(--app-border);
-  border-radius: 12px;
   background: var(--app-surface);
-  padding: 12px 14px;
-  min-width: 0;
+  border: 1px solid var(--app-border);
+  border-radius: 16px;
+  box-shadow: var(--app-shadow-sm);
+  margin-bottom: 22px;
 }
-.ledger-status-label { font-size: 12px; color: var(--app-muted); font-weight: 600; }
-.ledger-status-main {
-  margin-top: 6px;
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--app-text);
+.app-stat-row.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.app-stat-row.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.app-stat-row.cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.app-stat-cell { padding: 18px 22px; min-width: 0; }
+.app-stat-cell + .app-stat-cell { border-left: 1px solid var(--app-hairline); }
+.app-stat-cell .k { font-size: 12px; color: var(--app-muted); margin-bottom: 6px; }
+.app-stat-cell .v {
+  font-family: "SF Mono", Menlo, Consolas, ui-monospace, monospace;
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.app-brief { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.app-brief.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.app-brief.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.app-brief-cell { min-width: 0; }
+.app-brief-cell .k { font-size: 12px; color: var(--app-muted); margin-bottom: 5px; }
+.app-brief-cell .v {
+  font-family: "SF Mono", Menlo, Consolas, ui-monospace, monospace;
+  font-size: 16px;
+  font-weight: 640;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.ledger-status-main.is-warn { color: var(--app-warn); }
-.ledger-status-main.is-ok { color: var(--app-ok); }
-.ledger-status-sub { margin-top: 4px; font-size: 12px; color: var(--app-soft); }
+.app-stat-cell .v.up, .app-brief-cell .v.up { color: var(--app-up); }
+.app-stat-cell .v.down, .app-brief-cell .v.down { color: var(--app-down); }
+.app-stat-cell .v.warn, .app-brief-cell .v.warn { color: var(--app-warn); }
+.app-stat-cell .v.ok, .app-brief-cell .v.ok { color: var(--app-ok); }
+@media (max-width: 900px) {
+  .app-stat-row[class*="cols-"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .app-stat-cell + .app-stat-cell { border-left: 0; }
+  .app-stat-cell:nth-child(even) { border-left: 1px solid var(--app-hairline); }
+  .app-stat-cell:nth-child(n+3) { border-top: 1px solid var(--app-hairline); }
+  .app-brief { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .app-stat-row[class*="cols-"] { grid-template-columns: 1fr; }
+  .app-stat-cell:nth-child(even) { border-left: 0; }
+  .app-stat-cell + .app-stat-cell { border-top: 1px solid var(--app-hairline); }
+}
 @media (max-width: 1100px) {
   .ledger-metrics.cols-5,
   .ledger-metrics.cols-6 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -580,7 +611,6 @@ html.dark .stat-label::after { background: rgba(255,255,255,0.08); }
   .ledger-metrics.cols-4,
   .ledger-metrics.cols-5,
   .ledger-metrics.cols-6 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .ledger-status-strip { grid-template-columns: 1fr; }
 }
 @media (max-width: 560px) {
   .ledger-metrics.cols-2,
@@ -858,8 +888,14 @@ html.dark .stat-label::after { background: rgba(255,255,255,0.08); }
 .screenshot-mask .sync-notice,
 .screenshot-mask .ledger-metric-value,
 .screenshot-mask .ledger-metric-sub,
-.screenshot-mask .ledger-status-main,
-.screenshot-mask .ledger-status-sub,
+.screenshot-mask .app-stat-cell .v,
+.screenshot-mask .app-brief-cell .v,
+.screenshot-mask .ov-lede,
+.screenshot-mask .ov-brief-v,
+.screenshot-mask .perf-lede-num,
+.screenshot-mask .perf-seg-big,
+.screenshot-mask .perf-num-cell .v,
+.screenshot-mask .perf-brief-cell .v,
 .screenshot-mask .snapshot-metric-value,
 .screenshot-mask .snapshot-metric-sub,
 .screenshot-mask .allocation-value,
