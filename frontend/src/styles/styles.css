@@ -1321,3 +1321,97 @@ html.dark .perf-contrib-table.el-table th.el-table__cell {
   background: color-mix(in srgb, var(--app-surface) 90%, #000) !important;
   color: var(--app-muted);
 }
+
+/* ===== 设置组 4 页（消息推送 / AI 设置 / 证券账户 / 数据备份）共用排版件 =====
+   结构与取值来自 docs/design/prototype/settings/*.html；只新增，不改上面的既有规则与断点。 */
+/* 状态带每格的补充小字 */
+.app-stat-cell .s { margin-top: 6px; font-size: 12px; color: var(--app-soft); line-height: 1.45; }
+/* 卡片标题里的问题编号（Q1 / Q2 …） */
+.ops-q {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 8px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  color: var(--app-primary);
+  background: var(--app-primary-soft);
+  vertical-align: 2px;
+}
+/* 字段栅格 + 字段 */
+.field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 24px; }
+.field-grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.field { min-width: 0; }
+.field.span-2 { grid-column: 1 / -1; }
+.field-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--app-muted);
+}
+.field-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* 通道分组（消息推送 Q2） */
+.chan {
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: color-mix(in srgb, var(--app-surface) 96%, var(--app-bg0));
+}
+.chan + .chan { margin-top: 12px; }
+.chan.is-off { background: color-mix(in srgb, var(--app-bg0) 40%, var(--app-surface)); }
+.chan-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.chan-name { font-size: 14px; font-weight: 700; color: var(--app-text); }
+.chan-mode { font-size: 12px; color: var(--app-soft); }
+.chan-hint { margin-left: auto; max-width: 60ch; font-size: 12px; color: var(--app-soft); }
+/* 危险操作组：单独成组 + 二次确认视觉 */
+.hazard {
+  margin-top: 16px;
+  border: 1px solid color-mix(in srgb, var(--app-up) 30%, var(--app-border));
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: color-mix(in srgb, var(--app-up) 5%, var(--app-surface));
+}
+.hazard-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--app-text); }
+.hazard-hint { flex: 1 1 320px; min-width: 0; margin: 0; font-size: 12px; line-height: 1.55; color: var(--app-soft); }
+.hazard-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px 18px; margin-top: 12px; }
+.hazard-body { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.hazard-note {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed color-mix(in srgb, var(--app-up) 32%, var(--app-border));
+  font-size: 12px;
+  color: var(--app-up);
+  line-height: 1.55;
+}
+/* 用例开关小卡（AI 设置 Q2） */
+.use-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.use-card {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  min-width: 0;
+  border: 1px solid var(--app-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--app-surface) 96%, var(--app-bg0));
+}
+.use-card-txt { min-width: 0; }
+.use-card-title { display: block; font-size: 13.5px; font-weight: 650; color: var(--app-text); }
+.use-card-hint { display: block; margin-top: 4px; font-size: 12px; color: var(--app-soft); line-height: 1.45; }
+@media (max-width: 900px) {
+  .field-grid.cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hazard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .use-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 768px) {
+  .field-grid,
+  .field-grid.cols-3 { grid-template-columns: 1fr; }
+  .hazard-grid { grid-template-columns: 1fr; }
+  .chan-head .chan-hint { margin-left: 0; max-width: 100%; }
+}

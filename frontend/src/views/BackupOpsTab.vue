@@ -1,66 +1,52 @@
 <template>
   <PageShell>
-    <template #actions>
-      <el-space wrap>
-        <el-button size="small" @click="fetchMaintenance" :loading="maintenanceLoading">刷新列表</el-button>
-        <el-button size="small" type="primary" :loading="maintenanceLoading || backupBusy === 'create'" :disabled="!!backupBusy && backupBusy !== 'create'" @click="onCreateBackup">创建备份</el-button>
-        <el-upload
-          :auto-upload="false"
-          :show-file-list="false"
-          accept=".db,.bak"
-          :on-change="onRestoreUploadedBackup"
-        >
-          <el-button size="small" type="danger" plain :loading="maintenanceLoading || backupBusy === 'upload'" :disabled="!!backupBusy && backupBusy !== 'upload'">上传并恢复</el-button>
-        </el-upload>
-      </el-space>
-    </template>
-
-    <!-- 四个状态数：一行、发丝线分格（新版排版） -->
-    <div class="app-stat-row cols-4">
+    <!-- 状态带：最近有没有备、能不能恢复 -->
+    <div class="app-stat-row cols-4" aria-label="数据备份状态速览">
       <div class="app-stat-cell">
         <div class="k">数据库</div>
-        <div class="v" :class="maintenanceStatus.db_exists ? 'ok' : 'warn'" :title="dbSizeText">{{ maintenanceStatus.db_exists ? '正常' : '未找到' }}</div>
+        <div class="v" :class="maintenanceStatus.db_exists ? 'ok' : 'warn'">{{ maintenanceStatus.db_exists ? '正常' : '未找到' }}</div>
+        <div class="s">数据库大小 {{ dbSizeText }}</div>
       </div>
       <div class="app-stat-cell">
         <div class="k">备份数量</div>
         <div class="v" :class="backupCount ? 'ok' : 'warn'">{{ String(backupCount) }}</div>
+        <div class="s">共 {{ backupCount }} 份，都可下载 / 可恢复</div>
       </div>
       <div class="app-stat-cell">
         <div class="k">最近备份</div>
-        <div class="v" :title="String(maintenanceStatus.latest_backup || latestBackupText || '')">{{ latestBackupShort }}</div>
+        <div class="v">{{ latestBackupShort }}</div>
+        <div class="s">{{ maintenanceStatus.latest_backup || latestBackupText || '还没有备份，先「创建备份」' }}</div>
       </div>
       <div class="app-stat-cell">
         <div class="k">建议</div>
         <div class="v">先下本地</div>
+        <div class="s">恢复前会自动备份当前库，但仍建议先「下载」留一份</div>
       </div>
     </div>
 
-    <el-alert
-      title="恢复属于高风险操作：系统会先自动备份当前库，但仍建议先下载最新备份到电脑。恢复后会刷新首页/持仓/交易。"
-      type="warning"
-      show-icon
-      :closable="false"
-      style="margin-bottom: 14px;"
-    />
-
+    <!-- Q1 有哪些备份、能下载 / 恢复哪一份 -->
     <el-card shadow="never" class="ops-card">
       <template #header>
         <div class="ops-card-head">
           <div>
-            <div class="ops-section-title">备份文件</div>
-            <div class="ops-hint">下载到本地最稳；恢复会覆盖当前库</div>
+            <div class="ops-section-title"><span class="ops-q">Q1</span>有哪些备份、能下载 / 恢复哪一份</div>
+            <div class="ops-hint">下载到本地最稳；恢复会覆盖当前库。创建备份后这张表会自动刷新。</div>
           </div>
-          <el-tag size="small" type="info">{{ backupCount }} 份</el-tag>
+          <div class="ops-card-actions">
+            <el-tag size="small" type="info" effect="light">{{ backupCount }} 份</el-tag>
+            <el-button size="small" @click="fetchMaintenance" :loading="maintenanceLoading">刷新列表</el-button>
+            <el-button size="small" type="primary" :loading="maintenanceLoading || backupBusy === 'create'" :disabled="!!backupBusy && backupBusy !== 'create'" @click="onCreateBackup">创建备份</el-button>
+          </div>
         </div>
       </template>
       <el-table :data="backups" stripe size="small" style="width:100%;" empty-text="暂无备份文件" v-loading="maintenanceLoading" aria-label="备份文件列表">
         <el-table-column prop="filename" label="备份文件" min-width="260" show-overflow-tooltip />
+        <el-table-column prop="created_at" label="创建时间" width="180" />
         <el-table-column label="大小" width="110" align="right" header-align="right">
           <template #default="scope">
             <span class="num-cell">{{ (Number(scope.row.size || 0) / 1024 / 1024).toFixed(2) }} MB</span>
           </template>
         </el-table-column>
-        <el-table-column prop="created_at" label="创建时间" width="180" />
         <el-table-column label="操作" width="220" align="center" header-align="center">
           <template #default="scope">
             <el-button type="primary" link size="small" :loading="backupBusy === 'download:' + scope.row.filename" :disabled="!!backupBusy" @click="onDownloadBackup(scope.row)">下载</el-button>
@@ -69,6 +55,49 @@
           </template>
         </el-table-column>
       </el-table>
+    </el-card>
+
+    <!-- Q2 恢复 / 上传恢复 / 删除（危险） -->
+    <el-card shadow="never" class="ops-card">
+      <template #header>
+        <div class="ops-card-head">
+          <div>
+            <div class="ops-section-title"><span class="ops-q">Q2</span>恢复 / 上传恢复 / 删除（危险）</div>
+            <div class="ops-hint">这三种操作会改动或删除现有数据，所以从日常操作里拆出来单独放，每一步都过二次确认。</div>
+          </div>
+          <el-tag size="small" type="danger" effect="light">高风险</el-tag>
+        </div>
+      </template>
+      <div class="hazard">
+        <div class="hazard-head">
+          <el-tag size="small" type="danger" effect="light">危险操作</el-tag>
+          <strong>上传并恢复</strong>
+          <div class="hazard-hint">把本地的 .db / .bak 传到服务器直接覆盖当前库，用于换机器或救急。</div>
+        </div>
+        <div class="hazard-body">
+          <el-upload
+            :auto-upload="false"
+            :show-file-list="false"
+            accept=".db,.bak"
+            :on-change="onRestoreUploadedBackup"
+          >
+            <el-button type="danger" plain :loading="maintenanceLoading || backupBusy === 'upload'" :disabled="!!backupBusy && backupBusy !== 'upload'">上传并恢复</el-button>
+          </el-upload>
+          <span class="hazard-hint">接受 .db / .bak；选完文件即进入二次确认</span>
+        </div>
+
+        <el-alert
+          title="恢复属于高风险操作：系统会先自动备份当前库，但仍建议先下载最新备份到电脑。恢复后会刷新首页/持仓/交易。"
+          type="warning"
+          show-icon
+          :closable="false"
+          style="margin-top: 14px;"
+        />
+
+        <p class="hazard-note">
+          表里的「恢复」与「删除」用同一套二次确认：「确定恢复备份 xxx？会先自动备份当前数据库。」/「确定删除备份 xxx？删除后无法从系统内恢复。」
+        </p>
+      </div>
     </el-card>
   </PageShell>
 </template>
@@ -133,6 +162,12 @@ const latestBackupShort = computed(() => {
   justify-content: space-between;
   align-items: flex-start;
   gap: 10px;
+  flex-wrap: wrap;
+}
+.ops-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex-wrap: wrap;
 }
 .ops-section-title {

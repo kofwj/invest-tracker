@@ -8,22 +8,26 @@
       </el-space>
     </template>
 
-    <div class="app-stat-row cols-4">
+    <div class="app-stat-row cols-4" aria-label="AI 设置状态速览">
       <div class="app-stat-cell">
         <div class="k">总开关</div>
         <div class="v" :class="form.enabled ? 'ok' : 'warn'">{{ form.enabled ? '已开启' : '已关闭' }}</div>
+        <div class="s">关掉后晚报 / 预警 / 规则都不调用，配置保留</div>
       </div>
       <div class="app-stat-cell">
         <div class="k">影子模式</div>
         <div class="v" :class="form.shadow_mode ? 'warn' : 'ok'">{{ form.shadow_mode ? '只记日志' : '正式拦截' }}</div>
+        <div class="s">{{ form.shadow_mode ? '不拦截；关掉才是「正式拦截」' : '已按正式规则拦截' }}</div>
       </div>
       <div class="app-stat-cell">
         <div class="k">今日调用</div>
         <div class="v">{{ usageText }}</div>
+        <div class="s">上限填 0＝不限；只数成功的正式调用</div>
       </div>
       <div class="app-stat-cell">
         <div class="k">密钥</div>
         <div class="v" :class="status.api_key_configured ? 'ok' : 'warn'">{{ status.api_key_configured ? '已配置' : '未配置' }}</div>
+        <div class="s">{{ status.api_key_masked || '界面只回显打码值' }}</div>
       </div>
     </div>
 
@@ -36,109 +40,179 @@
       style="margin-bottom: 14px;"
     />
 
+    <!-- Q1 连到哪个模型 -->
     <el-card shadow="never" class="ops-card">
       <template #header>
         <div class="ops-card-head">
           <div>
-            <div class="ops-section-title">连接</div>
+            <div class="ops-section-title"><span class="ops-q">Q1</span>连到哪个模型</div>
             <div class="ops-hint">OpenAI 兼容 POST /v1/chat/completions；没写 /v1 会自动补。密钥留空表示不改，勾选「清除」才删掉已存密钥。</div>
           </div>
+          <el-tag size="small" :type="status.api_key_configured ? 'success' : 'info'" effect="light">
+            {{ status.api_key_configured ? '密钥已配置' : '密钥未配置' }}
+          </el-tag>
         </div>
       </template>
       <el-form label-position="top">
-        <el-row :gutter="16">
-          <el-col :xs="24" :sm="8">
-            <el-form-item label="总开关">
+        <div class="field-grid">
+          <div class="field">
+            <div class="field-label">总开关</div>
+            <div class="field-row">
               <el-switch v-model="form.enabled" active-text="开" inactive-text="关" />
-            </el-form-item>
-          </el-col>
-          <el-col :xs="24" :sm="8">
-            <el-form-item label="影子模式">
+            </div>
+            <div class="ops-hint">关掉后晚报 / 预警 / 规则都不调用，配置保留。</div>
+          </div>
+          <div class="field">
+            <div class="field-label">影子模式</div>
+            <div class="field-row">
               <el-switch v-model="form.shadow_mode" active-text="开" inactive-text="关" />
-            </el-form-item>
-          </el-col>
-          <el-col :xs="24" :sm="8">
-            <el-form-item label="每日上限">
+            </div>
+            <div class="ops-hint">
+              {{ form.shadow_mode ? '只写审计日志、不拦截推送；确认效果后再关掉。' : '已按正式规则拦截；开启影子模式可先只记日志。' }}
+            </div>
+          </div>
+          <div class="field">
+            <div class="field-label">每日上限</div>
+            <div class="field-row">
               <el-input-number v-model="form.daily_call_cap" :min="0" :max="10000" :step="1" />
-            </el-form-item>
-          </el-col>
-          <el-col :xs="24" :md="12">
-            <el-form-item label="Base URL">
-              <el-input v-model="form.base_url" clearable placeholder="https://api.deepseek.com 或 …/v1" />
-            </el-form-item>
-          </el-col>
-          <el-col :xs="24" :md="12">
-            <el-form-item label="模型">
-              <el-space wrap>
-                <el-select
-                  v-model="form.model"
-                  filterable
-                  allow-create
-                  default-first-option
-                  clearable
-                  placeholder="deepseek-chat"
-                  style="min-width: 200px;"
-                >
-                  <el-option v-for="m in modelOptions" :key="m" :label="m" :value="m" />
-                </el-select>
-                <el-button size="small" :loading="modelsLoading" @click="fetchModels">拉取模型</el-button>
-              </el-space>
-              <div class="ops-hint">模型名要和供应方 /models 里的 id 完全一致（区分大小写、不能带空格）；先保存 base_url + 密钥再拉取</div>
-              <div v-if="modelsHint" class="ops-hint" :class="{ 'ops-warn': !!modelsError || modelUnknown }">{{ modelsHint }}</div>
-            </el-form-item>
-          </el-col>
-          <el-col :xs="24" :md="12">
-            <el-form-item label="API Key">
-              <el-input v-model="form.api_key" type="password" show-password clearable :placeholder="status.api_key_masked || '留空不改'" :disabled="clearApiKey" />
-              <el-checkbox v-model="clearApiKey" style="margin-top:6px;">清除已存密钥</el-checkbox>
-            </el-form-item>
-          </el-col>
-          <el-col :xs="24" :md="12">
-            <el-form-item label="超时（秒）">
+            </div>
+            <div class="ops-hint">0＝不限。只数当天成功且不是试推的调用（今天 {{ Number(status.today_used ?? status.today_calls ?? 0) }} 次）。</div>
+          </div>
+          <div class="field">
+            <div class="field-label">超时（秒）</div>
+            <div class="field-row">
               <el-input-number v-model="form.timeout_seconds" :min="1" :max="120" :step="1" />
-            </el-form-item>
-          </el-col>
-        </el-row>
+            </div>
+            <div class="ops-hint">1–120 秒；超时算失败并进审计日志。</div>
+          </div>
+          <div class="field">
+            <div class="field-label">
+              API Key
+              <span v-if="status.api_key_configured" class="cred-flag">库里已有</span>
+            </div>
+            <el-input v-model="form.api_key" type="password" show-password clearable :placeholder="status.api_key_masked || '留空不改'" :disabled="clearApiKey" />
+            <div class="ops-hint">只存库、不回明文；想删掉看下面的「危险操作」。</div>
+          </div>
+          <div class="field">
+            <div class="field-label">模型</div>
+            <div class="field-row">
+              <el-select
+                v-model="form.model"
+                filterable
+                allow-create
+                default-first-option
+                clearable
+                placeholder="deepseek-chat"
+                style="min-width: 200px;"
+              >
+                <el-option v-for="m in modelOptions" :key="m" :label="m" :value="m" />
+              </el-select>
+              <el-button size="small" :loading="modelsLoading" @click="fetchModels">拉取模型</el-button>
+            </div>
+            <div class="ops-hint">模型名要和供应方 /models 里的 id 完全一致（区分大小写、不能带空格）；先保存 base_url + 密钥再拉取</div>
+            <div v-if="modelsHint" class="ops-hint" :class="{ 'ops-warn': !!modelsError || modelUnknown }">{{ modelsHint }}</div>
+          </div>
+          <div class="field span-2">
+            <div class="field-label">Base URL</div>
+            <div class="field-row">
+              <el-input v-model="form.base_url" clearable placeholder="https://api.deepseek.com 或 …/v1" />
+            </div>
+            <div class="ops-hint">可写 …/v1 也可只写域名，没写 /v1 会自动补。</div>
+          </div>
+        </div>
       </el-form>
+
+      <!-- 危险操作单独成组：清除已存密钥 -->
+      <div class="hazard">
+        <div class="hazard-head">
+          <el-tag size="small" type="danger" effect="light">危险操作</el-tag>
+          <strong>清除已存密钥</strong>
+          <div class="hazard-hint">勾选后点右上角「保存设置」会先弹一次确认，确认后删掉库里的 AI 密钥；服务器 .env 里的 AI_API_KEY 还能兜底，但页面里配的地址 + 模型会立刻用不了。</div>
+        </div>
+        <div class="hazard-body">
+          <el-checkbox v-model="clearApiKey">清除已存密钥</el-checkbox>
+        </div>
+        <p v-if="clearApiKey" class="hazard-note">
+          已勾选：保存时会先确认「确定清除库里已有的 AI 密钥？」，上面的 API Key 输入框同时锁定。
+        </p>
+      </div>
     </el-card>
 
+    <!-- Q2 哪些用例允许调用 -->
     <el-card shadow="never" class="ops-card">
       <template #header>
         <div class="ops-card-head">
           <div>
-            <div class="ops-section-title">用例开关</div>
-            <div class="ops-hint">先配底座；真正接晚报/预警/自然语言规则是后面的包</div>
+            <div class="ops-section-title"><span class="ops-q">Q2</span>哪些用例允许调用</div>
+            <div class="ops-hint">先配底座；真正接晚报 / 预警 / 自然语言规则是后面的包。用例关闭时后端返回 feature_disabled，不发请求。</div>
           </div>
+          <el-tag size="small" type="info" effect="light">已开 {{ enabledFeatureCount }} / 3</el-tag>
         </div>
       </template>
-      <el-space wrap>
-        <el-switch v-model="form.features.brief" active-text="晚报 brief" />
-        <el-switch v-model="form.features.alert_note" active-text="预警附言" />
-        <el-switch v-model="form.features.nl_rule" active-text="自然语言规则" />
-      </el-space>
+      <div class="use-grid">
+        <div class="use-card">
+          <el-switch v-model="form.features.brief" aria-label="晚报 brief 开关" />
+          <span class="use-card-txt">
+            <span class="use-card-title">晚报 brief</span>
+            <span class="use-card-hint">晚间简报正文用 AI 生成。{{ form.features.brief ? '已开启' : '未开启' }}。</span>
+          </span>
+        </div>
+        <div class="use-card">
+          <el-switch v-model="form.features.alert_note" aria-label="预警附言开关" />
+          <span class="use-card-txt">
+            <span class="use-card-title">预警附言</span>
+            <span class="use-card-hint">价格预警后面附一句解读。{{ form.features.alert_note ? '已开启' : '未开启' }}。</span>
+          </span>
+        </div>
+        <div class="use-card">
+          <el-switch v-model="form.features.nl_rule" aria-label="自然语言规则开关" />
+          <span class="use-card-txt">
+            <span class="use-card-title">自然语言规则</span>
+            <span class="use-card-hint">把自然语言描述翻成纪律规则。{{ form.features.nl_rule ? '已开启' : '未开启' }}。</span>
+          </span>
+        </div>
+      </div>
     </el-card>
 
+    <!-- Q3 最近一次连接测试 -->
     <el-card v-if="lastTest" shadow="never" class="ops-card">
       <template #header>
         <div class="ops-card-head">
           <div>
-            <div class="ops-section-title">最近一次连接测试</div>
-            <div class="ops-hint">看真实请求 URL，base_url 拼错一眼能看出来</div>
+            <div class="ops-section-title"><span class="ops-q">Q3</span>最近一次连接测试</div>
+            <div class="ops-hint">看真实请求 URL，base_url 拼错一眼能看出来。</div>
           </div>
+          <el-tag size="small" :type="lastTest.ok ? 'success' : 'danger'" effect="light">{{ lastTest.ok ? '成功' : '失败' }}</el-tag>
         </div>
       </template>
-      <div class="ops-hint">{{ lastTest.ok ? '成功' : ('失败 ' + (lastTest.reason || '')) }} · {{ lastTest.duration_ms || 0 }} ms · HTTP {{ lastTest.status == null ? '—' : lastTest.status }}</div>
+      <div class="app-brief cols-3">
+        <div class="app-brief-cell">
+          <div class="k">结果</div>
+          <div class="v" :class="lastTest.ok ? 'ok' : 'warn'">{{ lastTest.ok ? '成功' : ('失败 ' + (lastTest.reason || '')) }}</div>
+        </div>
+        <div class="app-brief-cell">
+          <div class="k">耗时</div>
+          <div class="v">{{ lastTest.duration_ms || 0 }} ms</div>
+        </div>
+        <div class="app-brief-cell">
+          <div class="k">HTTP</div>
+          <div class="v">{{ lastTest.status == null ? '—' : lastTest.status }}</div>
+        </div>
+      </div>
       <div v-if="lastTest.provider_error" class="ops-hint ops-warn">供应方原文：{{ lastTest.provider_error }}</div>
+      <div class="ops-hint">真实请求 URL</div>
       <div class="ops-url">{{ lastTest.request_url || '（未配置 base_url）' }}</div>
     </el-card>
 
+    <!-- Q4 最近调用（审计） -->
     <el-card shadow="never" class="ops-card">
       <template #header>
         <div class="ops-card-head">
           <div>
-            <div class="ops-section-title">最近调用</div>
-            <div class="ops-hint">最多 10 条，不含密钥</div>
+            <div class="ops-section-title"><span class="ops-q">Q4</span>最近调用（审计）</div>
+            <div class="ops-hint">最多 10 条，不含密钥；失败的写清原因，方便对账「今天到底烧了几次」。</div>
           </div>
+          <el-tag size="small" type="info" effect="light">{{ (status.recent || []).length }} 条</el-tag>
         </div>
       </template>
       <el-table :data="status.recent || []" size="small" style="width:100%;" empty-text="暂无调用" max-height="360" aria-label="AI 调用审计">
@@ -159,7 +233,7 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import PageShell from '../components/PageShell.vue';
 import api from '../api/index.js';
 
@@ -185,6 +259,10 @@ const usageText = computed(() => {
   if (cap <= 0) return `${used} / 不限`;
   return `${used} / ${cap}`;
 });
+// 状态带 / Q2 卡头「已开 n / 3」（只做展示计数，不改三个开关本身）
+const enabledFeatureCount = computed(
+  () => [form.features.brief, form.features.alert_note, form.features.nl_rule].filter(Boolean).length,
+);
 function applyStatus(data, { writeForm = true } = {}) {
   status.value = data || {};
   if (!writeForm) return;
@@ -257,6 +335,18 @@ async function onSave() {
   if (saving.value) return;
   saving.value = true;
   try {
+    // 破坏性操作（清除已存密钥）补一次二次确认：勾了才问，取消就不发保存请求。
+    if (clearApiKey.value) {
+      try {
+        await ElMessageBox.confirm(
+          '确定清除库里已有的 AI 密钥？\n1）清除后三个用例都无法调用，直到重新填入密钥\n2）审计日志与用量统计不受影响\n3）服务器 .env 里有 AI_API_KEY 时仍会兜底',
+          '清除已存 AI 密钥',
+          { type: 'warning' },
+        );
+      } catch {
+        return;
+      }
+    }
     const payload = {
       enabled: form.enabled,
       shadow_mode: form.shadow_mode,
@@ -334,5 +424,11 @@ onUnmounted(() => {
   font-size: 13px;
   word-break: break-all;
   color: var(--app-text);
+  font-family: "SF Mono", Menlo, Consolas, ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+.cred-flag {
+  color: var(--app-ok, #3d9a5f);
+  font-weight: 600;
 }
 </style>
