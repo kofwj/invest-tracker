@@ -293,6 +293,13 @@ chmod +x scripts/verify_vps_deploy.sh scripts/cron_sync_prices.sh
 - [ ] 同步最新价 / 半自动分红可用
 - [ ] `data/`、`backups/`、`.env` 未被删除
 
+> **前端校验需要 Node ≥ 22.19（2026-09-25 起）**：`scripts/check.sh` 里的 vitest 依赖
+> `jsdom@30` → `undici@8`，后者声明 `engines: node >=22.19`；旧 Node 上 vitest 会在启动阶段
+> 全挂（`TypeError: webidl.util.markAsUncloneable`），表现为「0 用例 + N errors」这种假红。
+> CI 的 frontend job 与 `frontend/Dockerfile` 已固定 Node 22；VPS 系统 node 目前是 20.19.2，
+> `check.sh` 会自动跳过前端单测并打印原因（不影响部署本身）。要在 VPS 上也能跑这一步：
+> `curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt-get install -y nodejs`
+
 ## 9. 定时同步最新价
 
 仓库提供 `scripts/cron_sync_prices.sh`：优先 `docker compose exec` 调用后端同步（绕过密码门与 OAuth），失败再回退本机 curl。

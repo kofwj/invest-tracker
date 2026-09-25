@@ -160,7 +160,15 @@ fi
 
 echo "==> Running frontend unit tests (vitest)"
 if command -v npm >/dev/null 2>&1; then
-  npm --prefix frontend test
+  # jsdom 30 → undici 8 要求 node >=22.19。旧 Node 上 vitest 会在启动阶段全挂
+  # （TypeError: webidl.util.markAsUncloneable），表现为「0 用例 + N errors」这种假红。
+  # CI 与 frontend/Dockerfile 已固定 Node 22；这里对本地/VPS 的旧 Node 明确跳过并说清原因。
+  if node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||(a===22&&b>=19)?0:1)' 2>/dev/null; then
+    npm --prefix frontend test
+  else
+    echo "    ⚠ node $(node -v 2>/dev/null || echo '?') 不满足 >=22.19，跳过前端单测（jsdom 30 依赖 undici 8）" >&2
+    echo "      CI 与 frontend/Dockerfile 已是 Node 22；本机升级 node 后再跑这一步。" >&2
+  fi
 else
   echo "npm not found; skipping frontend unit tests"
 fi

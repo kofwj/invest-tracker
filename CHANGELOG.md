@@ -4,6 +4,40 @@
 版本号单一来源 `backend/version.py`；发布流程：改那里 → 本文件记版本 → `git tag vX.Y.Z`。生产部署以分支 `deploy/vps` 为准。
 
 ---
+
+## [1.0.5] — 2026-09-25 — AI 层第一批（A1/A2/R1/R2 + A3 晚报归因）+ 供应商接入修补
+
+默认关闭的 AI 层从底座做到「晚报归因段」，并把接入过程踩到的两个坑（Cloudflare 按 UA 拦、
+模型名必须精确匹配）修进代码；顺带修掉长期红的前端 CI 与一个时区型 flaky 测试。
+
+- **A1 底座与配置页**（`backend/ai_client.py`、`routers_ai.py`、`frontend/src/views/AiOpsTab.vue`、`schema.py`）：
+  OpenAI 兼容客户端（只用 urllib）、密钥只以打码回显、`ai_call_log` 审计、日上限只数当天
+  `ok=1` 且 `feature != 'test'` 的成功调用；schema v18 建 AI 审计表 + 四张原因缓存表。
+- **A2 脱敏与校验**（`backend/ai_payload.py`）：payload 逐字段白名单构造（禁止整字典透传），
+  movers 只留 `code/name/change_pct`（贡献只用于排序）；输出侧校验来源可溯、数字可溯、
+  推测措辞与因果措辞。
+- **R1/R2 原因缓存**（`reason_sources.py`、`reason_cache.py`）：akshare 四个抓取包装（公告传
+  `YYYYMMDD`、回看 3 天、按天 150s / 整批 300s 预算）、新闻/公告/市场新闻/异动四张表、
+  异动 15 分钟节流、30 天保留，抓取全程不持写锁。
+- **A3 晚报归因段**（`backend/ai_brief.py`、`portfolio_helpers.py`）：注入点选
+  `send_evening_brief`（`GET /evening-brief` 预览只读当日缓存、绝不调模型），按日缓存、
+  空数据短路为固定句、影子模式只写日志；brief 预算 120s、前端推送超时 180s
+  （`scripts/check.sh` 有「前端超时 > 后端预算」断言兜底）。
+- **供应商接入修补**（`ai_client.py`、`routers_ai.py`、`AiOpsTab.vue`）：请求自带
+  `User-Agent`（urllib 默认 UA 会被供应方前的 Cloudflare 判 1010 → 403）、4xx/5xx 透出
+  供应方原文、新增 `GET /ai/models` 与设置页「拉取模型」。
+- **工程**（`.github/workflows/ci.yml`、`frontend/Dockerfile`、`frontend/package.json`、`scripts/check.sh`）：
+  CI 前端 job 与前端构建阶段升到 Node 22（`jsdom@30` → `undici@8` 声明 `node >=22.19`，
+  原先 Node 20 让 vitest 的 21 个文件启动即挂，表现为「0 用例 + 21 errors」）；action 升 v7；
+  `check.sh` 增加 Node 版本守卫与上述超时断言。
+- **修复**（`tests/test_bugfix_regressions_20260830.py`）：分红「拒绝未来日期」测试用系统时区
+  造 today/tomorrow，在 UTC 16:00–24:00（= 上海次日 00:00–08:00）窗口必然假红；改用
+  `database.local_today_iso()`。
+
+验证：后端 386 passed、前端 177 passed、`ruff` clean、`scripts/check.sh` 全绿；CI 两个 job 全绿；
+VPS `verify_vps_deploy.sh` OK=14 / WARN=0 / FAIL=0，`/api/health` 报 `1.0.5`。
+
+---
 ## [未发布 · 第十三轮] — AI 层第一批（A1/A2/R1/R2）+ A3 晚报归因
 
 默认关闭。OpenAI 兼容 `POST /v1/chat/completions`，无厂商 SDK。schema 升到 v19
@@ -60,6 +94,11 @@
   `TypeError: webidl.util.markAsUncloneable is not a function`（表现为「0 用例 + 21 errors」，
   后端 job 一直正常），前端 job 因此长期红。
 - `frontend/package.json` 增 `engines.node >=22.19.0`，让这类版本漂移在安装阶段就能看见。
+- GitHub Actions 升到 v7（`actions/checkout`、`actions/setup-python`、`actions/setup-node`）：
+  旧版自身跑在 Node 20 runtime，GitHub 强制在 24 上跑并每次 CI 打 deprecation annotation。
+- `scripts/check.sh` 加 Node 版本守卫：node < 22.19 时明确报「跳过前端单测（jsdom 30 依赖
+  undici 8）」而不是假红——VPS 系统 node 是 20.19.2，在那台机器上跑 check.sh 不会再看到
+  「0 用例 + 21 errors」。同时加了「前端推送超时 > brief 预算」的断言。
 
 ---
 

@@ -13,8 +13,10 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      # action 自身也升到 v7：checkout@v4 / setup-python@v5 跑在 Node 20 runtime，
+      # GitHub 强制在 24 上跑并每次 CI 打 deprecation annotation。用法不变。
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
@@ -41,8 +43,8 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           # jsdom 30 → undici 8 声明 engines: node >=22.19。CI 原先跑 Node 20，
           # vitest 的 21 个文件在启动阶段就 TypeError（webidl.util.markAsUncloneable
