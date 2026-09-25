@@ -1,3 +1,4 @@
+import { setAppTimezone } from '../utils/index.js';
 /**
  * App bootstrap and initialization logic.
  * Extracted from main.js: bootstrapAfterAuth + onMounted auth + initial data loads.
@@ -11,6 +12,7 @@ const createAppInit = ({
     queryCashFlows,
     fetchSnapshots,
     fetchMaintenance,
+    refreshLocalDates,
 }) => {
     let bootstrapAfterAuth = async () => {};
 
@@ -29,8 +31,14 @@ const createAppInit = ({
     };
 
     bootstrapAfterAuth = bootstrap;
-
     const setupOnMounted = async () => {
+        try {
+            const healthRes = await api.getHealth();
+            setAppTimezone(healthRes.data?.timezone);
+            if (typeof refreshLocalDates === 'function') refreshLocalDates();
+        } catch (e) {
+            console.error('获取应用时区失败，使用默认时区', e);
+        }
         try {
             const statusRes = await api.getAuthStatus();
             authEnabled.value = statusRes.data.auth_enabled;

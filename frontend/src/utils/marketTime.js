@@ -1,3 +1,4 @@
+import { getAppTimezone } from './index.js';
 /**
  * 交易时段相关的纯函数。
  *
@@ -11,7 +12,15 @@ const MARKET_CLOSE_MINUTES = 15 * 60 + 30;
 /** 一天中的第几分钟（0-1439） */
 const minutesOfDay = (now = new Date()) => {
   const d = now instanceof Date ? now : new Date(now);
-  return d.getHours() * 60 + d.getMinutes();
+  if (Number.isNaN(d.getTime())) return NaN;
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: getAppTimezone(),
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(d);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return Number(values.hour) * 60 + Number(values.minute);
 };
 
 /**

@@ -1,21 +1,62 @@
 // Shared frontend utility helpers. Keep this file framework-agnostic.
 const normalizeText = (value) => String(value || '').trim().toLowerCase();
 
+const DEFAULT_APP_TIMEZONE = 'Asia/Shanghai';
+let appTimezone = DEFAULT_APP_TIMEZONE;
+
+const setAppTimezone = (timezone) => {
+    const candidate = String(timezone || '').trim();
+    if (!candidate) return appTimezone;
+    try {
+        new Intl.DateTimeFormat('en-US', { timeZone: candidate }).format();
+        appTimezone = candidate;
+    } catch {
+        // 后端配置异常时保留默认时区，不让日期工具整体失效。
+    }
+    return appTimezone;
+};
+
+const getAppTimezone = () => appTimezone;
+
+const datePartsInTimezone = (value = new Date()) => {
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: appTimezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    }).formatToParts(value);
+    const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return { year: byType.year, month: byType.month, day: byType.day };
+};
+
+const isoDateToUtcDay = (value) => {
+    const match = String(value || '').slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return null;
+    const day = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+    return Number.isNaN(day) ? null : day;
+};
+
+const addIsoDays = (isoDate, days) => {
+    const base = isoDateToUtcDay(isoDate);
+    if (base == null) return null;
+    const shifted = new Date(base + Number(days || 0) * 86400000);
+    return shifted.toISOString().slice(0, 10);
+};
+
 const daysUntil = (dateStr) => {
     if (!dateStr) return null;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const due = new Date(dateStr + 'T00:00:00');
-    if (Number.isNaN(due.getTime())) return null;
-    return Math.ceil((due - today) / 86400000);
+    const due = isoDateToUtcDay(dateStr);
+    const today = isoDateToUtcDay(todayLocalIso());
+    if (due == null || today == null) return null;
+    return Math.round((due - today) / 86400000);
 };
 
 /** Inclusive day count between two YYYY-MM-DD dates (start → end). */
 const daysBetween = (startStr, endStr) => {
     if (!startStr || !endStr) return null;
-    const start = new Date(String(startStr) + 'T00:00:00');
-    const end = new Date(String(endStr) + 'T00:00:00');
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+    const start = isoDateToUtcDay(startStr);
+    const end = isoDateToUtcDay(endStr);
+    if (start == null || end == null) return null;
     return Math.round((end - start) / 86400000);
 };
 
@@ -111,11 +152,8 @@ const holdingLifetimeProfitRate = (row) => {
 };
 
 const todayLocalIso = () => {
-    const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
+    const { year, month, day } = datePartsInTimezone();
+    return `${year}-${month}-${day}`;
 };
 
 /** Simple interest for N days at annual rate % (365-day year). */
@@ -191,6 +229,11 @@ const summarizeDailyPnl = (rows = [], days = 0) => {
 };
 
 export {
+    DEFAULT_APP_TIMEZONE,
+    setAppTimezone,
+    getAppTimezone,
+    datePartsInTimezone,
+    addIsoDays,
     normalizeText,
     daysUntil,
     daysBetween,

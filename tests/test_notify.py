@@ -134,6 +134,25 @@ def test_notify_settings_roundtrip(client):
     assert "telegram" in data["event_channels"]["price_alert"]
 
 
+def test_empty_event_mapping_does_not_fallback_to_configured_channels(client, app_module, monkeypatch):
+    """明确取消事件的全部通道后，不应回退到所有已配置通道。"""
+    from unittest.mock import patch
+
+    monkeypatch.setenv("NOTIFY_ENABLED", "1")
+    monkeypatch.setenv("NOTIFY_FEISHU_WEBHOOK", "https://93.184.216.34/feishu")
+    with app_module.get_db_connection(app_module.DB_PATH) as conn:
+        from notify import dispatch, save_notify_settings
+
+        save_notify_settings(conn, enabled=True, event_channels={"ops": ""})
+        conn.commit()
+        with patch("notify.send_to_channel") as send:
+            result = dispatch("body", event="ops", conn=conn, force=True)
+        assert result["sent"] is False
+        assert result["reason"] == "no_channels"
+        assert result["results"] == []
+        send.assert_not_called()
+
+
 def test_legacy_feishu_env_still_configures_channel(monkeypatch):
     from notify import channel_config
 

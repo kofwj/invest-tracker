@@ -1,24 +1,19 @@
 import api from '../api/index.js';
-import { buildDailyPnlRows, formatMoney, summarizeDailyPnl, todayLocalIso } from '../utils/index.js';
+import { addIsoDays, buildDailyPnlRows, datePartsInTimezone, formatMoney, summarizeDailyPnl, todayLocalIso } from '../utils/index.js';
 import { computed } from 'vue';
 
 function shiftIsoDays(days) {
-    const d = new Date();
-    d.setHours(12, 0, 0, 0);
-    d.setDate(d.getDate() + days);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
+    return addIsoDays(todayLocalIso(), days);
 }
 
 function yearStartIso() {
-    return `${new Date().getFullYear()}-01-01`;
+    const { year } = datePartsInTimezone();
+    return `${year}-01-01`;
 }
 
 function monthStartIso() {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+    const { year, month } = datePartsInTimezone();
+    return `${year}-${month}-01`;
 }
 
 const createPerformanceModule = ({

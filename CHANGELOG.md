@@ -38,6 +38,52 @@
 VPS `verify_vps_deploy.sh` OK=14 / WARN=0 / FAIL=0，`/api/health` 报 `1.0.5`。
 
 ---
+
+## [未发布 · 第十四轮] — 时区口径统一 + 收益期末/月度口径修正
+
+「今天」以前有两套尺子：后端按 `APP_TIMEZONE`，前端按浏览器本地时区。浏览器不在上海时
+（换机器、出差、CI runner 的 UTC），交易时段判定、表单默认日期、YTD/月度窗口都会错。这一轮把
+前端的「今天」统一到应用时区，并修正收益里三处与期末/外部现金流相关的口径。
+
+### 前端：时区统一（`utils/index.js`、`utils/marketTime.js`）
+
+- 新增 `setAppTimezone/getAppTimezone/datePartsInTimezone/addIsoDays`；`todayLocalIso`、
+  `daysUntil`、`daysBetween` 与 `performance.js` 的年/月/日移位全部改走应用时区 + UTC 日算术
+  （原实现用 `new Date().getFullYear()/setHours()`，在非上海机器上会差一天）。
+- `marketTime.minutesOfDay` 按应用时区解释时刻：交易时段守卫不再取决于"看页面的人在哪"。
+- `appInit` 启动时先取 `/api/health` 的 `timezone` 写入，并刷新各表单默认日期
+  （`main.js` 新增 `refreshLocalDates`）；取不到时保留默认（Asia/Shanghai），不阻塞登录流程。
+- `frontend/tests/snapshot-reminder.test.js` 从"本地时区构造时刻"改成显式 `+08:00`：
+  原写法在 UTC runner 上会让 14 条断言整体翻转（CI 必红），断言内容一条没删。
+
+### 后端：收益期末与月度口径（`performance.py`）
+
+- `build_performance_summary` 支持历史期末：给了 `end_date` 就以该日期之前最后一条快照为期末，
+  `report_date` 贯穿 XIRR 终值日期、YTD 起点与上限、期间上限和 `as_of_date`，不再出现
+  "今天的总资产 配 历史区间的现金流"；该日期之前**没有任何快照**时整体回退当前口径
+  （`as_of_date` 与金额保持自洽）。
+- `build_performance_timeline` 的流水也按 `end_date` 截断（原先只截快照，历史区间仍会吃到期后流水）。
+- `build_monthly_stats` 剔除月末之间的外部投入/取出（`_flows_between((lo, hi])`，与 `_daily_returns`
+  同口径）：转入不再被算成"当月收益"。
+- 收益窗口新增 `_flow_is_after_snapshot`：同一天的流水用 `created_at` 判定是否已被快照包含
+  （老数据缺 `created_at` 时回退旧口径），并删掉因此失用的 `_net_in_since`。
+
+### 后端：推送事件路由（`notify.py`）
+
+- 事件→通道映射**显式为空的**不再 fallback 到"所有已配置通道"：把某事件的通道全部清掉就是
+  不想再收到它，之前会被兜底逻辑重新打开。
+
+### 测试
+
+- 新增 `tests/test_performance_regressions_new.py`：期末资产与期间口径、时间线按区间筛选、
+  月度统计剔除外部流水，以及 `_flow_is_after_snapshot` 的同日先后 / 缺失回退 / 跨日，
+  外加一条端到端用例（今年窗口按 `created_at` 把"快照之后转入的钱"从收益里扣掉）。
+- `tests/test_notify.py` 增加"空事件映射不回退"用例。
+
+验证：后端 393 passed、`ruff` clean、前端 177 passed（`TZ=UTC` 与本地各跑一次）、`npm run build`、
+`scripts/check.sh` 全绿；新测试另用"把同日判定改回旧行为"验证过确实会红。
+
+---
 ## [未发布 · 第十三轮] — AI 层第一批（A1/A2/R1/R2）+ A3 晚报归因
 
 默认关闭。OpenAI 兼容 `POST /v1/chat/completions`，无厂商 SDK。schema 升到 v19

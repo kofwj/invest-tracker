@@ -719,14 +719,16 @@ def dispatch(
         }
 
     if channels is None:
-        channels = event_channel_map(conn).get(event) or []
+        # None 表示调用方没有显式指定，才允许按「事件映射」解析。
+        # 映射为空是用户明确关闭该事件，不能再 fallback 到所有通道。
+        mapped_channels = event_channel_map(conn).get(event)
+        if mapped_channels is None:
+            cfg = channel_config(conn)
+            channels = [c for c in CHANNEL_KEYS if cfg[c]["configured"]]
+        else:
+            channels = mapped_channels
     else:
         channels = _parse_channel_list(",".join(channels) if not isinstance(channels, str) else channels)
-
-    if not channels:
-        # fallback: any configured channel
-        cfg = channel_config(conn)
-        channels = [c for c in CHANNEL_KEYS if cfg[c]["configured"]]
 
     if not channels:
         return {

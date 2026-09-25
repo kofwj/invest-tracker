@@ -128,10 +128,16 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-/** 固定本地时间（只假 Date，不动 setTimeout） */
+/** 固定上海时间（只假 Date，不动 setTimeout），与 CI 的系统时区无关。 */
+function shanghaiDate(hours, minutes) {
+  const hour = String(hours).padStart(2, '0');
+  const minute = String(minutes).padStart(2, '0');
+  return new Date(`2026-03-06T${hour}:${minute}:00+08:00`);
+}
+
 function freezeAt(hours, minutes) {
   vi.useFakeTimers({ toFake: ['Date'] });
-  vi.setSystemTime(new Date(2026, 2, 6, hours, minutes, 0));
+  vi.setSystemTime(shanghaiDate(hours, minutes));
 }
 
 // ---------------------------------------------------------------- 纯函数
@@ -142,18 +148,18 @@ describe('isAfterMarketClose 纯函数', () => {
   });
 
   it('14:00 → false，15:29 → false', () => {
-    expect(isAfterMarketClose(new Date(2026, 2, 6, 14, 0))).toBe(false);
-    expect(isAfterMarketClose(new Date(2026, 2, 6, 15, 29))).toBe(false);
+    expect(isAfterMarketClose(shanghaiDate(14, 0))).toBe(false);
+    expect(isAfterMarketClose(shanghaiDate(15, 29))).toBe(false);
   });
 
   it('15:30 → true（边界含等于），16:00 → true', () => {
-    expect(isAfterMarketClose(new Date(2026, 2, 6, 15, 30))).toBe(true);
-    expect(isAfterMarketClose(new Date(2026, 2, 6, 16, 0))).toBe(true);
+    expect(isAfterMarketClose(shanghaiDate(15, 30))).toBe(true);
+    expect(isAfterMarketClose(shanghaiDate(16, 0))).toBe(true);
   });
 
   it('早盘 09:35 → false，深夜 23:59 → true', () => {
-    expect(isAfterMarketClose(new Date(2026, 2, 6, 9, 35))).toBe(false);
-    expect(isAfterMarketClose(new Date(2026, 2, 6, 23, 59))).toBe(true);
+    expect(isAfterMarketClose(shanghaiDate(9, 35))).toBe(false);
+    expect(isAfterMarketClose(shanghaiDate(23, 59))).toBe(true);
   });
 });
 
@@ -167,26 +173,26 @@ function mountReminder({ now = null, todaySnapshotDone = false, createSnapshot =
 
 describe('SnapshotReminder 渲染时机', () => {
   it('收盘前（14:00）不渲染提示', async () => {
-    const { host, app } = mountReminder({ now: new Date(2026, 2, 6, 14, 0), todaySnapshotDone: false });
+    const { host, app } = mountReminder({ now: shanghaiDate(14, 0), todaySnapshotDone: false });
     await flush();
     expect(host.querySelector('.snapshot-reminder')).toBeNull();
     app.unmount();
   });
 
   it('15:29 还不渲染，15:30 起渲染（边界）', async () => {
-    const before = mountReminder({ now: new Date(2026, 2, 6, 15, 29), todaySnapshotDone: false });
+    const before = mountReminder({ now: shanghaiDate(15, 29), todaySnapshotDone: false });
     await flush();
     expect(before.host.querySelector('.snapshot-reminder')).toBeNull();
     before.app.unmount();
 
-    const after = mountReminder({ now: new Date(2026, 2, 6, 15, 30), todaySnapshotDone: false });
+    const after = mountReminder({ now: shanghaiDate(15, 30), todaySnapshotDone: false });
     await flush();
     expect(after.host.querySelector('.snapshot-reminder')).toBeTruthy();
     after.app.unmount();
   });
 
   it('收盘后还没记快照 → 提示 + 补记按钮', async () => {
-    const { host, app } = mountReminder({ now: new Date(2026, 2, 6, 16, 0), todaySnapshotDone: false });
+    const { host, app } = mountReminder({ now: shanghaiDate(16, 0), todaySnapshotDone: false });
     await flush();
     const box = host.querySelector('.snapshot-reminder');
     expect(box).toBeTruthy();
@@ -197,7 +203,7 @@ describe('SnapshotReminder 渲染时机', () => {
   });
 
   it('已经记过今天快照时不渲染', async () => {
-    const { host, app } = mountReminder({ now: new Date(2026, 2, 6, 16, 0), todaySnapshotDone: true });
+    const { host, app } = mountReminder({ now: shanghaiDate(16, 0), todaySnapshotDone: true });
     await flush();
     expect(host.querySelector('.snapshot-reminder')).toBeNull();
     app.unmount();
@@ -205,7 +211,7 @@ describe('SnapshotReminder 渲染时机', () => {
 
   it('todaySnapshotDone 从 false 变 true 时提示消失', async () => {
     const createSnapshot = vi.fn(async () => ({}));
-    const { host, app, ctx } = mountReminder({ now: new Date(2026, 2, 6, 16, 0), createSnapshot });
+    const { host, app, ctx } = mountReminder({ now: shanghaiDate(16, 0), createSnapshot });
     await flush();
     expect(host.querySelector('.snapshot-reminder')).toBeTruthy();
 
@@ -230,7 +236,7 @@ describe('SnapshotReminder 补记今日快照的 409 闸门', () => {
       return { data: { action: 'created' } };
     });
     const { host, app } = mountReminder({
-      now: new Date(2026, 2, 6, 16, 0),
+      now: shanghaiDate(16, 0),
       todaySnapshotDone: false,
       createSnapshot,
     });
@@ -256,7 +262,7 @@ describe('SnapshotReminder 补记今日快照的 409 闸门', () => {
       return {};
     });
     const { host, app } = mountReminder({
-      now: new Date(2026, 2, 6, 16, 0),
+      now: shanghaiDate(16, 0),
       todaySnapshotDone: false,
       createSnapshot,
     });
@@ -274,7 +280,7 @@ describe('SnapshotReminder 补记今日快照的 409 闸门', () => {
     let resolveFirst;
     const createSnapshot = vi.fn(() => new Promise((r) => { resolveFirst = r; }));
     const { host, app } = mountReminder({
-      now: new Date(2026, 2, 6, 16, 0),
+      now: shanghaiDate(16, 0),
       todaySnapshotDone: false,
       createSnapshot,
     });
@@ -297,7 +303,7 @@ describe('SnapshotReminder 补记今日快照的 409 闸门', () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const createSnapshot = vi.fn(async () => { throw new Error('boom'); });
     const { host, app } = mountReminder({
-      now: new Date(2026, 2, 6, 16, 0),
+      now: shanghaiDate(16, 0),
       todaySnapshotDone: false,
       createSnapshot,
     });

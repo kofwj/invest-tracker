@@ -441,6 +441,16 @@ const app = createApp({
             remark: ''
         });
 
+        const refreshLocalDates = () => {
+            const today = todayLocalIso();
+            cashFlowForm.value.date = today;
+            reconcileForm.value.date = today;
+            transForm.value.date = today;
+            holdingCorrectionDialog.value.form.date = today;
+            perfFlowForm.value.date = today;
+            brokerAsOfDate.value = today;
+        };
+
         const {
             hasPerfFlows,
             perfStoryToneType,
@@ -738,6 +748,7 @@ const app = createApp({
             queryCashFlows,
             fetchSnapshots,
             fetchMaintenance,
+            refreshLocalDates,
         });
 
         bootstrapAfterAuth = doBootstrap;

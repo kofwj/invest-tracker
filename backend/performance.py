@@ -30,6 +30,25 @@ def _iso_date_diff(later_iso, earlier_iso):
         return None
 
 
+def _flow_is_after_snapshot(flow, snapshot):
+    """判断流水是否发生在快照之后；同日用 created_at 消除日期粒度歧义。
+
+    老数据可能没有可靠 created_at，同日时回退为包含该流水，保持旧口径。
+    """
+    flow_date = str(flow.get("date") or "")[:10]
+    snapshot_date = str(snapshot.get("date") or "")[:10]
+    if flow_date > snapshot_date:
+        return True
+    if flow_date < snapshot_date:
+        return False
+    flow_created = flow.get("created_at")
+    snapshot_created = snapshot.get("created_at")
+    if not flow_created or not snapshot_created:
+        return True
+    normalize = lambda value: str(value).replace("T", " ")[:19]
+    return normalize(flow_created) > normalize(snapshot_created)
+
+
 def _xnpv(rate, cashflows):
     if not cashflows:
         return None
@@ -78,16 +97,27 @@ def get_total_assets_perf(conn):
 
 def build_performance_summary(conn, start_date=None, end_date=None):
     totals = compute_portfolio_totals(conn)
-    total_assets = totals["total_assets"]
     pending = totals["pending_purchase"]
     holdings = totals["holdings"]
 
     today = _local_today()
+    requested_end = str(end_date or today.isoformat())[:10]
+    end_snapshot = None
+    if end_date:
+        end_snapshot = conn.execute(
+            "SELECT date, total_assets, created_at FROM daily_snapshots WHERE date <= ? ORDER BY date DESC LIMIT 1",
+            (requested_end,),
+        ).fetchone()
+    # 没有截止日前快照就无法重建历史期末，回退完整当前口径，保持日期与金额自洽。
+    historical_end_unavailable = bool(end_date and not end_snapshot)
+    report_date = str(end_snapshot["date"] if end_snapshot else today.isoformat())
+    total_assets = float(end_snapshot["total_assets"]) if end_snapshot else totals["total_assets"]
+    flow_end = today.isoformat() if historical_end_unavailable else (report_date if end_snapshot else requested_end)
 
-    # 全周期流水
+    # 全周期流水（在历史区间请求中，截至有效报告日期）。
     all_flows = conn.execute(
         "SELECT * FROM portfolio_cash_flows WHERE date <= ? ORDER BY date, id",
-        (today.isoformat(),),
+        (flow_end,),
     ).fetchall()
     all_flows = [dict(f) for f in all_flows]
 
@@ -109,7 +139,7 @@ def build_performance_summary(conn, start_date=None, end_date=None):
         elif f["flow_type"] == "取出":
             xirr_flows.append((d, f["amount"]))
     if total_assets > 0:
-        xirr_flows.append((today, total_assets))
+        xirr_flows.append((dt_date.fromisoformat(report_date), total_assets))
     xirr_flows.sort(key=lambda x: x[0])
     xirr_val, xirr_status, xirr_msg = calculate_xirr(xirr_flows)
 
@@ -128,12 +158,12 @@ def build_performance_summary(conn, start_date=None, end_date=None):
     ytd_start = today.replace(month=1, day=1)
     ytd_snap = conn.execute(
         "SELECT * FROM daily_snapshots WHERE date BETWEEN ? AND ? ORDER BY date ASC LIMIT 1",
-        (ytd_start.isoformat(), today.isoformat()),
+        (ytd_start.isoformat(), report_date),
     ).fetchone()
     ytd_start_assets = dict(ytd_snap)["total_assets"] if ytd_snap else total_assets
     # 净投入以「起点快照日期」为界：快照市值已含其之前的投入，不能按日历起点重复扣
     ytd_cut = dict(ytd_snap)["date"] if ytd_snap else ytd_start.isoformat()
-    ytd_flows = [f for f in all_flows if f["date"] >= ytd_cut]
+    ytd_flows = [f for f in all_flows if ytd_cut <= f["date"] <= flow_end]
     ytd_net = sum(f["amount"] for f in ytd_flows if f["flow_type"] == "投入") - sum(
         f["amount"] for f in ytd_flows if f["flow_type"] == "取出"
     )
@@ -149,13 +179,13 @@ def build_performance_summary(conn, start_date=None, end_date=None):
 
     if start_date:
         snap = conn.execute(
-            "SELECT date, total_assets FROM daily_snapshots WHERE date >= ? ORDER BY date ASC LIMIT 1",
-            (start_date,),
+            "SELECT date, total_assets FROM daily_snapshots WHERE date >= ? AND date <= ? ORDER BY date ASC LIMIT 1",
+            (start_date, flow_end),
         ).fetchone()
         period_start_assets = float(snap["total_assets"]) if snap else None
         # 净投入以「起点快照日期」为界：快照市值已含其之前的投入，不能按日历起点重复扣
         period_cut = snap["date"] if snap else start_date
-        p_flows = [f for f in all_flows if f["date"] >= period_cut]
+        p_flows = [f for f in all_flows if period_cut <= f["date"] <= flow_end]
         p_in = sum(f["amount"] for f in p_flows if f["flow_type"] == "投入")
         p_out = sum(f["amount"] for f in p_flows if f["flow_type"] == "取出")
         period_net = p_in - p_out
@@ -212,8 +242,13 @@ def build_performance_summary(conn, start_date=None, end_date=None):
 
     monthly = None
     try:
-        tl_full = build_performance_timeline(conn)
-        monthly = build_monthly_stats(tl_full)
+        tl_full = build_performance_timeline(conn, start_date, end_date)
+        flow_map = {}
+        for flow in all_flows:
+            day = str(flow["date"])[:10]
+            amount = float(flow["amount"] or 0)
+            flow_map[day] = flow_map.get(day, 0.0) + (amount if flow["flow_type"] == "投入" else -amount)
+        monthly = build_monthly_stats(tl_full, flows_by_date=flow_map)
     except Exception as e:
         logger.warning("构建月度统计失败: %s", e)
 
@@ -241,7 +276,7 @@ def build_performance_summary(conn, start_date=None, end_date=None):
         logger.warning("build_performance_summary 专业指标计算失败: %s", e)
 
     return {
-        "as_of_date": today.isoformat(),
+        "as_of_date": report_date,
         "total_assets": round(total_assets, 2),
         "net_contribution": round(net_contribution, 2),
         "total_gain": round(total_gain, 2),
@@ -302,27 +337,22 @@ def build_performance_windows(conn):
     today_iso = today.isoformat()
 
     all_flows = conn.execute(
-        "SELECT date, flow_type, amount FROM portfolio_cash_flows WHERE date <= ? ORDER BY date, id",
+        "SELECT date, flow_type, amount, created_at FROM portfolio_cash_flows WHERE date <= ? ORDER BY date, id",
         (today_iso,),
     ).fetchall()
     all_flows = [dict(f) for f in all_flows]
 
-    def _net_in_since(start_iso):
-        return sum(
-            (f["amount"] if f["flow_type"] == "投入" else -f["amount"])
-            for f in all_flows if f["date"] >= start_iso
-        )
 
     def _snap_at_or_after(start_iso):
         row = conn.execute(
-            "SELECT date, total_assets FROM daily_snapshots WHERE date >= ? ORDER BY date ASC LIMIT 1",
+            "SELECT date, total_assets, created_at FROM daily_snapshots WHERE date >= ? ORDER BY date ASC LIMIT 1",
             (start_iso,),
         ).fetchone()
         return dict(row) if row else None
 
     def _snap_latest_before(cut_iso):
         row = conn.execute(
-            "SELECT date, total_assets FROM daily_snapshots WHERE date < ? ORDER BY date DESC LIMIT 1",
+            "SELECT date, total_assets, created_at FROM daily_snapshots WHERE date < ? ORDER BY date DESC LIMIT 1",
             (cut_iso,),
         ).fetchone()
         return dict(row) if row else None
@@ -339,8 +369,12 @@ def build_performance_windows(conn):
                 "stale_days": None,
             }
         start_assets = float(snap["total_assets"])
-        # 净投入从快照日期算起：快照值已含其之前的投入
-        net = _net_in_since(snap["date"])
+        # 快照当天只有在流水 created_at 晚于快照 created_at 时才计入后续现金流；
+        # 老数据缺 created_at 时回退为包含同日流水。
+        net = sum(
+            (f["amount"] if f["flow_type"] == "投入" else -f["amount"])
+            for f in all_flows if _flow_is_after_snapshot(f, snap)
+        )
         if start_assets > 0:
             gain = total_assets - start_assets - net
             gain_pct = gain / start_assets * 100
@@ -360,7 +394,10 @@ def build_performance_windows(conn):
     # stale_days 让前端能说明基准日；基准过旧时不能把这个数当"今天的收益"宣传。
     today_snap = _snap_latest_before(today_iso)
     if today_snap and float(today_snap["total_assets"]) > 0:
-        net = _net_in_since(today_snap["date"])
+        net = sum(
+            (f["amount"] if f["flow_type"] == "投入" else -f["amount"])
+            for f in all_flows if _flow_is_after_snapshot(f, today_snap)
+        )
         g = total_assets - float(today_snap["total_assets"]) - net
         today_win = {
             "key": "today",
@@ -411,16 +448,22 @@ def build_performance_windows(conn):
 def build_performance_timeline(conn, start_date=None, end_date=None):
     query = "SELECT * FROM daily_snapshots"
     params = []
-    if start_date and end_date:
-        query += " WHERE date BETWEEN ? AND ?"
-        params = [start_date, end_date]
-    elif start_date:
+    if start_date:
         query += " WHERE date >= ?"
-        params = [start_date]
+        params.append(start_date)
+    if end_date:
+        query += " AND date <= ?" if " WHERE " in query else " WHERE date <= ?"
+        params.append(end_date)
     query += " ORDER BY date ASC"
     snapshots = [dict(r) for r in conn.execute(query, params).fetchall()]
 
-    all_flows = [dict(r) for r in conn.execute("SELECT * FROM portfolio_cash_flows ORDER BY date, id").fetchall()]
+    flow_query = "SELECT * FROM portfolio_cash_flows"
+    flow_params = []
+    if end_date:
+        flow_query += " WHERE date <= ?"
+        flow_params.append(end_date)
+    flow_query += " ORDER BY date, id"
+    all_flows = [dict(r) for r in conn.execute(flow_query, flow_params).fetchall()]
 
     if not snapshots:
         return []
@@ -741,8 +784,8 @@ def calculate_sharpe(returns, rf_annual=0.02, periods=252):
     return round(sharpe, 2) if sharpe is not None else None
 
 
-def build_monthly_stats(timeline_rows):
-    """月度收益统计：最好/最差月、平均月回报、正收益月占比。"""
+def build_monthly_stats(timeline_rows, flows_by_date=None):
+    """月度收益统计；月末间外部投入/取出会从收益中剔除。"""
     if not timeline_rows or len(timeline_rows) < 2:
         return None
     from collections import defaultdict
@@ -750,38 +793,31 @@ def build_monthly_stats(timeline_rows):
     monthly = defaultdict(list)
     for r in timeline_rows:
         d = dt.fromisoformat(str(r.get("date", ""))[:10])
-        key = (d.year, d.month)
-        monthly[key].append((d, float(r.get("total_assets") or 0)))
-
+        monthly[(d.year, d.month)].append((d, float(r.get("total_assets") or 0)))
     month_ends = []
     for key in sorted(monthly.keys()):
-        last = sorted(monthly[key], key=lambda x: x[0])[-1]
-        month_ends.append(last[1])
-
+        month_ends.append(sorted(monthly[key], key=lambda x: x[0])[-1])
     if len(month_ends) < 2:
         return None
-
+    flow_dates, flow_cum = _flow_prefix_sums(flows_by_date or {})
     monthly_rets = []
     for i in range(1, len(month_ends)):
-        p = month_ends[i-1]
-        c = month_ends[i]
-        if p > 0:
-            monthly_rets.append((c - p) / p)
-
+        prev_date, previous = month_ends[i - 1]
+        curr_date, current = month_ends[i]
+        if previous > 0:
+            flow = _flows_between(flow_dates, flow_cum, prev_date.date().isoformat(), curr_date.date().isoformat())
+            monthly_rets.append((current - previous - flow) / previous)
     if not monthly_rets:
         return None
-
     best = max(monthly_rets) * 100
     worst = min(monthly_rets) * 100
-    avg = (sum(monthly_rets) / len(monthly_rets)) * 100
-    positive = sum(1 for r in monthly_rets if r > 0)
-    pos_pct = round(positive / len(monthly_rets) * 100, 1)
-
+    avg = sum(monthly_rets) / len(monthly_rets) * 100
+    positive = sum(1 for value in monthly_rets if value > 0)
     return {
         "best_month": round(best, 2),
         "worst_month": round(worst, 2),
         "avg_monthly": round(avg, 2),
-        "positive_pct": pos_pct,
+        "positive_pct": round(positive / len(monthly_rets) * 100, 1),
         "months_count": len(monthly_rets),
     }
 
