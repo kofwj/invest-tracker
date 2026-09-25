@@ -152,7 +152,8 @@ export function createMaintenanceHelpers({
         }
     };
 
-    const testNotifyPush = async () => {
+    // channels 可选：不传 = 试推所有已配置通道（原行为）；传 ['dingtalk'] = 只测这一个
+    const testNotifyPush = async (channels) => {
         notifyLoading.value = true;
         try {
             const res = await api.testNotify({
@@ -160,6 +161,7 @@ export function createMaintenanceHelpers({
                 text: '这是 invest-tracker 设置页发出的试推消息。',
                 event: 'test',
                 force: true,
+                channels: Array.isArray(channels) && channels.length ? channels : undefined,
             });
             const data = res.data || {};
             if (data.sent) ElMessage.success('试推已发出（至少一个通道成功）');

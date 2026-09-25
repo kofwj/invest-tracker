@@ -3,7 +3,6 @@
     <template #actions>
       <el-space wrap>
         <el-button size="small" @click="fetchNotifyPanel" :loading="notifyLoading">刷新</el-button>
-        <el-button size="small" type="success" plain :loading="notifyLoading" @click="onTestNotifyPush">试推一条</el-button>
         <el-button size="small" type="primary" :loading="notifyLoading" @click="onSaveNotifyPanel">保存设置</el-button>
       </el-space>
     </template>
@@ -39,8 +38,8 @@
       <template #header>
         <div class="ops-card-head">
           <div>
-            <div class="ops-section-title"><span class="ops-q">Q1</span>要不要推、推得吵不吵</div>
-            <div class="ops-hint">总开关、正文模板、飞书模式、同事件冷却；模板与冷却原来收在折叠区，现在直接摊在页面上。</div>
+            <div class="ops-section-title"><span class="ops-q">Q1</span>通知与开关</div>
+            <div class="ops-hint">总开关、正文模板、飞书模式、同事件冷却。改完点右上角「保存设置」才生效。</div>
           </div>
         </div>
       </template>
@@ -95,12 +94,18 @@
       <template #header>
         <div class="ops-card-head">
           <div>
-            <div class="ops-section-title"><span class="ops-q">Q2</span>推到哪些通道（4 组凭据）</div>
-            <div class="ops-hint">本页填写优先；留空不改，勾选下面的「清除已存凭据」删掉库里的值（仍可用 .env 兜底）。</div>
+            <div class="ops-section-title">通知渠道</div>
+            <div class="ops-hint">
+              配了哪个通道就发哪个，也可以同时用；点渠道行展开填凭据。本页填写优先，留空不改；
+              勾「清除已存凭据」会删掉库里的值（保存前再确认一次，仍可用 .env 兜底）。
+            </div>
           </div>
-          <el-tag size="small" :type="configuredCount ? 'success' : 'info'" effect="light">
-            已配置 {{ configuredCount }} / {{ channelRows.length }}
-          </el-tag>
+          <span class="ops-card-actions">
+            <el-button size="small" :loading="notifyLoading" @click="onTestNotifyPush">发送测试</el-button>
+            <el-tag size="small" :type="configuredCount ? 'success' : 'info'" effect="light">
+              已配置 {{ configuredCount }} / {{ channelRows.length }}
+            </el-tag>
+          </span>
         </div>
       </template>
       <el-form label-position="top" class="cred-form">
@@ -110,17 +115,29 @@
           class="chan"
           :class="row.configured ? '' : 'is-off'"
         >
-          <div class="chan-head">
+          <div
+            class="chan-head"
+            role="button"
+            tabindex="0"
+            :aria-expanded="chanOpen(row.key) ? 'true' : 'false'"
+            @click="toggleChan(row.key)"
+            @keydown.enter.prevent="toggleChan(row.key)"
+            @keydown.space.prevent="toggleChan(row.key)"
+          >
+            <span class="chan-chev" :class="{ 'is-open': chanOpen(row.key) }" aria-hidden="true">›</span>
             <span class="chan-name">{{ row.name }}</span>
-            <el-tag :type="row.configured ? 'success' : 'info'" size="small" effect="light">
-              {{ row.configured ? (row.sourceLabel || '已配置') : '未配置' }}
-            </el-tag>
             <span v-if="row.key === 'feishu'" class="chan-mode">{{ feishuMode === 'app' ? '自建应用' : 'Webhook' }}</span>
             <span class="chan-hint">{{ row.hint || '—' }}</span>
+            <span class="chan-tools" @click.stop>
+              <el-button size="small" :loading="notifyLoading" @click="onTestChannel(row.key)">测试</el-button>
+              <el-tag :type="row.configured ? 'success' : 'info'" size="small" effect="light">
+                {{ row.configured ? (row.sourceLabel || '已配置') : '未配置' }}
+              </el-tag>
+            </span>
           </div>
 
           <!-- 飞书：Webhook 模式 / 自建应用模式字段二选一 -->
-          <div v-if="row.key === 'feishu'" class="field-grid">
+          <div v-if="chanOpen(row.key) && row.key === 'feishu'" class="field-grid">
             <div v-if="feishuMode === 'webhook'" class="field">
               <div class="field-label">
                 {{ fieldLabel('feishu_webhook') }}
@@ -184,7 +201,7 @@
           </div>
 
           <!-- 钉钉：Webhook + 加签密钥 -->
-          <div v-else-if="row.key === 'dingtalk'" class="field-grid">
+          <div v-else-if="chanOpen(row.key) && row.key === 'dingtalk'" class="field-grid">
             <div class="field">
               <div class="field-label">
                 {{ fieldLabel('dingtalk_webhook') }}
@@ -218,7 +235,7 @@
           </div>
 
           <!-- 企业微信：Webhook -->
-          <div v-else-if="row.key === 'wecom'" class="field-grid">
+          <div v-else-if="chanOpen(row.key) && row.key === 'wecom'" class="field-grid">
             <div class="field">
               <div class="field-label">
                 {{ fieldLabel('wecom_webhook') }}
@@ -237,7 +254,7 @@
           </div>
 
           <!-- Telegram：Token + Chat ID -->
-          <div v-else class="field-grid">
+          <div v-else-if="chanOpen(row.key)" class="field-grid">
             <div class="field">
               <div class="field-label">
                 {{ fieldLabel('telegram_bot_token') }}
@@ -517,6 +534,18 @@ const configuredNames = computed(() => {
   const names = channelRows.value.filter((r) => r.configured).map((r) => r.name);
   return names.length ? names.join(' · ') : '';
 });
+
+// 渠道行默认收起（参考图 idiom）：行头常驻「已配置 / 未配置」胶囊，展开才编辑凭据
+const openChans = ref({});
+const chanOpen = (key) => !!openChans.value[key];
+function toggleChan(key) {
+  openChans.value = { ...openChans.value, [key]: !openChans.value[key] };
+}
+// 按渠道试推：复用 maintenanceHelpers 的 testNotifyPush（新增可选 channels 参数）
+async function onTestChannel(key) {
+  if (notifyLoading.value) return;
+  await testNotifyPush([key]);
+}
 const templateLabel = computed(() => {
   const t = notifyStatus.value?.template || 'medium';
   return t === 'short' ? '短' : '中';
@@ -642,5 +671,48 @@ watch(
 }
 @media (max-width: 560px) {
   .ops-action-grid { grid-template-columns: 1fr; }
+}
+
+/* —— 参考图 idiom：卡片更轻、渠道行可折叠、输入框更高 —— */
+.ops-card {
+  border: 1px solid var(--app-hairline);
+  border-radius: 12px;
+  box-shadow: none;
+}
+.ops-card + .ops-card { margin-top: 16px; }
+.chan {
+  border: 1px solid var(--app-hairline);
+  border-radius: 12px;
+  box-shadow: none;
+}
+.chan-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  user-select: none;
+  transition: background .15s ease;
+}
+.chan-head:hover { background: color-mix(in srgb, var(--app-bg0) 45%, transparent); }
+.chan-head:focus-visible { outline: 2px solid var(--app-primary); outline-offset: 2px; }
+.chan-chev {
+  width: 14px;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--app-soft);
+  transition: transform .15s ease;
+}
+.chan-chev.is-open { transform: rotate(90deg); }
+.chan-tools { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.chan .field-grid { padding: 0 14px 14px; }
+.ops-card :deep(.el-card__body) { padding: 18px 20px; }
+.ops-card :deep(.el-input__wrapper) { min-height: 40px; }
+@media (max-width: 768px) {
+  .chan-hint { max-width: 100%; }
+  .chan-tools { margin-left: 0; width: 100%; justify-content: flex-end; }
 }
 </style>

@@ -1415,3 +1415,11 @@ html.dark .perf-contrib-table.el-table th.el-table__cell {
   .hazard-grid { grid-template-columns: 1fr; }
   .chan-head .chan-hint { margin-left: 0; max-width: 100%; }
 }
+
+/* 卡片头右侧动作组（发送测试 / 计数标签等）；消息推送页的「通知渠道」卡先用 */
+.ops-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
