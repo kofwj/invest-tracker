@@ -49,7 +49,7 @@
             <div class="ops-hint">OpenAI 兼容 POST /v1/chat/completions；没写 /v1 会自动补。密钥留空表示不改，勾选「清除」才删掉已存密钥。</div>
           </div>
           <el-tag size="small" :type="status.api_key_configured ? 'success' : 'info'" effect="light">
-            {{ status.api_key_configured ? '密钥已配置' : '密钥未配置' }}
+            {{ status.api_key_configured ? '密钥已配置' : '未配置' }}
           </el-tag>
         </div>
       </template>
@@ -99,15 +99,14 @@
               <el-select
                 v-model="form.model"
                 filterable
-                allow-create
                 default-first-option
                 clearable
-                placeholder="deepseek-chat"
+                placeholder="先拉取模型再选"
                 style="min-width: 200px;"
               >
                 <el-option v-for="m in modelOptions" :key="m" :label="m" :value="m" />
               </el-select>
-              <el-button size="small" :loading="modelsLoading" @click="fetchModels">拉取模型</el-button>
+              <el-button size="small" :loading="modelsLoading" @click="fetchModels()">拉取模型</el-button>
             </div>
             <div class="ops-hint">模型名要和供应方 /models 里的 id 完全一致（区分大小写、不能带空格）；先保存 base_url + 密钥再拉取</div>
             <div v-if="modelsHint" class="ops-hint" :class="{ 'ops-warn': !!modelsError || modelUnknown }">{{ modelsHint }}</div>
@@ -295,33 +294,39 @@ async function loadStatus({ writeForm = true } = {}) {
 }
 
 const modelsLoading = ref(false);
-const modelOptions = ref([]);
+// 拉取结果（原始列表）与「当前值」分开：已保存的模型名永远能在下拉里选到，
+// 即使拉取失败或它已从供应方下线（见下面 modelOptions）。
+const fetchedModels = ref([]);
 const modelsError = ref('');
 
+const modelOptions = computed(() => [...new Set([...fetchedModels.value, form.model].filter(Boolean))]);
+
+// 「当前值不在供应方列表里」只跟拉取结果比，不能拿 modelOptions 比（那个一定包含当前值）
 const modelUnknown = computed(
-  () => !!form.model && modelOptions.value.length > 0 && !modelOptions.value.includes(form.model),
+  () => !!form.model && fetchedModels.value.length > 0 && !fetchedModels.value.includes(form.model),
 );
 const modelsHint = computed(() => {
   if (modelsError.value) return `拉取模型失败：${modelsError.value}`;
-  if (!modelOptions.value.length) return '';
+  if (!fetchedModels.value.length) return '';
   if (modelUnknown.value) {
-    return `已拉取 ${modelOptions.value.length} 个模型，但当前填的「${form.model}」不在列表里 —— 供应方会按 model_not_found 处理`;
+    return `已拉取 ${fetchedModels.value.length} 个模型，但当前填的「${form.model}」不在列表里 —— 供应方会按 model_not_found 处理`;
   }
-  return `已拉取 ${modelOptions.value.length} 个模型`;
+  return `已拉取 ${fetchedModels.value.length} 个模型`;
 });
 
-async function fetchModels() {
+// silent=true：进页面自动拉取时不弹「已拉取 N 个模型」的成功提示；失败仍然提示。
+async function fetchModels({ silent = false } = {}) {
   if (modelsLoading.value) return;
   modelsLoading.value = true;
   modelsError.value = '';
   try {
     const { data } = await api.getAiModels();
-    modelOptions.value = Array.isArray(data?.ids) ? data.ids : [];
+    fetchedModels.value = Array.isArray(data?.ids) ? data.ids : [];
     if (!data?.ok) {
       modelsError.value = data?.error || `HTTP ${data?.status}`;
       ElMessage.error('拉取模型失败：' + modelsError.value);
-    } else {
-      ElMessage.success(`已拉取 ${modelOptions.value.length} 个模型`);
+    } else if (!silent) {
+      ElMessage.success(`已拉取 ${fetchedModels.value.length} 个模型`);
     }
   } catch (e) {
     modelsError.value = e?.response?.data?.detail || e?.message || '拉取失败';
@@ -390,6 +395,8 @@ function onHeaderRefresh() {
 
 onMounted(() => {
   loadStatus();
+  // 进页面静默拉一次模型列表：不弹成功提示，失败仍提示（hint 里也留供应方 error）
+  fetchModels({ silent: true });
   window.addEventListener('invest-tab-refresh', onHeaderRefresh);
 });
 onUnmounted(() => {
@@ -431,4 +438,13 @@ onUnmounted(() => {
   color: var(--app-ok, #3d9a5f);
   font-weight: 600;
 }
+/* —— 参考图 idiom：卡片更轻、输入框更高（与消息推送页同一套，.chan-* 是推送页专属不在此列） —— */
+.ops-card {
+  border: 1px solid var(--app-hairline);
+  border-radius: 12px;
+  box-shadow: none;
+}
+.ops-card + .ops-card { margin-top: 16px; }
+.ops-card :deep(.el-card__body) { padding: 18px 20px; }
+.ops-card :deep(.el-input__wrapper) { min-height: 40px; }
 </style>

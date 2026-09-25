@@ -15,7 +15,7 @@
       </div>
       <div class="app-stat-cell">
         <div class="k">费率</div>
-        <div class="v" :class="feeSettings[activeFeeAccount] ? 'ok' : 'warn'">{{ feeSettings[activeFeeAccount] ? '已配置' : '默认费率' }}</div>
+        <div class="v" :class="feeConfigured ? 'ok' : 'warn'">{{ feeConfigured ? '已配置' : '默认费率' }}</div>
         <div class="s">当前账户 {{ activeFeeAccount }} · 共 {{ feeAccounts.length }} 个账户</div>
       </div>
       <div class="app-stat-cell">
@@ -39,7 +39,12 @@
             <div class="ops-section-title"><span class="ops-q">Q1</span>哪个账户、按什么费率算</div>
             <div class="ops-hint">多账户可分别设费率；单位 %，万 2.5 填 0.025。改完点右上角「保存费率」才生效。</div>
           </div>
-          <el-tag size="small" type="info" effect="light">{{ feeAccounts.length }} 个账户</el-tag>
+          <span class="ops-card-actions">
+            <el-tag size="small" :type="feeConfigured ? 'success' : 'info'" effect="light">
+              {{ feeConfigured ? '已配置' : '默认费率' }}
+            </el-tag>
+            <el-tag size="small" type="info" effect="light">{{ feeAccounts.length }} 个账户</el-tag>
+          </span>
         </div>
       </template>
       <div class="fee-toolbar">
@@ -358,6 +363,12 @@ const adjustRows = computed(() => {
   if (!Array.isArray(rows)) return [];
   return rows.filter((r) => r && (r.flow_type === '现金校准' || r.flow_type === '其他调整'));
 });
+// 状态带 / Q1 卡头胶囊共用同一份判断：当前账户在 feeSettings 里有记录＝已有费率，否则走默认费率
+const feeConfigured = computed(() => {
+  const table = feeSettings?.value ?? feeSettings;
+  const acc = activeFeeAccount?.value ?? activeFeeAccount;
+  return !!(table && acc && table[acc]);
+});
 
 // 写操作防连点：模块里没有现成的 loading ref，这里用一个 in-flight 标志包一层。
 // feeBusy 记当前在跑的费率写操作（保存/恢复默认/新增/删除账户），互斥避免并发覆盖同一份费率。
@@ -469,4 +480,14 @@ async function onDeleteCashFlow(row) {
   margin-bottom: 12px;
   flex-wrap: wrap;
 }
+
+/* —— 参考图 idiom：卡片更轻、输入框更高（与消息推送页同一套，.chan-* 是推送页专属不在此列） —— */
+.ops-card {
+  border: 1px solid var(--app-hairline);
+  border-radius: 12px;
+  box-shadow: none;
+}
+.ops-card + .ops-card { margin-top: 16px; }
+.ops-card :deep(.el-card__body) { padding: 18px 20px; }
+.ops-card :deep(.el-input__wrapper) { min-height: 40px; }
 </style>

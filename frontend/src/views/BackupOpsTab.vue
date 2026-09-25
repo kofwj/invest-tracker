@@ -180,4 +180,14 @@ const latestBackupShort = computed(() => {
   font-size: 12px;
   color: var(--app-soft);
 }
+
+/* —— 参考图 idiom：卡片更轻、输入框更高（与消息推送页同一套，.chan-* 是推送页专属不在此列） —— */
+.ops-card {
+  border: 1px solid var(--app-hairline);
+  border-radius: 12px;
+  box-shadow: none;
+}
+.ops-card + .ops-card { margin-top: 16px; }
+.ops-card :deep(.el-card__body) { padding: 18px 20px; }
+.ops-card :deep(.el-input__wrapper) { min-height: 40px; }
 </style>
