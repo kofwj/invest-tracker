@@ -57,6 +57,7 @@ class NotifySettingsBody(BaseModel):
 class NotifyRunBody(BaseModel):
     deposit: bool = True
     discipline: bool = True
+    dividend: bool = False
     force: bool = False
 
 
@@ -144,6 +145,7 @@ def post_notify_run(body: NotifyRunBody = NotifyRunBody()):
             conn,
             deposit=body.deposit,
             discipline=body.discipline,
+            dividend=body.dividend,
             force=body.force,
         )
         conn.commit()

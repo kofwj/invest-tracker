@@ -101,19 +101,22 @@ def build_performance_summary(conn, start_date=None, end_date=None):
     holdings = totals["holdings"]
 
     today = _local_today()
-    requested_end = str(end_date or today.isoformat())[:10]
+    today_iso = today.isoformat()
+    requested_end = str(end_date or today_iso)[:10]
+    # end_date 落在今天或未来时保持当前口径（实时总资产 + 含今日流水）。
+    # 只要传了截止日就把「现在」切成快照，收益页一旦接上区间选择器就会和流水页打架。
+    historical_end = bool(end_date) and requested_end < today_iso
     end_snapshot = None
-    if end_date:
+    if historical_end:
         end_snapshot = conn.execute(
             "SELECT date, total_assets, created_at FROM daily_snapshots WHERE date <= ? ORDER BY date DESC LIMIT 1",
             (requested_end,),
         ).fetchone()
     # 没有截止日前快照就无法重建历史期末，回退完整当前口径，保持日期与金额自洽。
-    historical_end_unavailable = bool(end_date and not end_snapshot)
-    report_date = str(end_snapshot["date"] if end_snapshot else today.isoformat())
+    historical_end_unavailable = bool(historical_end and not end_snapshot)
+    report_date = str(end_snapshot["date"] if end_snapshot else today_iso)
     total_assets = float(end_snapshot["total_assets"]) if end_snapshot else totals["total_assets"]
-    flow_end = today.isoformat() if historical_end_unavailable else (report_date if end_snapshot else requested_end)
-
+    flow_end = today_iso if historical_end_unavailable else (report_date if end_snapshot else requested_end)
     # 全周期流水（在历史区间请求中，截至有效报告日期）。
     all_flows = conn.execute(
         "SELECT * FROM portfolio_cash_flows WHERE date <= ? ORDER BY date, id",
@@ -154,8 +157,12 @@ def build_performance_summary(conn, start_date=None, end_date=None):
         total_dividend += float(h["total_dividend"] or 0)
     lifetime_profit = totals["lifetime_profit"]
 
-    # YTD 固定今年
-    ytd_start = today.replace(month=1, day=1)
+    # YTD 按报告日所在年。无 end_date 时 report_date 就是今天，与「固定今年」逐位一致；
+    # end_date 落在往年时不再用 today 的 1-1（否则 BETWEEN 起点>终点，收益退化成 0）。
+    try:
+        ytd_start = dt_date.fromisoformat(str(report_date)[:10]).replace(month=1, day=1)
+    except ValueError:
+        ytd_start = today.replace(month=1, day=1)
     ytd_snap = conn.execute(
         "SELECT * FROM daily_snapshots WHERE date BETWEEN ? AND ? ORDER BY date ASC LIMIT 1",
         (ytd_start.isoformat(), report_date),

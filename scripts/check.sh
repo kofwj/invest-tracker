@@ -129,6 +129,7 @@ assert 'migrate_to_v5_market_alerts' in schema, 'schema missing v5 market alerts
 assert 'migrate_to_v6_snapshot_lifetime_and_watchlist' in schema, 'schema missing v6 snapshot lifetime migration'
 assert 'migrate_to_v18_ai_and_reason_cache' in schema, 'schema missing v18 AI/reason cache migration'
 assert 'migrate_to_v19_ai_call_log_warnings' in schema, 'schema missing v19 AI audit warnings column'
+assert 'migrate_to_v20_dividend_events' in schema, 'schema missing v20 dividend calendar table'
 import re as _re
 _brief_src = Path('backend/ai_brief.py').read_text(encoding='utf-8')
 _api_src = Path('frontend/src/api/index.js').read_text(encoding='utf-8')
@@ -232,6 +233,7 @@ required_backend_files=(
   backend/reason_sources.py
   backend/reason_cache.py
   backend/ai_brief.py
+  backend/dividend_calendar.py
   backend/routers_cron.py
 )
 for file in "${required_backend_files[@]}"; do
@@ -259,6 +261,7 @@ required_routes = {
     "/holding-corrections",
     "/sync-prices",
     "/dividends/scan",
+    "/dividends/calendar",
     "/cron/sync-prices",
     "/cron/snapshot",
     "/cron/check-alerts",

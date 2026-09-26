@@ -1,7 +1,7 @@
 import api from '../api/index.js';
 import { ElLoading, ElMessage } from 'element-plus';
 import { todayLocalIso } from '../utils/index.js';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 
 /**
  * Core data fetching and sync helpers.
@@ -103,7 +103,10 @@ const createDataSync = ({
         }
     };
 
-    const todayIso = computed(() => todayLocalIso());
+    const todayIso = ref(todayLocalIso());
+    const refreshTodayIso = () => {
+        todayIso.value = todayLocalIso();
+    };
     const todaySnapshotDone = computed(() => dashboard.value.latest_snapshot_date === todayIso.value);
     const latestPriceStatusText = computed(() => {
         const raw = dashboard.value.latest_price_updated_at;
@@ -122,6 +125,7 @@ const createDataSync = ({
         syncPrices,
         syncTrailingReturns,
         todayIso,
+        refreshTodayIso,
         todaySnapshotDone,
         latestPriceStatusText,
         latestBackupText,

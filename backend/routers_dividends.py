@@ -23,6 +23,7 @@ try:
         confirm_dividend_drafts,
         scan_dividend_drafts,
     )
+    from .dividend_calendar import list_dividend_calendar
     from .holding_calculator import infer_category, recalc_holdings
 except ImportError:
     from csv_utils import (
@@ -41,6 +42,7 @@ except ImportError:
         confirm_dividend_drafts,
         scan_dividend_drafts,
     )
+    from dividend_calendar import list_dividend_calendar
     from holding_calculator import infer_category, recalc_holdings
 
 import sqlite3
@@ -73,6 +75,17 @@ class DividendDraftConfirmItem(BaseModel):
 class DividendConfirmRequest(BaseModel):
     drafts: List[DividendDraftConfirmItem]
     backup: bool = True
+
+
+@router.get("/dividends/calendar")
+def get_dividend_calendar(days: int = 30):
+    """Read-only local ex-dividend calendar. Does not fetch market data."""
+    try:
+        days_n = int(days)
+    except (TypeError, ValueError):
+        days_n = 30
+    with db_session(row_factory=sqlite3.Row) as conn:
+        return list_dividend_calendar(conn, days=days_n)
 
 
 @router.post("/dividends/scan")

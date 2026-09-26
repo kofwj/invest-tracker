@@ -14,6 +14,29 @@
       class="holdings-toolbar-alert"
       style="margin-bottom: 12px;"
     />
+    <el-card v-if="dividendCalendar.length" shadow="never" header="除权除息日历" class="holdings-div-cal" aria-label="除权除息日历">
+      <el-alert
+        v-if="dividendCalendarStatus === 'stale' || dividendCalendarStatus === 'partial'"
+        type="warning"
+        show-icon
+        :closable="false"
+        :title="dividendCalendarStatus === 'stale'
+          ? '日历数据可能过期（上次抓取失败），以下仍是本地未过期事件。'
+          : '部分标的上次抓取失败，日历可能不完整。'"
+        style="margin-bottom: 8px;"
+      />
+      <el-table :data="dividendCalendar" size="small" style="width:100%;" aria-label="除权除息日程">
+        <el-table-column prop="name" label="标的" min-width="120"></el-table-column>
+        <el-table-column prop="ex_date" label="除权除息日" width="120"></el-table-column>
+        <el-table-column label="还剩" width="88">
+          <template #default="scope">{{ dividendDaysLabel(scope.row.days_left) }}</template>
+        </el-table-column>
+        <el-table-column prop="plan_text" label="方案" min-width="160"></el-table-column>
+      </el-table>
+      <div v-if="dividendCalendarFetchedAt" style="margin-top: 8px; color: var(--el-text-color-secondary); font-size: 12px;">
+        数据抓取于 {{ dividendCalendarFetchedAt }}
+      </div>
+    </el-card>
     <div v-if="!holdings || !holdings.length" class="empty-hint" style="margin-bottom: 12px;">
       <strong>当前没有持仓</strong>
       <span>去交易页录入买入，或先同步价格核对。空仓时这里保持干净。</span>
@@ -143,7 +166,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import PageShell from '../components/PageShell.vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import KlineDialog from '../components/KlineDialog.vue';
@@ -169,6 +192,27 @@ const {
   goTab,
 } = useAppCtx();
 
+const dividendCalendar = ref([]);
+const dividendCalendarStatus = ref('ok');
+const dividendCalendarFetchedAt = ref('');
+function dividendDaysLabel(days) {
+  if (days == null || Number.isNaN(Number(days))) return '—';
+  const n = Number(days);
+  if (n < 0) return `过期 ${Math.abs(n)} 天`;
+  if (n === 0) return '今天';
+  return `剩 ${n} 天`;
+}
+onMounted(async () => {
+  try {
+    const res = await api.getDividendCalendar(30);
+    dividendCalendar.value = Array.isArray(res.data?.items) ? res.data.items : [];
+    dividendCalendarStatus.value = res.data?.source_status || 'ok';
+    dividendCalendarFetchedAt.value = res.data?.fetched_at || '';
+  } catch {
+    dividendCalendar.value = [];
+    dividendCalendarFetchedAt.value = '';
+  }
+});
 // 同步近一年收益率走 POST /sync-trailing-returns：模块里的 trailingSyncing 一开头就置位，
 // 这里补一个入口判断，避免同一 tick 连点发两次请求（同时弹出两个全屏 loading）。
 function onSyncTrailingReturns() {
@@ -236,7 +280,10 @@ function openKline(row) {
 .holdings-toolbar-alert {
   flex: 1;
   min-width: 240px;
-  margin: 0 !important;
+  margin: 0 0 12px !important;
+}
+.holdings-div-cal {
+  margin-bottom: 12px;
 }
 .manual-price-tag {
   margin-left: 6px;

@@ -42,8 +42,8 @@ class CronAlertCheckBody(BaseModel):
 class CronNotifyBody(BaseModel):
     deposit: bool = True
     discipline: bool = True
+    dividend: bool = True
     force: bool = False
-
 
 @router.post("/cron/sync-prices")
 def cron_sync_prices():
@@ -102,6 +102,7 @@ def cron_notify_events(body: CronNotifyBody = CronNotifyBody()):
             conn,
             deposit=body.deposit,
             discipline=body.discipline,
+            dividend=body.dividend,
             force=body.force,
         )
         conn.commit()

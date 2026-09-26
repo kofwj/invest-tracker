@@ -139,3 +139,42 @@ def test_ytd_window_ignores_snapshot_same_day_flow_by_created_at(client, app_mod
 
     assert before_snapshot is not None
     assert after_snapshot == before_snapshot - 5000
+
+
+def test_ytd_uses_report_year_when_end_date_is_prior_year(client, app_module):
+    """end_date 落在往年时，YTD 按报告日所在年的 1-1，而不是今天的 1-1。"""
+    from database import local_today_iso
+
+    today = local_today_iso()
+    prev_year = str(int(today[:4]) - 1)
+    _seed_snapshots(
+        app_module,
+        [(f"{prev_year}-06-01", 100000), (f"{prev_year}-12-30", 120000)],
+    )
+    _seed_flow(client, f"{prev_year}-07-01", "投入", 10000)
+
+    body = client.get(
+        "/performance/summary", params={"end_date": f"{prev_year}-12-31"}
+    ).json()
+    assert body["as_of_date"] == f"{prev_year}-12-30"
+    assert body["total_assets"] == 120000
+    # 120k − 100k 起点 − 10k 年中投入
+    assert body["ytd_gain"] == 10000
+
+
+def test_summary_end_date_today_keeps_live_assets(client, app_module):
+    """end_date=今天必须保持当前口径，不能切成昨日快照。"""
+    from datetime import datetime, timedelta
+
+    from database import local_today_iso
+
+    today = local_today_iso()
+    yesterday = (datetime.strptime(today, "%Y-%m-%d").date() - timedelta(days=1)).isoformat()
+    _seed_snapshots(app_module, [(yesterday, 100000)])
+    _seed_flow(client, today, "投入", 5000)
+
+    live = client.get("/performance/summary").json()
+    tagged = client.get("/performance/summary", params={"end_date": today}).json()
+    assert tagged["as_of_date"] == live["as_of_date"]
+    assert tagged["total_assets"] == live["total_assets"]
+    assert tagged["flow_count"] == live["flow_count"]

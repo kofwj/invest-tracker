@@ -719,14 +719,9 @@ def dispatch(
         }
 
     if channels is None:
-        # None 表示调用方没有显式指定，才允许按「事件映射」解析。
-        # 映射为空是用户明确关闭该事件，不能再 fallback 到所有通道。
-        mapped_channels = event_channel_map(conn).get(event)
-        if mapped_channels is None:
-            cfg = channel_config(conn)
-            channels = [c for c in CHANNEL_KEYS if cfg[c]["configured"]]
-        else:
-            channels = mapped_channels
+        # event_channel_map 对每个 EVENT_KEYS 都有键；空列表 = 用户关闭该事件。
+        # 不能再 fallback 到全部已配置通道。
+        channels = list(event_channel_map(conn).get(event) or [])
     else:
         channels = _parse_channel_list(",".join(channels) if not isinstance(channels, str) else channels)
 
@@ -1074,12 +1069,30 @@ def run_scheduled_events(
     *,
     deposit: bool = True,
     discipline: bool = True,
+    dividend: bool = True,
     force: bool = False,
 ) -> Dict[str, Any]:
-    """Cron entry: deposit due + discipline summary."""
+    """Cron entry: deposit due + discipline summary + dividend calendar (fetch then remind)."""
     out: Dict[str, Any] = {"ran_at": _now_local().isoformat(sep=" ", timespec="seconds")}
     if deposit:
         out["deposit_due"] = notify_deposit_due(conn, force=force)
     if discipline:
         out["discipline"] = notify_discipline(conn, force=force, only_if_breaches=not force)
+    if dividend:
+        try:
+            try:
+                from .dividend_calendar import notify_dividend_upcoming, refresh_dividend_events
+            except ImportError:
+                from dividend_calendar import notify_dividend_upcoming, refresh_dividend_events
+
+            refresh = refresh_dividend_events(conn)
+            out["dividend_refresh"] = refresh
+            out["dividend_upcoming"] = notify_dividend_upcoming(
+                conn,
+                force=force,
+                source_status=refresh.get("source_status"),
+            )
+        except Exception as exc:
+            logger.exception("scheduled dividend calendar failed")
+            out["dividend_upcoming"] = {"sent": False, "reason": str(exc), "results": []}
     return out

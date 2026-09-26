@@ -5,6 +5,39 @@
 
 ---
 
+## [1.1.0] — 2026-09-26 — 除权除息日历（N5）+ 时区口径统一 + 收益口径修正
+
+本轮新增除权除息日历（持仓/自选的已排期与已实施分红本地成表，收益页只读本地表，定时任务在
+除权除息前 7/3/当天与过期 7 天内提醒），并把「今天」统一到应用时区、修正收益的期末/月度口径
+（后者详见下方「第十四轮」）。
+
+- **除权除息日历**（新增 `backend/dividend_calendar.py`，`routers_dividends.py`、
+  `routers_cron.py`、`routers_notify.py`、`schema.py` v20、`dividend_events` 表）：
+  抓取顺序固定为「抓取 → 可用性过滤 → upsert → 清理 → 算窗口 → 推送」，抓取失败永不清空旧行。
+  `GET /dividends/calendar?days=` 纯本地读（不抓行情、不调模型）；`POST /cron/notify-events`
+  默认 `dividend=true` 走「先刷新再提醒」，`POST /notify/run` 默认不抓取（避免误触发网络）。
+- **入库与清理口径**：只收 `ex_date ≥ 今天-14 天`（`INGEST_LOOKBACK_DAYS`）——东财
+  `RPT_SHAREBONUS_DET` 会带回多年已实施记录，不过滤会把十年前的除权日灌进提醒；
+  `cleanup_dividend_events` 删「已不在持仓∪自选」的标的与超 30 天（`RETENTION_DAYS`）的行，
+  且目标清单读失败时跳过按标的清理（`load_calendar_targets` 区分「空」与「读失败」）。
+- **提醒窗口**：`overdue` 只报过期 7 天内（`OVERDUE_MAX_DAYS`）且按日期降序截断（改前
+  升序会把最近的事件挤出前 10 条）；`d0/d3/d7` 升序。同日去重靠 `dividend_upcoming_notify_stamp`。
+- **状态可视**：`source_status` 新增 `partial`（部分标的抓取失败或目标读失败），
+  `/dividends/calendar` 一并返回 `failed_codes` 与 `fetched_at`；持仓页卡片据此提示
+  「可能不完整」并显示抓取时间。
+- **时区口径统一**（前端 `utils/index.js`、`utils/marketTime.js`、`dataSync.js`）：
+  `todayIso` 由「无响应式依赖的 computed」改为 ref + `refreshTodayIso`，在
+  `/api/health` 取回 `APP_TIMEZONE` 后与表单默认日期一起刷新——否则非上海时区部署下
+  「今天已记快照」会整场会话钉在默认时区。
+- **收益口径**（`performance.py`）：`end_date ≥ 今天` 保持当前口径（实时总资产 + 含今日流水），
+  历史截止日才切快照口径；YTD 起点改按**报告日**所在年（改前往年 `end_date` 会让 BETWEEN
+  起点 > 终点、YTD 退化成 0）；`notify.dispatch` 事件通道映射显式为空时不再 fallback 到全部通道。
+
+验证：后端 418 passed、前端 178 passed（TZ=UTC 与本地各一次）、`ruff` clean、`npm run build`、
+`scripts/check.sh` 全绿。
+
+---
+
 ## [1.0.5] — 2026-09-25 — AI 层第一批（A1/A2/R1/R2 + A3 晚报归因）+ 供应商接入修补
 
 默认关闭的 AI 层从底座做到「晚报归因段」，并把接入过程踩到的两个坑（Cloudflare 按 UA 拦、

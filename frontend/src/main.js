@@ -239,6 +239,7 @@ const app = createApp({
             syncPrices,
             syncTrailingReturns,
             todayIso,
+            refreshTodayIso,
             todaySnapshotDone,
             latestPriceStatusText,
             latestBackupText,
@@ -442,7 +443,8 @@ const app = createApp({
         });
 
         const refreshLocalDates = () => {
-            const today = todayLocalIso();
+            if (typeof refreshTodayIso === 'function') refreshTodayIso();
+            const today = todayIso.value || todayLocalIso();
             cashFlowForm.value.date = today;
             reconcileForm.value.date = today;
             transForm.value.date = today;

@@ -83,6 +83,7 @@ const api = {
     syncTrailingReturns: () => axios.post(API + '/sync-trailing-returns', null, { timeout: 180000 }),
     scanDividends: (payload = {}) => axios.post(API + '/dividends/scan', payload, { timeout: 180000 }),
     confirmDividends: (payload) => axios.post(API + '/dividends/confirm', payload, { timeout: 120000 }),
+    getDividendCalendar: (days = 30) => axios.get(API + '/dividends/calendar', { params: { days } }),
     downloadDividendTemplate: () => axios.get(API + '/dividends/template', { responseType: 'blob' }),
     importDividends: (formData) => axios.post(API + '/dividends/import', formData, { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 180000 }),
 

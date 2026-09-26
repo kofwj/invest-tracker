@@ -88,6 +88,7 @@ def clear_backend_module_cache():
         'ai_brief',
         'reason_sources',
         'reason_cache',
+        'dividend_calendar',
     ]
     for name in module_names:
         sys.modules.pop(name, None)

@@ -14,6 +14,7 @@ try:
     from .snapshots import ensure_snapshot_columns, ensure_portfolio_cash_flows_table, ensure_reconcile_table
     from .ai_client import ensure_ai_tables
     from .reason_cache import ensure_reason_tables
+    from .dividend_calendar import ensure_dividend_event_tables
 except ImportError:
     from cash import ensure_cash_base, set_setting, ensure_cash_flow_indexes
     from database import open_db
@@ -27,9 +28,10 @@ except ImportError:
     from snapshots import ensure_snapshot_columns, ensure_portfolio_cash_flows_table, ensure_reconcile_table
     from ai_client import ensure_ai_tables
     from reason_cache import ensure_reason_tables
+    from dividend_calendar import ensure_dividend_event_tables
 
 
-SCHEMA_VERSION = 19
+SCHEMA_VERSION = 20
 SCHEMA_VERSION_KEY = "schema_version"
 
 
@@ -374,6 +376,12 @@ def migrate_to_v19_ai_call_log_warnings(conn):
     """ai_call_log.warnings_json，影子模式一周要分项计数。"""
     ensure_ai_tables(conn)
 
+
+def migrate_to_v20_dividend_events(conn):
+    """除权除息日历本地表。幂等：CREATE TABLE IF NOT EXISTS。"""
+    ensure_dividend_event_tables(conn)
+
+
 MIGRATIONS = [
     (1, migrate_to_v1_core_compat),
     (2, migrate_to_v2_holdings_and_snapshots),
@@ -394,6 +402,7 @@ MIGRATIONS = [
     (17, migrate_to_v17_alert_rule_types),
     (18, migrate_to_v18_ai_and_reason_cache),
     (19, migrate_to_v19_ai_call_log_warnings),
+    (20, migrate_to_v20_dividend_events),
 ]
 
 
