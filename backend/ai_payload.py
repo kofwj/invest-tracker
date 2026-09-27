@@ -10,26 +10,17 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 ALLOWED_KEYS = {
     "brief": {
-        "as_of",
-        "day_pnl_amount_rounded",
-        "counts",
-        "movers",
-        "benchmark",
-        "discipline_breach_count",
-        "plans",
-        "reasons",
-        "moves",
-        "reason_coverage",
+        "as_of", "day_pnl_amount_rounded", "counts", "movers", "benchmark",
+        "discipline_breach_count", "plans", "reasons", "moves", "reason_coverage",
     },
     "alert_note": {
-        "trigger",
-        "portfolio_direction",
-        "peers",
-        "benchmark",
-        "reasons",
-        "moves",
+        "trigger", "portfolio_direction", "peers", "benchmark", "reasons", "moves",
     },
     "nl_rule": {"utterance", "available_codes"},
+    "profile_digest": {
+        "code", "asset_kind", "report_period", "period_kind", "as_of", "metrics",
+        "profile", "dividends", "dividend_summary", "information_complete",
+    },
 }
 
 _AMOUNT_ROUND_UNIT = 1000
@@ -56,6 +47,15 @@ SPECULATION_TERMS = (
     "应该是",
     "或受",
 )
+TRADE_ADVICE_TERMS = (
+    "利好", "利空", "建议买入", "建议卖出", "加仓", "减仓",
+    "目标价", "估值修复", "有望上涨", "或将下跌", "买入", "卖出", "评级",
+)
+
+
+def trade_advice_prompt_clause() -> str:
+    """Forbidden-word sentence shared by the profile digest system prompt."""
+    return "禁止出现这些词：" + "、".join(TRADE_ADVICE_TERMS) + "。也禁止预测、涨跌判断或任何投资建议。"
 CAUSAL_TERMS = ("因为", "由于", "导致", "原因在于", "拖累")
 FLAT_CLAIM_TERMS = ("全部持平", "全部平盘", "都是平盘", "全员平盘", "持仓全部持平")
 _NUM_RE = re.compile(
@@ -132,7 +132,7 @@ def build_payload(feature: str, **sources) -> Dict[str, Any]:
         amount = sources.get("day_pnl_amount_rounded")
         if amount is None:
             amount = sources.get("day_pnl_amount", 0)
-        payload = {
+        return {
             "as_of": str(sources.get("as_of") or ""),
             "day_pnl_amount_rounded": round_amount(amount or 0),
             "counts": _pick_dict(sources.get("counts") or {}, COUNTS_KEEP),
@@ -144,7 +144,6 @@ def build_payload(feature: str, **sources) -> Dict[str, Any]:
             "moves": _pick_list(sources.get("moves"), MOVE_KEEP),
             "reason_coverage": _pick_dict(sources.get("reason_coverage") or {}, COVERAGE_KEEP),
         }
-        return payload
 
     if feature == "alert_note":
         return {
@@ -154,6 +153,20 @@ def build_payload(feature: str, **sources) -> Dict[str, Any]:
             "benchmark": _pick_dict(sources.get("benchmark") or {}, BENCHMARK_KEEP),
             "reasons": _pick_list(sources.get("reasons"), REASON_KEEP),
             "moves": _pick_list(sources.get("moves"), MOVE_KEEP),
+        }
+
+    if feature == "profile_digest":
+        return {
+            "code": str(sources.get("code") or ""),
+            "asset_kind": str(sources.get("asset_kind") or ""),
+            "report_period": str(sources.get("report_period") or ""),
+            "period_kind": str(sources.get("period_kind") or "as_of"),
+            "as_of": str(sources.get("as_of") or ""),
+            "metrics": _pick_list(sources.get("metrics"), ("section", "label", "value", "status", "note")),
+            "profile": _pick_dict(sources.get("profile") or {}, ("name", "short_name", "industry", "main_biz", "market", "listed")),
+            "dividends": _pick_list(sources.get("dividends"), ("report", "desc", "yield_pct", "ex_date")),
+            "dividend_summary": _pick_dict(sources.get("dividend_summary") or {}, ("per10_12m", "per_hand", "count", "newest")),
+            "information_complete": bool(sources.get("information_complete")),
         }
 
     return {
@@ -289,6 +302,12 @@ def validate_output(
             msg = "因果措辞: %s" % "、".join(causal)
             warnings.append(msg)
             reasons.append("causal_claim")
+
+    if feature == "profile_digest":
+        hits = [term for term in TRADE_ADVICE_TERMS if term in body]
+        if hits:
+            warnings.append("投资建议词: %s" % "、".join(hits))
+            reasons.append("trade_advice")
 
     if _counts_lack_quotes(payload):
         hit = [term for term in FLAT_CLAIM_TERMS if term in body]

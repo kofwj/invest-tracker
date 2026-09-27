@@ -145,7 +145,7 @@
             <div class="ops-section-title"><span class="ops-q">Q2</span>哪些用例允许调用</div>
             <div class="ops-hint">先配底座；真正接晚报 / 预警 / 自然语言规则是后面的包。用例关闭时后端返回 feature_disabled，不发请求。</div>
           </div>
-          <el-tag size="small" type="info" effect="light">已开 {{ enabledFeatureCount }} / 3</el-tag>
+          <el-tag size="small" type="info" effect="light">已开 {{ enabledFeatureCount }} / 4</el-tag>
         </div>
       </template>
       <div class="use-grid">
@@ -168,6 +168,13 @@
           <span class="use-card-txt">
             <span class="use-card-title">自然语言规则</span>
             <span class="use-card-hint">把自然语言描述翻成纪律规则。{{ form.features.nl_rule ? '已开启' : '未开启' }}。</span>
+          </span>
+        </div>
+        <div class="use-card">
+          <el-switch v-model="form.features.profile_digest" aria-label="档案摘要开关" />
+          <span class="use-card-txt">
+            <span class="use-card-title">档案摘要</span>
+            <span class="use-card-hint">持仓弹窗内按报告期生成 AI 档案摘要。{{ form.features.profile_digest ? '已开启' : '未开启' }}。</span>
           </span>
         </div>
       </div>
@@ -250,7 +257,7 @@ const form = reactive({
   api_key: '',
   timeout_seconds: 8,
   daily_call_cap: 30,
-  features: { brief: false, alert_note: false, nl_rule: false },
+  features: { brief: false, alert_note: false, nl_rule: false, profile_digest: false },
 });
 const usageText = computed(() => {
   const used = Number(status.value.today_used ?? status.value.today_calls ?? 0);
@@ -258,9 +265,8 @@ const usageText = computed(() => {
   if (cap <= 0) return `${used} / 不限`;
   return `${used} / ${cap}`;
 });
-// 状态带 / Q2 卡头「已开 n / 3」（只做展示计数，不改三个开关本身）
 const enabledFeatureCount = computed(
-  () => [form.features.brief, form.features.alert_note, form.features.nl_rule].filter(Boolean).length,
+  () => [form.features.brief, form.features.alert_note, form.features.nl_rule, form.features.profile_digest].filter(Boolean).length,
 );
 function applyStatus(data, { writeForm = true } = {}) {
   status.value = data || {};
@@ -276,6 +282,7 @@ function applyStatus(data, { writeForm = true } = {}) {
     brief: !!(data.features && data.features.brief),
     alert_note: !!(data.features && data.features.alert_note),
     nl_rule: !!(data.features && data.features.nl_rule),
+    profile_digest: !!(data.features && data.features.profile_digest),
   };
   clearApiKey.value = false;
 }

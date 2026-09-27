@@ -36,7 +36,7 @@ SETTING_SHADOW = "ai_shadow_mode"
 SETTING_CAP = "ai_daily_call_cap"
 SETTING_FEATURES = "ai_features"
 
-DEFAULT_FEATURES = {"brief": False, "alert_note": False, "nl_rule": False}
+DEFAULT_FEATURES = {"brief": False, "alert_note": False, "nl_rule": False, "profile_digest": False}
 DEFAULT_TIMEOUT = 8
 DEFAULT_CAP = 30
 AI_LOG_KEEP_DAYS = 30

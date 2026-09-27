@@ -132,7 +132,20 @@
         </div>
       </div>
 
-      <!-- 基本面体检：估值 / 盈利 / 杠杆 / 现金 -->
+      <el-collapse v-if="fundCode && profileDigestVisible" v-model="profileDigestOpen" class="profile-digest-collapse">
+        <el-collapse-item name="profile-digest" title="AI 档案摘要">
+          <div class="profile-digest-meta">
+            <span v-if="profileDigest.report_period">报告期：{{ profileDigest.report_period }}</span>
+            <span v-if="profileDigest.period_kind === 'as_of'">（按取得日）</span>
+            <span v-if="profileDigest.as_of"> · 数据于 {{ profileDigest.as_of }} 获取</span>
+            <el-button size="small" text @click="loadProfileDigest(true)" :loading="profileDigestLoading">刷新</el-button>
+          </div>
+          <div v-if="profileDigestLoading" class="fund-hint">正在生成摘要…</div>
+          <div v-else-if="profileDigestError" class="fund-hint">{{ profileDigestError }}</div>
+          <div v-else-if="profileDigest.text" class="profile-digest-text">{{ profileDigest.text }}</div>
+          <div v-else class="fund-hint">{{ profileDigestHint }}</div>
+        </el-collapse-item>
+      </el-collapse>
       <div v-if="fundCode" class="fund-block">
         <div class="fund-header">
           <span class="fund-title">基本面体检</span>
@@ -206,7 +219,27 @@ const trend = ref(null);
 const fundProfile = ref(null);
 const fundDividends = ref([]);
 const fundDivSummary = ref(null);
-// 请求令牌：关窗或换代码后到达的旧响应一律丢掉，避免串数据
+const profileDigest = ref({});
+const profileDigestOpen = ref([]);
+const profileDigestLoading = ref(false);
+const profileDigestError = ref('');
+const profileDigestFeatureEnabled = ref(false);
+const profileDigestFeatureLoaded = ref(false);
+const profileDigestVisible = computed(() => !!(
+  profileDigest.text
+  || profileDigestLoading.value
+  || profileDigestError.value
+  || ['blocked', 'timeout', 'feature_disabled'].includes(profileDigest.value?.mode)
+));
+const profileDigestHint = computed(() => {
+  const mode = profileDigest.value?.mode;
+  const warnings = (profileDigest.value?.warnings || []).filter(Boolean).join('、');
+  if (mode === 'blocked') return warnings ? `已拦截（原因：${warnings}）` : '已拦截';
+  if (mode === 'timeout') return '超时，可点刷新重试';
+  if (mode === 'feature_disabled') return '未开启';
+  if (mode === 'empty') return profileDigest.value?.text || '数据不足，无法生成摘要';
+  return 'AI 摘要未生成。';
+});
 const loadToken = ref(0);
 
 const dialogTitle = computed(() => {
@@ -268,6 +301,8 @@ async function loadFundamental(c, token = loadToken.value) {
     fundProfile.value = null;
     fundDividends.value = [];
     fundDivSummary.value = null;
+    profileDigest.value = {};
+    profileDigestError.value = '';
     return;
   }
   fundCode.value = c;
@@ -281,12 +316,39 @@ async function loadFundamental(c, token = loadToken.value) {
     fundProfile.value = res.data?.profile || null;
     fundDividends.value = res.data?.dividends || [];
     fundDivSummary.value = res.data?.dividend_summary || null;
+    // 不 await：AI 摘要有自己的 loading 与过期丢弃，不能把已到手的基本面数字压住
+    void loadProfileDigest(false);
     if (res.data?.error) fundError.value = res.data.error;
   } catch (e) {
     if (token !== loadToken.value) return;
     fundError.value = '体检拉取失败：' + (e?.response?.data?.detail || e?.message || '网络错误');
   } finally {
     if (token === loadToken.value) fundLoading.value = false;
+  }
+}
+async function loadProfileDigest(refresh = false) {
+  const c = fundCode.value;
+  if (!c) return;
+  if (!profileDigestFeatureLoaded.value) {
+    profileDigestFeatureLoaded.value = true;
+    try {
+      const status = await api.getAiStatus();
+      profileDigestFeatureEnabled.value = !!(status.data?.enabled && status.data?.features?.profile_digest);
+    } catch {
+      profileDigestFeatureEnabled.value = false;
+    }
+  }
+  if (!profileDigestFeatureEnabled.value) return;
+  profileDigestLoading.value = true;
+  profileDigestError.value = '';
+  try {
+    const res = await api.getProfileDigest(c, refresh ? { refresh: 1 } : {});
+    if (c !== fundCode.value) return;
+    profileDigest.value = res.data || {};
+  } catch (e) {
+    profileDigestError.value = 'AI 摘要加载失败：' + (e?.response?.data?.detail || e?.message || '网络错误');
+  } finally {
+    profileDigestLoading.value = false;
   }
 }
 
@@ -387,6 +449,11 @@ function clearAll() {
   info.value = null;
   error.value = '';
   trend.value = null;
+  fundLoading.value = false;
+  profileDigest.value = {};
+  profileDigestOpen.value = [];
+  profileDigestLoading.value = false;
+  profileDigestError.value = '';
   loadFundamental('');
   if (chartEl.value) {
     renderKlineChartView(chartEl.value, []);
@@ -403,6 +470,10 @@ function resetState() {
   error.value = '';
   trend.value = null;
   fundLoading.value = false;
+  profileDigest.value = {};
+  profileDigestOpen.value = [];
+  profileDigestLoading.value = false;
+  profileDigestError.value = '';
   loadFundamental('');
 }
 
@@ -807,6 +878,22 @@ onMounted(() => {
 .fund-tag.s-high {
   color: #dc2626;
   background: rgba(220, 38, 38, 0.12);
+}
+.profile-digest-collapse {
+  margin-top: 16px;
+}
+.profile-digest-meta {
+  color: var(--app-muted);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.profile-digest-text {
+  color: var(--app-text);
+  line-height: 1.7;
+  white-space: pre-wrap;
 }
 .fund-tag.s-low {
   color: #d97706;

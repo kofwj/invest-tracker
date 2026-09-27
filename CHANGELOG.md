@@ -5,6 +5,38 @@
 
 ---
 
+## [1.2.0] — 2026-09-27 — AI 档案摘要（N6）：结构化基本面 → 受约束的白话摘要
+
+标的弹窗（K 线对话框）里多一段「AI 档案摘要」：先取结构化基本面（盈利 / 杠杆 / 现金 / 估值）
+与公司简报（行业、主营、历史分红），只把这份白名单 JSON 交给模型，产出 200 字内白话摘要，
+按「代码 + 资产类别 + 报告期」缓存 7 天。
+
+- **新用例与开关**（新增 `backend/ai_profile.py`，`ai_client.py`、`AiOpsTab.vue`）：新增
+  `profile_digest`（默认关，设置页第 4 个开关，卡头计数改 /4）；用例关闭时**不取数、不调模型**。
+- **上行白名单**（`ai_payload.py`）：`profile_digest` 只放
+  `code / asset_kind / report_period / period_kind / as_of / metrics / profile / dividends /
+  dividend_summary / information_complete`；持仓数量与金额一律不进 payload
+  （测试断言 `market_value` 之类字段被丢弃）。
+- **输出校验**（`ai_payload.py`、`ai_profile.py`）：新增投资建议词表 `TRADE_ADVICE_TERMS`
+  并新增 `trade_advice_prompt_clause()`——system prompt 与检查器共用同一份词表（原先各写一遍会漂移）；
+  strict 命中即拦、shadow 只记警告，与既有用例口径一致。实测「报告期 2026-06-30，ROE 12.3%…
+  10派10元」不误判，而「建议买入 / 该股属于利好 / 机构评级维持买入」一律拦下。
+- **缓存口径**（`ai_profile.py`）：键含代码 + 资产类别 + 报告期（同一代码的股票与基金不会串味），
+  读取时再校验三者一致；`ok` 记 7 天、`blocked` 记 10 分钟、`timeout`**不写缓存**
+  （一次抖动不再把「失败」钉一周），30 天保留 + 定期清理；清理用 `LIKE ... ESCAPE` 精确匹配前缀。
+- **接口与前端**（`routers_fundamentals.py`、`api/index.js`、`KlineDialog.vue`）：
+  `GET /analysis/{code}/digest?refresh=0|1`（`refresh` 有 `ge=0, le=1` 校验，前端 180s 超时 ≥
+  后端 120s AI 预算）；弹窗内折叠块显示报告期 / 取得日并提供「刷新」，
+  `blocked / timeout / feature_disabled / empty` 各有明确文案；摘要请求**不阻塞**基本面面板
+  （fire-and-forget，避免 AI 冷启动时把已经取到的指标压在 spinner 后面）。
+- **连带修正**（`fundamentals.py`）：`build_fundamental_check` 新增 `report_period`，
+  复用既有 `_latest_report_col()`（宽表最新期列的约定只留一处）。
+
+验证：后端 428 passed、前端 178 passed（TZ=UTC 与本地各一次）、`ruff` clean、`npm run build`、
+`scripts/check.sh` 全绿。
+
+---
+
 ## [1.1.0] — 2026-09-26 — 除权除息日历（N5）+ 时区口径统一 + 收益口径修正
 
 本轮新增除权除息日历（持仓/自选的已排期与已实施分红本地成表，收益页只读本地表，定时任务在

@@ -221,7 +221,7 @@ def _fetch_abstract(code):
 def build_fundamental_check(code: str) -> dict:
     """返回 {code, sections: [{key,label,items:[{label,value,status,note}]}], error?}。"""
 
-    out = {"code": str(code or "").strip(), "sections": [], "source_time": None}
+    out = {"code": str(code or "").strip(), "report_period": None, "sections": [], "source_time": None}
     c = str(code or "").strip().lower()
 
     value = None
@@ -234,6 +234,16 @@ def build_fundamental_check(code: str) -> dict:
         abs_df = _fetch_abstract(c)
     except Exception as exc:
         logger.info("财务摘要获取失败 %s: %s", c, exc)
+    if abs_df is not None:
+        try:
+            raw_period = _latest_report_col(list(abs_df.columns))
+            raw_period = str(raw_period or "").strip()
+            if len(raw_period) == 8 and raw_period.isdigit():
+                out["report_period"] = "%s-%s-%s" % (raw_period[:4], raw_period[4:6], raw_period[6:8])
+            elif raw_period:
+                out["report_period"] = raw_period[:10]
+        except Exception:
+            out["report_period"] = None
 
     if not value and abs_df is None:
         out["error"] = "取不到数据（可能是 ETF/指数或数据源暂不可用）"

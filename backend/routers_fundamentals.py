@@ -2,15 +2,18 @@
 + 公司简报 + 历史分红。"""
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 try:
+    from .ai_profile import generate_profile_digest
+    from .database import db_session
     from .fundamentals import build_fundamental_check
     from .company_extras import build_company_extras
 except ImportError:
+    from ai_profile import generate_profile_digest
+    from database import db_session
     from fundamentals import build_fundamental_check
     from company_extras import build_company_extras
-
 router = APIRouter()
 
 
@@ -27,3 +30,23 @@ def fundamental_check(code: str):
     except Exception as exc:  # 数据源偶发失败不应 500
         raise HTTPException(status_code=502, detail=f"基本面数据获取失败：{exc}") from exc
     return data
+
+
+@router.get("/analysis/{code}/digest")
+def profile_digest(code: str, refresh: int = Query(default=0, ge=0, le=1), asset_kind: str = ""):
+    """Read/generate the in-app profile digest. Never pushes or writes portfolio data."""
+    normalized = str(code or "").strip()
+    if not normalized:
+        raise HTTPException(status_code=400, detail="code 不能为空")
+    try:
+        with db_session() as conn:
+            result = generate_profile_digest(
+                conn,
+                normalized,
+                asset_kind=asset_kind or None,
+                refresh=bool(refresh),
+            )
+            conn.commit()
+            return result
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="档案摘要生成失败：%s" % exc) from exc

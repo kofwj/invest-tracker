@@ -124,6 +124,7 @@ const api = {
     getKlines: (code, days = 120) => axios.get(API + '/klines/' + encodeURIComponent(code) + '?days=' + days, { timeout: 30000 }),
     syncKlines: (payload = {}) => axios.post(API + '/klines/sync', payload, { timeout: 180000 }),
     fundamentalCheck: (code) => axios.get(API + '/analysis/' + encodeURIComponent(code), { timeout: 45000 }),
+    getProfileDigest: (code, params = {}) => axios.get(API + '/analysis/' + encodeURIComponent(code) + '/digest', { params, timeout: 180000 }),
 
     // force=true 用于「最新价不是今天的」被 409 拦住后，用户确认强制记录
     createSnapshot: (force = false) => axios.post(API + '/snapshots' + (force ? '?force=true' : '')),
