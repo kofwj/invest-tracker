@@ -3,6 +3,54 @@ import { createAssetHelpers } from './assets.js';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { todayLocalIso, apiErrorDetail, formatMoney } from '../utils/index.js';
 
+// 一句话记账（N1）草稿 → 表单字段。导出成纯函数便于单测：只做字段落位，
+// 金额由「数量 × 单价」算（AI 不给金额）；日期只在原话明写时采用，否则补应用时区的"今天"
+// —— 不能沿用表单里可能被改过的旧值，否则"昨天"会被记到上次填的日期上。
+const applyEntryDraftFields = (form, draft) => {
+    if (!form || !draft) return form;
+    if (draft.code) form.code = String(draft.code);
+    if (draft.name) form.name = String(draft.name);
+    if (draft.direction) form.direction = String(draft.direction);
+    form.date = draft.date ? String(draft.date).slice(0, 10) : todayLocalIso();
+    const qty = Number(draft.quantity);
+    if (Number.isFinite(qty) && qty > 0) form.quantity = qty;
+    const price = Number(draft.price);
+    if (Number.isFinite(price) && price > 0) form.price = price;
+    const gross = Number(form.quantity || 0) * Number(form.price || 0);
+    form.amount = Math.round(gross * 100) / 100;
+    return form;
+};
+
+// 一句话记账：后端给的原因 → 人话。放在模块层（纯函数、可单测），视图只调用。
+const NL_ENTRY_REASONS = {
+    unknown_code: '原话里的标的不在持仓 / 关注 / 交易记录里。先手填一次，之后它就能被识别。',
+    invalid_direction: '没听出买卖方向（只支持 买入 / 卖出 / 分红 / 分红再投资 / 申购待确认）。',
+    direction_conflict: '买卖方向跟原话对不上，为避免记反请手动确认方向。',
+    invalid_value: '数量或单价不合理，请手动填写。',
+    untraceable_number: '数量或单价没能跟原话对上，为避免填错请手动输入。',
+    unit_conflict: '数量和单价可能被搞混了，为避免记错请手动输入。',
+    amount_mismatch: '数量×单价 与「花了…元」的总额对不上，请手动核对。',
+    unparsable: '没能从这句话里读出交易，换个说法或手动填写。',
+    timeout: 'AI 超时了，请重试或手动填写。',
+    budget: '今天的 AI 调用额度用完了，请手动填写。',
+    blocked: 'AI 暂时不可用，请手动填写。',
+    not_configured: 'AI 还没配好（设置 → AI 的地址 / 密钥 / 模型），请手动填写。',
+    assets_unavailable: '读持仓清单失败，暂时用不了，请手动填写。',
+    empty_universe: '还没有持仓或交易记录，先手填第一笔吧。',
+};
+
+const nlEntryReasonText = (data) => {
+    const mode = String((data && data.mode) || '');
+    const reason = String((data && data.reason) || '');
+    // mode=blocked 是兜底分类，它自己那句话最没用：先拿 reason 试一次，
+    // 否则 assets_unavailable / payload_failed 这类具体原因永远显示不出来。
+    const keys = mode === 'blocked' ? [reason, mode] : [mode, reason];
+    for (const key of keys) {
+        if (key && NL_ENTRY_REASONS[key]) return NL_ENTRY_REASONS[key];
+    }
+    return `没能解析成草稿（${reason || mode || '未知原因'}），请手动填写。`;
+};
+
 const createTransactionsModule = ({
     activeTab,
     allTransactions,
@@ -223,6 +271,34 @@ const createTransactionsModule = ({
             ElMessage.error('删除失败：' + apiErrorDetail(e));
         }
     };
+    // N1 一句话记账：把草稿填进录入表单。**不落库** —— 用户仍要点「提交记录」
+    // 才走 POST /transactions，与「草稿确认后才入账」的既有立场一致。
+    const applyEntryDraft = (draft) => {
+        applyEntryDraftFields(transForm.value, draft);
+        feeManuallyEdited.value = false;
+        autoMatchTransAsset('code');
+        // fee 不由模型猜：先按金额估一次，再按「买入 +费 / 卖出 −费」把总额对齐，
+        // 否则提交前那条「数量×单价 vs 总额」反向校验会为几元手续费弹一次核对框。
+        estimateFeeIfAuto();
+        const fee = Number(transForm.value.fee || 0);
+        const gross = Number(transForm.value.quantity || 0) * Number(transForm.value.price || 0);
+        const dir = transForm.value.direction;
+        if (gross > 0) {
+            const withFee = (dir === '卖出' || dir === '分红') ? gross - fee : gross + fee;
+            transForm.value.amount = Math.round(Math.max(withFee, 0) * 100) / 100;
+            estimateFeeIfAuto();
+        }
+    };
+
+    const parseNlEntry = async (utterance) => {
+        const text = String(utterance || '').trim();
+        if (!text) return { ok: false, mode: 'unparsable', reason: 'empty_utterance', draft: null, warnings: [], shadow: false };
+        const res = await api.nlEntry(text);
+        const data = res.data || {};
+        // 影子模式与 A3 同语义：只记录、不生效 —— 草稿不填进表单。
+        if (data.ok && data.draft && !data.shadow) applyEntryDraft(data.draft);
+        return data;
+    };
 
     return {
         submitTrans, resetForm, showTransactions, updatePendingTransactions, queryTransactions,
@@ -230,8 +306,9 @@ const createTransactionsModule = ({
         goPendingTransactions, openTransEditDialog, saveTransactionEdit, deleteTransaction,
         // asset query helpers now owned here
         queryAssetByCode, queryAssetByName, selectTransAsset, autoMatchTransAsset,
+        applyEntryDraftFields, parseNlEntry,
     };
 };
 
-export { createTransactionsModule };
+export { createTransactionsModule, nlEntryReasonText, applyEntryDraftFields };
 export default createTransactionsModule;

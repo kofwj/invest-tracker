@@ -295,6 +295,7 @@ const app = createApp({
             queryAssetByName,
             selectTransAsset,
             autoMatchTransAsset,
+            parseNlEntry,
         } = createTransactionsModule({
             activeTab,
             allTransactions,
@@ -785,7 +786,7 @@ const app = createApp({
             queryAssetByCode, queryAssetByName, selectTransAsset, autoMatchTransAsset,
             openDepositDialog, saveDeposit, deleteDeposit, updateCash, queryCashFlows, resetCashFlowQuery, addCashFlow, openCashFlowEditDialog, saveCashFlowEdit, deleteCashFlow, cashFlowTagType, fetchCashAudit,
             createSnapshot, fetchSnapshots, exportSnapshots, compactSnapshots, showTransactions,
-            queryTransactions, applyTransFilter, resetTransQuery, handleTransPageChange, handleTransPageSizeChange, goPendingTransactions, openTransEditDialog, saveTransactionEdit, deleteTransaction,
+            queryTransactions, applyTransFilter, resetTransQuery, handleTransPageChange, handleTransPageSizeChange, goPendingTransactions, openTransEditDialog, saveTransactionEdit, deleteTransaction, parseNlEntry,
             openExpectedReturnDialog, saveExpectedReturn, openHoldingCorrectionDialog, saveHoldingCorrection, openHoldingCorrectionHistory, deleteHoldingCorrection,
             expectedReturnDialog, holdingCorrectionDialog, holdingCorrectionHistoryDialog,
             formatMoney, formatPercent, pct, holdingFloatProfit, holdingLifetimeProfit, holdingFloatProfitRate, holdingLifetimeProfitRate,

@@ -702,6 +702,11 @@ html.dark .stat-label::after { background: rgba(255,255,255,0.08); }
 .wide-number-input .el-input__wrapper { padding-left: 12px; padding-right: 12px; }
 .wide-number-input .el-input__inner { text-align: left; }
 .fee-hint { margin-top: -8px; margin-bottom: 12px; color: var(--app-muted); font-size: 12px; line-height: 1.5; }
+/* N1 一句话记账：原话输入 + 解析出的草稿摘要（.fee-hint 同族，只是不吃负 margin） */
+.nl-entry-row { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
+/* 输入框吃掉剩余宽度，否则和按钮横排时会只占一半 */
+.nl-entry-row .el-input { flex: 1; }
+.nl-entry-preview { margin-bottom: 12px; color: var(--app-muted); font-size: 12px; line-height: 1.5; }
 .fee-settings-table .cell { white-space: nowrap; }
 .fee-settings-native { border: 1px solid var(--app-border); border-radius: 8px; overflow-x: auto; }
 .fee-settings-head, .fee-settings-row { display: grid; grid-template-columns: 110px repeat(4, minmax(130px, 1fr)); align-items: center; min-width: 650px; }

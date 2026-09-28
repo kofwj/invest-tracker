@@ -143,9 +143,9 @@
         <div class="ops-card-head">
           <div>
             <div class="ops-section-title"><span class="ops-q">Q2</span>哪些用例允许调用</div>
-            <div class="ops-hint">先配底座；真正接晚报 / 预警 / 自然语言规则是后面的包。用例关闭时后端返回 feature_disabled，不发请求。</div>
+            <div class="ops-hint">已接：晚报 brief、档案摘要、一句话记账。未接：预警附言、自然语言规则（开关可先开，功能还没落地）。用例关闭时后端返回 feature_disabled，不发请求。</div>
           </div>
-          <el-tag size="small" type="info" effect="light">已开 {{ enabledFeatureCount }} / 4</el-tag>
+          <el-tag size="small" type="info" effect="light">已开 {{ enabledFeatureCount }} / 5</el-tag>
         </div>
       </template>
       <div class="use-grid">
@@ -175,6 +175,13 @@
           <span class="use-card-txt">
             <span class="use-card-title">档案摘要</span>
             <span class="use-card-hint">持仓弹窗内按报告期生成 AI 档案摘要。{{ form.features.profile_digest ? '已开启' : '未开启' }}。</span>
+          </span>
+        </div>
+        <div class="use-card">
+          <el-switch v-model="form.features.nl_entry" aria-label="一句话记账开关" />
+          <span class="use-card-txt">
+            <span class="use-card-title">一句话记账</span>
+            <span class="use-card-hint">交易页「说一句话」拆成录入草稿，确认后才入账。{{ form.features.nl_entry ? '已开启' : '未开启' }}。</span>
           </span>
         </div>
       </div>
@@ -257,7 +264,7 @@ const form = reactive({
   api_key: '',
   timeout_seconds: 8,
   daily_call_cap: 30,
-  features: { brief: false, alert_note: false, nl_rule: false, profile_digest: false },
+  features: { brief: false, alert_note: false, nl_rule: false, profile_digest: false, nl_entry: false },
 });
 const usageText = computed(() => {
   const used = Number(status.value.today_used ?? status.value.today_calls ?? 0);
@@ -266,7 +273,7 @@ const usageText = computed(() => {
   return `${used} / ${cap}`;
 });
 const enabledFeatureCount = computed(
-  () => [form.features.brief, form.features.alert_note, form.features.nl_rule, form.features.profile_digest].filter(Boolean).length,
+  () => [form.features.brief, form.features.alert_note, form.features.nl_rule, form.features.profile_digest, form.features.nl_entry].filter(Boolean).length,
 );
 function applyStatus(data, { writeForm = true } = {}) {
   status.value = data || {};
@@ -283,6 +290,7 @@ function applyStatus(data, { writeForm = true } = {}) {
     alert_note: !!(data.features && data.features.alert_note),
     nl_rule: !!(data.features && data.features.nl_rule),
     profile_digest: !!(data.features && data.features.profile_digest),
+    nl_entry: !!(data.features && data.features.nl_entry),
   };
   clearApiKey.value = false;
 }

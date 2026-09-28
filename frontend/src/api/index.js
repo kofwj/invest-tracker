@@ -208,6 +208,8 @@ const api = {
     saveAiConfig: (payload) => axios.put(API + '/ai/config', payload || {}),
     testAi: () => axios.post(API + '/ai/test', {}, { timeout: 125000 }),
     getAiModels: () => axios.get(API + '/ai/models', { timeout: 30000 }),
+    // N1 一句话记账：超时 60s > 后端 30s 预算（慢就回落成"没听懂"，不拖住表单）。
+    nlEntry: (utterance) => axios.post(API + '/ai/nl-entry', { utterance }, { timeout: 60000 }),
 
     getDisciplineReport: () => axios.get(API + '/discipline/report', { timeout: 60000 }),
     getDisciplinePolicy: () => axios.get(API + '/discipline/policy'),

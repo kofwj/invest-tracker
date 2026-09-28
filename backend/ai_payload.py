@@ -17,6 +17,8 @@ ALLOWED_KEYS = {
         "trigger", "portfolio_direction", "peers", "benchmark", "reasons", "moves",
     },
     "nl_rule": {"utterance", "available_codes"},
+    # N1 一句话记账：只有原话、候选标的清单与"今天"三样，账本数值一个都不进。
+    "nl_entry": {"utterance", "available_codes", "today"},
     "profile_digest": {
         "code", "asset_kind", "report_period", "period_kind", "as_of", "metrics",
         "profile", "dividends", "dividend_summary", "information_complete",
@@ -169,6 +171,13 @@ def build_payload(feature: str, **sources) -> Dict[str, Any]:
             "information_complete": bool(sources.get("information_complete")),
         }
 
+
+    if feature == "nl_entry":
+        return {
+            "utterance": str(sources.get("utterance") or "").strip(),
+            "available_codes": _codes(sources.get("available_codes")),
+            "today": str(sources.get("today") or "")[:10],
+        }
     return {
         "utterance": str(sources.get("utterance") or ""),
         "available_codes": _codes(sources.get("available_codes")),

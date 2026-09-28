@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 try:
@@ -15,6 +15,7 @@ try:
         normalize_chat_url,
         save_ai_config,
     )
+    from .ai_entry import ENTRY_MAX_UTTERANCE, parse_entry_draft
     from .database import db_session
 except ImportError:
     from ai_client import (
@@ -25,6 +26,7 @@ except ImportError:
         normalize_chat_url,
         save_ai_config,
     )
+    from ai_entry import ENTRY_MAX_UTTERANCE, parse_entry_draft
     from database import db_session
 
 router = APIRouter(tags=["ai"])
@@ -97,3 +99,22 @@ def get_ai_models():
         "error": data.get("error") or "",
         "model_current": cfg.model,
     }
+
+
+class EntryBody(BaseModel):
+    utterance: str = ""
+
+
+@router.post("/ai/nl-entry")
+def post_nl_entry(body: EntryBody):
+    """一句话记账 → 交易草稿。AI 只填字段，不落库（写库仍走 POST /transactions）。"""
+    text = str(body.utterance or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="请先说一句要记的交易")
+    if len(text) > ENTRY_MAX_UTTERANCE:
+        # 超长在花钱之前就拦掉：既省额度，也避免把长文丢给供应商。
+        raise HTTPException(status_code=400, detail="原话过长（限 %d 字）" % ENTRY_MAX_UTTERANCE)
+    with db_session() as conn:
+        result = parse_entry_draft(conn, text)
+        conn.commit()
+    return result

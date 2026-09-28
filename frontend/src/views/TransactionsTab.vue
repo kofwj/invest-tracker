@@ -1,5 +1,22 @@
 <template>
   <PageShell>
+                <!-- 一句话记账（N1）：AI 只把原话拆成字段填进下面的表单，仍要点「提交记录」才入账 -->
+                <el-card header="一句话记账（草稿）">
+                    <div class="nl-entry-row">
+                        <el-input
+                            v-model="nlUtterance"
+                            :disabled="nlEntryDisabled"
+                            aria-label="一句话记账原话"
+                            placeholder="例：昨天 1.85 买了 2000 份红利ETF华泰柏瑞"
+                            maxlength="200"
+                            @keyup.enter="onParseNlEntry"
+                        />
+                        <el-button :loading="nlEntryLoading" :disabled="nlEntryDisabled" @click="onParseNlEntry">解析成草稿</el-button>
+                    </div>
+                    <div class="fee-hint">原话会发送给你配置的 AI 服务；AI 只填字段，不会入账，金额与手续费由系统按既有规则算。</div>
+                    <div v-if="nlEntryDisabledReason" class="fee-hint">{{ nlEntryDisabledReason }}</div>
+                    <div v-if="nlEntryPreview" class="nl-entry-preview">{{ nlEntryPreview }}</div>
+                </el-card>
                 <el-card header="新增交易记录">
                     <el-form :model="transForm" label-width="100px">
                         <el-row :gutter="20">
@@ -267,15 +284,88 @@
 
 <script setup>
 import PageShell from '../components/PageShell.vue';
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
+import api from '../api/index.js';
 import { useAppCtx } from '../composables/useAppCtx.js';
-const { transForm, feeAccounts, feeAutoHint, filteredTransactions, pendingTransactions, pendingPurchaseTotal, transQuery, transPage, submitTrans, resetForm, markFeeManual, downloadTransactionsTemplate, exportTransactions, importTransactions, queryAssetByCode, queryAssetByName, selectTransAsset, autoMatchTransAsset, applyTransFilter, resetTransQuery, handleTransPageChange, handleTransPageSizeChange, openTransEditDialog, deleteTransaction, formatMoney, dashboard, dividendLoading, openDividendDraftDialog } = useAppCtx();
+import { ElMessage } from 'element-plus';
+import { nlEntryReasonText } from '../modules/transactions.js';
+import { apiErrorDetail } from '../utils/index.js';
+const { transForm, feeAccounts, feeAutoHint, filteredTransactions, pendingTransactions, pendingPurchaseTotal, transQuery, transPage, submitTrans, resetForm, markFeeManual, downloadTransactionsTemplate, exportTransactions, importTransactions, queryAssetByCode, queryAssetByName, selectTransAsset, autoMatchTransAsset, applyTransFilter, resetTransQuery, handleTransPageChange, handleTransPageSizeChange, openTransEditDialog, deleteTransaction, formatMoney, dashboard, dividendLoading, openDividendDraftDialog, parseNlEntry } = useAppCtx();
 
 // 写操作防连点：提交记录（模块里已有 transSubmitting 入口判断，这里补按钮 loading）、
 // 删除交易、导入交易 CSV（el-upload 的 on-change）都包一层本地 in-flight ref。
 const transSubmitting = ref(false);
 const transDeleting = ref(null);
 const transImporting = ref(false);
+
+// 一句话记账（N1）：AI 只把原话拆成字段填进表单，**不落库** —— 仍要点「提交记录」才入账。
+const nlUtterance = ref('');
+const nlEntryLoading = ref(false);
+const nlEntryDisabled = ref(false);
+const nlEntryDisabledReason = ref('');
+const nlEntryPreview = ref('');
+
+// 「原因 → 人话」的映射搬到了 modules/transactions.js（纯函数、可单测），这里直接用。
+
+// 入口可用性：开关没开就直接禁用，别让用户白点一次（§1.10 验收 1）。
+// 读不到状态时不拦着 —— 让用户点一次，后端会给更准确的 feature_disabled。
+async function refreshNlEntryGate() {
+  try {
+    const { data } = await api.getAiStatus();
+    const enabled = !!(data && data.enabled && data.features && data.features.nl_entry);
+    nlEntryDisabled.value = !enabled;
+    nlEntryDisabledReason.value = enabled
+      ? ''
+      : 'AI 记账未开启：请到「设置 → AI」打开总开关与「一句话记账」用例。';
+  } catch (e) {
+    nlEntryDisabled.value = false;
+    nlEntryDisabledReason.value = '';
+  }
+}
+
+onMounted(refreshNlEntryGate);
+
+function draftSummary(draft) {
+  const dateText = draft.date ? ` ${draft.date}` : '';
+  return `${draft.name || draft.code}(${draft.code}) ${draft.direction} ${draft.quantity} @ ${draft.price}${dateText}`;
+}
+
+async function onParseNlEntry() {
+  if (nlEntryLoading.value) return;
+  const text = String(nlUtterance.value || '').trim();
+  if (!text) {
+    ElMessage.warning('先说一句要记的交易，例如「昨天 1.85 买了 2000 份红利ETF」');
+    return;
+  }
+  nlEntryLoading.value = true;
+  try {
+    const data = await parseNlEntry(text);
+    if (data.mode === 'feature_disabled' || data.mode === 'disabled') {
+      nlEntryDisabled.value = true;
+      nlEntryPreview.value = '';
+      nlEntryDisabledReason.value = 'AI 记账未开启：请到「设置 → AI」打开总开关与「一句话记账」用例。';
+      ElMessage.info(nlEntryDisabledReason.value);
+      return;
+    }
+    if (data.ok && data.draft) {
+      if (data.shadow) {
+        // 影子模式与 A3 同语义：只记录、不生效 —— 草稿不填表，只在这里预览。
+        nlEntryPreview.value = `影子模式：仅预览，未填入表单 —— ${draftSummary(data.draft)}`;
+        ElMessage.info('影子模式：只记录不生效，草稿没有填进表单。');
+        return;
+      }
+      nlEntryPreview.value = draftSummary(data.draft);
+      ElMessage.success('草稿已填入下方表单，请核对后点「提交记录」入账');
+      return;
+    }
+    nlEntryPreview.value = '';
+    ElMessage.warning(nlEntryReasonText(data));
+  } catch (e) {
+    ElMessage.error('解析失败：' + apiErrorDetail(e));
+  } finally {
+    nlEntryLoading.value = false;
+  }
+}
 
 async function onSubmitTrans() {
   if (transSubmitting.value) return;
