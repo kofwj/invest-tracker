@@ -223,18 +223,24 @@ const profileDigest = ref({});
 const profileDigestOpen = ref([]);
 const profileDigestLoading = ref(false);
 const profileDigestError = ref('');
-const profileDigestFeatureEnabled = ref(false);
+const profileDigestAiOn = ref(false);
 const profileDigestFeatureLoaded = ref(false);
+const profileDigestFeatureEnabled = ref(false);
 const profileDigestVisible = computed(() => !!(
-  profileDigest.text
+  // 注意 profileDigest 是 ref：在 script 里必须 .value 取值，写 profileDigest.text
+  // 永远是 undefined —— 那样连"生成成功"的摘要也不显示（整块静默消失）。
+  profileDigest.value?.text
   || profileDigestLoading.value
   || profileDigestError.value
-  || ['blocked', 'timeout', 'feature_disabled'].includes(profileDigest.value?.mode)
+  || ['blocked', 'timeout', 'feature_disabled', 'empty'].includes(profileDigest.value?.mode)
 ));
 const profileDigestHint = computed(() => {
   const mode = profileDigest.value?.mode;
   const warnings = (profileDigest.value?.warnings || []).filter(Boolean).join('、');
-  if (mode === 'blocked') return warnings ? `已拦截（原因：${warnings}）` : '已拦截';
+  if (mode === 'blocked') {
+    if (warnings.includes('budget')) return '今天的 AI 调用额度用完了（设置页可调大上限）';
+    return warnings ? `已拦截（原因：${warnings}）` : '已拦截';
+  }
   if (mode === 'timeout') return '超时，可点刷新重试';
   if (mode === 'feature_disabled') return '未开启';
   if (mode === 'empty') return profileDigest.value?.text || '数据不足，无法生成摘要';
@@ -316,14 +322,18 @@ async function loadFundamental(c, token = loadToken.value) {
     fundProfile.value = res.data?.profile || null;
     fundDividends.value = res.data?.dividends || [];
     fundDivSummary.value = res.data?.dividend_summary || null;
-    // 不 await：AI 摘要有自己的 loading 与过期丢弃，不能把已到手的基本面数字压住
-    void loadProfileDigest(false);
     if (res.data?.error) fundError.value = res.data.error;
   } catch (e) {
     if (token !== loadToken.value) return;
     fundError.value = '体检拉取失败：' + (e?.response?.data?.detail || e?.message || '网络错误');
   } finally {
-    if (token === loadToken.value) fundLoading.value = false;
+    if (token === loadToken.value) {
+      fundLoading.value = false;
+      // 不 await：AI 摘要有自己的 loading 与过期丢弃，不能把已到手的基本面数字压住。
+      // 放在 finally 里：基本面拉失败（502 / 网络）不该把摘要入口一起吞掉 ——
+      // 摘要是后端自己重新取数的，与这次体检成功与否无关。
+      void loadProfileDigest(false);
+    }
   }
 }
 async function loadProfileDigest(refresh = false) {
@@ -333,12 +343,21 @@ async function loadProfileDigest(refresh = false) {
     profileDigestFeatureLoaded.value = true;
     try {
       const status = await api.getAiStatus();
+      profileDigestAiOn.value = !!status.data?.enabled;
       profileDigestFeatureEnabled.value = !!(status.data?.enabled && status.data?.features?.profile_digest);
     } catch {
+      profileDigestAiOn.value = false;
       profileDigestFeatureEnabled.value = false;
     }
   }
-  if (!profileDigestFeatureEnabled.value) return;
+  if (!profileDigestFeatureEnabled.value) {
+    // 别静默隐藏：开关关着时用户只会觉得"出不来"。AI 完全没配好就不打扰（设置页才是
+    // 发现它的地方）；AI 开着只是没开这个用例，就给一句能自己解决的提示。
+    profileDigestError.value = profileDigestAiOn.value
+      ? 'AI 档案摘要未开启：请到「设置 → AI」打开「档案摘要」用例。'
+      : '';
+    return;
+  }
   profileDigestLoading.value = true;
   profileDigestError.value = '';
   try {

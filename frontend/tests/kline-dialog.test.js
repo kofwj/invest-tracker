@@ -39,6 +39,9 @@ const apiMock = vi.hoisted(() => ({
   fundamentalCheck: vi.fn(async () => ({ data: { sections: [], profile: null, dividends: [], dividend_summary: null } })),
   syncKlines: vi.fn(async () => ({ data: {} })),
   setHoldingPrice: vi.fn(async () => ({ data: {} })),
+  // AI 档案摘要（N6）：默认关着，避免老用例意外去打摘要接口
+  getAiStatus: vi.fn(async () => ({ data: { enabled: false, features: {} } })),
+  getProfileDigest: vi.fn(async () => ({ data: {} })),
 }));
 
 vi.mock('../src/api/index.js', () => ({
@@ -47,6 +50,15 @@ vi.mock('../src/api/index.js', () => ({
   api: apiMock,
   default: apiMock,
 }));
+
+// 图表模块：jsdom 里没有真 canvas，真渲染会抛（"reading 'setOption'"）——
+// 抛在 loadKline 的 try 里会把后面的「基本面体检 + AI 档案摘要」整段挡掉，
+// 于是这里把两个用到的函数都换成 no-op（只是取图，不影响本文件要断言的行为）。
+const chartsMock = vi.hoisted(() => ({
+  renderKlineChartView: vi.fn(),
+  analyzeKlineTrend: vi.fn(() => ({ text: '', tone: '' })),
+}));
+vi.mock('../src/charts/index.js', () => chartsMock);
 
 // 透传桩：渲染默认插槽、保留 attrs（@click 会挂成原生监听，所以可以直接点）
 const passthrough = (name) => ({
@@ -122,6 +134,8 @@ const STUBS = {
   ElDialog: ElDialogStub,
   ElTable: ElTableStub,
   ElTableColumn: ElTableColumnStub,
+  ElCollapse: passthrough('ElCollapse'),
+  ElCollapseItem: passthrough('ElCollapseItem'),
 };
 
 function mountView(view, ctx) {
@@ -250,6 +264,65 @@ describe('持仓明细 → K线弹窗', () => {
     expect(apiMock.getKlines).not.toHaveBeenCalled();
     // 持仓页自己也不去拉 K 线持仓列表（打开弹窗时才拉）
     expect(apiMock.getHoldings).not.toHaveBeenCalled();
+    app.unmount();
+  });
+
+  it('档案摘要用例关着 → 弹窗里给出「未开启」提示（而不是整块消失），且不发摘要请求', async () => {
+    apiMock.getAiStatus.mockImplementation(async () => ({
+      data: { enabled: true, features: { profile_digest: false } },
+    }));
+    const { host, app } = mountView(HoldingsTab, holdingsCtx());
+    await flush();
+
+    click(findButton(host, '农业银行'));
+    await flush();
+    await flush();
+
+    // 修前：整块静默消失，用户只看到"出不来"，无从判断是开关没开还是坏了
+    expect(host.textContent).toContain('AI 档案摘要未开启');
+    expect(apiMock.getProfileDigest).not.toHaveBeenCalled();
+    app.unmount();
+  });
+
+  it('用例开着 → 会去拉摘要，并把结果渲染出来', async () => {
+    apiMock.getAiStatus.mockImplementation(async () => ({
+      data: { enabled: true, features: { profile_digest: true } },
+    }));
+    apiMock.getProfileDigest.mockImplementation(async () => ({
+      data: { mode: 'empty', text: '数据不足，无法生成摘要', report_period: '', period_kind: 'as_of', as_of: '2026-09-28' },
+    }));
+    const { host, app } = mountView(HoldingsTab, holdingsCtx());
+    await flush();
+
+    click(findButton(host, '农业银行'));
+    await flush();
+    await flush();
+
+    expect(apiMock.getProfileDigest).toHaveBeenCalledWith('601288', {});
+    expect(host.textContent).toContain('数据不足');
+    app.unmount();
+  });
+
+  it('基本面拉取失败也不吞掉摘要入口（摘要是后端自己重新取数的）', async () => {
+    apiMock.getAiStatus.mockImplementation(async () => ({
+      data: { enabled: true, features: { profile_digest: true } },
+    }));
+    apiMock.getProfileDigest.mockImplementation(async () => ({
+      data: { mode: 'blocked', text: '', warnings: ['http_404'], report_period: '', period_kind: 'as_of', as_of: '2026-09-28' },
+    }));
+    apiMock.fundamentalCheck.mockImplementation(async () => {
+      throw new Error('boom');
+    });
+    const { host, app } = mountView(HoldingsTab, holdingsCtx());
+    await flush();
+
+    click(findButton(host, '农业银行'));
+    await flush();
+    await flush();
+
+    expect(host.textContent).toContain('体检拉取失败');
+    expect(apiMock.getProfileDigest).toHaveBeenCalled(); // 修前这条路径直接不请求
+    expect(host.textContent).toContain('http_404'); // 失败原因看得见
     app.unmount();
   });
 });
