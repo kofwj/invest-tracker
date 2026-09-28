@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, Field
 
 try:
@@ -16,6 +16,8 @@ try:
         save_ai_config,
     )
     from .ai_entry import ENTRY_MAX_UTTERANCE, parse_entry_draft
+    from .ai_nl_rule import NL_RULE_MAX_UTTERANCE, parse_rule_draft
+    from .ai_usage import ai_usage_summary, audit_csv, audit_filename, audit_json
     from .database import db_session
 except ImportError:
     from ai_client import (
@@ -27,6 +29,8 @@ except ImportError:
         save_ai_config,
     )
     from ai_entry import ENTRY_MAX_UTTERANCE, parse_entry_draft
+    from ai_nl_rule import NL_RULE_MAX_UTTERANCE, parse_rule_draft
+    from ai_usage import ai_usage_summary, audit_csv, audit_filename, audit_json
     from database import db_session
 
 router = APIRouter(tags=["ai"])
@@ -118,3 +122,44 @@ def post_nl_entry(body: EntryBody):
         result = parse_entry_draft(conn, text)
         conn.commit()
     return result
+
+
+class RuleBody(BaseModel):
+    utterance: str = ""
+
+
+@router.post("/ai/nl-rule")
+def post_nl_rule(body: RuleBody):
+    """一句话 → 预警规则草稿。AI 只产草稿，写库仍走 POST /market/alert-rules。"""
+    text = str(body.utterance or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="请先说一句要设的规则")
+    if len(text) > NL_RULE_MAX_UTTERANCE:
+        raise HTTPException(status_code=400, detail="原话过长（限 %d 字）" % NL_RULE_MAX_UTTERANCE)
+    with db_session() as conn:
+        result = parse_rule_draft(conn, text)
+        conn.commit()
+    return result
+
+
+@router.get("/ai/usage")
+def get_ai_usage(days: int = 7):
+    """近 N 天用量与命中率（只读）。days 会被夹到 1..30。"""
+    with db_session() as conn:
+        return ai_usage_summary(conn, days=days)
+
+
+@router.get("/ai/audit/export")
+def get_ai_audit_export(days: int = 7, format: str = "json"):
+    """导出窗口内的调用审计（不含密钥）。json 自带窗口信息，csv 是纯表格。"""
+    fmt = str(format or "json").strip().lower()
+    if fmt not in ("json", "csv"):
+        raise HTTPException(status_code=400, detail="format 只支持 json 或 csv")
+    with db_session() as conn:
+        body = audit_json(conn, days=days) if fmt == "json" else audit_csv(conn, days=days)
+    media = "application/json" if fmt == "json" else "text/csv"
+    return Response(
+        content=body,
+        media_type=media + "; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="%s"' % audit_filename(fmt)},
+    )

@@ -505,7 +505,7 @@ def _mute_notifier(monkeypatch):
     monkeypatch.setattr(
         notify,
         "notify_price_alerts",
-        lambda triggered, conn=None: {"sent": False, "reason": "muted", "count": len(triggered)},
+        lambda triggered, conn=None, **kwargs: {"sent": False, "reason": "muted", "count": len(triggered)},
     )
 
 

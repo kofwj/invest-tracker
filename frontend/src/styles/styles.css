@@ -706,6 +706,9 @@ html.dark .stat-label::after { background: rgba(255,255,255,0.08); }
 .nl-entry-row { display: flex; gap: 8px; align-items: center; margin-bottom: 4px; }
 /* 输入框吃掉剩余宽度，否则和按钮横排时会只占一半 */
 .nl-entry-row .el-input { flex: 1; }
+/* A5 一句话建规则：原话输入 + 解析按钮横排（与 N1 的 .nl-entry-row 同族） */
+.nl-rule-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.nl-rule-row .el-input { flex: 1; }
 .nl-entry-preview { margin-bottom: 12px; color: var(--app-muted); font-size: 12px; line-height: 1.5; }
 .fee-settings-table .cell { white-space: nowrap; }
 .fee-settings-native { border: 1px solid var(--app-border); border-radius: 8px; overflow-x: auto; }

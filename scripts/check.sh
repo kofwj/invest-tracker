@@ -273,6 +273,9 @@ required_routes = {
     "/ai/test",
     "/ai/models",
     "/ai/nl-entry",
+    "/ai/nl-rule",
+    "/ai/usage",
+    "/ai/audit/export",
 }
 routes = {getattr(route, "path", "") for route in module.app.routes}
 missing = sorted(required_routes - routes)

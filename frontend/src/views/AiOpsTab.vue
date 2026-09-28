@@ -40,6 +40,58 @@
       style="margin-bottom: 14px;"
     />
 
+    <!-- A6 近 7 / 30 天用量与命中率（只读） -->
+    <el-card shadow="never" class="ops-card">
+      <template #header>
+        <div class="ops-card-head">
+          <div>
+            <div class="ops-section-title"><span class="ops-q">Q0</span>近 7 / 30 天用量</div>
+            <div class="ops-hint">只数正式调用（试推不计）；平均耗时只看成功的调用；命中率来自本地原因缓存，不是审计摘要。</div>
+          </div>
+          <el-space wrap>
+            <el-radio-group v-model="usageDays" size="small" @change="loadUsage">
+              <el-radio-button :value="7">7 天</el-radio-button>
+              <el-radio-button :value="30">30 天</el-radio-button>
+            </el-radio-group>
+            <el-button size="small" plain :loading="usageExporting" @click="onExportAudit('json')">导出审计</el-button>
+            <el-button size="small" plain :loading="usageExporting" @click="onExportAudit('csv')">导出 CSV</el-button>
+          </el-space>
+        </div>
+      </template>
+      <div class="app-stat-row cols-4" aria-label="AI 用量速览">
+        <div class="app-stat-cell">
+          <div class="k">尝试调用</div>
+          <div class="v">{{ usage.calls.attempted }}</div>
+          <div class="s">成功 {{ usage.calls.ok }} / 失败 {{ usage.calls.failed }}</div>
+        </div>
+        <div class="app-stat-cell">
+          <div class="k">失败率</div>
+          <div class="v" :class="usage.calls.failed ? 'warn' : 'ok'">{{ failRateText }}</div>
+          <div class="s">失败原因分组见下方审计表</div>
+        </div>
+        <div class="app-stat-cell">
+          <div class="k">有效原因天数</div>
+          <div class="v">{{ usage.reasons_hit.days_with_hits }} / {{ usage.reasons_hit.window_days }}</div>
+          <div class="s">命中持仓的公告 / 新闻 / 异动天数</div>
+        </div>
+        <div class="app-stat-cell">
+          <div class="k">平均耗时</div>
+          <div class="v">{{ avgMsText }}</div>
+          <div class="s">只统计成功的调用</div>
+        </div>
+      </div>
+      <el-table :data="usage.by_feature" size="small" style="width:100%;" empty-text="暂无调用" aria-label="AI 用例分布">
+        <el-table-column prop="feature" label="用例" width="140" />
+        <el-table-column prop="ok" label="成功" width="80" align="right" header-align="right" />
+        <el-table-column prop="failed" label="失败" width="80" align="right" header-align="right" />
+        <el-table-column label="平均耗时" width="120" align="right" header-align="right">
+          <template #default="scope">{{ scope.row.avg_ms == null ? '—' : scope.row.avg_ms + ' ms' }}</template>
+        </el-table-column>
+        <el-table-column prop="tokens" label="tokens" min-width="90" align="right" header-align="right" />
+      </el-table>
+      <div class="ops-hint" style="margin-top:8px;">{{ usage.note }}</div>
+    </el-card>
+
     <!-- Q1 连到哪个模型 -->
     <el-card shadow="never" class="ops-card">
       <template #header>
@@ -143,7 +195,7 @@
         <div class="ops-card-head">
           <div>
             <div class="ops-section-title"><span class="ops-q">Q2</span>哪些用例允许调用</div>
-            <div class="ops-hint">已接：晚报 brief、档案摘要、一句话记账。未接：预警附言、自然语言规则（开关可先开，功能还没落地）。用例关闭时后端返回 feature_disabled，不发请求。</div>
+            <div class="ops-hint">已接：晚报 brief、档案摘要、一句话记账、预警附言、自然语言规则。用例关闭时后端返回 feature_disabled，不发请求。</div>
           </div>
           <el-tag size="small" type="info" effect="light">已开 {{ enabledFeatureCount }} / 5</el-tag>
         </div>
@@ -167,7 +219,7 @@
           <el-switch v-model="form.features.nl_rule" aria-label="自然语言规则开关" />
           <span class="use-card-txt">
             <span class="use-card-title">自然语言规则</span>
-            <span class="use-card-hint">把自然语言描述翻成纪律规则。{{ form.features.nl_rule ? '已开启' : '未开启' }}。</span>
+            <span class="use-card-hint">把一句话翻成价格预警规则草稿（仍要你确认才落库）。{{ form.features.nl_rule ? '已开启' : '未开启' }}。</span>
           </span>
         </div>
         <div class="use-card">
@@ -249,6 +301,7 @@ import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import PageShell from '../components/PageShell.vue';
 import api from '../api/index.js';
+import { todayLocalIso } from '../utils/index.js';
 
 const loading = ref(false);
 const saving = ref(false);
@@ -408,8 +461,70 @@ function onHeaderRefresh() {
   loadStatus();
 }
 
+// A6 用量与命中率：只读统计 + 审计导出（口径由后端写死，前端只展示）。
+const usageDays = ref(7);
+const usageLoading = ref(false);
+const usageExporting = ref(false);
+const usage = ref({
+  days: 7,
+  since: '',
+  until: '',
+  calls: { attempted: 0, ok: 0, failed: 0, fail_rate: 0 },
+  by_feature: [],
+  by_reason: [],
+  daily: [],
+  reasons_hit: { window_days: 7, days_with_hits: 0, by_source: {} },
+  note: '',
+});
+
+const failRateText = computed(() => `${(Number(usage.value?.calls?.fail_rate || 0) * 100).toFixed(1)}%`);
+
+const avgMsText = computed(() => {
+  // 各用例的 avg_ms 本身只统计成功调用；跨用例要**按成功次数加权**再平均，
+  // 否则一条只跑过一次的慢用例会把整体耗时带偏（后端不返回总平均，前端自己算）。
+  const rows = (usage.value?.by_feature || []).filter((row) => row.avg_ms != null && Number(row.ok) > 0);
+  if (!rows.length) return '—';
+  const calls = rows.reduce((sum, row) => sum + Number(row.ok), 0);
+  const total = rows.reduce((sum, row) => sum + Number(row.avg_ms) * Number(row.ok), 0);
+  return `${Math.round(total / calls)} ms`;
+});
+
+async function loadUsage() {
+  if (usageLoading.value) return;
+  usageLoading.value = true;
+  try {
+    const { data } = await api.getAiUsage(usageDays.value);
+    usage.value = { ...usage.value, ...(data || {}) };
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '读取用量失败');
+  } finally {
+    usageLoading.value = false;
+  }
+}
+
+async function onExportAudit(format) {
+  if (usageExporting.value) return;
+  usageExporting.value = true;
+  try {
+    const res = await api.exportAiAudit(usageDays.value, format);
+    const type = format === 'csv' ? 'text/csv;charset=utf-8;' : 'application/json;charset=utf-8;';
+    const url = window.URL.createObjectURL(new Blob([res.data], { type }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `ai-audit-${todayLocalIso().replace(/-/g, '')}.${format}`;
+    link.click();
+    window.URL.revokeObjectURL(url);
+    ElMessage.success(`已导出审计（${format.toUpperCase()}）`);
+  } catch (e) {
+    ElMessage.error(e?.response?.data?.detail || '导出失败');
+  } finally {
+    usageExporting.value = false;
+  }
+}
+
 onMounted(() => {
   loadStatus();
+  loadUsage();
   // 进页面静默拉一次模型列表：不弹成功提示，失败仍提示（hint 里也留供应方 error）
   fetchModels({ silent: true });
   window.addEventListener('invest-tab-refresh', onHeaderRefresh);

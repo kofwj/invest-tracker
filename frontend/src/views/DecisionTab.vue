@@ -254,6 +254,20 @@
                   <el-button type="primary" size="small" @click="openAlertCreate">添加规则</el-button>
                 </div>
               </template>
+              <!-- A5：一句话建规则（草稿）。原话会外发；仍要点对话框里的「保存」才落库。 -->
+              <div class="nl-rule-row">
+                <el-input
+                  v-model="nlRuleUtterance"
+                  :disabled="nlRuleDisabled"
+                  aria-label="一句话建规则原话"
+                  placeholder="说一句话，例如：格力跌到 60 块提醒我"
+                  maxlength="200"
+                  @keyup.enter="onParseNlRule"
+                />
+                <el-button :loading="nlRuleParsing" :disabled="nlRuleDisabled" @click="onParseNlRule">解析成规则</el-button>
+              </div>
+              <div class="hint">原话会发送给你配置的 AI 服务；解析结果仅作草稿，确认后才写入规则。</div>
+              <div v-if="nlRuleDisabledReason" class="hint">{{ nlRuleDisabledReason }}</div>
               <el-table :data="alertRules" stripe size="small" empty-text="暂无规则" aria-label="价格预警规则">
                 <el-table-column label="监控" width="118">
                   <template #default="scope">{{
@@ -423,7 +437,9 @@
 import PageShell from '../components/PageShell.vue';
 import { computed, onMounted, ref } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
-import { formatPercent } from '../utils/index.js';
+import { ElMessage } from 'element-plus';
+import { apiErrorDetail, formatPercent } from '../utils/index.js';
+import api from '../api/index.js';
 
 const {
   goTab,
@@ -461,6 +477,7 @@ const {
   alertCooldownMinutes,
   openAlertCreate,
   openAlertEdit,
+  parseNlRule,
   saveAlertRule,
   deleteAlertRule,
   toggleAlertEnabled,
@@ -472,6 +489,60 @@ const {
   removeWatchlistRow,
   saveWatchlist,
 } = useAppCtx();
+
+// A5 一句话建规则：AI 只产草稿（填进规则对话框），仍要点「保存」才落库。
+const nlRuleUtterance = ref('');
+const nlRuleParsing = ref(false);
+const nlRuleDisabled = ref(false);
+const nlRuleDisabledReason = ref('');
+
+const NL_RULE_REASONS = {
+  unknown_code: '原话里的标的不在持仓 / 关注 / 交易记录 / 指数清单里。',
+  invalid_rule: '这条规则不合法，请检查标的、方向与阈值。',
+  unparsable: '没能从这句话里读出规则，换个说法再试。',
+  timeout: 'AI 超时了，请重试。',
+  budget: '今天的 AI 调用额度用完了。',
+  blocked: 'AI 暂时不可用。',
+  not_configured: 'AI 还没配好（设置 → AI 的地址 / 密钥 / 模型）。',
+  assets_unavailable: '读标的数据失败，暂时用不了。',
+  empty_universe: '还没有可监控的标的。',
+};
+
+function nlRuleReasonText(data) {
+  // 后端对「规则不合法」给了人话 detail（例如阈值区间），优先用它。
+  const detail = String((data && data.detail) || '');
+  if (detail) return detail;
+  const mode = String((data && data.mode) || '');
+  return NL_RULE_REASONS[mode] || `没能解析成规则（${mode || '未知原因'}）`;
+}
+
+async function onParseNlRule() {
+  if (nlRuleParsing.value) return;
+  const text = String(nlRuleUtterance.value || '').trim();
+  if (!text) {
+    ElMessage.warning('先说一句要设的规则，例如「格力跌到 60 块提醒我」');
+    return;
+  }
+  nlRuleParsing.value = true;
+  try {
+    const data = await parseNlRule(text);
+    if (data.mode === 'feature_disabled' || data.mode === 'disabled') {
+      nlRuleDisabled.value = true;
+      nlRuleDisabledReason.value = 'AI 规则未开启：请到「设置 → AI」打开总开关与「自然语言规则」用例。';
+      ElMessage.info(nlRuleDisabledReason.value);
+      return;
+    }
+    if (data.ok && data.draft) {
+      ElMessage.success('草稿已填进规则对话框，请核对后点「保存」');
+      return;
+    }
+    ElMessage.warning(nlRuleReasonText(data));
+  } catch (e) {
+    ElMessage.error('解析失败：' + apiErrorDetail(e));
+  } finally {
+    nlRuleParsing.value = false;
+  }
+}
 
 const signals = computed(() => marketSignals?.value ?? marketSignals ?? {});
 const disciplineSnap = computed(() => snapshot?.value ?? snapshot ?? {});
@@ -742,9 +813,26 @@ async function onSaveAlertRule() {
   }
 }
 
+// 入口可用性：与 N1 记账页一致 —— 开关没开就直接禁用，别让用户白点一次。
+// 读不到状态时不拦着（后端还会给 feature_disabled，更准确）。
+async function refreshNlRuleGate() {
+  try {
+    const { data } = await api.getAiStatus();
+    const enabled = !!(data && data.enabled && data.features && data.features.nl_rule);
+    nlRuleDisabled.value = !enabled;
+    nlRuleDisabledReason.value = enabled
+      ? ''
+      : 'AI 规则未开启：请到「设置 → AI」打开总开关与「自然语言规则」用例。';
+  } catch (e) {
+    nlRuleDisabled.value = false;
+    nlRuleDisabledReason.value = '';
+  }
+}
+
 onMounted(() => {
   refreshDecision();
   if (typeof fetchAlertEvents === 'function') fetchAlertEvents();
+  refreshNlRuleGate();
 });
 </script>
 

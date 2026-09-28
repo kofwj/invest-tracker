@@ -945,7 +945,9 @@ def _rule_in_cooldown(conn, rule_id: int, cooldown_minutes: int, now: datetime) 
     return (now - last) < timedelta(minutes=cooldown_minutes)
 
 
-def notify_feishu_alerts(triggered: List[Dict[str, Any]], webhook: Optional[str] = None) -> Dict[str, Any]:
+def notify_feishu_alerts(
+    triggered: List[Dict[str, Any]], webhook: Optional[str] = None, note: str = ""
+) -> Dict[str, Any]:
     """Backward-compatible alias → multi-channel notify_price_alerts.
 
     ``webhook`` is only used as a one-off Feishu override when provided;
@@ -960,6 +962,9 @@ def notify_feishu_alerts(triggered: List[Dict[str, Any]], webhook: Optional[str]
             from notify import dispatch, build_price_alert_text, post_webhook_response
 
         text = build_price_alert_text(triggered)
+        if note:
+            # A4 附言：legacy webhook 分支与下面的 dispatch 共用这同一份 text。
+            text = (text + "\n" + note).strip()
         if webhook:
             # legacy: force only this feishu webhook via temporary env-less path
             payload = {"msg_type": "text", "content": {"text": f"【invest-tracker 价格预警】\n{text}"}}
@@ -1200,10 +1205,24 @@ def check_alerts(
             except ImportError:
                 from notify import notify_price_alerts
 
+            # A4 预警附言：算一次，两个出口共用。**AI 永不进主链路** —— 失败即空串。
+            note = ""
+            if triggered:
+                try:
+                    try:
+                        from .ai_alert import build_alert_note
+                    except ImportError:
+                        from ai_alert import build_alert_note
+
+                    note = build_alert_note(conn, triggered) or ""
+                except Exception:
+                    logger.exception("check_alerts: ai note failed")
+                    note = ""
+
             if webhook:
-                notify_result = notify_feishu_alerts(triggered, webhook=webhook)
+                notify_result = notify_feishu_alerts(triggered, webhook=webhook, note=note)
             else:
-                notify_result = notify_price_alerts(triggered, conn=conn)
+                notify_result = notify_price_alerts(triggered, conn=conn, note=note)
         except Exception as exc:
             logger.warning("alert notify failed: %s", exc)
             notify_result = {"sent": False, "reason": str(exc)}

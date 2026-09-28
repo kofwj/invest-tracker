@@ -247,6 +247,33 @@ const createMarketModule = ({
         alertEditDialog.value = true;
     };
 
+    // A5 自然语言建规则：草稿填进既有规则表单并打开对话框 —— 仍要用户点「保存」才落库。
+    const applyRuleDraft = (draft) => {
+        if (!draft) return;
+        alertForm.value = {
+            target_type: draft.target_type || 'holding',
+            rule_type: draft.rule_type || 'price',
+            code: draft.code || '',
+            name: draft.name || '',
+            condition: draft.condition || 'above',
+            threshold: Number(draft.threshold || 0),
+            enabled: true,
+        };
+        alertEditDialog.value = true;
+    };
+
+    const parseNlRule = async (utterance) => {
+        const text = String(utterance || '').trim();
+        if (!text) {
+            return { ok: false, mode: 'unparsable', reason: 'empty_utterance', draft: null, detail: '请先说一句话' };
+        }
+        const res = await api.nlRule(text);
+        const data = res.data || {};
+        // 成功即预填并打开对话框（草稿必须人工确认，所以影子模式也照常填）。
+        if (data.ok && data.draft) applyRuleDraft(data.draft);
+        return data;
+    };
+
     const toggleAlertEnabled = async (row) => {
         try {
             const enabled = !(Number(row.enabled) === 1 || row.enabled === true);
@@ -361,6 +388,7 @@ const createMarketModule = ({
         saveAlertRule,
         openAlertCreate,
         openAlertEdit,
+        parseNlRule,
         toggleAlertEnabled,
         deleteAlertRule,
         checkAlerts,

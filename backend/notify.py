@@ -854,10 +854,15 @@ def build_price_alert_text(triggered: List[Dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-def notify_price_alerts(triggered: List[Dict[str, Any]], *, conn=None, force: bool = False) -> Dict[str, Any]:
+def notify_price_alerts(
+    triggered: List[Dict[str, Any]], *, conn=None, force: bool = False, note: str = ""
+) -> Dict[str, Any]:
     if not triggered:
         return {"sent": False, "reason": "no_triggers", "results": []}
     text = build_price_alert_text(triggered)
+    if note:
+        # A4 预警附言：纯附加，失败上游已经回落成空串，所以这里逐字节不变。
+        text = (text + "\n" + note).strip()
     return dispatch(
         text,
         title="价格预警",

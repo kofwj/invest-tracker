@@ -208,6 +208,11 @@ const api = {
     saveAiConfig: (payload) => axios.put(API + '/ai/config', payload || {}),
     testAi: () => axios.post(API + '/ai/test', {}, { timeout: 125000 }),
     getAiModels: () => axios.get(API + '/ai/models', { timeout: 30000 }),
+    // A5 自然语言建规则：超时 60s > 后端 30s 预算
+    getAiUsage: (days = 7) => axios.get(API + '/ai/usage', { params: { days } }),
+    exportAiAudit: (days = 7, format = 'json') =>
+        axios.get(API + '/ai/audit/export', { params: { days, format }, responseType: 'blob' }),
+    nlRule: (utterance) => axios.post(API + '/ai/nl-rule', { utterance }, { timeout: 60000 }),
     // N1 一句话记账：超时 60s > 后端 30s 预算（慢就回落成"没听懂"，不拖住表单）。
     nlEntry: (utterance) => axios.post(API + '/ai/nl-entry', { utterance }, { timeout: 60000 }),
 
