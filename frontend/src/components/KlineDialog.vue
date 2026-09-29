@@ -146,6 +146,29 @@
           <div v-else class="fund-hint">{{ profileDigestHint }}</div>
         </el-collapse-item>
       </el-collapse>
+      <!-- N4 公告要点分类：无公告时整块不出现（后端 mode=empty 不调模型）。
+           与摘要同级放在基本面体检上方，共用一次 /ai/status 的开关闸门。 -->
+      <el-collapse v-if="fundCode && noticeClassVisible" v-model="noticeClassOpen" class="profile-digest-collapse">
+        <el-collapse-item name="notice-class" title="公告要点（AI 分类）">
+          <div class="profile-digest-meta">
+            <span v-if="noticeClassItemsCount">窗口内 {{ noticeClassItemsCount }} 条公告</span>
+            <el-button size="small" text @click="loadNoticeClass(true)" :loading="noticeClassLoading">刷新</el-button>
+          </div>
+          <div v-if="noticeClassLoading" class="fund-hint">正在分类…</div>
+          <div v-else-if="noticeClassError" class="fund-hint">{{ noticeClassError }}</div>
+          <div v-else-if="noticeClassResults.length" class="notice-class-list">
+            <div v-for="row in noticeClassResults" :key="row.title" class="notice-class-row">
+              <el-tag size="small" :type="noticeClassTagType(row.label)" effect="light">{{ row.label }}</el-tag>
+              <div class="notice-class-body">
+                <div class="notice-class-title">{{ row.title }}</div>
+                <div v-if="row.why" class="notice-class-why">{{ row.why }}</div>
+              </div>
+            </div>
+            <div class="notice-class-note">标签由 AI 按公告内容判断相关性，只提示「这条公告与本标的有关」，不是买卖建议。</div>
+          </div>
+          <div v-else class="fund-hint">暂无可分类的公告</div>
+        </el-collapse-item>
+      </el-collapse>
       <div v-if="fundCode" class="fund-block">
         <div class="fund-header">
           <span class="fund-title">基本面体检</span>
@@ -223,8 +246,9 @@ const profileDigest = ref({});
 const profileDigestOpen = ref([]);
 const profileDigestLoading = ref(false);
 const profileDigestError = ref('');
-const profileDigestAiOn = ref(false);
-const profileDigestFeatureLoaded = ref(false);
+// AI 状态（摘要与公告分类共用一份 /ai/status；弹窗每次打开作废重读一次）
+const aiEnabled = ref(false);
+const aiFeatureFlags = ref({});
 const profileDigestFeatureEnabled = ref(false);
 const profileDigestVisible = computed(() => !!(
   // 注意 profileDigest 是 ref：在 script 里必须 .value 取值，写 profileDigest.text
@@ -246,6 +270,106 @@ const profileDigestHint = computed(() => {
   if (mode === 'empty') return profileDigest.value?.text || '数据不足，无法生成摘要';
   return 'AI 摘要未生成。';
 });
+
+// N4 公告要点分类（站内展示，不进任何推送）。无公告时整块不显示。
+const noticeClassOpen = ref([]);
+const noticeClassLoading = ref(false);
+const noticeClassError = ref('');
+const noticeClassResults = ref([]);
+const noticeClassMode = ref('');
+const noticeClassWarnings = ref([]);
+const noticeClassItemsCount = ref(0);
+const noticeClassVisible = computed(() => !!(
+  noticeClassLoading.value
+  || noticeClassResults.value.length
+  || noticeClassError.value
+  || ['blocked', 'timeout', 'feature_disabled'].includes(noticeClassMode.value)
+));
+
+function noticeClassTagType(label) {
+  if (label === '相关') return 'success';
+  if (label === '无关') return 'info';
+  return 'warning'; // 无法判断
+}
+
+// AI 状态只读一次，但**不能用布尔值抢跑**：摘要与公告分类是同一 tick 里并发调用的
+// （loadFundamental 的 finally 连发两个），用 `if (loaded) return` 的话先到的那个把标志
+// 立起来后立刻返回，后来者会拿着**还没填好的空 flags** 去判断开关 —— 真实网络下 /ai/status
+// 要几十毫秒，公告块会被误判成"AI 没配"而整块隐藏（单测 mock 几乎同步，盖不住这个）。
+// 收成一份 in-flight Promise：后来者 await 同一份。
+let aiFlagsPromise = null;
+
+function ensureAiFlags() {
+  if (!aiFlagsPromise) {
+    aiFlagsPromise = (async () => {
+      try {
+        const status = await api.getAiStatus();
+        aiEnabled.value = !!status.data?.enabled;
+        aiFeatureFlags.value = status.data?.features || {};
+      } catch {
+        aiEnabled.value = false;
+        aiFeatureFlags.value = {};
+      }
+    })();
+  }
+  return aiFlagsPromise;
+}
+
+/** 作废缓存的状态：弹窗每次打开都重读一次（否则设置页刚开的用例要重载页面才生效）。 */
+function invalidateAiFlags() {
+  aiFlagsPromise = null;
+}
+
+/** 换标的时把公告分类清干净；loading=true 时先显示"正在分类…"，别让上一只的结果顶在下面。 */
+function resetNoticeClass({ loading = false } = {}) {
+  noticeClassResults.value = [];
+  noticeClassError.value = '';
+  noticeClassMode.value = '';
+  noticeClassWarnings.value = [];
+  noticeClassItemsCount.value = 0;
+  noticeClassLoading.value = loading;
+}
+
+async function loadNoticeClass(refresh = false) {
+  const c = fundCode.value;
+  if (!c) return;
+  await ensureAiFlags();
+  if (!(aiEnabled.value && aiFeatureFlags.value.notice_class)) {
+    // 别静默隐藏（N6 的教训）：AI 配好了、只是这个用例关着 → 给一句能自己解决的提示；
+    // AI 整个没配就别打扰（设置页才是发现它的地方，与档案摘要同口径）。
+    noticeClassLoading.value = false;
+    noticeClassResults.value = [];
+    noticeClassMode.value = aiEnabled.value ? 'feature_disabled' : '';
+    noticeClassError.value = aiEnabled.value
+      ? '公告要点未开启：请到「设置 → AI」打开「公告要点」用例。'
+      : '';
+    return;
+  }
+  noticeClassLoading.value = true;
+  noticeClassError.value = '';
+  try {
+    const res = await api.getNoticeClass(c, refresh);
+    if (c !== fundCode.value) return;
+    const data = res.data || {};
+    noticeClassMode.value = String(data.mode || '');
+    noticeClassResults.value = Array.isArray(data.results) ? data.results : [];
+    noticeClassWarnings.value = Array.isArray(data.warnings) ? data.warnings : [];
+    noticeClassItemsCount.value = Number(data.items_count || 0);
+    if (data.mode === 'blocked') {
+      noticeClassError.value = noticeClassWarnings.value.length
+        ? `已拦截（${noticeClassWarnings.value.join('、')}）`
+        : '已拦截';
+    } else if (data.mode === 'timeout') {
+      noticeClassError.value = '分类超时，可点刷新重试';
+    } else if (data.mode === 'budget') {
+      noticeClassError.value = '今天的 AI 调用额度用完了（设置页可调大上限）';
+    }
+  } catch (e) {
+    noticeClassError.value = '公告分类加载失败：' + (e?.response?.data?.detail || e?.message || '网络错误');
+  } finally {
+    noticeClassLoading.value = false;
+  }
+}
 const loadToken = ref(0);
 
 const dialogTitle = computed(() => {
@@ -309,9 +433,14 @@ async function loadFundamental(c, token = loadToken.value) {
     fundDivSummary.value = null;
     profileDigest.value = {};
     profileDigestError.value = '';
+    resetNoticeClass();
     return;
   }
+  // 换标的的**那一瞬**就把公告分类清掉（并挂上 loading）：公告请求要等体检的 finally 才发出去，
+  // 这段窗口里 v-if 为真，不清就会拿上一只的结果顶在新代码下面（串味）。
+  const switched = fundCode.value !== c;
   fundCode.value = c;
+  if (switched) resetNoticeClass({ loading: true });
   fundLoading.value = true;
   fundError.value = '';
   fundSections.value = [];
@@ -333,27 +462,20 @@ async function loadFundamental(c, token = loadToken.value) {
       // 放在 finally 里：基本面拉失败（502 / 网络）不该把摘要入口一起吞掉 ——
       // 摘要是后端自己重新取数的，与这次体检成功与否无关。
       void loadProfileDigest(false);
+      // N4 公告分类同样 fire-and-forget：与体检成败无关
+      void loadNoticeClass(false);
     }
   }
 }
 async function loadProfileDigest(refresh = false) {
   const c = fundCode.value;
   if (!c) return;
-  if (!profileDigestFeatureLoaded.value) {
-    profileDigestFeatureLoaded.value = true;
-    try {
-      const status = await api.getAiStatus();
-      profileDigestAiOn.value = !!status.data?.enabled;
-      profileDigestFeatureEnabled.value = !!(status.data?.enabled && status.data?.features?.profile_digest);
-    } catch {
-      profileDigestAiOn.value = false;
-      profileDigestFeatureEnabled.value = false;
-    }
-  }
+  await ensureAiFlags();
+  profileDigestFeatureEnabled.value = aiEnabled.value && !!aiFeatureFlags.value.profile_digest;
   if (!profileDigestFeatureEnabled.value) {
     // 别静默隐藏：开关关着时用户只会觉得"出不来"。AI 完全没配好就不打扰（设置页才是
     // 发现它的地方）；AI 开着只是没开这个用例，就给一句能自己解决的提示。
-    profileDigestError.value = profileDigestAiOn.value
+    profileDigestError.value = aiEnabled.value
       ? 'AI 档案摘要未开启：请到「设置 → AI」打开「档案摘要」用例。'
       : '';
     return;
@@ -473,6 +595,7 @@ function clearAll() {
   profileDigestOpen.value = [];
   profileDigestLoading.value = false;
   profileDigestError.value = '';
+  resetNoticeClass();
   loadFundamental('');
   if (chartEl.value) {
     renderKlineChartView(chartEl.value, []);
@@ -493,12 +616,14 @@ function resetState() {
   profileDigestOpen.value = [];
   profileDigestLoading.value = false;
   profileDigestError.value = '';
+  resetNoticeClass();
   loadFundamental('');
 }
 
 /** 打开即加载：先清空，再用传入的 code 拉 K 线与体检 */
 async function openWith(c) {
   resetState();
+  invalidateAiFlags(); // 开关可能在设置页刚改过：每次打开都重读一次
   loadHoldings();
   const target = String(c || '').trim();
   // 没传标的（例如从别处直接打开）就停在空态，等用户在输入框里填
@@ -923,5 +1048,41 @@ onMounted(() => {
   font-size: 11px;
   line-height: 1.5;
   margin-top: 1px;
+}
+
+/* ── N4 公告要点分类 ── */
+.notice-class-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+.notice-class-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+/* 标签不参与压缩，否则长标题会把「无法判断」挤成两行 */
+.notice-class-row .el-tag {
+  flex: 0 0 auto;
+}
+.notice-class-body {
+  min-width: 0;
+}
+.notice-class-title {
+  color: var(--app-text);
+  font-size: 13px;
+  line-height: 1.5;
+  word-break: break-all;
+}
+.notice-class-why {
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.notice-class-note {
+  color: var(--app-muted);
+  font-size: 11px;
+  line-height: 1.5;
 }
 </style>

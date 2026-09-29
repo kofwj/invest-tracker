@@ -18,6 +18,7 @@ try:
     from .market import check_alerts
     from .notify import run_scheduled_events
     from .reason_cache import refresh_reasons
+    from .ai_weekly import run_weekly_brief
     from .routers_holdings import _sync_prices_impl
     from .snapshots import create_snapshot_record, resolve_snapshot_price_state
     from .trading_calendar import trading_day_status
@@ -29,6 +30,7 @@ except ImportError:
     from reason_cache import refresh_reasons
     from routers_holdings import _sync_prices_impl
     from snapshots import create_snapshot_record, resolve_snapshot_price_state
+    from ai_weekly import run_weekly_brief
     from trading_calendar import trading_day_status
 
 router = APIRouter()
@@ -105,6 +107,20 @@ def cron_notify_events(body: CronNotifyBody = CronNotifyBody()):
             dividend=body.dividend,
             force=body.force,
         )
+        conn.commit()
+    return {"status": "success", **result}
+
+
+class CronWeeklyBody(BaseModel):
+    notify: bool = True
+    force: bool = False
+
+
+@router.post("/cron/weekly-brief")
+def cron_weekly_brief(body: CronWeeklyBody = CronWeeklyBody()):
+    """周报（N2）：按周缓存 —— 同一周只调一次模型；notify=false 只生成不推送。"""
+    with db_session() as conn:
+        result = run_weekly_brief(conn, notify=body.notify, force=body.force)
         conn.commit()
     return {"status": "success", **result}
 

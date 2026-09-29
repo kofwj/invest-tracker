@@ -36,7 +36,17 @@ SETTING_SHADOW = "ai_shadow_mode"
 SETTING_CAP = "ai_daily_call_cap"
 SETTING_FEATURES = "ai_features"
 
-DEFAULT_FEATURES = {"brief": False, "alert_note": False, "nl_rule": False, "profile_digest": False, "nl_entry": False}
+DEFAULT_FEATURES = {
+    "brief": False,
+    "alert_note": False,
+    "nl_rule": False,
+    "profile_digest": False,
+    "nl_entry": False,
+    # N2 周报 AI 段（默认关，与其它用例一致）
+    "weekly": False,
+    # N4 公告要点分类（默认关）
+    "notice_class": False,
+}
 DEFAULT_TIMEOUT = 8
 DEFAULT_CAP = 30
 AI_LOG_KEEP_DAYS = 30

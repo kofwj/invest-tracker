@@ -33,6 +33,8 @@ EVENT_KEYS = (
     "deposit_due",
     "discipline",
     "ops",
+    # N2 周报：与晚间简报同类（正文由 /cron/weekly-brief 生成后走这个事件推）
+    "weekly_brief",
     "test",
 )
 
@@ -61,6 +63,8 @@ DEFAULT_EVENT_CHANNELS = {
     "deposit_due": "telegram,feishu",
     "discipline": "feishu",
     "ops": "telegram",
+    # 周报与晚间简报同类，默认走飞书
+    "weekly_brief": "feishu",
     "test": "feishu,dingtalk,wecom,telegram",
 }
 
@@ -878,6 +882,17 @@ def notify_evening_brief(brief_text: str, *, conn=None, force: bool = False) -> 
         brief_text or "（空简报）",
         title="晚间简报",
         event="evening_brief",
+        conn=conn,
+        force=force,
+    )
+
+
+
+def notify_weekly_brief(text: str, *, conn=None, force: bool = False) -> Dict[str, Any]:
+    return dispatch(
+        text or "（本周无内容）",
+        title="周报",
+        event="weekly_brief",
         conn=conn,
         force=force,
     )

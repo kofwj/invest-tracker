@@ -91,8 +91,10 @@ def clear_backend_module_cache():
         'ai_profile',
         'ai_entry',
         'ai_alert',
+        'ai_weekly',
         'ai_nl_rule',
         'ai_usage',
+        'ai_notice',
         'dividend_calendar',
     ]
     for name in module_names:

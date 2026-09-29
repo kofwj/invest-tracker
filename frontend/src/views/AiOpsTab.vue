@@ -195,9 +195,9 @@
         <div class="ops-card-head">
           <div>
             <div class="ops-section-title"><span class="ops-q">Q2</span>哪些用例允许调用</div>
-            <div class="ops-hint">已接：晚报 brief、档案摘要、一句话记账、预警附言、自然语言规则。用例关闭时后端返回 feature_disabled，不发请求。</div>
+            <div class="ops-hint">已接：晚报 brief、档案摘要、一句话记账、预警附言、自然语言规则、周报、公告要点。用例关闭时后端返回 feature_disabled，不发请求。</div>
           </div>
-          <el-tag size="small" type="info" effect="light">已开 {{ enabledFeatureCount }} / 5</el-tag>
+          <el-tag size="small" type="info" effect="light">已开 {{ enabledFeatureCount }} / 7</el-tag>
         </div>
       </template>
       <div class="use-grid">
@@ -234,6 +234,20 @@
           <span class="use-card-txt">
             <span class="use-card-title">一句话记账</span>
             <span class="use-card-hint">交易页「说一句话」拆成录入草稿，确认后才入账。{{ form.features.nl_entry ? '已开启' : '未开启' }}。</span>
+          </span>
+        </div>
+        <div class="use-card">
+          <el-switch v-model="form.features.weekly" aria-label="周报开关" />
+          <span class="use-card-txt">
+            <span class="use-card-title">周报</span>
+            <span class="use-card-hint">每周一条「这周钱从哪来」：抬头是代码算的，AI 只补一句同期信息。{{ form.features.weekly ? '已开启' : '未开启' }}。</span>
+          </span>
+        </div>
+        <div class="use-card">
+          <el-switch v-model="form.features.notice_class" aria-label="公告要点开关" />
+          <span class="use-card-txt">
+            <span class="use-card-title">公告要点</span>
+            <span class="use-card-hint">持仓弹窗里给 T-2 窗口内的公告打「相关 / 无关 / 无法判断」；没公告就不调模型。{{ form.features.notice_class ? '已开启' : '未开启' }}。</span>
           </span>
         </div>
       </div>
@@ -317,7 +331,7 @@ const form = reactive({
   api_key: '',
   timeout_seconds: 8,
   daily_call_cap: 30,
-  features: { brief: false, alert_note: false, nl_rule: false, profile_digest: false, nl_entry: false },
+  features: { brief: false, alert_note: false, nl_rule: false, profile_digest: false, nl_entry: false, weekly: false, notice_class: false },
 });
 const usageText = computed(() => {
   const used = Number(status.value.today_used ?? status.value.today_calls ?? 0);
@@ -326,7 +340,7 @@ const usageText = computed(() => {
   return `${used} / ${cap}`;
 });
 const enabledFeatureCount = computed(
-  () => [form.features.brief, form.features.alert_note, form.features.nl_rule, form.features.profile_digest, form.features.nl_entry].filter(Boolean).length,
+  () => [form.features.brief, form.features.alert_note, form.features.nl_rule, form.features.profile_digest, form.features.nl_entry, form.features.weekly, form.features.notice_class].filter(Boolean).length,
 );
 function applyStatus(data, { writeForm = true } = {}) {
   status.value = data || {};
@@ -344,6 +358,8 @@ function applyStatus(data, { writeForm = true } = {}) {
     nl_rule: !!(data.features && data.features.nl_rule),
     profile_digest: !!(data.features && data.features.profile_digest),
     nl_entry: !!(data.features && data.features.nl_entry),
+    weekly: !!(data.features && data.features.weekly),
+    notice_class: !!(data.features && data.features.notice_class),
   };
   clearApiKey.value = false;
 }

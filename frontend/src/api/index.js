@@ -213,6 +213,12 @@ const api = {
     exportAiAudit: (days = 7, format = 'json') =>
         axios.get(API + '/ai/audit/export', { params: { days, format }, responseType: 'blob' }),
     nlRule: (utterance) => axios.post(API + '/ai/nl-rule', { utterance }, { timeout: 60000 }),
+    // N4 公告要点分类：超时 60s > 后端 30s 预算；refresh=1 跳过缓存读（弹窗里的「刷新」）
+    getNoticeClass: (code, refresh = false) =>
+        axios.get(API + '/ai/notice-class/' + encodeURIComponent(code), {
+            params: refresh ? { refresh: 1 } : {},
+            timeout: 60000,
+        }),
     // N1 一句话记账：超时 60s > 后端 30s 预算（慢就回落成"没听懂"，不拖住表单）。
     nlEntry: (utterance) => axios.post(API + '/ai/nl-entry', { utterance }, { timeout: 60000 }),
 

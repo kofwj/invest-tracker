@@ -42,6 +42,8 @@ const apiMock = vi.hoisted(() => ({
   // AI 档案摘要（N6）：默认关着，避免老用例意外去打摘要接口
   getAiStatus: vi.fn(async () => ({ data: { enabled: false, features: {} } })),
   getProfileDigest: vi.fn(async () => ({ data: {} })),
+  // N4 公告要点分类：默认空结果（mode=empty → 弹窗里整块不出现）
+  getNoticeClass: vi.fn(async () => ({ data: { mode: 'empty', results: [], items_count: 0 } })),
 }));
 
 vi.mock('../src/api/index.js', () => ({
@@ -67,6 +69,19 @@ const passthrough = (name) => ({
     return () => h('div', attrs, slots.default ? slots.default() : []);
   },
 });
+
+// el-collapse-item 桩：真组件把 title 属性渲染成标题，桩也必须渲染出来 ——
+// 否则「这一块到底在不在」在 DOM 上看不出来（折叠面板最容易整块静默消失）
+const ElCollapseItemStub = {
+  name: 'ElCollapseItem',
+  props: { title: { type: String, default: '' }, name: { type: String, default: '' } },
+  setup(props, { slots }) {
+    return () => h('div', { class: 'stub-collapse-item', 'data-title': props.title }, [
+      h('div', { class: 'stub-collapse-title' }, props.title),
+      slots.default ? slots.default() : [],
+    ]);
+  },
+};
 
 // el-dialog 桩：modelValue 为真才渲染 body + footer —— 这样「开/关」在 DOM 上看得见，
 // 也顺带复现 destroy-on-close（关掉内容就没了）
@@ -135,7 +150,7 @@ const STUBS = {
   ElTable: ElTableStub,
   ElTableColumn: ElTableColumnStub,
   ElCollapse: passthrough('ElCollapse'),
-  ElCollapseItem: passthrough('ElCollapseItem'),
+  ElCollapseItem: ElCollapseItemStub,
 };
 
 function mountView(view, ctx) {
@@ -323,6 +338,186 @@ describe('持仓明细 → K线弹窗', () => {
     expect(host.textContent).toContain('体检拉取失败');
     expect(apiMock.getProfileDigest).toHaveBeenCalled(); // 修前这条路径直接不请求
     expect(host.textContent).toContain('http_404'); // 失败原因看得见
+    app.unmount();
+  });
+
+  it('公告要点用例开着 → 拉分类并渲染标签与理由', async () => {
+    apiMock.getAiStatus.mockImplementation(async () => ({
+      data: { enabled: true, features: { profile_digest: true, notice_class: true } },
+    }));
+    apiMock.getNoticeClass.mockImplementation(async () => ({
+      data: {
+        mode: 'ok',
+        items_count: 2,
+        results: [
+          { title: '农业银行:关于非执行董事任职的公告', label: '无法判断', why: '仅人事任免，与股价无直接对应' },
+          { title: '农业银行:关于召开临时股东大会的通知', label: '相关', why: '涉及利润分配' },
+        ],
+      },
+    }));
+    const { host, app } = mountView(HoldingsTab, holdingsCtx());
+    await flush();
+
+    click(findButton(host, '农业银行'));
+    await flush();
+    await flush();
+
+    expect(apiMock.getNoticeClass).toHaveBeenCalledWith('601288', false);
+    expect(host.textContent).toContain('公告要点');
+    expect(host.textContent).toContain('窗口内 2 条公告');
+    expect(host.textContent).toContain('无法判断');
+    expect(host.textContent).toContain('仅人事任免，与股价无直接对应');
+    app.unmount();
+  });
+
+  it('窗口内没有公告 → 整块不出现（不留空壳），也不编内容', async () => {
+    apiMock.getAiStatus.mockImplementation(async () => ({
+      data: { enabled: true, features: { profile_digest: true, notice_class: true } },
+    }));
+    apiMock.getNoticeClass.mockImplementation(async () => ({ data: { mode: 'empty', results: [], items_count: 0 } }));
+    const { host, app } = mountView(HoldingsTab, holdingsCtx());
+    await flush();
+
+    click(findButton(host, '农业银行'));
+    await flush();
+    await flush();
+
+    expect(apiMock.getNoticeClass).toHaveBeenCalled();
+    expect(host.textContent).not.toContain('公告要点');
+    expect(host.textContent).not.toContain('暂无可分类的公告');
+    app.unmount();
+  });
+
+  it('公告要点用例关着 → 给出「未开启」提示，且不发分类请求', async () => {
+    apiMock.getAiStatus.mockImplementation(async () => ({
+      data: { enabled: true, features: { notice_class: false } },
+    }));
+    const { host, app } = mountView(HoldingsTab, holdingsCtx());
+    await flush();
+
+    click(findButton(host, '农业银行'));
+    await flush();
+    await flush();
+
+    expect(host.textContent).toContain('公告要点未开启');
+    expect(apiMock.getNoticeClass).not.toHaveBeenCalled();
+    app.unmount();
+  });
+
+  it('点公告块的「刷新」→ 带 refresh=1 再跑一次', async () => {
+    apiMock.getAiStatus.mockImplementation(async () => ({
+      data: { enabled: true, features: { profile_digest: true, notice_class: true } },
+    }));
+    apiMock.getProfileDigest.mockImplementation(async () => ({ data: { mode: 'empty', text: '数据不足' } }));
+    apiMock.getNoticeClass.mockImplementation(async () => ({
+      data: {
+        mode: 'ok',
+        items_count: 1,
+        results: [{ title: '农业银行:关于非执行董事任职的公告', label: '无关', why: '仅人事任免' }],
+      },
+    }));
+    const { host, app } = mountView(HoldingsTab, holdingsCtx());
+    await flush();
+
+    click(findButton(host, '农业银行'));
+    await flush();
+    await flush();
+    expect(apiMock.getNoticeClass).toHaveBeenCalledTimes(1);
+
+    // 弹窗里有两个「刷新」（摘要在前、公告在后），取最后一个 = 公告块的
+    const refresh = [...host.querySelectorAll('div')]
+      .filter((el) => el.textContent.trim() === '刷新' && el.children.length === 0)
+      .pop();
+    expect(refresh).toBeTruthy();
+    click(refresh);
+    await flush();
+    await flush();
+
+    expect(apiMock.getNoticeClass).toHaveBeenLastCalledWith('601288', true);
+    app.unmount();
+  });
+
+  it('摘要与公告并发检查开关：都等同一份 /ai/status，不许用旧标志抢跑', async () => {
+    let releaseStatus;
+    apiMock.getAiStatus.mockImplementation(() => new Promise((resolve) => {
+      releaseStatus = () => resolve({
+        data: { enabled: true, features: { profile_digest: true, notice_class: true } },
+      });
+    }));
+    apiMock.getProfileDigest.mockImplementation(async () => ({ data: { mode: 'empty', text: '数据不足' } }));
+    apiMock.getNoticeClass.mockImplementation(async () => ({
+      data: {
+        mode: 'ok',
+        items_count: 1,
+        results: [{ title: '农业银行:关于非执行董事任职的公告', label: '无关', why: '仅人事任免' }],
+      },
+    }));
+    const { host, app } = mountView(HoldingsTab, holdingsCtx());
+    await flush();
+
+    click(findButton(host, '农业银行'));
+    await flush();
+    await flush();
+
+    // /ai/status 还在飞：两个用例谁都不许先跑。
+    // 旧实现是「先把 loaded 标志立起来再等」——第二个调用看到标志就拿着**空 flags** 判断开关，
+    // 于是公告块被当成"AI 没配"整块隐藏、请求根本不发（单测 mock 同步所以盖不住）。
+    expect(apiMock.getNoticeClass).not.toHaveBeenCalled();
+    expect(apiMock.getProfileDigest).not.toHaveBeenCalled();
+
+    releaseStatus();
+    await flush();
+    await flush();
+
+    expect(apiMock.getNoticeClass).toHaveBeenCalledWith('601288', false);
+    expect(apiMock.getProfileDigest).toHaveBeenCalled();
+    expect(host.textContent).toContain('农业银行:关于非执行董事任职的公告');
+    app.unmount();
+  });
+
+  it('换标的时不会把上一只的公告结果顶到新代码下面', async () => {
+    apiMock.getAiStatus.mockImplementation(async () => ({
+      data: { enabled: true, features: { notice_class: true } },
+    }));
+    let releaseFundamental;
+    apiMock.fundamentalCheck.mockImplementation(async (c) => {
+      if (c === '600519') await new Promise((resolve) => { releaseFundamental = resolve; });
+      return { data: { sections: [], profile: null, dividends: [], dividend_summary: null } };
+    });
+    apiMock.getNoticeClass.mockImplementation(async (c) => ({
+      data: {
+        mode: 'ok',
+        items_count: 1,
+        results: [{
+          title: c === '601288' ? '农业银行:关于非执行董事任职的公告' : '贵州茅台:关于回购股份的公告',
+          label: '无关',
+          why: '仅人事任免',
+        }],
+      },
+    }));
+    const { host, app } = mountView(HoldingsTab, holdingsCtx());
+    await flush();
+
+    click(findButton(host, '农业银行'));
+    await flush();
+    await flush();
+    expect(host.textContent).toContain('农业银行:关于非执行董事任职的公告');
+
+    click(findButton(host, '关闭'));
+    await flush();
+    click(findButton(host, '贵州茅台'));
+    await flush();
+    await flush();
+
+    // 体检还挂着（公告请求要等它的 finally 才发）——这段窗口里绝不能显示上一只的公告：
+    // 修前 fundCode 已经换成 600519，而 noticeClass 结果还是 601288 的，直接顶在下面。
+    expect(host.textContent).not.toContain('农业银行:关于非执行董事任职的公告');
+    expect(host.textContent).toContain('正在分类');
+
+    releaseFundamental();
+    await flush();
+    await flush();
+    expect(host.textContent).toContain('贵州茅台:关于回购股份的公告');
     app.unmount();
   });
 });

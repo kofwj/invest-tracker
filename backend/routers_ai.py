@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 
 try:
@@ -18,6 +18,7 @@ try:
     from .ai_entry import ENTRY_MAX_UTTERANCE, parse_entry_draft
     from .ai_nl_rule import NL_RULE_MAX_UTTERANCE, parse_rule_draft
     from .ai_usage import ai_usage_summary, audit_csv, audit_filename, audit_json
+    from .ai_notice import classify_notice_points
     from .database import db_session
 except ImportError:
     from ai_client import (
@@ -31,6 +32,7 @@ except ImportError:
     from ai_entry import ENTRY_MAX_UTTERANCE, parse_entry_draft
     from ai_nl_rule import NL_RULE_MAX_UTTERANCE, parse_rule_draft
     from ai_usage import ai_usage_summary, audit_csv, audit_filename, audit_json
+    from ai_notice import classify_notice_points
     from database import db_session
 
 router = APIRouter(tags=["ai"])
@@ -163,3 +165,19 @@ def get_ai_audit_export(days: int = 7, format: str = "json"):
         media_type=media + "; charset=utf-8",
         headers={"Content-Disposition": 'attachment; filename="%s"' % audit_filename(fmt)},
     )
+
+
+@router.get("/ai/notice-class/{code}")
+def get_notice_class(code: str, refresh: int = Query(default=0, ge=0, le=1)):
+    """公告要点分类（N4）：只读缓存、命中才生成；只给站内看，不进推送。
+
+    refresh=1（用户点弹窗里的「刷新」）跳过缓存读，重跑一次分类：空结果要等到
+    16:40 之后才会自动重算，用户在此之前想再试一次只能自己触发。
+    """
+    text = str(code or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="code 不能为空")
+    with db_session() as conn:
+        result = classify_notice_points(conn, text, refresh=bool(refresh))
+        conn.commit()
+    return result

@@ -309,6 +309,7 @@ chmod +x scripts/verify_vps_deploy.sh scripts/cron_sync_prices.sh
 ```cron
 20 15 * * 1-5 /home/kofwj/invest-tracker/scripts/cron_sync_prices.sh >> /home/kofwj/invest-tracker/backups/cron_sync_prices.log 2>&1
 40 16 * * 1-5 /home/kofwj/invest-tracker/scripts/cron_sync_prices.sh --snapshot --check-alerts >> /home/kofwj/invest-tracker/backups/cron_sync_prices.log 2>&1
+30 8 * * 6 /home/kofwj/invest-tracker/scripts/cron_sync_prices.sh --weekly >> /home/kofwj/invest-tracker/backups/cron_sync_prices.log 2>&1
 ```
 
 - `--snapshot`：同步价后记录/更新今日资产快照（**默认跳过周末/节假日**；强制写用 `--force-snapshot` 或 `CRON_FORCE_SNAPSHOT=1`）

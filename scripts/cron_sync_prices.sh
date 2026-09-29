@@ -8,6 +8,7 @@
 #   20 15 * * 1-5 /home/kofwj/invest-tracker/scripts/cron_sync_prices.sh --check-alerts --notify-alerts >> /home/kofwj/invest-tracker/backups/cron_sync_prices.log 2>&1
 #   40 16 * * 1-5 /home/kofwj/invest-tracker/scripts/cron_sync_prices.sh --snapshot --check-alerts --notify-alerts --notify-events >> /home/kofwj/invest-tracker/backups/cron_sync_prices.log 2>&1
 #   */3 9-11,13-14 * * 1-5 /home/kofwj/invest-tracker/scripts/cron_sync_prices.sh --intraday --check-alerts --notify-alerts >> /home/kofwj/invest-tracker/backups/cron_sync_prices.log 2>&1
+#   30 8 * * 6  /home/kofwj/invest-tracker/scripts/cron_sync_prices.sh --weekly >> /home/kofwj/invest-tracker/backups/cron_sync_prices.log 2>&1
 #
 # 盘中那行不需要自己算交易时段边界：脚本内部的守卫会再按 9:30/11:30/13:00/15:00
 # 精确判断并跳过，crontab 的范围只是先把请求量压下来。
@@ -22,6 +23,7 @@ WITH_ALERTS=0
 ALERTS_NOTIFY=0
 FORCE_SNAPSHOT=0
 WITH_NOTIFY_EVENTS=0
+WITH_WEEKLY=0
 INTRADAY=0
 for arg in "$@"; do
   case "$arg" in
@@ -30,15 +32,17 @@ for arg in "$@"; do
     --notify-alerts) ALERTS_NOTIFY=1 ;;
     --force-snapshot) FORCE_SNAPSHOT=1 ;;
     --notify-events) WITH_NOTIFY_EVENTS=1 ;;
+    --weekly) WITH_WEEKLY=1 ;;
     --intraday) INTRADAY=1 ;;
     -h|--help)
       cat <<'EOF'
-Usage: cron_sync_prices.sh [--snapshot] [--check-alerts] [--notify-alerts] [--notify-events] [--force-snapshot] [--intraday]
+Usage: cron_sync_prices.sh [--snapshot] [--check-alerts] [--notify-alerts] [--notify-events] [--weekly] [--force-snapshot] [--intraday]
 
   --snapshot         同步价格后记录/更新今日资产快照（默认跳过非交易日）
   --check-alerts     同步（及可选快照）后检查价格预警规则
   --notify-alerts    检查时若触发则多通道推送（飞书/钉钉/企微/TG，见 .env NOTIFY_*）
   --notify-events    跑存款到期 + 纪律破线摘要推送（POST /notify/run）
+  --weekly           生成并推送周报（POST /cron/weekly-brief；窗口=本周一~本周五）
   --force-snapshot   强制写快照（忽略交易日历）
   --intraday         盘中轮询：只在交易时段(9:30-11:30 / 13:00-15:00)运行，
                      自带 flock 防重叠，且**绝不写快照**（daily_snapshots 是日频账本）
@@ -52,6 +56,7 @@ Usage: cron_sync_prices.sh [--snapshot] [--check-alerts] [--notify-alerts] [--no
   CRON_CHECK_ALERTS=1    等价于总是 --check-alerts
   CRON_NOTIFY_ALERTS=1   等价于总是 --notify-alerts
   CRON_NOTIFY_EVENTS=1   等价于总是 --notify-events
+  CRON_WEEKLY=1          等价于总是 --weekly
   CRON_FORCE_SNAPSHOT=1  等价于 --force-snapshot
   CRON_API_TOKEN         走 /cron/* HTTP 路径（推荐）
   ALERT_COOLDOWN_MINUTES 预警冷却分钟（默认读 settings / 240）
@@ -65,11 +70,12 @@ done
 if [ "${CRON_CHECK_ALERTS:-0}" = "1" ]; then WITH_ALERTS=1; fi
 if [ "${CRON_NOTIFY_ALERTS:-0}" = "1" ]; then ALERTS_NOTIFY=1; WITH_ALERTS=1; fi
 if [ "${CRON_NOTIFY_EVENTS:-0}" = "1" ]; then WITH_NOTIFY_EVENTS=1; fi
+if [ "${CRON_WEEKLY:-0}" = "1" ]; then WITH_WEEKLY=1; fi
 if [ "${CRON_FORCE_SNAPSHOT:-0}" = "1" ]; then FORCE_SNAPSHOT=1; fi
 
 ts() { date '+%Y-%m-%d %H:%M:%S'; }
 
-echo "[$(ts)] start price sync (snapshot=${WITH_SNAPSHOT} alerts=${WITH_ALERTS} notify=${ALERTS_NOTIFY} notify_events=${WITH_NOTIFY_EVENTS} force_snapshot=${FORCE_SNAPSHOT})"
+echo "[$(ts)] start price sync (snapshot=${WITH_SNAPSHOT} alerts=${WITH_ALERTS} notify=${ALERTS_NOTIFY} notify_events=${WITH_NOTIFY_EVENTS} weekly=${WITH_WEEKLY} force_snapshot=${FORCE_SNAPSHOT})"
 
 if [ -f .env ]; then
   set -a
@@ -457,4 +463,16 @@ PY
   fi
 fi
 
+
+# 周报（N2）：建议 crontab 放周六早上（周六非交易日、安静；窗口=本周一~本周五，按周缓存）。
+if [ "$WITH_WEEKLY" = "1" ]; then
+  WEEKLY_BODY='{"notify":true,"force":false}'
+  if [ -n "${CRON_API_TOKEN}" ] && WEEKLY_OUT="$(cron_http POST /cron/weekly-brief "$WEEKLY_BODY" 300)"; then
+    echo "[$(ts)] cron-http weekly-brief ok: ${WEEKLY_OUT}"
+  else
+    echo "[$(ts)] cron-http weekly-brief 不可用，回退本机登录 HTTP…" >&2
+    WEEKLY_OUT="$(run_api_post "/cron/weekly-brief" "$WEEKLY_BODY")"
+    echo "[$(ts)] HTTP weekly-brief ok: ${WEEKLY_OUT}"
+  fi
+fi
 echo "[$(ts)] done"

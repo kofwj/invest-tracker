@@ -469,6 +469,7 @@ const CHANNEL_LABEL = {
 const EVENT_LABEL = {
   price_alert: '价格预警',
   evening_brief: '晚间简报',
+  weekly_brief: '周报',
   deposit_due: '存款到期',
   discipline: '纪律破线',
   ops: '运维',

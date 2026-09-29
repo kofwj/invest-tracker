@@ -23,6 +23,13 @@ ALLOWED_KEYS = {
         "code", "asset_kind", "report_period", "period_kind", "as_of", "metrics",
         "profile", "dividends", "dividend_summary", "information_complete",
     },
+    # N2 周报：只给区间汇总（金额取整到千位）+ 同期信息，**不给组合区间涨跌幅**。
+    "weekly": {
+        "window_start", "window_end", "net_gain_rounded", "external_flow_rounded",
+        "discipline_breach_count", "plans", "deposits_due", "reasons", "moves", "reason_coverage",
+    },
+    # N4 公告要点分类：只给标题/类型/日期 + 三个标签，正文、数量、金额都不进。
+    "notice_class": {"code", "name", "items", "labels"},
 }
 
 _AMOUNT_ROUND_UNIT = 1000
@@ -76,6 +83,16 @@ def round_amount(v: float) -> int:
         return 0
     return int(round(x / float(_AMOUNT_ROUND_UNIT)) * _AMOUNT_ROUND_UNIT)
 
+
+def _round_or_null(v: Any) -> Optional[int]:
+    """金额取整到千位；**None 原样保留**。
+
+    缺基准快照时 `period_gain` 是 None，写成 0 就等于告诉模型"这周没盈亏"（明明算不出来）——
+    抬头那边已经写"算不出"，payload 必须同口径。
+    """
+    if v is None:
+        return None
+    return round_amount(v)
 
 def _pick_dict(raw: Any, keys: Sequence[str]) -> Dict[str, Any]:
     if not isinstance(raw, dict):
@@ -169,6 +186,36 @@ def build_payload(feature: str, **sources) -> Dict[str, Any]:
             "dividends": _pick_list(sources.get("dividends"), ("report", "desc", "yield_pct", "ex_date")),
             "dividend_summary": _pick_dict(sources.get("dividend_summary") or {}, ("per10_12m", "per_hand", "count", "newest")),
             "information_complete": bool(sources.get("information_complete")),
+        }
+
+
+    if feature == "weekly":
+        due = sources.get("deposits_due") or {}
+        return {
+            "window_start": str(sources.get("window_start") or "")[:10],
+            "window_end": str(sources.get("window_end") or "")[:10],
+            # 区间口径（period_*），不是全期的 total_gain / net_contribution ——
+            # 用错字段会把"开户以来总收益"当成"这周赚了多少"（见 ai_weekly 模块注释）。
+            "net_gain_rounded": _round_or_null(sources.get("net_gain")),
+            "external_flow_rounded": _round_or_null(sources.get("external_flow")),
+            "discipline_breach_count": int(sources.get("discipline_breach_count") or 0),
+            "plans": _pick_list(sources.get("plans"), PLAN_KEEP),
+            # 只给各桶的**条数**，不给金额/银行名（存款金额与组合金额一样不外发）
+            "deposits_due": {
+                key: len(due.get(key) or []) for key in ("overdue", "d0", "d7", "d30")
+            },
+            "reasons": _pick_list(sources.get("reasons"), REASON_KEEP),
+            "moves": _pick_list(sources.get("moves"), MOVE_KEEP),
+            "reason_coverage": _pick_dict(sources.get("reason_coverage") or {}, COVERAGE_KEEP),
+        }
+
+    if feature == "notice_class":
+        return {
+            "code": str(sources.get("code") or ""),
+            "name": str(sources.get("name") or ""),
+            "items": _pick_list(sources.get("items"), ("kind", "notice_type", "title", "date")),
+            # 标签集合由代码写死，不给模型自由发挥的余地（三值里必须有"无法判断"）
+            "labels": ["相关", "无关", "无法判断"],
         }
 
 
@@ -312,7 +359,9 @@ def validate_output(
             warnings.append(msg)
             reasons.append("causal_claim")
 
-    if feature == "profile_digest":
+    if feature in ("profile_digest", "weekly"):
+        # 投资建议词表原来只挂在档案摘要上：周报同样是"叙述性结论"，也不能出现
+        # 利好 / 目标价 / 建议买入 这类词 —— 此前只靠 prompt，strict 拦不住。
         hits = [term for term in TRADE_ADVICE_TERMS if term in body]
         if hits:
             warnings.append("投资建议词: %s" % "、".join(hits))
