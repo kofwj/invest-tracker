@@ -175,3 +175,84 @@ def test_sync_prices_impl_updates_via_tencent_when_eastmoney_down(app_module, mo
     with db_session() as conn:
         row = conn.execute("SELECT last_price FROM holdings WHERE code='601288'").fetchone()
     assert float(row["last_price"]) == 6.83
+
+
+def test_resolve_symbol_prefers_secid_override():
+    """指数兜底必须认 secid：000001 是上证指数（1.000001），不能按股票口径猜成 sz000001。"""
+    from price_sync import resolve_symbol, symbol_from_secid
+
+    assert symbol_from_secid("1.000001") == "sh000001"
+    assert symbol_from_secid("0.399001") == "sz399001"
+    assert symbol_from_secid("") == "" and symbol_from_secid("1.00001") == ""
+
+    assert resolve_symbol("000001", {"000001": "1.000001"}) == "sh000001"   # 上证指数
+    assert resolve_symbol("000510", {"000510": "1.000510"}) == "sh000510"   # 中证A500
+    assert resolve_symbol("000300", {"000300": "1.000300"}) == "sh000300"   # 沪深300
+    assert resolve_symbol("399006", {"399006": "0.399006"}) == "sz399006"   # 创业板指
+    # 没有覆盖时仍按原口径（股票/ETF 走 tencent_symbol）
+    assert resolve_symbol("000001") == "sz000001"
+    assert resolve_symbol("601288") == "sh601288"
+
+
+def test_fallback_uses_the_index_secid_not_the_bare_code(monkeypatch):
+    """东财挂了走兜底时，指数要请求 sh000001 / sh000510 ——
+    修前传的是裸代码，兜底按"非 6/5 开头=深市"猜前缀，于是
+    上证指数被取成 sz000001 平安银行、中证A500 被取成 sz000510 新金路、
+    沪深300 取 sz000300 直接落空（界面上就是"—"）。"""
+    import price_sync as ps
+
+    ps.clear_quote_cache()
+    payload = ";".join([
+        _quote_line("sh000001", "上证指数", "000001", "3830.45", "3823.62"),
+        _quote_line("sh000510", "中证A500", "000510", "5360.18", "5348.50"),
+        _quote_line("sh000300", "沪深300", "000300", "4345.21", "4340.76"),
+    ]).encode("gbk")
+    urls = []
+
+    def fake_get(url, **kwargs):
+        urls.append(url)
+        if "eastmoney.com" in url:
+            raise ConnectionError("Remote end closed connection without response")
+        return FakeResp(payload)
+
+    monkeypatch.setattr(ps.requests, "get", fake_get)
+    quotes = ps.fetch_eastmoney_quotes(
+        ["000001", "000510", "000300"],
+        secid_map={"000001": "1.000001", "000510": "1.000510", "000300": "1.000300"},
+    )
+
+    gtimg = [u for u in urls if "gtimg" in u][0]
+    assert "sh000001" in gtimg and "sh000510" in gtimg and "sh000300" in gtimg
+    # 关键：不许再拿同号的深市个股顶包
+    assert "sz000001" not in gtimg and "sz000510" not in gtimg and "sz000300" not in gtimg
+    assert quotes["000001"]["name"] == "上证指数" and quotes["000001"]["price"] == 3830.45
+    assert quotes["000510"]["name"] == "中证A500"
+    assert quotes["000300"]["name"] == "沪深300" and quotes["000300"]["price"] == 4345.21
+
+
+def test_key_indices_screen_shows_the_real_index(app_module, monkeypatch):
+    """端到端（决策页「关键指数」那一屏）：东财挂了也不许把上证指数显示成平安银行。"""
+    import price_sync as ps
+    from market import build_market_summary
+
+    ps.clear_quote_cache()
+    payload = ";".join([
+        _quote_line("sh000001", "上证指数", "000001", "3830.45", "3823.62"),
+        _quote_line("sh000510", "中证A500", "000510", "5360.18", "5348.50"),
+        _quote_line("sh000300", "沪深300", "000300", "4345.21", "4340.76"),
+    ]).encode("gbk")
+
+    def fake_get(url, **kwargs):
+        if "eastmoney.com" in url:
+            raise ConnectionError("Remote end closed connection without response")
+        return FakeResp(payload)
+
+    monkeypatch.setattr(ps.requests, "get", fake_get)
+    with app_module.get_db_connection(app_module.DB_PATH) as conn:
+        rows = {row["code"]: row for row in build_market_summary(conn)["indices"]}
+
+    assert rows["000001"]["name"] == "上证指数"      # 修前是"平安银行"
+    assert rows["000001"]["price"] == 3830.45       # 修前是平安银行的 11.35
+    assert rows["000510"]["name"] == "中证A500"     # 修前是"新金路"
+    assert rows["000300"]["available"] is True      # 修前取不到，"—"
+    assert rows["000300"]["price"] == 4345.21

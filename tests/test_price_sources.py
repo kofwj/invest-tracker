@@ -114,12 +114,12 @@ def test_sina_fills_gap_left_by_tencent(monkeypatch):
     monkeypatch.setattr(
         ps,
         "fetch_tencent_quotes",
-        lambda codes: {"601288": {"price": 6.83, "source": "腾讯行情"}},
+        lambda codes, secid_map=None: {"601288": {"price": 6.83, "source": "腾讯行情"}},
     )
     monkeypatch.setattr(
         ps,
         "fetch_sina_quotes",
-        lambda codes: {"000651": {"price": 38.36, "source": "新浪行情"}},
+        lambda codes, secid_map=None: {"000651": {"price": 38.36, "source": "新浪行情"}},
     )
 
     quotes = ps.fetch_eastmoney_quotes(["601288", "000651"])
@@ -137,11 +137,11 @@ def test_sina_not_called_when_tencent_covers_everything(monkeypatch):
     monkeypatch.setattr(
         ps,
         "fetch_tencent_quotes",
-        lambda codes: {"601288": {"price": 6.83, "source": "腾讯行情"}},
+        lambda codes, secid_map=None: {"601288": {"price": 6.83, "source": "腾讯行情"}},
     )
     sina_calls = []
     monkeypatch.setattr(
-        ps, "fetch_sina_quotes", lambda codes: sina_calls.append(list(codes)) or {}
+        ps, "fetch_sina_quotes", lambda codes, secid_map=None: sina_calls.append(list(codes)) or {}
     )
 
     quotes = ps.fetch_eastmoney_quotes(["601288"])
@@ -156,11 +156,11 @@ def test_sina_fills_gap_left_by_eastmoney_and_tencent(monkeypatch):
 
     ps.clear_quote_cache()
     _eastmoney_down(monkeypatch, ps)
-    monkeypatch.setattr(ps, "fetch_tencent_quotes", lambda codes: {})
+    monkeypatch.setattr(ps, "fetch_tencent_quotes", lambda codes, secid_map=None: {})
     monkeypatch.setattr(
         ps,
         "fetch_sina_quotes",
-        lambda codes: {"601288": {"price": 6.83, "source": "新浪行情"}},
+        lambda codes, secid_map=None: {"601288": {"price": 6.83, "source": "新浪行情"}},
     )
 
     quotes = ps.fetch_eastmoney_quotes(["601288"])
@@ -176,7 +176,7 @@ def test_chain_returns_empty_when_all_sources_fail(monkeypatch):
     ps.clear_quote_cache()
     _eastmoney_down(monkeypatch, ps)
 
-    def boom(codes):
+    def boom(codes, secid_map=None):
         raise ConnectionError("down")
 
     monkeypatch.setattr(ps, "fetch_tencent_quotes", boom)
@@ -194,8 +194,19 @@ def test_sina_layer_failure_does_not_break_chain(monkeypatch):
     monkeypatch.setattr(
         ps,
         "fetch_tencent_quotes",
-        lambda codes: {"601288": {"price": 6.83, "source": "腾讯行情"}},
+        lambda codes, secid_map=None: {"601288": {"price": 6.83, "source": "腾讯行情"}},
     )
+    # 这个用例原来少了新浪那层与断言（写了 setattr 就收尾），顺手补回：
+    def boom(codes, secid_map=None):
+        raise ConnectionError("down")
+
+    monkeypatch.setattr(ps, "fetch_sina_quotes", boom)
+
+    quotes = ps.fetch_eastmoney_quotes(["601288", "000651"])
+
+    assert quotes["601288"]["price"] == 6.83
+    assert quotes["601288"]["source"] == "腾讯行情"
+
 
 def test_chain_handles_empty_input():
     """空输入直接返回空，不该打任何请求。"""

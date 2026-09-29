@@ -13,6 +13,7 @@ try:
         ensure_kline_cache_table,
         get_cached_klines,
         get_cached_klines_range,
+        index_lookup_for,
         sync_kline_for_code,
         sync_klines_for_holdings,
     )
@@ -23,6 +24,7 @@ except ImportError:
         ensure_kline_cache_table,
         get_cached_klines,
         get_cached_klines_range,
+        index_lookup_for,
         sync_kline_for_code,
         sync_klines_for_holdings,
     )
@@ -47,6 +49,13 @@ def get_klines(code: str, days: int = 120):
     if code.lower().startswith("f"):
         return {"code": code, "days": days, "count": 0, "rows": [], "is_fund": True}
     days = max(1, min(int(days), 500))
+    index_hit = None
+    with db_session() as conn:
+        ensure_kline_cache_table(conn)
+        # 这个代码是不是已知指数（判定见 market.index_lookup）：前端靠它标注"按指数取数"，
+        # 取数口径也由它决定 —— 手输 000001 时按上证指数走，而不是同号的平安银行。
+        index_hit = index_lookup_for(conn, code)
+        conn.commit()
     rows = get_cached_klines(code, days=days)
     if not rows:
         # 尝试拉一次
@@ -56,7 +65,11 @@ def get_klines(code: str, days: int = 120):
             conn.commit()
         if n > 0:
             rows = get_cached_klines(code, days=days)
-    return {"code": code, "days": days, "count": len(rows), "rows": rows}
+    payload = {"code": code, "days": days, "count": len(rows), "rows": rows}
+    if index_hit:
+        payload["symbol"] = index_hit.get("symbol") or ""
+        payload["index_name"] = index_hit.get("name") or ""
+    return payload
 
 
 @router.post("/klines/sync")

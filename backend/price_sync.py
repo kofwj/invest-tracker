@@ -2,7 +2,7 @@ import os
 import threading
 import time
 import logging
-from typing import Dict
+from typing import Dict, Optional
 
 import requests
 
@@ -30,6 +30,34 @@ def eastmoney_sec_id(code: str) -> str:
         return f"1.{c}"
     return f"0.{c}"
 
+def symbol_from_secid(secid: str) -> str:
+    """`1.000001` → `sh000001`、`0.399001` → `sz399001`；不认识的返回空串。"""
+    raw = str(secid or "").strip()
+    if "." not in raw:
+        return ""
+    market, _, c = raw.partition(".")
+    c = c.strip()
+    if not (c.isdigit() and len(c) == 6):
+        return ""
+    if market == "1":
+        return "sh" + c
+    if market == "0":
+        return "sz" + c
+    return ""
+
+
+def resolve_symbol(code: str, secid_map: Optional[Dict[str, str]] = None) -> str:
+    """兜底行情用的 sh/sz/bj 符号：**secid 覆盖优先**，没有覆盖才按代码猜。
+
+    为什么必须优先：`eastmoney_sec_id` 是"股票口径"的猜法（非 6/5 开头一律当深市），
+    对指数就会猜错 —— 000001 是上证指数（secid `1.000001`），猜成 `sz000001` 就变成
+    平安银行，000510 同理变成新金路（名字和价钱双双串到同号的深市个股上）。
+    """
+    override = symbol_from_secid((secid_map or {}).get(str(code).strip(), ""))
+    if override:
+        return override
+    return tencent_symbol(code)
+
 
 def tencent_symbol(code: str) -> str:
     """腾讯行情符号：sh/sz/bj + 6 位代码。
@@ -49,7 +77,7 @@ def tencent_symbol(code: str) -> str:
     return ("sh" if secid.startswith("1.") else "sz") + c
 
 
-def fetch_tencent_quotes(codes):
+def fetch_tencent_quotes(codes, secid_map=None):
     """腾讯行情兜底，返回结构与 fetch_eastmoney_quotes 一致。
 
     为什么需要：东方财富的实时报价接口（push2/push2delay 的 /api/qt/*）会整段不可用
@@ -59,9 +87,10 @@ def fetch_tencent_quotes(codes):
     就是腾讯这条线），所以拿它兜底，否则一次报价故障会让当天快照沿用旧价、
     当日收益显示成 0 并污染后续所有指标。
     """
+    secid_map = secid_map or {}
     symbol_to_code = {}
     for c in codes:
-        sym = tencent_symbol(c)
+        sym = resolve_symbol(c, secid_map)
         if sym:
             symbol_to_code[sym] = str(c).strip().lower().replace("f", "")
     if not symbol_to_code:
@@ -121,7 +150,7 @@ def fetch_tencent_quotes(codes):
             }
     return quotes
 
-def fetch_sina_quotes(codes):
+def fetch_sina_quotes(codes, secid_map=None):
     """新浪行情兜底（第二数据源），返回结构与 fetch_tencent_quotes 一致。
 
     为什么需要：东方财富 push2 / push2delay 的 /api/qt/* 从**这台服务器**的出口
@@ -134,9 +163,10 @@ def fetch_sina_quotes(codes):
     字段 0=名称 1=今开 2=昨收 3=现价。与腾讯不同，新浪没有现成涨跌幅，这里自己按
     昨收算，口径与腾讯保持一致。
     """
+    secid_map = secid_map or {}
     symbol_to_code = {}
     for c in codes:
-        sym = tencent_symbol(c)
+        sym = resolve_symbol(c, secid_map)
         if sym:
             symbol_to_code[sym] = str(c).strip().lower().replace("f", "")
     if not symbol_to_code:
@@ -349,7 +379,13 @@ def fetch_eastmoney_quotes(codes, secid_map=None, *, use_cache: bool = True):
     still_missing = [c for c in numeric_codes if c not in quotes]
     if still_missing:
         try:
-            fallback = fetch_tencent_quotes(still_missing)
+            # 兜底也必须认 secid：**这里就是"指数被取成同号深市个股"的入口** ——
+            # 不带 secid 时 000001（上证指数）会走 sz000001 平安银行、000510（中证A500）
+            # 走 sz000510 新金路，000300（沪深300）更会直接落空显示"—"。
+            fallback = fetch_tencent_quotes(
+                still_missing,
+                secid_map={c: resolved_secids[c] for c in still_missing if c in resolved_secids},
+            )
         except Exception as exc:
             logger.warning("腾讯行情兜底失败: %s", exc)
             fallback = {}
@@ -369,7 +405,10 @@ def fetch_eastmoney_quotes(codes, secid_map=None, *, use_cache: bool = True):
     still_missing = [c for c in numeric_codes if c not in quotes]
     if still_missing:
         try:
-            sina = fetch_sina_quotes(still_missing)
+            sina = fetch_sina_quotes(
+                still_missing,
+                secid_map={c: resolved_secids[c] for c in still_missing if c in resolved_secids},
+            )
         except Exception as exc:
             logger.warning("新浪行情兜底失败: %s", exc)
             sina = {}

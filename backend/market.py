@@ -16,11 +16,11 @@ from typing import Any, Dict, List, Optional, Tuple
 try:
     from .database import LOCAL_TZ
     from .portfolio_totals import compute_portfolio_totals
-    from .price_sync import fetch_eastmoney_quotes
+    from .price_sync import fetch_eastmoney_quotes, symbol_from_secid
 except ImportError:
     from database import LOCAL_TZ
     from portfolio_totals import compute_portfolio_totals
-    from price_sync import fetch_eastmoney_quotes
+    from price_sync import fetch_eastmoney_quotes, symbol_from_secid
 
 logger = logging.getLogger(__name__)
 
@@ -492,6 +492,51 @@ def delete_alert_rule(conn, rule_id: int) -> bool:
 
 def _index_secid_map() -> Dict[str, str]:
     return {item["code"]: item["secid"] for item in DEFAULT_INDICES}
+
+def index_lookup(conn, code: str) -> Optional[Dict[str, str]]:
+    """这个代码该不该按**指数**解释？命中返回 {'symbol','name','secid'}，否则 None。
+
+    为什么要单独判：`kline_cache._market_prefix` 只把 5/6/9 开头当沪市，指数与个股同号时必错 ——
+    弹窗里输 000001 本意是上证指数，却拉到了平安银行的日K。判定只认两处权威来源，且**持仓优先**：
+      1. 该代码是当前持仓 → None（弹窗主要就是从持仓行点名称打开的，那一刻 000001 就是平安银行）；
+      2. 自选里用户给这个代码填了 secid → 按那个 secid（用户显式指定，优先于内置表）；
+      3. 内置指数表 `DEFAULT_INDICES` 命中 → 按它的 secid。
+    """
+    c = str(code or "").strip()
+    if not c:
+        return None
+    try:
+        held = conn.execute(
+            "SELECT 1 FROM holdings WHERE code = ? AND quantity > 0 LIMIT 1", (c,)
+        ).fetchone()
+    except Exception:
+        held = None
+    if held:
+        return None
+
+    secid = ""
+    name = ""
+    for item in get_watchlist(conn) or []:
+        if str(item.get("code") or "").strip() == c and str(item.get("secid") or "").strip():
+            secid = str(item["secid"]).strip()
+            name = str(item.get("name") or "").strip()
+            break
+    if not secid:
+        for item in DEFAULT_INDICES:
+            if item["code"] == c:
+                secid = str(item.get("secid") or "").strip()
+                name = str(item.get("name") or "").strip()
+                break
+    symbol = symbol_from_secid(secid)
+    if not symbol:
+        return None
+    return {"symbol": symbol, "name": name or c, "secid": secid}
+
+
+def index_symbol_for(conn, code: str) -> Optional[str]:
+    """`index_lookup` 的简版：只要 sh/sz 符号（K线取数用）。"""
+    hit = index_lookup(conn, code)
+    return hit["symbol"] if hit else None
 
 
 def get_watchlist(conn) -> List[Dict[str, str]]:

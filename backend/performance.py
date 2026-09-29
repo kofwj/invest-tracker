@@ -10,9 +10,11 @@ TARGET_ANNUAL_PCT = 0.04
 try:
     from .database import LOCAL_TZ
     from .portfolio_totals import compute_portfolio_totals, holding_lifetime_profit
+    from .price_sync import symbol_from_secid
 except ImportError:
     from database import LOCAL_TZ
     from portfolio_totals import compute_portfolio_totals, holding_lifetime_profit
+    from price_sync import symbol_from_secid
 
 
 def _local_today():
@@ -891,7 +893,7 @@ BENCH_CLOSE_CACHE = {}
 BENCH_CLOSE_TTL_SECONDS = 900.0
 
 
-def _fetch_bench_closes(code, min_date, max_date):
+def _fetch_bench_closes(code, min_date, max_date, symbol=None):
     """带进程内 TTL 缓存的基准指数收盘价读取。
 
     /performance/summary 每次刷新都会拉沪深300/国债/货币ETF 三条序列，
@@ -899,19 +901,19 @@ def _fetch_bench_closes(code, min_date, max_date):
     """
     import time
 
-    cache_key = (str(code), str(min_date)[:10], str(max_date)[:10])
+    cache_key = (str(code), str(symbol or ""), str(min_date)[:10], str(max_date)[:10])
     hit = BENCH_CLOSE_CACHE.get(cache_key)
     if hit and (time.monotonic() - hit[0]) < BENCH_CLOSE_TTL_SECONDS:
         return hit[1]
 
-    rows = _fetch_bench_closes_uncached(code, min_date, max_date)
+    rows = _fetch_bench_closes_uncached(code, min_date, max_date, symbol=symbol)
     # 只缓存拿到数据的结果；失败不缓存，下次刷新仍会重试
     if rows:
         BENCH_CLOSE_CACHE[cache_key] = (time.monotonic(), rows)
     return rows
 
 
-def _fetch_bench_closes_uncached(code, min_date, max_date):
+def _fetch_bench_closes_uncached(code, min_date, max_date, symbol=None):
     try:
         from .kline_cache import fetch_tencent_kline_ohlc
     except ImportError:
@@ -920,7 +922,7 @@ def _fetch_bench_closes_uncached(code, min_date, max_date):
         except Exception:
             return []
     try:
-        ohlc = fetch_tencent_kline_ohlc(code, count=600)
+        ohlc = fetch_tencent_kline_ohlc(code, count=600, symbol=symbol)
         if not ohlc:
             return []
         filtered = [x for x in ohlc if min_date <= x.get("date", "") <= max_date]
@@ -940,13 +942,15 @@ def build_benchmark_relative(timeline):
     port_ret = ((p_end - p_start) / p_start * 100) if p_start > 0 else 0
 
     benches = {
-        "hs300": ("000300", "沪深300"),
-        "bond": ("000012", "上证国债"),
-        "cash": ("511880", "货币ETF"),
+        # (代码, secid, 展示名)：secid 是交易所前缀的唯一真相 —— 000300 / 000012 都是**沪市**指数，
+        # 只按代码猜（非 5/6/9 开头=深市）会把沪深300取成"取不到"、上证国债取成南玻A 的走势。
+        "hs300": ("000300", "1.000300", "沪深300"),
+        "bond": ("000012", "1.000012", "上证国债"),
+        "cash": ("511880", "1.511880", "货币ETF"),
     }
     out = {}
-    for key, (code, name) in benches.items():
-        closes = _fetch_bench_closes(code, min_d, max_d)
+    for key, (code, secid, name) in benches.items():
+        closes = _fetch_bench_closes(code, min_d, max_d, symbol=symbol_from_secid(secid))
         if len(closes) < 2:
             continue
         b_start = float(closes[0].get("close") or 0)

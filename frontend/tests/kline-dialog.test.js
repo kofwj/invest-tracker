@@ -520,4 +520,40 @@ describe('持仓明细 → K线弹窗', () => {
     expect(host.textContent).toContain('贵州茅台:关于回购股份的公告');
     app.unmount();
   });
+
+  it('指数代码 → 界面上明确标注「按指数取数」（不再让它看着像个股）', async () => {
+    apiMock.getKlines.mockImplementation(async (c) => ({
+      data: {
+        code: c,
+        count: 1,
+        rows: [{ date: '2026-09-25', open: 3800, high: 3850, low: 3790, close: 3830, volume: 1, amount: 1 }],
+        symbol: 'sh000001',
+        index_name: '上证指数',
+      },
+    }));
+    const { host, app } = mountView(HoldingsTab, holdingsCtx());
+    await flush();
+
+    click(findButton(host, '农业银行'));
+    await flush();
+    await flush();
+
+    expect(host.textContent).toContain('按指数取数');
+    expect(host.textContent).toContain('上证指数');
+    expect(host.textContent).toContain('sh000001');
+    app.unmount();
+  });
+
+  it('普通个股不显示「按指数取数」标注', async () => {
+    const { host, app } = mountView(HoldingsTab, holdingsCtx());
+    await flush();
+
+    click(findButton(host, '农业银行'));
+    await flush();
+    await flush();
+
+    // 默认 mock 不带 symbol → 后端没把它当指数，界面也不该冒出这句
+    expect(host.textContent).not.toContain('按指数取数');
+    app.unmount();
+  });
 });

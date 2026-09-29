@@ -9,7 +9,7 @@ import logging
 import math
 import urllib.request
 from datetime import date as dt_date, datetime
-from typing import List
+from typing import Any, Dict, List, Optional
 
 import sqlite3
 
@@ -63,9 +63,14 @@ def _tencent_symbol(code: str) -> str:
     return _market_prefix(c) + c
 
 
-def fetch_tencent_kline_ohlc(code: str, count: int = 420) -> List[dict]:
-    """从腾讯接口拉前复权日K完整 OHLC。返回 [{date,open,high,low,close,volume,amount}]"""
-    symbol = _tencent_symbol(code)
+def fetch_tencent_kline_ohlc(code: str, count: int = 420, symbol: Optional[str] = None) -> List[dict]:
+    """从腾讯接口拉前复权日K完整 OHLC。返回 [{date,open,high,low,close,volume,amount}]
+
+    `symbol` 可显式指定 sh/sz 前缀（如 `sh000300`）：**指数代码与个股同号时靠猜前缀必错** ——
+    `_market_prefix` 只把 5/6/9 开头当沪市，于是 000300（沪深300）被当成 sz000300 取不到、
+    000012（上证国债指数）被当成 sz000012 南玻A，基准数字会静默变成一只股票的走势。
+    """
+    symbol = symbol or _tencent_symbol(code)
     url = f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={symbol},day,,,{count},qfq"
     req = urllib.request.Request(
         url,
@@ -164,10 +169,65 @@ def upsert_klines(conn, code: str, rows: List[dict]) -> int:
     return cnt
 
 
-def _fetch_kline_rows(code: str) -> List[dict]:
-    """纯网络阶段：先腾讯，空则退化东财。不碰 DB，可在任何事务之外调用。"""
-    rows = fetch_tencent_kline_ohlc(code, count=KLINE_DEFAULT_DAYS)
-    if not rows:
+# 记录每个 code 上一次是按什么口径取的行（""=个股，sh000001=上证指数）。
+# 表主键只有 (code, date)，同名代码在"个股 / 指数"之间切换时必须能察觉，
+# 否则"今天已同步过"的跳过判断会把上一个口径的行当成新的用。
+KLINE_SYMBOL_PREFIX = "kline_symbol_"
+
+
+def _get_setting_str(conn, key: str) -> str:
+    try:
+        row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+    except Exception:
+        return ""
+    if not row:
+        return ""
+    value = row["value"] if hasattr(row, "keys") else row[0]
+    return "" if value is None else str(value)
+
+
+def _stored_kline_symbol(conn, code: str) -> str:
+    return _get_setting_str(conn, KLINE_SYMBOL_PREFIX + str(code or "").strip())
+
+
+def _store_kline_symbol(conn, code: str, symbol: str) -> None:
+    try:
+        conn.execute(
+            "INSERT INTO settings (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (KLINE_SYMBOL_PREFIX + str(code or "").strip(), str(symbol or "")),
+        )
+    except Exception:
+        logger.warning("记录 K线取数口径失败: %s", code, exc_info=True)
+
+
+def _index_symbol_for(conn, code: str) -> str:
+    """该代码若应把日K当**指数**取，返回 sh/sz 符号；否则空串（判定见 market.index_lookup）。"""
+    hit = index_lookup_for(conn, code)
+    return str((hit or {}).get("symbol") or "")
+
+
+def index_lookup_for(conn, code: str) -> Optional[Dict[str, Any]]:
+    """对外：该代码是否按指数解释（路由用它给前端一个可见标注）。永不抛。"""
+    try:
+        try:
+            from .market import index_lookup
+        except ImportError:
+            from market import index_lookup
+        return index_lookup(conn, code)
+    except Exception:
+        logger.warning("指数判定失败，按个股处理: %s", code, exc_info=True)
+        return None
+
+def _fetch_kline_rows(code: str, symbol: str = "") -> List[dict]:
+    """纯网络阶段：先腾讯，空则退化东财。不碰 DB，可在任何事务之外调用。
+
+    `symbol` 是指数的显式 sh/sz 前缀（见 `_index_symbol_for`）；个股留空。
+    """
+    rows = fetch_tencent_kline_ohlc(code, count=KLINE_DEFAULT_DAYS, symbol=symbol or None)
+    if not rows and not symbol:
+        # 指数**不许**退化到东财那层：它走的是 akshare 的个股接口（stock_zh_a_hist），
+        # 会把同号个股的历史当成指数的 —— 宁可空着显示"暂无"，也不给错数据。
         rows = fetch_eastmoney_kline_ohlc(code, count=KLINE_DEFAULT_DAYS)
     return rows or []
 
@@ -206,20 +266,26 @@ def sync_kline_for_code(conn, code: str, *, force: bool = False) -> int:
     if code.lower().startswith("f"):
         return 0
     ensure_kline_cache_table(conn)
-    # 增量检查：如果今天已同步过则跳过（除非 force）
+    # 手输的代码可能是**指数**（判定见 market.index_lookup）：先把口径定下来 ——
+    # 它既决定怎么拉数，也决定"今天已同步过"算不算数（同名代码换了口径必须重取）。
+    symbol = _index_symbol_for(conn, code)
+    # 增量检查：如果今天已同步过则跳过（除非 force，或口径变了）
     if not force:
         row = conn.execute(
             f"SELECT MAX(updated_at) as last FROM {KLINE_TABLE} WHERE code = ?", (code,)
         ).fetchone()
         last = _row_get(row, "last", 0) if row else None
         today = _local_today_iso()
-        if last and str(last)[:10] == today:
+        if last and str(last)[:10] == today and _stored_kline_symbol(conn, code) == symbol:
             return 0
     conn.commit()  # 结束读事务：下面的网络拉取不持有任何 DB 事务/锁
-    rows = _fetch_kline_rows(code)
+    rows = _fetch_kline_rows(code, symbol=symbol)
     if not rows:
         return 0
-    return upsert_klines(conn, code, rows)
+    n = upsert_klines(conn, code, rows)
+    # 记录这次按什么口径取的行：同名代码在"个股/指数"之间切换时靠它决定要不要重取
+    _store_kline_symbol(conn, code, symbol)
+    return n
 
 
 def sync_klines_for_holdings(conn, *, force: bool = False) -> dict:
@@ -259,6 +325,7 @@ def sync_klines_for_holdings(conn, *, force: bool = False) -> dict:
     for code, fetched in pending:
         try:
             upsert_klines(conn, code, fetched)
+            _store_kline_symbol(conn, code, "")
             synced += 1
         except Exception as exc:
             logger.warning("kline sync failed for %s: %s", code, exc)

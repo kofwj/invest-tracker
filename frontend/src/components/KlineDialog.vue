@@ -51,6 +51,10 @@
 
       <div v-if="error" class="kline-error">{{ error }}</div>
 
+      <div v-if="klineIndex" class="kline-index-hint">
+        按指数取数：{{ klineIndex.name || klineIndex.symbol }}（{{ klineIndex.symbol }}）
+      </div>
+
       <!-- 走势解读：均线视角 -->
       <div v-if="trend && trend.ok" class="trend-block">
         <div class="trend-header">
@@ -234,6 +238,8 @@ const error = ref('');
 const chartEl = ref(null);
 const holdings = ref([]);
 const info = ref(null);
+// 这个代码是按什么口径取的：null=个股，{symbol:'sh000001',name:'上证指数'}=按指数
+const klineIndex = ref(null);
 const fundCode = ref('');
 const fundSections = ref([]);
 const fundLoading = ref(false);
@@ -502,10 +508,17 @@ async function loadKline() {
   const token = ++loadToken.value;
   loading.value = true;
   error.value = '';
+  klineIndex.value = null;
   try {
     const res = await api.getKlines(c, days.value);
     if (token !== loadToken.value) return; // 旧响应，不往界面里写
     rows.value = res.data?.rows || [];
+
+    // 后端判定这个代码按什么口径取的（见 market.index_lookup）：
+    // 手输 000001 会按上证指数取，界面上必须说出来，否则又变成"看着像个股"
+    klineIndex.value = res.data?.symbol
+      ? { symbol: String(res.data.symbol), name: String(res.data.index_name || '') }
+      : null;
     info.value = {
       code: res.data?.code || c,
       count: res.data?.count || rows.value.length,
@@ -1084,5 +1097,12 @@ onMounted(() => {
   color: var(--app-muted);
   font-size: 11px;
   line-height: 1.5;
+}
+
+/* 按指数取数时的可见标注（同号代码到底取的是哪个，肉眼看得见） */
+.kline-index-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--app-muted);
 }
 </style>

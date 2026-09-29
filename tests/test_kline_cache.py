@@ -87,7 +87,7 @@ def test_sync_kline_for_code_skips_recent(tmp_db, monkeypatch):
     from kline_cache import upsert_klines
 
     called = {"n": 0}
-    monkeypatch.setattr(kline_cache, "fetch_tencent_kline_ohlc", lambda code, count=420: (called.__setitem__("n", called["n"] + 1), [])[1])
+    monkeypatch.setattr(kline_cache, "fetch_tencent_kline_ohlc", lambda code, count=420, symbol=None: (called.__setitem__("n", called["n"] + 1), [])[1])
 
     with db_module.open_db() as conn:
         today_row = [{"date": "2026-07-30", "open": 1, "high": 1, "low": 1, "close": 1, "volume": 0, "amount": 0}]
@@ -136,7 +136,7 @@ def test_sync_kline_skips_otcfund(tmp_db):
     import kline_cache
     calls = {"n": 0}
 
-    def _explode(code, count=420):
+    def _explode(code, count=420, symbol=None):
         calls["n"] += 1
         raise AssertionError("场外基金不该走股票K线接口")
 
@@ -152,7 +152,7 @@ def test_sync_kline_skips_otcfund(tmp_db):
 def test_kline_api_endpoints(client, monkeypatch):
     """通过 API 测 /klines/{code} 与 /klines/sync 的契约。"""
     import kline_cache
-    monkeypatch.setattr(kline_cache, "fetch_tencent_kline_ohlc", lambda code, count=420: [])
+    monkeypatch.setattr(kline_cache, "fetch_tencent_kline_ohlc", lambda code, count=420, symbol=None: [])
     monkeypatch.setattr(kline_cache, "fetch_eastmoney_kline_ohlc", lambda code, count=420: [])
 
     res = client.get("/klines/NONEXIST")
@@ -168,3 +168,99 @@ def test_kline_api_endpoints(client, monkeypatch):
     assert "synced" in data2
     assert "skipped" in data2
     assert "failed" in data2
+
+
+def _seed_holding(conn, code, name="测试股", quantity=100):
+    conn.execute(
+        "INSERT INTO holdings (code,name,category,quantity,avg_cost,diluted_cost,total_dividend,last_price) "
+        "VALUES (?,?,?,?,?,?,0,1)",
+        (code, name, "A股权益", quantity, 1, 1),
+    )
+    conn.commit()
+
+
+def test_index_lookup_holdings_win_then_watchlist_then_builtin(tmp_db):
+    """手输代码按什么口径取：持仓 > 自选 secid > 内置指数表；都不是就按个股。"""
+    db_module, _ = tmp_db
+    from market import index_lookup, set_watchlist
+
+    with db_module.open_db() as conn:
+        # ① 内置指数表：000001 = 上证指数（secid 1.000001），不是平安银行
+        assert index_lookup(conn, "000001") == {
+            "symbol": "sh000001",
+            "name": "上证指数",
+            "secid": "1.000001",
+        }
+        # ② 自选里显式填了 secid 的代码（内置表里没有的）
+        set_watchlist(conn, [{"code": "950090", "name": "中证1000", "secid": "1.950090"}])
+        assert index_lookup(conn, "950090")["symbol"] == "sh950090"
+        # ③ 持仓优先：真持有 000001 时它就是个股（弹窗主要从持仓行点名称打开）
+        _seed_holding(conn, "000001", "平安银行")
+        assert index_lookup(conn, "000001") is None
+        # ④ 都不中 → None（按个股走，行为与改动前一致）
+        assert index_lookup(conn, "159352") is None
+
+
+def test_sync_kline_for_index_uses_secid_and_skips_stock_fallback(tmp_db, monkeypatch):
+    """指数代码要按 sh/sz 拉日K；拉不到也不许退化到 akshare 的个股接口。"""
+    db_module, _ = tmp_db
+    import kline_cache as kc
+
+    calls = []
+
+    def fake_tencent(code, count=420, symbol=None):
+        calls.append(symbol)
+        return [{"date": "2026-09-25", "open": 1, "high": 2, "low": 0.5, "close": 1.5, "volume": 1, "amount": 1}]
+
+    def fake_eastmoney(code, count=420):
+        raise AssertionError("指数不该退化到个股接口（那会把同号个股的历史当成指数的）")
+
+    monkeypatch.setattr(kc, "fetch_tencent_kline_ohlc", fake_tencent)
+    monkeypatch.setattr(kc, "fetch_eastmoney_kline_ohlc", fake_eastmoney)
+
+    with db_module.open_db() as conn:
+        kc.ensure_kline_cache_table(conn)
+        n = kc.sync_kline_for_code(conn, "000001", force=True)
+        conn.commit()
+    assert n == 1
+    assert calls == ["sh000001"]
+
+    # 腾讯也拉不到时：空手而归，且**没有**去碰 akshare（fake_eastmoney 会抛）
+    calls.clear()
+
+    def empty_tencent(code, count=420, symbol=None):
+        calls.append(symbol)
+        return []
+
+    monkeypatch.setattr(kc, "fetch_tencent_kline_ohlc", empty_tencent)
+    with db_module.open_db() as conn:
+        kc.ensure_kline_cache_table(conn)
+        assert kc.sync_kline_for_code(conn, "000300", force=True) == 0
+        conn.commit()
+    assert calls == ["sh000300"]
+
+
+def test_sync_skips_only_when_the_same_symbol_was_used(tmp_db, monkeypatch):
+    """同名代码换了口径必须重取：否则"今天已同步过"会把个股的行当成指数的用。"""
+    db_module, _ = tmp_db
+    import kline_cache as kc
+
+    calls = []
+
+    def fake_tencent(code, count=420, symbol=None):
+        calls.append(symbol)
+        return [{"date": "2026-09-25", "open": 1, "high": 2, "low": 0.5, "close": 1.5, "volume": 1, "amount": 1}]
+
+    monkeypatch.setattr(kc, "fetch_tencent_kline_ohlc", fake_tencent)
+    with db_module.open_db() as conn:
+        kc.ensure_kline_cache_table(conn)
+        # 第一次：000001 还不是持仓 → 按指数取（sh000001）
+        assert kc.sync_kline_for_code(conn, "000001") == 1
+        conn.commit()
+        # 第二次：同口径 + 今天已同步 → 跳过（不打网络）
+        assert kc.sync_kline_for_code(conn, "000001") == 0
+        # 买入 000001 之后口径变成个股 → 必须重取
+        _seed_holding(conn, "000001", "平安银行")
+        assert kc.sync_kline_for_code(conn, "000001") == 1
+        conn.commit()
+    assert calls == ["sh000001", None]
