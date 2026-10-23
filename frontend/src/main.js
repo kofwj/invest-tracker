@@ -13,6 +13,9 @@ import { useThemeStore } from './stores/theme.js';
 import { useAuthStore } from './stores/auth.js';
 import { useNotifyStore } from './stores/notify.js';
 import { useMarketStore } from './stores/market.js';
+import { usePortfolioStore } from './stores/portfolio.js';
+import { useCashStore } from './stores/cash.js';
+import { useTransactionsStore } from './stores/transactions.js';
 import { APP_CTX_KEY } from './composables/useAppCtx.js';
 import {
     normalizeText,
@@ -28,23 +31,12 @@ import {
     todayLocalIso,
 } from './utils/index.js';
 import api, { API } from './api/index.js';
-import { createTransactionsModule } from './modules/transactions.js';
-import { createDepositsModule } from './modules/deposits.js';
-import { createCashModule } from './modules/cash.js';
 import { createSnapshotsModule } from './modules/snapshots.js';
 import { createPerformanceModule } from './modules/performance.js';
 import { createBrokerReconcileModule } from './modules/brokerReconcile.js';
-import { createMarketModule } from './modules/market.js';
 import { createDisciplineModule } from './modules/discipline.js';
 import { createHoldingCorrectionHelpers } from './modules/holdingCorrections.js';
-import { createDataSync } from './modules/dataSync.js';
-import { createAuthMask } from './composables/authMask.js';
-import {
-    createFeeHelpers,
-    createMaintenanceHelpers,
-    createImportExportHelpers,
-
-} from './composables/domainHelpers.js';
+import { createMaintenanceHelpers } from './composables/domainHelpers.js';
 import { createDividendHelpers } from './modules/dividends.js';
 import { createAllocationModule } from './modules/allocation.js';
 import { createAppInit } from './modules/appInit.js';
@@ -96,28 +88,110 @@ const app = createApp({
             },
         });
         const tabGroup = computed(() => tabGroupOf(activeTab.value));
-        const dashboard = ref({});
-        const holdings = ref([]);
-        const deposits = ref([]);
-        const syncing = ref(false);
-        const trailingSyncing = ref(false);
-        const syncNotice = ref({ text: '', type: '' });
-        let syncNoticeTimer = null;
-        const showSyncNotice = (text, type = '') => {
-            syncNotice.value.text = text;
-            syncNotice.value.type = type;
-            if (syncNoticeTimer) clearTimeout(syncNoticeTimer);
-            syncNoticeTimer = setTimeout(() => {
-                syncNotice.value.text = '';
-                syncNotice.value.type = '';
-            }, 12000);
-        };
-        const cashForm = ref({ amount: 0 });
-        const cashFlows = ref([]);
-        const cashFlowForm = ref({ date: todayLocalIso(), account: '华泰证券', flow_type: '银证转入', amount: 0, remark: '' });
-        const cashFlowQuery = ref({ dateRange: [], account: '', flow_type: '' });
-        const cashFlowEditDialog = ref({ visible: false, editId: null, form: { date: '', account: '', flow_type: '', amount: 0, remark: '' } });
-        const cashAudit = ref(null);
+        const portfolioStore = usePortfolioStore(pinia);
+        const {
+            dashboard,
+            holdings,
+            deposits,
+            syncing,
+            trailingSyncing,
+            syncNotice,
+            todayIso,
+            todaySnapshotDone,
+            latestPriceStatusText,
+            latestBackupText,
+            depositDialog,
+            depositRows,
+            depositSummary,
+            depositBankBreakdown,
+            depositMaturityBuckets,
+        } = storeToRefs(portfolioStore);
+        const {
+            showSyncNotice,
+            refreshTodayIso,
+            fetchData,
+            syncPrices,
+            syncTrailingReturns,
+            openDepositDialog,
+            saveDeposit,
+            deleteDeposit,
+            downloadDepositsTemplate,
+            exportDeposits,
+            importDeposits,
+        } = portfolioStore;
+
+        const cashStore = useCashStore(pinia);
+        const {
+            cashForm,
+            cashFlows,
+            cashFlowForm,
+            cashFlowQuery,
+            cashFlowEditDialog,
+            cashAudit,
+            cashFlowSummary,
+        } = storeToRefs(cashStore);
+        const {
+            updateCash,
+            queryCashFlows,
+            resetCashFlowQuery,
+            cashFlowTagType,
+            addCashFlow,
+            openCashFlowEditDialog,
+            saveCashFlowEdit,
+            deleteCashFlow,
+            fetchCashAudit,
+        } = cashStore;
+
+        const transactionsStore = useTransactionsStore(pinia);
+        const {
+            allTransactions,
+            filteredTransactions,
+            pendingTransactions,
+            pendingPurchaseTotal,
+            transPage,
+            transQuery,
+            transEditDialog,
+            transDialog,
+            transForm,
+            feeManuallyEdited,
+            feeSettings,
+            feeAccounts,
+            activeFeeAccount,
+            newFeeAccountName,
+            feeAutoHint,
+            feeSettingRows,
+        } = storeToRefs(transactionsStore);
+        const {
+            feeCategories,
+            markFeeManual,
+            saveFeeSettings,
+            resetFeeSettings,
+            addFeeAccount,
+            removeFeeAccount,
+            onActiveFeeAccountChange,
+            submitTrans,
+            resetForm,
+            showTransactions,
+            updatePendingTransactions,
+            queryTransactions,
+            applyTransFilter,
+            resetTransQuery,
+            handleTransPageChange,
+            handleTransPageSizeChange,
+            goPendingTransactions,
+            openTransEditDialog,
+            saveTransactionEdit,
+            deleteTransaction,
+            queryAssetByCode,
+            queryAssetByName,
+            selectTransAsset,
+            autoMatchTransAsset,
+            parseNlEntry,
+            downloadTransactionsTemplate,
+            exportTransactions,
+            importTransactions,
+        } = transactionsStore;
+
         const snapshots = ref([]);
         const snapshotRange = ref([]);
         const snapshotSummary = ref(null);
@@ -143,46 +217,9 @@ const app = createApp({
             failed: [],
         });
 
-        const transForm = ref({
-            date: todayLocalIso(),
-            code: '', name: '', category: '', account: '华泰证券', direction: '买入',
-            quantity: 0, price: 0, amount: 0, fee: 0
-        });
-        const feeManuallyEdited = ref(false);
-        const feeSettings = ref({});
-        const feeAccounts = ref(['华泰证券']);
-        const activeFeeAccount = ref('华泰证券');
-        const newFeeAccountName = ref('');
-        const feeCategories = ['A股权益', 'A股ETF', '港股ETF', 'REITs', '黄金', '债基', '其他'];
-        const feeAutoHint = ref('');
-
-        const depositDialog = ref({
-            visible: false, isEdit: false, editId: null,
-            form: { bank_name: '', amount: 0, interest_rate: 0, start_date: '', due_date: '', remark: '' }
-        });
-
-        const transDialog = ref({
-            visible: false,
-            title: '',
-            transactions: []
-        });
-
-        const allTransactions = ref([]);
-        const filteredTransactions = ref([]);
-        const pendingTransactions = ref([]);
-        const pendingPurchaseTotal = ref(0);
-        const transPage = ref({ page: 1, pageSize: 100, total: 0 });
-        const transQuery = ref({
-            dateRange: [],
-            code: '',
-            name: '',
-            direction: ''
-        });
-        const transEditDialog = ref({
-            visible: false,
-            editId: null,
-            form: { date: '', code: '', name: '', category: '', account: '', direction: '', quantity: 0, price: 0, amount: 0, fee: 0, remark: '' }
-        });
+        watch(maintenanceStatus, (val) => {
+            portfolioStore.maintenanceStatus = val || {};
+        }, { immediate: true });
 
         const expectedReturnDialog = ref({
             visible: false,
@@ -198,27 +235,6 @@ const app = createApp({
         const allocationAnalysis = ref([]);
         const macroAllocationAnalysis = ref([]);
         const portfolioExpectedReturn = ref(0);
-
-        const {
-            feeSettingRows,
-            loadFeeSettingsToForm,
-            estimateFeeIfAuto,
-            markFeeManual,
-            saveFeeSettings,
-            resetFeeSettings,
-            addFeeAccount,
-            removeFeeAccount,
-            onActiveFeeAccountChange,
-        } = createFeeHelpers({
-            feeSettings,
-            feeAccounts,
-            activeFeeAccount,
-            newFeeAccountName,
-            feeCategories,
-            feeManuallyEdited,
-            feeAutoHint,
-            transForm,
-        });
 
         const allocationStory = ref(null);
         const allocationStoryLoading = ref(false);
@@ -240,32 +256,9 @@ const app = createApp({
             allocationStoryLoading,
         });
 
-        // Core data + sync (extracted to module)
-        const {
-            fetchData,
-            syncPrices,
-            syncTrailingReturns,
-            todayIso,
-            refreshTodayIso,
-            todaySnapshotDone,
-            latestPriceStatusText,
-            latestBackupText,
-        } = createDataSync({
-            dashboard,
-            holdings,
-            deposits,
-            cashForm,
-            cashFlowForm,
-            activeFeeAccount,
-            syncing,
-            trailingSyncing,
-            syncNotice,
-            maintenanceStatus,
-            loadFeeSettingsToForm,
-            calculateAllocationAnalysis,
-            activeTab,
-            showSyncNotice,
-            renderAllocationCharts,
+        portfolioStore.onAfterFetch(() => {
+            calculateAllocationAnalysis();
+            if (activeTab.value === 'allocation') renderAllocationCharts();
         });
 
         const {
@@ -281,74 +274,6 @@ const app = createApp({
             holdingCorrectionHistoryDialog,
             fetchData,
             todayLocalIso,
-        });
-
-        const {
-            submitTrans,
-            resetForm,
-            showTransactions,
-            updatePendingTransactions,
-            queryTransactions,
-            applyTransFilter,
-            resetTransQuery,
-            handleTransPageChange,
-            handleTransPageSizeChange,
-            goPendingTransactions,
-            openTransEditDialog,
-            saveTransactionEdit,
-            deleteTransaction,
-            // now provided by transactions module (asset helpers merged in)
-            queryAssetByCode,
-            queryAssetByName,
-            selectTransAsset,
-            autoMatchTransAsset,
-            parseNlEntry,
-        } = createTransactionsModule({
-            activeTab,
-            allTransactions,
-            filteredTransactions,
-            pendingTransactions,
-            pendingPurchaseTotal,
-            transDialog,
-            transEditDialog,
-            transForm,
-            transQuery,
-            transPage,
-            activeFeeAccount,
-            feeAccounts,
-            feeManuallyEdited,
-            feeAutoHint,
-            holdings,
-            estimateFeeIfAuto,
-            fetchData,
-        });
-
-        const {
-            openDepositDialog, saveDeposit, deleteDeposit,
-            depositRows, depositSummary, depositBankBreakdown, depositMaturityBuckets,
-        } = createDepositsModule({ depositDialog, deposits, fetchData });
-
-        const {
-            updateCash,
-            queryCashFlows,
-            resetCashFlowQuery,
-            cashFlowSummary,
-            cashFlowTagType,
-            addCashFlow,
-            openCashFlowEditDialog,
-            saveCashFlowEdit,
-            deleteCashFlow,
-            fetchCashAudit,
-        } = createCashModule({
-            dashboard,
-            cashForm,
-            cashFlows,
-            cashFlowForm,
-            cashFlowQuery,
-            cashFlowEditDialog,
-            cashAudit,
-            activeFeeAccount,
-            fetchData,
         });
 
         const {
@@ -372,12 +297,6 @@ const app = createApp({
         });
 
         const {
-            downloadTransactionsTemplate,
-            exportTransactions,
-            importTransactions,
-            downloadDepositsTemplate,
-            exportDeposits,
-            importDeposits,
             downloadDividendTemplate,
             importDividends,
         } = createImportExportHelpers({
