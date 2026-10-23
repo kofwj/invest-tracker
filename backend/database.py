@@ -6,6 +6,11 @@ from dataclasses import dataclass
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+try:
+    from .app_paths import ensure_directories, resolve_data_paths
+except ImportError:  # 扁平导入（uvicorn main:app 时 backend 就是顶层目录）
+    from app_paths import ensure_directories, resolve_data_paths
+
 
 @dataclass(frozen=True)
 class AppConfig:
@@ -14,29 +19,19 @@ class AppConfig:
     backup_dir: str
 
 
-def load_config() -> AppConfig:
+def project_root() -> str:
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    project_dir = os.path.dirname(base_dir) if os.path.basename(base_dir) == "backend" else base_dir
-    db_path = os.environ.get("DB_PATH", os.path.join(project_dir, "data", "invest.db"))
-    timezone_name = os.environ.get("APP_TIMEZONE", "Asia/Shanghai")
+    return os.path.dirname(base_dir) if os.path.basename(base_dir) == "backend" else base_dir
 
-    if os.environ.get("BACKUP_DIR"):
-        backup_dir = os.environ["BACKUP_DIR"]
-    else:
-        data_parent = os.path.dirname(db_path)
-        project_guess = (
-            os.path.dirname(data_parent)
-            if os.path.basename(data_parent) == "data"
-            else project_dir
-        )
-        backup_dir = os.path.join(project_guess, "backups")
 
-    os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
-    os.makedirs(backup_dir, exist_ok=True)
+def load_config() -> AppConfig:
+    """解析数据位置：DB_PATH/BACKUP_DIR 优先，其次平台标准目录（见 app_paths）。"""
+    paths = resolve_data_paths(project_root())
+    ensure_directories(paths)
     return AppConfig(
-        db_path=db_path,
-        local_timezone=ZoneInfo(timezone_name),
-        backup_dir=backup_dir,
+        db_path=paths.db_path,
+        local_timezone=ZoneInfo(os.environ.get("APP_TIMEZONE", "Asia/Shanghai")),
+        backup_dir=paths.backup_dir,
     )
 
 

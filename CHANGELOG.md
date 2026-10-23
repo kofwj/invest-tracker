@@ -6,6 +6,49 @@
 ---
 
 
+## [1.6.0] — 2026-10-23 — 本机直接跑：单进程 + 平台数据目录 + AGPL-3.0
+
+此前只能 Docker 起两个容器（前端 nginx + 后端 uvicorn）。这一版让源码克隆下来就能
+`python backend/main.py` 跑起来：一个进程、一个端口、自己开浏览器。**Docker 那条路一个字没改**，
+`deploy/vps` 的部署方式、`DB_PATH` 的行为都还是 1.5.2 的样子。
+
+### 单进程
+
+- 后端启动时找 `frontend/dist`（或 `FRONTEND_DIST` 指定的目录），找到就 mount `/assets`，并把所有
+  非接口路径回落到 `index.html`，前端 history 路由因此能直接深链（`/performance` 之类）。找不到就
+  退回纯 API 模式，和以前一样。
+- 前端请求写的是 `/api/...`，Docker 里靠 nginx 的 `proxy_pass http://backend:8000/` 剥前缀。现在多了
+  一个 ASGI 中间件做同一件事，两种部署共用一套前端产物。被剥过前缀的请求会打标记，接口 404 一律返回
+  JSON，不会回落成首页。
+- `python backend/main.py` 默认 `127.0.0.1:8000`，1.2 秒后打开浏览器；`HOST=0.0.0.0` 供局域网访问，
+  `INVEST_TRACKER_NO_BROWSER=1` 关掉自动打开。Docker 用的 `uvicorn main:app` 入口不受影响。
+
+### 数据不在仓库里了
+
+- 默认落平台标准目录：macOS `~/Library/Application Support/InvestTracker`，Windows
+  `%APPDATA%\InvestTracker`，Linux `${XDG_DATA_HOME:-~/.local/share}/InvestTracker`；库在
+  `data/invest.db`，备份在同根的 `backups/`。
+- 覆盖顺序：`DB_PATH` / `BACKUP_DIR` > `INVEST_TRACKER_HOME` > 平台目录。前两条是 Docker、VPS 和
+  测试走的，优先级最高，所以那些环境完全不受这次改动影响。
+- **首次启动迁移**：只在你没设 `DB_PATH`、平台目录里还没有库、而仓库里还留着旧 `data/invest.db` 时触发。
+  用 SQLite 在线备份 API 复制过去（WAL 里没落盘的也带上），再把旧文件改名成
+  `invest.db.migrated-<时间戳>` —— 不删，迁错了改回来就行。第二次启动不会再迁。
+- 迁移**不在 import 路径上**：`resolve_data_paths()` 保持纯函数，只有 `python backend/main.py` 这个
+  入口会显式调用 `migrate_on_first_run()`。否则跑一遍 pytest 就会把真实的库搬走。
+
+### 许可证改 AGPL-3.0
+
+`LICENSE` 换成 GNU AGPL-3.0 全文。自己用、自己改随便，但改完部署成网站给别人访问，就得把改动的部分
+一起开源。
+
+### 测试
+
+- 新增 `tests/test_app_paths.py`（30 项）：三平台路径推导、`DB_PATH` 与 `INVEST_TRACKER_HOME` 的优先级、
+  迁移的四种分支（复制 + 留档 / 目标已存在 / 无旧库 / 设了 `DB_PATH` 就不碰）、SPA 路由与目录穿越。
+- 后端 548 → **578 passed**。
+- `tests/conftest.py` 统一走 `boot_app()`，并把 `FRONTEND_DIST` 固定指向不存在的目录 —— CI 不构建
+  `frontend/dist`、本地却会，这样两边跑出来的路由形态才一致；SPA 行为单独用 `spa_app` fixture 测。
+
 ## [1.5.2] — 2026-10-23 — 通用化：去掉个人硬编码（含 v21 迁移）+ 前端状态层改 Pinia
 
 这一版没有新功能。把代码里写死的「这台机器自己的东西」交还给配置，并把前端的状态管理从

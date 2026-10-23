@@ -113,7 +113,28 @@
 
 ## 快速启动
 
-### Docker（推荐）
+### 本地运行（单进程，最省事）
+
+不需要 Docker：后端一个进程同时提供接口和页面，一个端口。
+
+```bash
+git clone https://github.com/kofwj/invest-tracker.git && cd invest-tracker
+python3 -m venv venv && source venv/bin/activate    # Windows: venv\Scripts\activate
+pip install -r backend/requirements.txt
+cd frontend && npm install && npm run build && cd ..
+python backend/main.py
+```
+
+浏览器会自动打开 <http://127.0.0.1:8000>（`INVEST_TRACKER_NO_BROWSER=1` 可关掉自动打开）。
+
+只想自己在本机用，上面就够了。要让同一局域网的手机 / 平板访问，
+用 `HOST=0.0.0.0 PORT=8000 python backend/main.py`，并且**务必**同时设
+`INVEST_TRACKER_PASSWORD`（开了鉴权后跨域默认关闭，同源直接用没问题）。
+
+没有 `frontend/dist` 时后端只提供 API（改前端仍走下面的本机开发流程）。
+数据库和备份**不在仓库目录里**，见「数据在主机的哪里」。
+
+### Docker（VPS / 多机访问）
 
 ```bash
 cp .env.example .env
@@ -230,8 +251,37 @@ python3 scripts/restore_db.py backups/你的备份.db
 
 - `data/`、`backups/`、`.env` 不进 Git
 - 可用 `DB_PATH`、`BACKUP_DIR`、`APP_TIMEZONE`（决定「今天」、交易时段判定与前端默认日期）、`CORS_ALLOW_ORIGINS` 覆盖
-- 库 schema 版本见 `backend/schema.py`（当前 **v20**）；启动时自动迁移
+- 库 schema 版本见 `backend/schema.py`（当前 **v21**）；启动时自动迁移
 - 上传上限：普通 CSV 20MB，券商 Excel 50MB；导出 CSV 会清洗公式注入前缀
+
+### 数据在主机的哪里
+
+单进程本地运行时，账本默认放在系统标准数据目录里（**不在仓库目录**，`git clean` 删不掉）：
+
+| 系统 | 位置 |
+|------|------|
+| macOS | `~/Library/Application Support/InvestTracker/data/invest.db` |
+| Windows | `%APPDATA%\InvestTracker\data\invest.db` |
+| Linux | `${XDG_DATA_HOME:-~/.local/share}/InvestTracker/data/invest.db` |
+
+备份在同根的 `backups/`。三条覆盖规则，优先级从高到低：
+
+- `DB_PATH` / `BACKUP_DIR`：最高优先（Docker、VPS、测试都走这条，行为和以前完全一样）
+- `INVEST_TRACKER_HOME=/some/dir`：换掉整个根目录（便携安装、一个目录一套账）
+- 首次启动时，如果仓库里还留着旧的 `data/invest.db`，会复制一份到上面那个位置，
+  旧文件改名成 `invest.db.migrated-<时间戳>` **留档不删**——迁错了改回名字就能退。
+
+### 数据会去哪（联网行为）
+
+离线也能记账。下面是仅有的三处主动出网：
+
+| 出网 | 发什么 | 默认 |
+|------|--------|------|
+| 行情 / K 线 / 基本面（akshare 等） | 只发股票代码，不发持仓、不发金额 | 开（点开或定时同步时） |
+| AI 简报 / 周报（`AI_ENABLED`） | **会把持仓明细和当日盈亏金额**发给所配的模型服务 | **关** |
+| 消息推送（`/ops/notify`） | 推到你自己配的 webhook / 机器人 | 关 |
+
+不想让持仓金额离开本机，就别开 `AI_ENABLED`；另外两处只发代码、或只发你自己配的目标地址。
 
 ---
 
@@ -239,8 +289,8 @@ python3 scripts/restore_db.py backups/你的备份.db
 
 ```text
 invest-tracker/
-  backend/                 FastAPI + SQLite
-    schema.py              版本迁移（当前 v20）
+    app_paths.py           数据目录解析 / 首次启动迁移 / dist 定位
+    schema.py              版本迁移（当前 v21）
     routers_*.py           HTTP
     routers_cron.py        /cron/* ，独立 token
     broker_reconcile.py    券商对账 + 银证勾稽
@@ -255,7 +305,8 @@ invest-tracker/
   docker-compose.yml       本地
   docker-compose.prod.yml  VPS
   .github/workflows/ci.yml
-  data/  backups/          运行时，不入库
+  LICENSE                  AGPL-3.0
+  # 运行时数据不在仓库里：默认落在系统数据目录，见「数据在主机的哪里」
 ```
 
 ---
@@ -284,4 +335,12 @@ curl -fsS http://localhost:8000/api/health
 
 ## 许可证
 
-个人真仓记账工具。公开仓库前请跑 `scripts/privacy_check.sh`，确认没有真实持仓、备份和密钥。
+[AGPL-3.0](LICENSE)（GNU Affero General Public License v3.0）。
+
+简单说：你可以随便用、随便改、自己跑；但**改完要是给别人用（包括部署成网站给别人访问），就得把改后的源码一起开源**。AGPL 相比 GPL 多管住"软件即服务"这一层，正好对上一个能被公网访问的记账后端。
+
+商用、闭源分发、或者想让改动的部分不开源，单独谈授权。
+
+---
+
+公开仓库前先跑 `scripts/privacy_check.sh`，确认没把真实持仓、备份和密钥传上去。`data/`、`backups/`、`.env` 已在 `.gitignore` 里，别用 `git add -f` 手动塞进去。

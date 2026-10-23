@@ -198,17 +198,24 @@ def rebind_test_module_refs():
                 setattr(test_mod, attr, candidate)
 
 
-@pytest.fixture
-def app_module(tmp_path, monkeypatch):
+def boot_app(tmp_path, monkeypatch, *, extra_env=None):
+    """按测试约定拉起一份后端：独立 data/backups + 显式 DB_PATH，然后重载模块。
+
+    ``FRONTEND_DIST`` 默认指向一个不存在的目录，让测试跑「纯 API」形态
+    （和 CI 一致）；要验证单进程托管前端时由调用方传真实 dist 进来。
+    """
     data_dir = tmp_path / 'data'
-    data_dir.mkdir()
+    data_dir.mkdir(parents=True, exist_ok=True)
     backup_dir = tmp_path / 'backups'
-    backup_dir.mkdir()
+    backup_dir.mkdir(parents=True, exist_ok=True)
     db_path = data_dir / 'test.db'
 
     monkeypatch.setenv('DB_PATH', str(db_path))
     monkeypatch.setenv('BACKUP_DIR', str(backup_dir))
     monkeypatch.setenv('APP_TIMEZONE', 'Asia/Shanghai')
+    monkeypatch.setenv('FRONTEND_DIST', str(tmp_path / 'no-frontend-dist'))
+    for key, value in (extra_env or {}).items():
+        monkeypatch.setenv(key, value)
 
     clear_backend_module_cache()
 
@@ -217,6 +224,21 @@ def app_module(tmp_path, monkeypatch):
     create_tables(db_path)
     module.initialize_database()
     return module
+
+
+@pytest.fixture
+def app_module(tmp_path, monkeypatch):
+    return boot_app(tmp_path, monkeypatch)
+
+
+@pytest.fixture
+def spa_app(tmp_path, monkeypatch):
+    """单进程形态：临时 dist 里有 index.html / assets，验证静态托管与 SPA 回落。"""
+    dist = tmp_path / 'dist'
+    (dist / 'assets').mkdir(parents=True)
+    (dist / 'index.html').write_text('<!doctype html><title>spa-index</title>', encoding='utf-8')
+    (dist / 'assets' / 'app.js').write_text('console.log("spa-asset")', encoding='utf-8')
+    return boot_app(tmp_path, monkeypatch, extra_env={'FRONTEND_DIST': str(dist)})
 
 
 @pytest.fixture
