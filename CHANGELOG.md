@@ -6,6 +6,63 @@
 ---
 
 
+## [1.5.2] — 2026-10-23 — 通用化：去掉个人硬编码（含 v21 迁移）+ 前端状态层改 Pinia
+
+这一版没有新功能。把代码里写死的「这台机器自己的东西」交还给配置，并把前端的状态管理从
+「模块单例 + 全局挂载」换成 Pinia。**老库升级后行为不变**，这一点由 schema v21 迁移保证。
+
+### 去个人硬编码
+
+- **账户名**：后端此前在十来个地方把「华泰证券」写成字面量。现在只有 `backend/cash.py:DEFAULT_ACCOUNT`
+  一个来源，可用环境变量 `DEFAULT_ACCOUNT` 覆盖。默认值仍是「华泰证券」——账户名是账本主键
+  （交易、费率设置都按它匹配），换名会让老库里按旧名存的费率对不上，所以默认不动，只开个口子。
+- **纪律策略**：`discipline.py` 的默认策略原来写死了格力电器 15% 单票上限、首选买入 `159352 中证A500ETF`、
+  不加仓清单 `000651 / 601288 / 600028`、分批建仓 20 万。现在这些默认值一律为空：
+  权益偏低时**只提示偏低、不生成买入建议**；具体标的由各用户在「调整参数」里填。
+- **老库兼容（schema v21）**：`migrate_to_v21_discipline_defaults` 只在**已有持仓**的库里，把此前写死的
+  那些值固化进 `settings.discipline_policy`，所以升级后看到的建议与升级前一模一样；空库/新库不注入，
+  从空白开始配。前端也不再自己拼「华泰证券」，账户取 `feeAccounts` 接口返回值。
+
+**已知未清完**：前端表单里还留着 13 处 `|| '华泰证券'` 兜底（`composables/feeHelpers.js` 6 处、
+`modules/*.js` 7 处）；正常路径账户来自接口不会命中，留到下一版统一清。
+后端 `schema.py` 里 3 处（建表 `DEFAULT '华泰证券'` 与一次 NULL 回填）属于老库 DDL 兼容，按原样保留。
+
+### 前端改 Pinia
+
+- 新增 `frontend/src/stores/` 下 14 个 store + `index.js`（portfolio / cash / transactions / performance /
+  allocation / discipline / snapshots / broker / maintenance / dividends / auth / theme / notify / market），
+  分四步把 `modules/*.js` 的单例状态与 `composables/authMask.js`、`modules/dataSync.js` 迁走，后两个文件已删除。
+- 用户可见行为不变，属内部重构；收益是状态来源唯一、测试可以直接建 store 实例断言。
+
+### 修复
+
+- **跨 store 传引用**：Pinia setup store 会把传出去的 ref 解开，`cashStore` / `allocationStore` /
+  `transactionsStore` 之前拿到的是值而不是引用，映射类操作会 `TypeError`。统一改用 `storeToRefs`，
+  并由新增的 `frontend/tests/stores.test.js`（5 条）锁住这几条路径。
+- **交易分页**：重构时 `transPage` 被改成 `{ page, size: 20 }`，而三个消费点仍读 `pageSize`（默认 100）。
+  已还原为 `{ page: 1, pageSize: 100, total: 0 }` 并加断言。
+- **生产依赖漏洞**：`npm audit --omit=dev` 此前报 5 个 high（`@vue/server-renderer`、`axios`、
+  `follow-redirects`、`source-map-js`）。锁文件升到 vue 3.5.44 / @vue/server-renderer 3.5.44 /
+  axios 1.20.0 / follow-redirects 1.16.1 / source-map-js 1.2.2，现在生产依赖 **0 漏洞**。
+  CI 那道 `npm audit --omit=dev` 也已恢复为硬失败（中途被加过 `|| true`，会造成本地绿、CI 红）。
+  devDependencies 里 vite / undici 还有 4 条公告，不进产物，本次未动。
+
+### 工程
+
+- 除权除息提醒的 `test_notify_same_stamp_not_repeated` 一直是**假绿**：`conftest.py` 重载模块后
+  `patch("dividend_calendar.local_today_iso")` 打空了，实际读真实时钟，2026-10-05 起必然变红。
+  改为 `today` 参数注入，并在 `conftest.py` 加 `rebind_test_module_refs()` 根治同类问题
+  （`test_ai_client.py` 的 `patch("ai_client._post_chat")` 同病，`assert_not_called()` 之前恒为真）。
+- `tests/test_allocation_story.py` 去掉写死的 `2030-01-01`。
+- `scripts/check.sh` 的后端导入断言改为递归 `extract_routes`，会钻进 `.routes` / `.original_router.routes`。
+
+验证：后端 **548 passed**、`ruff check backend tests` 全绿；前端 **25 个套件 / 210 项** 全绿、
+`npm run build` 通过、`npm audit --omit=dev` 0 漏洞；`scripts/check.sh` 全绿；
+CI（run `39902079702`）两个 job 全绿，含 `npm ci` 从锁文件全量重装。
+
+---
+
+
 ## [1.5.1] — 2026-09-29 — 修复：指数被当成同号深市个股（关键指数 / 收益基准 / 弹窗K线）
 
 **用户可见症状**：决策页「关键指数」里 `上证指数 000001 = 11.35`（其实是**平安银行**）、
