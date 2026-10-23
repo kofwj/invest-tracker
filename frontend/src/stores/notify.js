@@ -45,6 +45,7 @@ export const useNotifyStore = defineStore('notify', () => {
   const notifyEventDraft = ref({});
   const notifyChannelDraft = ref(emptyChannelDraft());
   const notifyChannelClear = ref(emptyChannelClear());
+  const eveningBriefDialog = ref({ visible: false, text: '', loading: false });
 
   const fetchNotifyPanel = async () => {
     try {
@@ -165,6 +166,31 @@ export const useNotifyStore = defineStore('notify', () => {
     }
   };
 
+  const openEveningBrief = async (notify = false) => {
+    eveningBriefDialog.value.loading = true;
+    try {
+      const res = notify
+        ? await api.eveningBriefNotify()
+        : await api.eveningBrief();
+      eveningBriefDialog.value.text = res.data?.text || '';
+      eveningBriefDialog.value.visible = true;
+      if (notify) {
+        const n = res.data?.notify || {};
+        if (n.sent) {
+          ElMessage.success('已推送（多通道）');
+        } else if (n.reason === 'no_webhook' || n.reason === 'skipped') {
+          ElMessage.warning('未配置通知通道，仅本地预览');
+        } else if (n.reason) {
+          ElMessage.warning('推送未成功：' + n.reason);
+        }
+      }
+    } catch (e) {
+      ElMessage.error(apiErrorDetail(e) || '简报失败');
+    } finally {
+      eveningBriefDialog.value.loading = false;
+    }
+  };
+
   return {
     notifyStatus,
     notifyLogs,
@@ -172,6 +198,8 @@ export const useNotifyStore = defineStore('notify', () => {
     notifyEventDraft,
     notifyChannelDraft,
     notifyChannelClear,
+    eveningBriefDialog,
+    openEveningBrief,
     fetchNotifyPanel,
     saveNotifyPanel,
     testNotifyPush,

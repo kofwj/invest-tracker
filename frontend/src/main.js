@@ -8,14 +8,23 @@ import 'element-plus/theme-chalk/dark/css-vars.css';
 import App from './App.vue';
 import router from './router/index.js';
 import { storeToRefs } from 'pinia';
-import { pinia } from './stores/index.js';
-import { useThemeStore } from './stores/theme.js';
-import { useAuthStore } from './stores/auth.js';
-import { useNotifyStore } from './stores/notify.js';
-import { useMarketStore } from './stores/market.js';
-import { usePortfolioStore } from './stores/portfolio.js';
-import { useCashStore } from './stores/cash.js';
-import { useTransactionsStore } from './stores/transactions.js';
+import {
+    pinia,
+    useThemeStore,
+    useAuthStore,
+    useNotifyStore,
+    useMarketStore,
+    usePortfolioStore,
+    useCashStore,
+    useTransactionsStore,
+    usePerformanceStore,
+    useAllocationStore,
+    useDisciplineStore,
+    useSnapshotsStore,
+    useBrokerStore,
+    useMaintenanceStore,
+    useDividendStore,
+} from './stores/index.js';
 import { APP_CTX_KEY } from './composables/useAppCtx.js';
 import {
     normalizeText,
@@ -30,19 +39,8 @@ import {
     holdingLifetimeProfitRate,
     todayLocalIso,
 } from './utils/index.js';
-import api, { API } from './api/index.js';
-import { usePerformanceStore } from './stores/performance.js';
-import { useAllocationStore } from './stores/allocation.js';
-import { useDisciplineStore } from './stores/discipline.js';
-import { useSnapshotsStore } from './stores/snapshots.js';
-import { createBrokerReconcileModule } from './modules/brokerReconcile.js';
-import {
-    createMaintenanceHelpers,
-    createImportExportHelpers,
-} from './composables/domainHelpers.js';
-import { createDividendHelpers } from './modules/dividends.js';
+import api from './api/index.js';
 import { createAppInit } from './modules/appInit.js';
-import { createBriefHelpers } from './modules/brief.js';
 import { TAB_GROUPS, tabGroupOf, SCREENSHOT_TABS, ROUTE_META, LEGACY_TAB_REDIRECT } from './modules/tabNav.js';
 import './styles/styles.css';
 
@@ -218,26 +216,6 @@ const app = createApp({
             saveReconcile,
         } = snapshotsStore;
 
-        const maintenanceStatus = ref({});
-        const backups = ref([]);
-        const maintenanceLoading = ref(false);
-        const dividendLoading = ref(false);
-        const dividendConfirming = ref(false);
-        const dividendTableRef = ref(null);
-        const dividendDialog = ref({
-            visible: false,
-            lookbackDays: 400,
-            drafts: [],
-            selected: [],
-            summary: null,
-            unsupported: [],
-            failed: [],
-        });
-
-        watch(maintenanceStatus, (val) => {
-            portfolioStore.maintenanceStatus = val || {};
-        }, { immediate: true });
-
         const allocationStore = useAllocationStore(pinia);
         const {
             allocationAnalysis,
@@ -263,6 +241,13 @@ const app = createApp({
             deleteHoldingCorrection,
         } = allocationStore;
 
+        const dividendStore = useDividendStore(pinia);
+        const {
+            dividendLoading,
+            dividendConfirming,
+            dividendTableRef,
+            dividendDialog,
+        } = storeToRefs(dividendStore);
         const {
             openDividendDraftDialog,
             dividendStatusLabel,
@@ -273,27 +258,9 @@ const app = createApp({
             clearDividendDraftSelection,
             scanDividendDrafts,
             confirmSelectedDividends,
-        } = createDividendHelpers({
-            dividendDialog,
-            dividendTableRef,
-            dividendLoading,
-            dividendConfirming,
-            activeFeeAccount,
-            fetchData,
-            queryTransactions,
-        });
-
-        const {
             downloadDividendTemplate,
             importDividends,
-        } = createImportExportHelpers({
-            todayLocalIso,
-            queryTransactions,
-            fetchData,
-            transQuery,
-        });
-
-
+        } = dividendStore;
 
         const notifyStore = useNotifyStore(pinia);
         const {
@@ -303,6 +270,7 @@ const app = createApp({
             notifyEventDraft,
             notifyChannelDraft,
             notifyChannelClear,
+            eveningBriefDialog,
         } = storeToRefs(notifyStore);
         const {
             fetchNotifyPanel,
@@ -310,8 +278,15 @@ const app = createApp({
             testNotifyPush,
             pushDepositDueNow,
             pushDisciplineNow,
+            openEveningBrief,
         } = notifyStore;
 
+        const maintenanceStore = useMaintenanceStore(pinia);
+        const {
+            maintenanceStatus,
+            backups,
+            maintenanceLoading,
+        } = storeToRefs(maintenanceStore);
         const {
             fetchMaintenance,
             createDbBackup,
@@ -319,15 +294,7 @@ const app = createApp({
             restoreBackup,
             deleteBackup,
             restoreUploadedBackup,
-        } = createMaintenanceHelpers({
-            maintenanceStatus,
-            backups,
-            maintenanceLoading,
-            fetchData,
-            fetchSnapshots,
-            queryTransactions,
-            API,
-        });
+        } = maintenanceStore;
 
 
 
@@ -374,12 +341,15 @@ const app = createApp({
             selectPerfWindow,
         } = performanceStore;
 
-        const brokerResult = ref(null);
-        const brokerLoading = ref(false);
-        const brokerSelected = ref([]);
-        const brokerAsOfDate = ref(todayLocalIso());
-        const brokerCashInput = ref('');
-        const brokerHistory = ref([]);
+        const brokerStore = useBrokerStore(pinia);
+        const {
+            brokerResult,
+            brokerLoading,
+            brokerSelected,
+            brokerAsOfDate,
+            brokerCashInput,
+            brokerHistory,
+        } = storeToRefs(brokerStore);
         const {
             statusLabel: brokerStatusLabel,
             statusType: brokerStatusType,
@@ -389,16 +359,7 @@ const app = createApp({
             clearBrokerSelection,
             applySelectedCorrections,
             fetchBrokerHistory,
-        } = createBrokerReconcileModule({
-            brokerResult,
-            brokerLoading,
-            brokerSelected,
-            brokerAsOfDate,
-            brokerCashInput,
-            brokerHistory,
-            fetchData,
-            showSyncNotice,
-        });
+        } = brokerStore;
 
         const refreshLocalDates = () => {
             if (typeof refreshTodayIso === 'function') refreshTodayIso();
@@ -593,8 +554,6 @@ const app = createApp({
         });
 
         bootstrapAfterAuth = doBootstrap;
-
-        const { eveningBriefDialog, openEveningBrief } = createBriefHelpers();
 
         const themeStore = useThemeStore(pinia);
         const {
