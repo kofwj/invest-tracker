@@ -14,7 +14,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
   const filteredTransactions = ref([]);
   const pendingTransactions = ref([]);
   const pendingPurchaseTotal = ref(0);
-  const transPage = ref({ page: 1, size: 20, total: 0 });
+  const transPage = ref({ page: 1, pageSize: 100, total: 0 });
   const transQuery = ref({
     code: '',
     name: '',
@@ -51,7 +51,6 @@ export const useTransactionsStore = defineStore('transactions', () => {
     quantity: 0,
     amount: 0,
     fee: 0,
-    fee_manual: false,
     remark: '',
   });
 

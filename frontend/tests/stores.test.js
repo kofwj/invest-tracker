@@ -102,4 +102,11 @@ describe('Pinia Stores Cross-Store Reactivity', () => {
     expect(transactionsStore.activeFeeAccount).toBe('银河证券');
     expect(transactionsStore.transForm.account).toBe('银河证券');
   });
+
+  it('transactionsStore maintains pageSize 100 default and page 1 for pagination consumers', () => {
+    const transactionsStore = useTransactionsStore();
+    expect(transactionsStore.transPage.pageSize).toBe(100);
+    expect(transactionsStore.transPage.page).toBe(1);
+    expect(transactionsStore.transPage.total).toBe(0);
+  });
 });

@@ -33,7 +33,7 @@ test -f frontend/src/modules/deposits.js
 test -f frontend/src/modules/cash.js
 test -f frontend/src/modules/snapshots.js
 test -f frontend/src/modules/performance.js
-test -f frontend/src/composables/authMask.js
+test -f frontend/src/stores/auth.js
 test -f frontend/src/composables/domainHelpers.js
 test -f frontend/src/composables/feeHelpers.js
 test -f frontend/src/composables/maintenanceHelpers.js
@@ -179,7 +179,7 @@ fi
 
 echo "==> Auditing frontend dependencies"
 if command -v npm >/dev/null 2>&1; then
-  npm --prefix frontend audit --omit=dev || true
+  npm --prefix frontend audit --omit=dev
 else
   echo "npm not found; skipping npm audit"
 fi
@@ -196,11 +196,11 @@ if command -v node >/dev/null 2>&1; then
   node --check frontend/src/modules/snapshots.js
   node --check frontend/src/modules/performance.js
   node --check frontend/src/modules/allocation.js
-  node --check frontend/src/modules/dataSync.js
+  node --check frontend/src/stores/portfolio.js
   node --check frontend/src/modules/appInit.js
   node --check frontend/src/modules/brief.js
   node --check frontend/src/modules/holdingCorrections.js
-  node --check frontend/src/composables/authMask.js
+  node --check frontend/src/stores/auth.js
   node --check frontend/src/composables/domainHelpers.js
 else
   echo "node not found; skipping frontend JavaScript syntax check"
@@ -282,7 +282,18 @@ required_routes = {
     "/ai/usage",
     "/ai/audit/export",
 }
-routes = {getattr(route, "path", "") for route in module.app.routes} | set(module.app.openapi().get("paths", {}).keys())
+def extract_routes(app_routes):
+    paths = set()
+    for r in app_routes:
+        if hasattr(r, "path"):
+            paths.add(r.path)
+        if hasattr(r, "routes"):
+            paths |= extract_routes(r.routes)
+        if hasattr(r, "original_router"):
+            paths |= extract_routes(r.original_router.routes)
+    return paths
+
+routes = extract_routes(module.app.routes)
 missing = sorted(required_routes - routes)
 if missing:
     raise SystemExit(f"Missing required routes: {missing}")
