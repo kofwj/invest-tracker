@@ -1,4 +1,4 @@
-import { defineStore } from 'pinia';
+import { defineStore, storeToRefs } from 'pinia';
 import { ref } from 'vue';
 import { createTransactionsModule } from '../modules/transactions.js';
 import { createFeeHelpers } from '../composables/feeHelpers.js';
@@ -8,17 +8,19 @@ import { usePortfolioStore } from './portfolio.js';
 
 export const useTransactionsStore = defineStore('transactions', () => {
   const portfolioStore = usePortfolioStore();
+  const { holdings } = storeToRefs(portfolioStore);
 
   const allTransactions = ref([]);
   const filteredTransactions = ref([]);
   const pendingTransactions = ref([]);
   const pendingPurchaseTotal = ref(0);
-  const transPage = ref({ page: 1, pageSize: 100, total: 0 });
+  const transPage = ref({ page: 1, size: 20, total: 0 });
   const transQuery = ref({
-    dateRange: [],
     code: '',
     name: '',
     direction: '',
+    account: '',
+    dateRange: [],
   });
   const transEditDialog = ref({
     visible: false,
@@ -28,37 +30,35 @@ export const useTransactionsStore = defineStore('transactions', () => {
       code: '',
       name: '',
       category: '',
-      account: '',
       direction: '',
-      quantity: 0,
       price: 0,
+      quantity: 0,
       amount: 0,
       fee: 0,
+      account: '',
       remark: '',
     },
   });
-  const transDialog = ref({
-    visible: false,
-    title: '',
-    transactions: [],
-  });
+  const transDialog = ref({ visible: false });
   const transForm = ref({
     date: todayLocalIso(),
+    account: '',
     code: '',
     name: '',
     category: '',
-    account: '华泰证券',
     direction: '买入',
-    quantity: 0,
     price: 0,
+    quantity: 0,
     amount: 0,
     fee: 0,
+    fee_manual: false,
+    remark: '',
   });
 
   const feeManuallyEdited = ref(false);
   const feeSettings = ref({});
-  const feeAccounts = ref(['华泰证券']);
-  const activeFeeAccount = ref('华泰证券');
+  const feeAccounts = ref([]);
+  const activeFeeAccount = ref('');
   const newFeeAccountName = ref('');
   const feeCategories = ['A股权益', 'A股ETF', '港股ETF', 'REITs', '黄金', '债基', '其他'];
   const feeAutoHint = ref('');
@@ -98,15 +98,15 @@ export const useTransactionsStore = defineStore('transactions', () => {
     feeAccounts,
     feeManuallyEdited,
     feeAutoHint,
-    holdings: portfolioStore.holdings,
+    holdings,
     estimateFeeIfAuto: feeHelpers.estimateFeeIfAuto,
-    fetchData: portfolioStore.fetchData,
+    fetchData: () => portfolioStore.fetchData(),
   });
 
   const importExport = createImportExportHelpers({
     todayLocalIso,
     queryTransactions: transactionsModule.queryTransactions,
-    fetchData: portfolioStore.fetchData,
+    fetchData: () => portfolioStore.fetchData(),
     transQuery,
   });
 

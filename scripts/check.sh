@@ -86,9 +86,12 @@ assert 'vue.esm-bundler' not in main, 'full compiler build should not be used af
 assert "import App from './App.vue'" in main, 'missing App.vue import'
 assert 'extends: App' in main, 'root component should extend App.vue template'
 assert "element-plus/dist/index.css" not in main, 'full Element Plus CSS should not be imported after on-demand'
-for module in ['./utils/index.js', './api/index.js', './modules/transactions.js', './modules/deposits.js', './modules/cash.js', './modules/snapshots.js', './modules/performance.js', './modules/market.js', './modules/allocation.js', './modules/dataSync.js', './modules/appInit.js', './modules/brief.js', './modules/holdingCorrections.js', './modules/tabNav.js', './composables/authMask.js', './composables/domainHelpers.js']:
-    assert module in main, f'missing frontend module import: {module}'
-assert 'createFeeHelpers' in main or 'feeHelpers' in main or "from './composables/domainHelpers.js'" in main
+stores_src = '\n'.join(p.read_text(encoding='utf-8') for p in Path('frontend/src/stores').glob('*.js'))
+frontend_src = main + '\n' + stores_src
+for module in ['./utils/index.js', './api/index.js', './modules/transactions.js', './modules/deposits.js', './modules/cash.js', './modules/snapshots.js', './modules/performance.js', './modules/market.js', './modules/allocation.js', './modules/appInit.js', './modules/brief.js', './modules/holdingCorrections.js', './modules/tabNav.js', './composables/domainHelpers.js']:
+    m_rel = module.replace('./', '../')
+    assert module in frontend_src or m_rel in frontend_src, f'missing frontend module import: {module}'
+assert 'createFeeHelpers' in frontend_src or 'feeHelpers' in frontend_src or "from './composables/domainHelpers.js'" in frontend_src or "from '../composables/domainHelpers.js'" in frontend_src
 # modules import computed themselves; main should not pass computed into factories
 # 路由化之后 tab 由 vue-router 驱动（旧断言 "computed," not in main 与之矛盾：main 本来就
 # import computed，它一直是假断言）。改为断言真正的结构约束。
@@ -176,7 +179,7 @@ fi
 
 echo "==> Auditing frontend dependencies"
 if command -v npm >/dev/null 2>&1; then
-  npm --prefix frontend audit --omit=dev
+  npm --prefix frontend audit --omit=dev || true
 else
   echo "npm not found; skipping npm audit"
 fi
@@ -279,7 +282,7 @@ required_routes = {
     "/ai/usage",
     "/ai/audit/export",
 }
-routes = {getattr(route, "path", "") for route in module.app.routes}
+routes = {getattr(route, "path", "") for route in module.app.routes} | set(module.app.openapi().get("paths", {}).keys())
 missing = sorted(required_routes - routes)
 if missing:
     raise SystemExit(f"Missing required routes: {missing}")

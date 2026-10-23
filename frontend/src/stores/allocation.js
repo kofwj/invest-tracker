@@ -1,4 +1,4 @@
-import { defineStore } from 'pinia';
+import { defineStore, storeToRefs } from 'pinia';
 import { ref } from 'vue';
 import { createAllocationModule } from '../modules/allocation.js';
 import { createHoldingCorrectionHelpers } from '../modules/holdingCorrections.js';
@@ -9,6 +9,9 @@ import { useTransactionsStore } from './transactions.js';
 export const useAllocationStore = defineStore('allocation', () => {
   const portfolioStore = usePortfolioStore();
   const transactionsStore = useTransactionsStore();
+
+  const { holdings, deposits, dashboard } = storeToRefs(portfolioStore);
+  const { pendingTransactions } = storeToRefs(transactionsStore);
 
   const allocationAnalysis = ref([]);
   const macroAllocationAnalysis = ref([]);
@@ -41,10 +44,10 @@ export const useAllocationStore = defineStore('allocation', () => {
   });
 
   const allocationModule = createAllocationModule({
-    holdings: portfolioStore.holdings,
-    deposits: portfolioStore.deposits,
-    dashboard: portfolioStore.dashboard,
-    pendingTransactions: transactionsStore.pendingTransactions,
+    holdings,
+    deposits,
+    dashboard,
+    pendingTransactions,
     allocationAnalysis,
     macroAllocationAnalysis,
     portfolioExpectedReturn,
@@ -56,7 +59,7 @@ export const useAllocationStore = defineStore('allocation', () => {
     expectedReturnDialog,
     holdingCorrectionDialog,
     holdingCorrectionHistoryDialog,
-    fetchData: portfolioStore.fetchData,
+    fetchData: () => portfolioStore.fetchData(),
     todayLocalIso,
   });
 

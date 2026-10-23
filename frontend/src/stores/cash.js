@@ -1,17 +1,22 @@
-import { defineStore } from 'pinia';
+import { defineStore, storeToRefs } from 'pinia';
 import { ref } from 'vue';
 import { createCashModule } from '../modules/cash.js';
 import { todayLocalIso } from '../utils/index.js';
 import { usePortfolioStore } from './portfolio.js';
+import { useTransactionsStore } from './transactions.js';
 
 export const useCashStore = defineStore('cash', () => {
   const portfolioStore = usePortfolioStore();
+  const transactionsStore = useTransactionsStore();
+
+  const { dashboard } = storeToRefs(portfolioStore);
+  const { activeFeeAccount, feeAccounts } = storeToRefs(transactionsStore);
 
   const cashForm = ref({ amount: 0 });
   const cashFlows = ref([]);
   const cashFlowForm = ref({
     date: todayLocalIso(),
-    account: '华泰证券',
+    account: '',
     flow_type: '银证转入',
     amount: 0,
     remark: '',
@@ -23,7 +28,6 @@ export const useCashStore = defineStore('cash', () => {
     form: { date: '', account: '', flow_type: '', amount: 0, remark: '' },
   });
   const cashAudit = ref(null);
-  const activeFeeAccount = ref('华泰证券');
 
   // Sync cash balance from portfolio fetchData
   portfolioStore.onAfterFetch(({ cashData }) => {
@@ -31,12 +35,12 @@ export const useCashStore = defineStore('cash', () => {
       cashForm.value.amount = cashData.amount;
     }
     if (!cashFlowForm.value.account) {
-      cashFlowForm.value.account = activeFeeAccount.value || '华泰证券';
+      cashFlowForm.value.account = activeFeeAccount.value || (feeAccounts.value && feeAccounts.value[0]) || '';
     }
   });
 
   const cashModule = createCashModule({
-    dashboard: portfolioStore.dashboard,
+    dashboard,
     cashForm,
     cashFlows,
     cashFlowForm,
@@ -44,7 +48,7 @@ export const useCashStore = defineStore('cash', () => {
     cashFlowEditDialog,
     cashAudit,
     activeFeeAccount,
-    fetchData: portfolioStore.fetchData,
+    fetchData: () => portfolioStore.fetchData(),
   });
 
   return {

@@ -405,7 +405,7 @@ def migrate_to_v21_discipline_defaults(conn):
         has_holdings = conn.execute(
             "SELECT COUNT(*) FROM holdings WHERE quantity > 0"
         ).fetchone()[0] > 0
-    except Exception:
+    except sqlite3.OperationalError:
         return
     if not has_holdings:
         return
