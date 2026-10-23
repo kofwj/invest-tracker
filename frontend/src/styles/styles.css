@@ -38,6 +38,8 @@
   --z-dropdown: 100;
   --z-toast: 200;
   --z-overlay: 300;
+  /* 顶栏实际高度，由 App.vue 用 ResizeObserver 写入；二级导航据此吸顶 */
+  --app-shell-header-h: 60px;
   color-scheme: light;
 }
 
@@ -102,6 +104,10 @@ body {
   border-radius: 14px;
   box-shadow: var(--app-shadow-sm);
   backdrop-filter: blur(14px);
+  /* 顶栏吸顶：滚长页面时分组导航不再消失 */
+  position: sticky;
+  top: 0;
+  z-index: var(--z-header);
 }
 .header-brand {
   min-width: 0;
@@ -186,7 +192,7 @@ body {
 }
 .header-nav-btn:focus-visible { outline: 2px solid color-mix(in srgb, var(--app-primary) 35%, transparent); outline-offset: 1px; }
 /* 顶栏 ≤960px：品牌副标题与主题文字先退场，保住一行里的按钮 */
-@media (max-width: 960px) {
+@media (max-width: 900px) {
   .header-subtitle { display: none; }
   .header-theme-label { display: none; }
 }
@@ -356,7 +362,7 @@ html.dark .stat-label::after { background: rgba(255,255,255,0.08); }
 .stat-value { margin-top: 10px; font-size: 20px; line-height: 1.15; font-weight: 750; color: var(--app-text); letter-spacing: -0.3px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .stat-main .stat-value { font-size: 30px; color: var(--app-primary); }
 .stat-sub { margin-top: 8px; font-size: 12px; color: var(--app-soft); white-space: nowrap; }
-@media (max-width: 1280px) { .top-stats { grid-template-columns: repeat(3, 1fr); } .stat-main { grid-column: span 3; } }
+@media (max-width: 1100px) { .top-stats { grid-template-columns: repeat(3, 1fr); } .stat-main { grid-column: span 3; } }
 @media (max-width: 900px) { .top-stats { grid-template-columns: repeat(2, 1fr); } .stat-main { grid-column: span 2; } }
 @media (max-width: 640px) { .top-stats { grid-template-columns: 1fr; } .stat-main { grid-column: span 1; } }
 .mt-20 { margin-top: 20px; }
@@ -364,6 +370,8 @@ html.dark .stat-label::after { background: rgba(255,255,255,0.08); }
 /* 首页壳层：概览区 + 内容区 */
 .home-panel { margin-bottom: 4px; }
 .content-shell {
+  /* 左右内边距同时供 .page-shell-header 吸顶时的背景外扩使用 */
+  --shell-pad-x: 16px;
   margin-top: 14px;
   padding: 14px 16px 18px;
   background: var(--app-surface);
@@ -401,6 +409,18 @@ html.dark .stat-label::after { background: rgba(255,255,255,0.08); }
   /* 窄屏 tab 多了一行放不下就换行（tab 行掉到第二行） */
   flex-wrap: wrap;
   margin-bottom: 14px;
+  /* 二级导航吸顶：滚动时仍能切页，不必滚回顶部 */
+  position: sticky;
+  top: var(--app-shell-header-h, 60px);
+  z-index: var(--z-sticky);
+}
+/* 吸顶时把左右留白一并盖住，否则内容会从 content-shell 内边距的缝隙里透出来 */
+.page-shell-header::before {
+  content: '';
+  position: absolute;
+  inset: 0 calc(-1 * var(--shell-pad-x, 16px)) -14px;
+  background: var(--app-surface);
+  z-index: -1;
 }
 .page-shell.is-compact .page-shell-header { margin-bottom: 10px; }
 .page-shell-heading { min-width: 0; flex: 1 1 240px; }
@@ -507,7 +527,7 @@ html.dark .stat-label::after { background: rgba(255,255,255,0.08); }
   .app-stat-cell:nth-child(n+3) { border-top: 1px solid var(--app-hairline); }
   .app-brief { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-@media (max-width: 560px) {
+@media (max-width: 640px) {
   .app-stat-row[class*="cols-"] { grid-template-columns: 1fr; }
   .app-stat-cell:nth-child(even) { border-left: 0; }
   .app-stat-cell + .app-stat-cell { border-top: 1px solid var(--app-hairline); }
@@ -739,8 +759,8 @@ html.dark .stat-label::after { background: rgba(255,255,255,0.08); }
 .snapshot-pill-sub { margin-top:4px; font-size:11px; color:var(--app-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .snapshot-chart { height: 320px; width: 100%; }
 .snapshot-table .cell { white-space: nowrap; }
-@media (max-width: 1000px) { .snapshot-hero { grid-template-columns: repeat(2, minmax(0, 1fr)); } .snapshot-insights { grid-template-columns: 1fr; } }
-@media (max-width: 560px) { .snapshot-hero { grid-template-columns: 1fr; } .snapshot-controls { justify-content:flex-start; } }
+@media (max-width: 1100px) { .snapshot-hero { grid-template-columns: repeat(2, minmax(0, 1fr)); } .snapshot-insights { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .snapshot-hero { grid-template-columns: 1fr; } .snapshot-controls { justify-content:flex-start; } }
 .deposit-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 .deposit-title { font-size: 18px; font-weight: 700; color: var(--app-text); }
 .deposit-subtitle { margin-top: 4px; font-size: 12px; color: var(--app-muted); }
@@ -755,7 +775,7 @@ html.dark .stat-label::after { background: rgba(255,255,255,0.08); }
 .deposit-bank-name { font-weight: 600; color: var(--app-text); }
 .deposit-table .cell { white-space: nowrap; }
 @media (max-width: 900px) { .deposit-stats { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 560px) { .deposit-stats { grid-template-columns: 1fr; } .deposit-toolbar { align-items: flex-start; flex-direction: column; } }
+@media (max-width: 640px) { .deposit-stats { grid-template-columns: 1fr; } .deposit-toolbar { align-items: flex-start; flex-direction: column; } }
 
 .allocation-hero { display: grid; grid-template-columns: 1.25fr 1fr 1fr 1fr; gap: 14px; margin-bottom: 16px; }
 .allocation-card { border: 0; border-radius: 12px; }
@@ -780,8 +800,8 @@ html.dark .stat-label::after { background: rgba(255,255,255,0.08); }
 }
 .allocation-risk-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font-weight:600; color:var(--app-text); }
 .allocation-table .cell { white-space: nowrap; }
-@media (max-width: 1000px) { .allocation-hero { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 560px) { .allocation-hero { grid-template-columns: 1fr; } }
+@media (max-width: 1100px) { .allocation-hero { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 640px) { .allocation-hero { grid-template-columns: 1fr; } }
 
 /* README 截图打码模式：访问 ?mask=1 时启用，避免截图泄露真实资产金额/明细 */
 .screenshot-mask .stat-value,
@@ -1069,7 +1089,7 @@ html.dark .asset-cell-code { color: var(--app-muted); }
 .el-table { overflow-x: auto; }
 
 /* —— 移动端整体 —— */
-@media (max-width: 768px) {
+@media (max-width: 640px) {
   .app-container { padding: 10px 10px 72px; max-width: 100%; }
   .header {
     flex-direction: column;
@@ -1082,7 +1102,7 @@ html.dark .asset-cell-code { color: var(--app-muted); }
   .header-actions { width: 100%; justify-content: flex-start; }
   .header-actions .el-button { margin: 0; }
   .inline-sync-status { max-width: 100%; font-size: 12px; }
-  .content-shell { padding: 10px 10px 14px; margin-top: 10px; }
+  .content-shell { --shell-pad-x: 10px; padding: 10px 10px 14px; margin-top: 10px; }
 
   .mt-20 { margin-top: 12px; }
   .el-tabs__header { margin: 0 0 12px; }
@@ -1139,7 +1159,7 @@ html.dark .asset-cell-code { color: var(--app-muted); }
 .tab-group-btn:focus-visible { outline: 2px solid color-mix(in srgb, var(--app-primary) 35%, transparent); outline-offset: 1px; }
 
 .plan-progress { max-width: 420px; }
-@media (max-width: 768px) {
+@media (max-width: 640px) {
   .tab-group-bar { width: 100%; justify-content: stretch; }
   .tab-group-btn { flex: 1 1 auto; text-align: center; padding: 7px 10px; }
 }
@@ -1201,7 +1221,7 @@ html.dark .asset-cell-code { color: var(--app-muted); }
 @media (max-width: 900px) {
   .sk-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-@media (max-width: 560px) {
+@media (max-width: 640px) {
   .sk-metrics { grid-template-columns: 1fr; }
 }
 
@@ -1222,7 +1242,7 @@ html.dark .asset-cell-code { color: var(--app-muted); }
 .empty-hint strong { color: var(--app-text); font-weight: 650; }
 
 /* 窄屏顶栏：第 1 行 品牌 + 操作按钮，第 2 行 分组导航（横向可滚动，不换行、不显示滚动条） */
-@media (max-width: 720px) {
+@media (max-width: 640px) {
   .header-theme-label { display: none; }
   .header-brand-text .header-subtitle { display: none; }
   .header {
@@ -1417,7 +1437,7 @@ html.dark .perf-contrib-table.el-table th.el-table__cell {
   .hazard-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .use-grid { grid-template-columns: 1fr; }
 }
-@media (max-width: 768px) {
+@media (max-width: 640px) {
   .field-grid,
   .field-grid.cols-3 { grid-template-columns: 1fr; }
   .hazard-grid { grid-template-columns: 1fr; }

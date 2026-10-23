@@ -793,7 +793,7 @@ const riskItems = computed(() => {
 .perf-detail-collapse :deep(.el-collapse-item__wrap) { border-bottom: 0; }
 .perf-detail-collapse :deep(.el-collapse-item__content) { padding-bottom: 8px; }
 
-@media (max-width: 800px) {
+@media (max-width: 900px) {
   .perf-num-row { grid-template-columns: 1fr; }
   .perf-num-cell + .perf-num-cell { border-left: 0; border-top: 1px solid var(--app-hairline); }
   .perf-brief { grid-template-columns: repeat(2, minmax(0, 1fr)); }

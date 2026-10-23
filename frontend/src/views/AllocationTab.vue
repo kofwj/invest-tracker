@@ -1126,7 +1126,7 @@ watch(
 .deviation-collapse :deep(.el-collapse-item__wrap) { border: none; background: transparent; }
 .deviation-collapse :deep(.el-collapse-item__content) { padding: 14px 2px 2px; }
 .deviation-collapse .merge-card:last-child { margin-bottom: 0; }
-@media (max-width: 960px) {
+@media (max-width: 900px) {
   .merge-grid { grid-template-columns: 1fr; }
   .preset-row { flex-direction: column; align-items: stretch; }
   .preset-seg { width: 100%; }

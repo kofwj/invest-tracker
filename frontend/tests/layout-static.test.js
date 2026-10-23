@@ -103,24 +103,24 @@ describe('顶栏响应式', () => {
     const headerBlocks = blocks.filter((b) => /\.header\s*[,{]/.test(b.body));
     expect(
       headerBlocks.map((b) => b.header),
-      '顶栏一行塞满按钮却没有断点：至少要有 ≤960px / ≤720px 两处',
+      '顶栏一行塞满按钮却没有断点：至少要有 ≤900px / ≤640px 两处',
     ).not.toEqual([]);
   });
 
-  it('≤960px 隐藏品牌副标题与主题文字（只留图标）', () => {
-    const b = blocks.find((x) => /max-width:\s*960px/.test(x.header));
-    expect(b, '缺少 ≤960px 断点').toBeTruthy();
+  it('≤900px 隐藏品牌副标题与主题文字（只留图标）', () => {
+    const b = blocks.find((x) => /max-width:\s*900px/.test(x.header));
+    expect(b, '缺少 ≤900px 断点').toBeTruthy();
     expect(/\.header-subtitle[^{]*\{[^}]*display:\s*none/.test(b.body)).toBe(true);
     expect(/\.header-theme-label[^{]*\{[^}]*display:\s*none/.test(b.body)).toBe(true);
   });
 
-  it('≤720px 顶栏排成两行 grid，第 2 行分组导航可横向滚动', () => {
-    // 文件里不止一个 ≤720px 断点（还有性能页的），所以要挑出动顶栏的那个
-    const candidates = blocks.filter((x) => /max-width:\s*720px/.test(x.header));
-    expect(candidates.length, '缺少 ≤720px 断点').toBeGreaterThan(0);
+  it('≤640px 顶栏排成两行 grid，第 2 行分组导航可横向滚动', () => {
+    // 断点收敛后 640 这一档有很多块，所以要挑出真正动顶栏的那个
+    const candidates = blocks.filter((x) => /max-width:\s*640px/.test(x.header));
+    expect(candidates.length, '缺少 ≤640px 断点').toBeGreaterThan(0);
     expect(
       candidates.some((b) => /\.header\s*\{[^}]*display:\s*grid/.test(b.body)),
-      '.header 在 ≤720px 要排成两行 grid',
+      '.header 在 ≤640px 要排成两行 grid',
     ).toBe(true);
     expect(
       candidates.some((b) => /\.header-nav\s*\{[^}]*overflow-x:\s*auto/.test(b.body)),
@@ -212,5 +212,61 @@ describe('模板 class 不许「有引用没定义」', () => {
       }
     }
     expect([...missing].sort(), '这些 class 没有任何样式定义：要么补样式，要么把死标记删掉').toEqual([]);
+  });
+});
+
+/** 应用外壳吸顶：滚动时顶栏不消失、二级导航仍可切页 */
+describe('应用外壳吸顶', () => {
+  const css = readFileSync(CSS_FILE, 'utf-8');
+
+  it('顶栏吸顶在视口顶部（滚长页面时分组导航不再消失）', () => {
+    expect(css, '.header 要 position: sticky + top: 0').toMatch(/\.header\s*\{[^}]*position:\s*sticky/);
+    expect(css, '.header 吸顶后要压在页面内容之上').toMatch(/\.header\s*\{[^}]*z-index:\s*var\(--z-header\)/);
+  });
+
+  it('二级导航吸在顶栏下方（原来它属于页面内容，一滚就没）', () => {
+    expect(css).toMatch(/\.page-shell-header\s*\{[^}]*position:\s*sticky/);
+    expect(css, '吸顶位置要跟着顶栏高度走，不能写死数字')
+      .toMatch(/\.page-shell-header\s*\{[^}]*top:\s*var\(--app-shell-header-h/);
+  });
+
+  it('吸顶的二级导航自带底色，否则内容会从 content-shell 内边距的缝隙里透出来', () => {
+    expect(css).toMatch(/\.page-shell-header::before\s*\{[^}]*background:\s*var\(--app-surface\)/);
+    expect(css, '外扩宽度要跟着 content-shell 的左右内边距').toMatch(/inset:\s*0\s+calc\(-1 \* var\(--shell-pad-x/);
+  });
+});
+
+/**
+ * 断点只有三档：1100 / 900 / 640。
+ *
+ * 收敛前全仓有 10 个不同值（560/640/720/768/800/900/960/1000/1100/1280），
+ * 每一处都是「当时看着不顺眼就加一个」，结果同一个布局意图在相邻宽度上表现不一致，
+ * 也没人说得清某个宽度到底走哪一套规则。这里把它钉成可执行的不变量。
+ */
+describe('断点只有三档', () => {
+  const ALLOWED = [1100, 900, 640];
+  const files = [CSS_FILE, ...walk(SRC, '.vue')];
+  const widthsOf = (src) =>
+    [...src.matchAll(/@media[^{]*\(max-width:\s*(\d+)px/g)].map((m) => ({
+      width: Number(m[1]),
+      line: src.slice(0, m.index).split('\n').length,
+    }));
+
+  it(`所有 @media (max-width) 只能是 ${ALLOWED.join(' / ')}`, () => {
+    const bad = [];
+    for (const f of files) {
+      for (const { width, line } of widthsOf(readFileSync(f, 'utf-8'))) {
+        if (!ALLOWED.includes(width)) bad.push(`${relative(SRC, f)}:${line} → ${width}px`);
+      }
+    }
+    expect(bad, '断点收敛到 1100 / 900 / 640 三档，别再新增第四档').toEqual([]);
+  });
+
+  it('三档都真的在用（防止收敛后某一档变成死规则）', () => {
+    const used = new Set();
+    for (const f of files) {
+      for (const { width } of widthsOf(readFileSync(f, 'utf-8'))) used.add(width);
+    }
+    expect([...used].sort((a, b) => b - a)).toEqual(ALLOWED);
   });
 });

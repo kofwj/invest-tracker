@@ -667,10 +667,10 @@ watch(
   color: var(--app-soft);
   line-height: 1.4;
 }
-@media (max-width: 960px) {
+@media (max-width: 900px) {
   .ops-action-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-@media (max-width: 560px) {
+@media (max-width: 640px) {
   .ops-action-grid { grid-template-columns: 1fr; }
 }
 
@@ -712,7 +712,7 @@ watch(
 .chan .field-grid { padding: 0 14px 14px; }
 .ops-card :deep(.el-card__body) { padding: 18px 20px; }
 .ops-card :deep(.el-input__wrapper) { min-height: 40px; }
-@media (max-width: 768px) {
+@media (max-width: 640px) {
   .chan-hint { max-width: 100%; }
   .chan-tools { margin-left: 0; width: 100%; justify-content: flex-end; }
 }
