@@ -116,7 +116,11 @@ def test_story_liquidity_counts_near_due_deposit(client, app_module):
     from datetime import datetime, timedelta
 
     today = local_today_iso()
-    near = (datetime.strptime(today, "%Y-%m-%d").date() + timedelta(days=10)).isoformat()
+    today_date = datetime.strptime(today, "%Y-%m-%d").date()
+    near = (today_date + timedelta(days=10)).isoformat()
+    # "远端"必须相对今天算：写死 2030-01-01 的话，真实日期一过 2030 这笔就变成
+    # 已到期存款，被一起算进 deposit_due_30d_amount，断言会突然变 98000。
+    far = (today_date + timedelta(days=365 * 5)).isoformat()
     conn = sqlite3.connect(app_module.DB_PATH)
     app_module.set_setting(conn, "securities_cash_base", 10000)
     app_module.set_setting(conn, "securities_cash", 10000)
@@ -126,7 +130,7 @@ def test_story_liquidity_counts_near_due_deposit(client, app_module):
     )
     conn.execute(
         "INSERT INTO deposits (bank_name, amount, interest_rate, due_date, remark) VALUES (?,?,?,?,?)",
-        ("远端行", 90000, 2.0, "2030-01-01", "far"),
+        ("远端行", 90000, 2.0, far, "far"),
     )
     conn.commit()
     conn.close()

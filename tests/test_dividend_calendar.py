@@ -194,10 +194,15 @@ def test_calendar_get_does_not_fetch(client, app_module):
 def test_notify_same_stamp_not_repeated(app_module):
     with app_module.get_db_connection(app_module.DB_PATH) as conn:
         _insert_event(conn, "601288", "农业银行", (TODAY + timedelta(days=1)).isoformat())
+        # today 走参数注入，不再 patch dividend_calendar.local_today_iso：
+        # conftest 的 app_module fixture 会把后端模块从 sys.modules 弹掉重载，而本文件
+        # 顶层 `from dividend_calendar import ...` 绑的是重载前的旧模块对象。patch 打在
+        # 重载后的新模块上，旧模块的函数查的是旧模块自己的全局名字，于是 patch 完全落空
+        # （call_count 恒为 0），测试会退化成读真实系统日期：事件写死 TODAY+1 天，一旦
+        # 真实日期超过 TODAY + OVERDUE_MAX_DAYS(7) 天就必然假红。
         with patch("notify.dispatch", return_value={"sent": True, "results": []}) as send:
-            with patch("dividend_calendar.local_today_iso", return_value=TODAY.isoformat()):
-                first = notify_dividend_upcoming(conn, source_status="ok")
-                second = notify_dividend_upcoming(conn, source_status="ok")
+            first = notify_dividend_upcoming(conn, today=TODAY, source_status="ok")
+            second = notify_dividend_upcoming(conn, today=TODAY, source_status="ok")
     assert first["sent"] is True
     assert second["sent"] is False
     assert second["reason"] == "already_notified"

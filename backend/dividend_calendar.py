@@ -545,14 +545,15 @@ def list_dividend_calendar(
     }
 
 
-def _notify_stamp(info: Dict[str, Any]) -> str:
+def _notify_stamp(info: Dict[str, Any], today: Optional[date] = None) -> str:
     keys = []
     buckets = info.get("buckets") or {}
     for name in ("overdue", "d0", "d3", "d7"):
         for item in buckets.get(name) or []:
             keys.append("%s:%s" % (item.get("code") or "", item.get("ex_date") or ""))
     keys.sort()
-    return local_today_iso() + "|" + ",".join(keys)
+    day = today.isoformat() if today is not None else local_today_iso()
+    return day + "|" + ",".join(keys)
 
 
 def notify_dividend_upcoming(
@@ -560,17 +561,18 @@ def notify_dividend_upcoming(
     *,
     force: bool = False,
     source_status: Optional[str] = None,
+    today: Optional[date] = None,
 ) -> Dict[str, Any]:
     try:
         from .notify import dispatch
     except ImportError:
         from notify import dispatch
 
-    info = check_dividend_upcoming(conn, source_status=source_status)
+    info = check_dividend_upcoming(conn, today=today, source_status=source_status)
     if not info.get("has_actionable") and not force:
         return {"sent": False, "reason": "nothing_due", "dividend": info, "results": []}
 
-    stamp = _notify_stamp(info)
+    stamp = _notify_stamp(info, today=today)
     if not force and stamp == (_get_setting(conn, NOTIFY_STAMP_KEY) or ""):
         return {"sent": False, "reason": "already_notified", "dividend": info, "results": []}
 

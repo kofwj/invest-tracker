@@ -164,6 +164,40 @@ def create_tables(db_path: Path):
     conn.close()
 
 
+def rebind_test_module_refs():
+    """把测试模块里指向"已被重载掉的旧后端模块"的全局名字改指到新模块。
+
+    app_module 每次都会把 60 个后端模块从 sys.modules 弹掉再重新加载；但测试文件在
+    收集阶段就执行了 `from market import foo`，绑定的是旧模块里的那份对象。之后
+    `patch("market.foo")` 打在重载后的新模块上，测试调的却还是旧模块里的函数 ——
+    patch 静默落空（call_count 恒为 0），测试要么退化成恒真，要么悄悄读真实系统时间。
+    重载完成后把名字改指到新模块，patch 语义才恢复正常。
+    """
+    import types
+
+    for mod_name, test_mod in list(sys.modules.items()):
+        if not (mod_name.startswith('test_') or mod_name.startswith('tests.')):
+            continue
+        for attr, value in list(vars(test_mod).items()):
+            if isinstance(value, types.ModuleType):
+                fresh = sys.modules.get(value.__name__)
+                if fresh is not None and fresh is not value:
+                    setattr(test_mod, attr, fresh)
+                continue
+            owner = getattr(value, '__module__', None)
+            if not owner:
+                continue
+            fresh_mod = sys.modules.get(owner)
+            if fresh_mod is None:
+                continue
+            candidate = getattr(fresh_mod, attr, None)
+            # 只认同名且限定名一致的对象，避免把别的东西误绑过来
+            if candidate is not None and getattr(candidate, '__qualname__', None) == getattr(
+                value, '__qualname__', None
+            ):
+                setattr(test_mod, attr, candidate)
+
+
 @pytest.fixture
 def app_module(tmp_path, monkeypatch):
     data_dir = tmp_path / 'data'
@@ -179,6 +213,7 @@ def app_module(tmp_path, monkeypatch):
     clear_backend_module_cache()
 
     module = load_backend_module()
+    rebind_test_module_refs()
     create_tables(db_path)
     module.initialize_database()
     return module
