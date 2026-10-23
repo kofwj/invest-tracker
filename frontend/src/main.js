@@ -31,14 +31,16 @@ import {
     todayLocalIso,
 } from './utils/index.js';
 import api, { API } from './api/index.js';
-import { createSnapshotsModule } from './modules/snapshots.js';
-import { createPerformanceModule } from './modules/performance.js';
+import { usePerformanceStore } from './stores/performance.js';
+import { useAllocationStore } from './stores/allocation.js';
+import { useDisciplineStore } from './stores/discipline.js';
+import { useSnapshotsStore } from './stores/snapshots.js';
 import { createBrokerReconcileModule } from './modules/brokerReconcile.js';
-import { createDisciplineModule } from './modules/discipline.js';
-import { createHoldingCorrectionHelpers } from './modules/holdingCorrections.js';
-import { createMaintenanceHelpers } from './composables/domainHelpers.js';
+import {
+    createMaintenanceHelpers,
+    createImportExportHelpers,
+} from './composables/domainHelpers.js';
 import { createDividendHelpers } from './modules/dividends.js';
-import { createAllocationModule } from './modules/allocation.js';
 import { createAppInit } from './modules/appInit.js';
 import { createBriefHelpers } from './modules/brief.js';
 import { TAB_GROUPS, tabGroupOf, SCREENSHOT_TABS, ROUTE_META, LEGACY_TAB_REDIRECT } from './modules/tabNav.js';
@@ -192,15 +194,30 @@ const app = createApp({
             importTransactions,
         } = transactionsStore;
 
-        const snapshots = ref([]);
-        const snapshotRange = ref([]);
-        const snapshotSummary = ref(null);
-        const snapshotMetrics = ref([]);
-        const snapshotChangeRows = ref([]);
-        const snapshotLoading = ref(false);
-        const reconcileData = ref(null);
-        const reconcileForm = ref({ date: todayLocalIso(), amount: 0, note: '' });
-        const reconcileSaving = ref(false);
+        const snapshotsStore = useSnapshotsStore(pinia);
+        const {
+            snapshots,
+            snapshotRange,
+            snapshotSummary,
+            snapshotMetrics,
+            snapshotChangeRows,
+            snapshotLoading,
+            reconcileData,
+            reconcileForm,
+            reconcileSaving,
+        } = storeToRefs(snapshotsStore);
+        const {
+            createSnapshot,
+            buildSnapshotAnalysis,
+            renderSnapshotCharts,
+            fetchSnapshots,
+            exportSnapshots,
+            compactSnapshots,
+            snapshotInsights,
+            fetchReconcile,
+            saveReconcile,
+        } = snapshotsStore;
+
         const maintenanceStatus = ref({});
         const backups = ref([]);
         const maintenanceLoading = ref(false);
@@ -221,60 +238,30 @@ const app = createApp({
             portfolioStore.maintenanceStatus = val || {};
         }, { immediate: true });
 
-        const expectedReturnDialog = ref({
-            visible: false,
-            form: { code: '', name: '', expected_return: 0 }
-        });
-        const holdingCorrectionDialog = ref({
-            visible: false,
-            current: {},
-            form: { date: todayLocalIso(), code: '', name: '', category: '', actual_quantity: 0, actual_avg_cost: 0, actual_total_dividend: 0, remark: '' }
-        });
-        const holdingCorrectionHistoryDialog = ref({ visible: false, title: '持仓校正记录', records: [] });
-
-        const allocationAnalysis = ref([]);
-        const macroAllocationAnalysis = ref([]);
-        const portfolioExpectedReturn = ref(0);
-
-        const allocationStory = ref(null);
-        const allocationStoryLoading = ref(false);
+        const allocationStore = useAllocationStore(pinia);
         const {
-            calculateAllocationAnalysis,
-            allocationSummary,
-            allocationHealth,
-            renderAllocationCharts,
-            fetchAllocationStory,
-        } = createAllocationModule({
-            holdings,
-            deposits,
-            dashboard,
-            pendingTransactions,
             allocationAnalysis,
             macroAllocationAnalysis,
             portfolioExpectedReturn,
             allocationStory,
             allocationStoryLoading,
-        });
-
-        portfolioStore.onAfterFetch(() => {
-            calculateAllocationAnalysis();
-            if (activeTab.value === 'allocation') renderAllocationCharts();
-        });
-
+            expectedReturnDialog,
+            holdingCorrectionDialog,
+            holdingCorrectionHistoryDialog,
+            allocationSummary,
+            allocationHealth,
+        } = storeToRefs(allocationStore);
         const {
+            calculateAllocationAnalysis,
+            renderAllocationCharts,
+            fetchAllocationStory,
             openExpectedReturnDialog,
             saveExpectedReturn,
             openHoldingCorrectionDialog,
             saveHoldingCorrection,
             openHoldingCorrectionHistory,
             deleteHoldingCorrection,
-        } = createHoldingCorrectionHelpers({
-            expectedReturnDialog,
-            holdingCorrectionDialog,
-            holdingCorrectionHistoryDialog,
-            fetchData,
-            todayLocalIso,
-        });
+        } = allocationStore;
 
         const {
             openDividendDraftDialog,
@@ -306,20 +293,7 @@ const app = createApp({
             transQuery,
         });
 
-        const { createSnapshot, buildSnapshotAnalysis, renderSnapshotCharts, fetchSnapshots, exportSnapshots, compactSnapshots, snapshotInsights, fetchReconcile, saveReconcile } = createSnapshotsModule({
-            activeTab,
-            snapshots,
-            snapshotRange,
-            snapshotSummary,
-            snapshotMetrics,
-            snapshotChangeRows,
-            snapshotLoading,
-            reconcileData,
-            reconcileForm,
-            reconcileSaving,
-            fetchData,
-            nextTick,
-        });
+
 
         const notifyStore = useNotifyStore(pinia);
         const {
@@ -357,36 +331,19 @@ const app = createApp({
 
 
 
-        const perfSummary = ref(null);
-        const perfTimeline = ref([]);
-        const perfContribution = ref([]);
-        const perfFlows = ref([]);
-        const perfStory = ref(null);
-        const perfWindows = ref([]);
-        const perfLoading = ref(false);
-        const perfContributionFilter = ref('all');
-        const perfContributionSort = ref('contribution');
-        const perfTimelineRange = ref('all');
-        const perfFlowForm = ref({
-            date: todayLocalIso(),
-            flow_type: '投入',
-            amount: 100000,
-            source: '',
-            remark: ''
-        });
-
-        const refreshLocalDates = () => {
-            if (typeof refreshTodayIso === 'function') refreshTodayIso();
-            const today = todayIso.value || todayLocalIso();
-            cashFlowForm.value.date = today;
-            reconcileForm.value.date = today;
-            transForm.value.date = today;
-            holdingCorrectionDialog.value.form.date = today;
-            perfFlowForm.value.date = today;
-            brokerAsOfDate.value = today;
-        };
-
+        const performanceStore = usePerformanceStore(pinia);
         const {
+            perfSummary,
+            perfTimeline,
+            perfContribution,
+            perfFlows,
+            perfStory,
+            perfWindows,
+            perfLoading,
+            perfContributionFilter,
+            perfContributionSort,
+            perfTimelineRange,
+            perfFlowForm,
             hasPerfFlows,
             perfStoryToneType,
             perfPrimaryCards,
@@ -397,6 +354,16 @@ const app = createApp({
             perfContributionHeadline,
             perfContributionMix,
             contributionBarStyle,
+            perfRiskMetrics,
+            perfContributionSummary,
+            perfWindowCards,
+            perfDailyRows,
+            perfDailyStats,
+            perfLatestSnapshotDate,
+            perfTodayPnl,
+            perfTodayRow,
+        } = storeToRefs(performanceStore);
+        const {
             fetchPerformance,
             setPerfTimelineRange,
             addPerfFlow,
@@ -404,33 +371,8 @@ const app = createApp({
             deletePerfFlow,
             loadPerfFlowSuggestions,
             applyPerfFlowSuggestion,
-            // 新增专业指标（防止 ReferenceError 导致整页空白）
-            perfRiskMetrics,
-            perfContributionSummary,
-            // 时间轴收益尺
-            perfWindowCards,
             selectPerfWindow,
-            // 每日收益
-            perfDailyRows,
-            perfDailyStats,
-            perfLatestSnapshotDate,
-            perfTodayPnl,
-            perfTodayRow,
-        } = createPerformanceModule({
-            perfSummary,
-            perfTimeline,
-            perfContribution,
-            perfFlows,
-            perfStory,
-            perfLoading,
-            perfContributionFilter,
-            perfContributionSort,
-            perfTimelineRange,
-            perfWindows,
-            perfFlowForm,
-            showSyncNotice,
-            nextTick,
-        });
+        } = performanceStore;
 
         const brokerResult = ref(null);
         const brokerLoading = ref(false);
@@ -457,6 +399,17 @@ const app = createApp({
             fetchData,
             showSyncNotice,
         });
+
+        const refreshLocalDates = () => {
+            if (typeof refreshTodayIso === 'function') refreshTodayIso();
+            const today = todayIso.value || todayLocalIso();
+            cashFlowForm.value.date = today;
+            reconcileForm.value.date = today;
+            transForm.value.date = today;
+            holdingCorrectionDialog.value.form.date = today;
+            perfFlowForm.value.date = today;
+            brokerAsOfDate.value = today;
+        };
 
         const marketStore = useMarketStore(pinia);
         const {
@@ -504,58 +457,8 @@ const app = createApp({
             saveWatchlist,
         } = marketStore;
 
-        const disciplineReport = ref({});
-        const disciplineDrafts = ref([]);
-        const disciplinePolicy = ref({
-            equity_min_pct: 35,
-            equity_max_pct: 55,
-            defensive_min_pct: 40,
-            single_holding_max_pct: 20,
-            rebalance_band_pct: 3,
-            preferred_buy_code: '',
-            preferred_buy_name: '',
-            preferred_buy_category: 'A股ETF',
-            preferred_buy_account: '',
-            targets: { equity_pct: 45, fixed_income_pct: 30, deposit_pct: 25 },
-            plans: {},
-            named_limits: [],
-            no_new_codes: [],
-        });
-        const disciplineLoading = ref(false);
-        const disciplineDraftLoading = ref(false);
-        const disciplinePolicyDialog = ref(false);
-        const disciplineDraftEditDialog = ref(false);
-        const disciplineDraftEditForm = ref({});
-        const disciplineSelectedDraftIds = ref([]);
-        const disciplinePresets = ref([]);
-        const disciplinePresetActiveId = ref(null);
-        const disciplinePresetLoading = ref(false);
-
+        const disciplineStore = useDisciplineStore(pinia);
         const {
-            fetchDisciplineReport,
-            fetchDisciplineDrafts,
-            fetchDisciplinePresets,
-            applyDisciplinePreset,
-            refreshDiscipline,
-            openPolicyDialog,
-            cancelPolicy,
-            savePolicy,
-            greeReducePct,
-            createDraftsFromReport,
-            openDraftEdit,
-            saveDraftEdit,
-            deleteDraft,
-            confirmDraft,
-            onDraftSelectionChange,
-            confirmSelectedDrafts,
-            breaches,
-            actions,
-            planItems,
-            helpNotes,
-            snapshot,
-            targets,
-            summaryText,
-        } = createDisciplineModule({
             disciplineReport,
             disciplineDrafts,
             disciplinePolicy,
@@ -565,13 +468,35 @@ const app = createApp({
             disciplineDraftEditDialog,
             disciplineDraftEditForm,
             disciplineSelectedDraftIds,
-            fetchData,
-            queryTransactions,
-            afterDisciplineChange: fetchAllocationStory,
             disciplinePresets,
             disciplinePresetActiveId,
             disciplinePresetLoading,
-        });
+            greeReducePct,
+            breaches,
+            actions,
+            planItems,
+            helpNotes,
+            snapshot,
+            targets,
+            summaryText,
+        } = storeToRefs(disciplineStore);
+        const {
+            fetchDisciplineReport,
+            fetchDisciplineDrafts,
+            fetchDisciplinePresets,
+            applyDisciplinePreset,
+            refreshDiscipline,
+            openPolicyDialog,
+            cancelPolicy,
+            savePolicy,
+            createDraftsFromReport,
+            openDraftEdit,
+            saveDraftEdit,
+            deleteDraft,
+            confirmDraft,
+            onDraftSelectionChange,
+            confirmSelectedDrafts,
+        } = disciplineStore;
 
         watch(activeTab, (val) => {
             // P2：decision 含市场；allocation 含纪律
