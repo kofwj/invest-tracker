@@ -1,4 +1,5 @@
 import math
+import os
 import sqlite3
 
 try:
@@ -6,7 +7,10 @@ try:
 except ImportError:
     from holdings import normalized_transaction_cash
 
-DEFAULT_ACCOUNT = "华泰证券"
+# 「账户缺省时记到哪个账户」的唯一来源。前后端其余地方一律引用这里 / 从接口拿，不要再写字面量。
+# 默认值保持历史上的「华泰证券」：账户名是账本主键（交易、费率设置都按它匹配），
+# 改默认值会让老库里按旧名存的费率对不上。新部署可用环境变量 DEFAULT_ACCOUNT 改成自己的券商。
+DEFAULT_ACCOUNT = (os.environ.get("DEFAULT_ACCOUNT") or "").strip() or "华泰证券"
 
 
 def ensure_cash_flow_indexes(conn):

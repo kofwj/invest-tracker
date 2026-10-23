@@ -26,12 +26,14 @@ import requests
 
 try:
     from .database import LOCAL_TZ, local_today_iso
+    from .cash import DEFAULT_ACCOUNT
     from .holding_calculator import (
         holding_quantity_as_of as _holding_quantity_as_of_impl,
         infer_category,
     )
 except ImportError:
     from database import LOCAL_TZ, local_today_iso
+    from cash import DEFAULT_ACCOUNT
     from holding_calculator import (
         holding_quantity_as_of as _holding_quantity_as_of_impl,
         infer_category,
@@ -440,7 +442,7 @@ def build_draft_from_market_row(
     plan = str(market_row.get("IMPL_PLAN_PROFILE") or "")
     name = holding.get("name") or market_row.get("SECURITY_NAME_ABBR") or code
     category = holding.get("category") or infer_category(code, name)
-    account = "华泰证券"
+    account = DEFAULT_ACCOUNT
     draft_key = f"{pure_security_code(code)}|{event_date.isoformat()}|{round(per_share, 6)}"
     unit_label = "每份" if str(market_row.get("_source") or "") == "sina_fund_fh" else "每股"
     remark = f"自动草稿|{plan}|{unit_label}{per_share:.4f}|登记日数量{round(quantity, 4)}"
@@ -611,7 +613,7 @@ def confirm_dividend_drafts(
             code = normalize_code(raw.get("code"))
             name = str(raw.get("name") or code).strip() or code
             category = raw.get("category") or infer_category(code, name)
-            account = raw.get("account") or "华泰证券"
+            account = raw.get("account") or DEFAULT_ACCOUNT
             event_date = parse_date_value(raw.get("event_date") or raw.get("date"))
             amount = float(raw.get("amount") or 0)
             fee = float(raw.get("fee") or 0)

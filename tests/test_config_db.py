@@ -60,6 +60,31 @@ def test_migrate_v12_focus_generalizes(app_module):
         assert focus.get('gold_codes') == ['518880']
 
 
+def test_migrate_v21_discipline_defaults_generalizes(app_module):
+    import json
+
+    with app_module.get_db_connection(app_module.DB_PATH) as conn:
+        from schema import migrate_to_v21_discipline_defaults
+        # 空库不注入
+        conn.execute("DELETE FROM holdings")
+        conn.execute("DELETE FROM settings WHERE key='discipline_policy'")
+        migrate_to_v21_discipline_defaults(conn)
+        row = conn.execute("SELECT value FROM settings WHERE key='discipline_policy'").fetchone()
+        assert row is None
+
+        # 有持仓但未自定义 -> 固化 legacy 个人默认
+        conn.execute(
+            "INSERT INTO holdings(code,name,category,quantity,last_price,avg_cost,diluted_cost,total_dividend) "
+            "VALUES ('600028','中国石化','A股权益',100000,6.0,5.0,5.0,0)"
+        )
+        migrate_to_v21_discipline_defaults(conn)
+        row = conn.execute("SELECT value FROM settings WHERE key='discipline_policy'").fetchone()
+        assert row is not None
+        pol = json.loads(row[0])
+        assert pol.get("preferred_buy_code") == "159352"
+        assert pol.get("plans", {}).get("batch_buy_code") == "159352"
+
+
 def test_database_initialization_migrates_missing_transaction_account(app_module):
     import sqlite3
 

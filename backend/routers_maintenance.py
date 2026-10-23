@@ -15,9 +15,11 @@ from pydantic import BaseModel
 try:
     from .csv_utils import _csv_sanitize_cell, create_safety_backup
     from .database import BACKUP_DIR, DB_PATH, LOCAL_TZ, db_session, open_db
+    from .cash import DEFAULT_ACCOUNT
 except ImportError:
     from csv_utils import _csv_sanitize_cell, create_safety_backup
     from database import BACKUP_DIR, DB_PATH, LOCAL_TZ, db_session, open_db
+    from cash import DEFAULT_ACCOUNT
 
 router = APIRouter()
 
@@ -327,7 +329,7 @@ EXPORT_COLUMN_NOTES = {
         "code": "证券/基金代码，场外基金以 f 开头（如 f004388）",
         "name": "证券/基金名称",
         "category": "大类分类（A股权益/A股ETF/港股ETF/债基/黄金/REITs/其他）",
-        "account": "证券账户名（默认华泰证券）",
+        "account": f"证券账户名（默认{DEFAULT_ACCOUNT}）",
         "direction": "交易方向（买入/卖出/分红/分红再投资/申购待确认/待确认申购）",
         "quantity": "数量（股数或基金份额，场外申购未确认时为 0）",
         "price": "成交单价（场外基金为申购/确认净值）",

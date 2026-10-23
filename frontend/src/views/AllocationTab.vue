@@ -160,7 +160,7 @@
                 <span class="preset-meta-main">当前 · {{ activePresetLabel }}</span>
                 <span class="preset-meta-sub">{{ activePresetHint }}</span>
               </div>
-              <div class="hint preset-guard">只改目标与安全带；优先加仓 / 禁开 / 格力上限不动</div>
+              <div class="hint preset-guard">只改目标与安全带；优先加仓 / 禁开 / 个股上限不动</div>
 
               <div class="gap-list" style="margin-top: 12px;">
                 <div v-for="row in gapRows" :key="row.key">
@@ -259,7 +259,7 @@
               <template #header>
                 <div>
                   <div class="section-title">个人计划</div>
-                  <div class="hint">A500 分批 / 格力软上限等，只提醒不自动下单</div>
+                  <div class="hint">分批建仓 / 标的软上限等，只提醒不自动下单</div>
                 </div>
               </template>
               <div class="breach-list">
@@ -441,21 +441,21 @@
           <el-input-number v-model="disciplinePolicy.rebalance_band_pct" :min="0" :max="20" :step="0.5" />
         </el-form-item>
         <el-form-item label="优先加仓代码">
-          <el-input v-model="disciplinePolicy.preferred_buy_code" />
+          <el-input v-model="disciplinePolicy.preferred_buy_code" placeholder="如 159352 或留空" />
         </el-form-item>
         <el-form-item label="优先加仓名称">
-          <el-input v-model="disciplinePolicy.preferred_buy_name" />
+          <el-input v-model="disciplinePolicy.preferred_buy_name" placeholder="如 中证A500ETF" />
         </el-form-item>
-        <el-form-item label="格力上限%">
-          <el-input-number v-model="greeLimitPct" :min="1" :max="100" :step="1" />
-        </el-form-item>
-        <el-form-item label="A500计划金额">
+        <el-form-item label="分批买入目标金额">
           <el-input-number
-            v-model="disciplinePolicy.plans.a500_batch_target_amount"
+            v-model="batchTargetAmount"
             :min="0"
             :step="10000"
             :controls="true"
           />
+        </el-form-item>
+        <el-form-item label="个股上限 (示例 000651)%">
+          <el-input-number v-model="greeLimitPct" :min="1" :max="100" :step="1" />
         </el-form-item>
         <el-form-item label="格力软上限%">
           <el-input-number v-model="disciplinePolicy.plans.gree_soft_max_pct" :min="0" :max="100" :step="1" />
@@ -651,14 +651,28 @@ if (disciplinePolicy.value && !disciplinePolicy.value.targets) {
   disciplinePolicy.value.targets = { equity_pct: 45, fixed_income_pct: 30, deposit_pct: 25 };
 }
 if (disciplinePolicy.value && !disciplinePolicy.value.plans) {
-  disciplinePolicy.value.plans = { a500_batch_target_amount: 200000, gree_soft_max_pct: 15 };
+  disciplinePolicy.value.plans = {};
 }
 if (disciplinePolicy.value && !Array.isArray(disciplinePolicy.value.defensive_extra_categories)) {
   disciplinePolicy.value.defensive_extra_categories = [];
 }
 if (disciplinePolicy.value && !Array.isArray(disciplinePolicy.value.named_limits)) {
-  disciplinePolicy.value.named_limits = [{ code: '000651', name: '格力电器', max_pct: 15 }];
+  disciplinePolicy.value.named_limits = [];
 }
+
+const batchTargetAmount = computed({
+  get() {
+    const p = disciplinePolicy.value?.plans;
+    return p?.batch_buy_target_amount ?? p?.a500_batch_target_amount ?? 0;
+  },
+  set(v) {
+    if (!disciplinePolicy.value) return;
+    if (!disciplinePolicy.value.plans) disciplinePolicy.value.plans = {};
+    const n = Number(v || 0);
+    disciplinePolicy.value.plans.batch_buy_target_amount = n;
+    disciplinePolicy.value.plans.a500_batch_target_amount = n;
+  },
+});
 
 const greeLimitPct = computed({
   get() {

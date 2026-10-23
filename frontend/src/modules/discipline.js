@@ -157,7 +157,7 @@ const createDisciplineModule = ({
         const summary = meta?.summary || '';
         try {
             await ElMessageBox.confirm(
-                `将套用「${label}」目标尺子${summary ? `：${summary}` : ''}。\n只改权益/固收/存款目标和安全带，不改优先加仓代码、禁开名单和格力上限。确认？`,
+                `将套用「${label}」目标尺子${summary ? `：${summary}` : ''}。\n只改权益/固收/存款目标和安全带，不改优先加仓代码、禁开名单和个股上限。确认？`,
                 '一键套用预设',
                 { type: 'info', confirmButtonText: '套用', cancelButtonText: '取消' },
             );
@@ -201,7 +201,7 @@ const createDisciplineModule = ({
             const res = await api.getDisciplinePolicy();
             const p = res.data || {};
             if (!p.targets) p.targets = { equity_pct: 45, fixed_income_pct: 30, deposit_pct: 25 };
-            if (!p.plans) p.plans = { a500_batch_target_amount: 200000, gree_soft_max_pct: 15 };
+            if (!p.plans) p.plans = {};
             if (!p.focus) p.focus = { dividend_bucket_equity_max_pct: 50, gold_target_min_pct: 3, gold_target_max_pct: 5, reduce_tasks: [] };
             policyBeforeEdit = clonePolicy(disciplinePolicy.value);
             disciplinePolicy.value = clonePolicy(p);
@@ -213,7 +213,7 @@ const createDisciplineModule = ({
             disciplinePolicy.value.targets = { equity_pct: 45, fixed_income_pct: 30, deposit_pct: 25 };
         }
         if (disciplinePolicy.value && !disciplinePolicy.value.plans) {
-            disciplinePolicy.value.plans = { a500_batch_target_amount: 200000, gree_soft_max_pct: 15 };
+            disciplinePolicy.value.plans = {};
         }
         // 初始化 focus 组编辑值（格力减仓目标）
         const greeTask = (disciplinePolicy.value.focus?.reduce_tasks || []).find((t) => t.code === '000651');
@@ -250,18 +250,21 @@ const createDisciplineModule = ({
                 return;
             }
             const preferred_buy_code = String(p.preferred_buy_code || '').trim();
-            if (!preferred_buy_code) {
-                ElMessage.error('优先加仓代码不能为空');
-                return;
-            }
+            const rawPlans = p.plans || {};
+            const batchTarget = numOr(rawPlans.batch_buy_target_amount ?? rawPlans.a500_batch_target_amount, 0);
+            const batchCode = String(rawPlans.batch_buy_code ?? rawPlans.a500_batch_code ?? preferred_buy_code).trim();
+            const batchName = String(rawPlans.batch_buy_name ?? rawPlans.a500_batch_name ?? p.preferred_buy_name ?? '').trim();
             const plans = {
-                a500_batch_target_amount: numOr(p.plans?.a500_batch_target_amount, 200000),
-                a500_batch_code: String(p.plans?.a500_batch_code || preferred_buy_code).trim(),
-                a500_batch_name: String(p.plans?.a500_batch_name || p.preferred_buy_name || '').trim(),
-                gree_code: String(p.plans?.gree_code || '000651').trim(),
-                gree_name: String(p.plans?.gree_name || '格力电器').trim(),
-                gree_soft_max_pct: numOr(p.plans?.gree_soft_max_pct, 15),
+                batch_buy_target_amount: batchTarget,
+                batch_buy_code: batchCode,
+                batch_buy_name: batchName,
             };
+            if (rawPlans.a500_batch_target_amount != null) plans.a500_batch_target_amount = batchTarget;
+            if (rawPlans.a500_batch_code) plans.a500_batch_code = batchCode;
+            if (rawPlans.a500_batch_name) plans.a500_batch_name = batchName;
+            if (rawPlans.gree_code) plans.gree_code = String(rawPlans.gree_code).trim();
+            if (rawPlans.gree_name) plans.gree_name = String(rawPlans.gree_name).trim();
+            if (rawPlans.gree_soft_max_pct != null) plans.gree_soft_max_pct = Number(rawPlans.gree_soft_max_pct);
             const payload = {
                 equity_min_pct,
                 equity_max_pct,

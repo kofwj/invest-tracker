@@ -18,6 +18,7 @@ try:
         read_upload_csv,
     )
     from .database import db_session, local_today_iso
+    from .cash import DEFAULT_ACCOUNT
     from .dividend_sync import (
         DEFAULT_LOOKBACK_DAYS,
         confirm_dividend_drafts,
@@ -37,6 +38,7 @@ except ImportError:
         read_upload_csv,
     )
     from database import db_session, local_today_iso
+    from cash import DEFAULT_ACCOUNT
     from dividend_sync import (
         DEFAULT_LOOKBACK_DAYS,
         confirm_dividend_drafts,
@@ -154,8 +156,8 @@ def confirm_dividends(payload: DividendConfirmRequest):
 def download_dividend_template():
     """下载分红手工模板（纯现金分红专用，数量/单价固定为0）。"""
     rows = [
-        [local_today_iso(), "华泰证券", "601288", "农业银行", "A股权益", "1234.56", "0", "手工补录：某债基或不支持标的的分红"],
-        [local_today_iso(), "华泰证券", "f004388", "鹏华丰享", "债基", "80.00", "0", "场外基金分红示例"],
+        [local_today_iso(), DEFAULT_ACCOUNT, "601288", "农业银行", "A股权益", "1234.56", "0", "手工补录：某债基或不支持标的的分红"],
+        [local_today_iso(), DEFAULT_ACCOUNT, "f004388", "鹏华丰享", "债基", "80.00", "0", "场外基金分红示例"],
     ]
     return csv_response("dividends_template.csv", DIVIDEND_CSV_COLUMNS, rows)
 
@@ -197,7 +199,7 @@ async def import_dividends(file: UploadFile = File(...)):
                     code = str(row.get("code") or "").strip()
                     name = str(row.get("name") or "").strip() or code
                     category = row.get("category") or infer_category(code, name)
-                    account = row.get("account") or "华泰证券"
+                    account = row.get("account") or DEFAULT_ACCOUNT
                     amount = parse_float(row.get("amount"), 0.0)
                     fee = parse_float(row.get("fee"), 0.0)
                     remark = str(row.get("remark") or "").strip() or "手工分红导入"

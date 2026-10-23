@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Optional, Tuple
 try:
     from .csv_utils import create_safety_backup
     from .database import LOCAL_TZ, local_today_iso
+    from .cash import DEFAULT_ACCOUNT
     from .holdings import (
         current_holding_quantity,
         infer_category,
@@ -26,6 +27,7 @@ try:
 except ImportError:
     from csv_utils import create_safety_backup
     from database import LOCAL_TZ, local_today_iso
+    from cash import DEFAULT_ACCOUNT
     from holdings import (
         current_holding_quantity,
         infer_category,
@@ -40,26 +42,28 @@ logger = logging.getLogger(__name__)
 POLICY_KEY = "discipline_policy"
 DRAFT_REMARK_PREFIX = "[纪律草稿]"
 
-# Defaults aligned with app's existing allocation health checks + user habits.
+# 通用默认：只放结构尺子，不放任何具体标的代码。
+# 个人化的代码（优先加仓、个股上限、禁开名单、分批计划）都由用户在「调整参数」里填；
+# 老库升级时由 schema v21 迁移把此前写死的个人默认固化进库，行为不变。
 DEFAULT_POLICY: Dict[str, Any] = {
     "equity_min_pct": 35.0,
     "equity_max_pct": 55.0,
     "defensive_min_pct": 40.0,
     "single_holding_max_pct": 20.0,
-    "named_limits": [
-        {"code": "000651", "name": "格力电器", "max_pct": 15.0},
-    ],
+    # 个股上限：[{code, name, max_pct}]，超出即提示并给减仓建议
+    "named_limits": [],
     "targets": {
         "equity_pct": 45.0,
         "fixed_income_pct": 30.0,
         "deposit_pct": 25.0,
     },
     "rebalance_band_pct": 3.0,
-    "preferred_buy_code": "159352",
-    "preferred_buy_name": "中证A500ETF",
+    # 权益偏低时买什么。留空 = 只提示偏低，不生成买入建议
+    "preferred_buy_code": "",
+    "preferred_buy_name": "",
     "preferred_buy_category": "A股ETF",
-    "preferred_buy_account": "华泰证券",
-    "no_new_codes": ["000651", "601288", "600028"],  # 格力/农行/石化 默认不建议新开仓
+    "preferred_buy_account": "",  # 空 = DEFAULT_ACCOUNT
+    "no_new_codes": [],  # 不建议新开仓的代码
     # 计入「固收」大类的品类（其余非存款进权益）。可在参数里改。
     "fixed_income_categories": ["债基", "证券现金", "基金申购在途"],
     # 额外算进「防守」的权益品类（不改大类饼图，只抬高防守占比）
@@ -68,12 +72,10 @@ DEFAULT_POLICY: Dict[str, Any] = {
     "preset_id": "balanced",
     # 个人计划（与再平衡建议并列，偏人话提醒）
     "plans": {
-        "a500_batch_target_amount": 200000.0,  # 计划分批买入 A500 总额
-        "a500_batch_code": "159352",
-        "a500_batch_name": "中证A500ETF",
-        "gree_code": "000651",
-        "gree_name": "格力电器",
-        "gree_soft_max_pct": 15.0,  # 超此占比提示减仓
+        # 分批建仓：目标总额 > 0 才启用；代码留空则沿用优先加仓代码
+        "batch_buy_code": "",
+        "batch_buy_name": "",
+        "batch_buy_target_amount": 0.0,
     },
     # 风格桶 / 削弱动作 / 黄金 体检：倾斜"个人资产配置"，默认中性（空清单）。
     # 通用阈值保留；具体代码/标的目标由各用户自己在「调整参数」里配置，
@@ -91,7 +93,50 @@ DEFAULT_POLICY: Dict[str, Any] = {
     },
 }
 
-# 一键套用：只改结构尺子，不改优先加仓代码/个人禁开/格力名单等私货。
+# 旧版字段 → 通用字段。读库和写库都过一遍 normalize_legacy_policy，
+# 所以老库、老备份、老前端发来的 payload 都能正确落到新结构上。
+_LEGACY_PLAN_KEYS = {
+    "a500_batch_code": "batch_buy_code",
+    "a500_batch_name": "batch_buy_name",
+    "a500_batch_target_amount": "batch_buy_target_amount",
+}
+
+
+def normalize_legacy_policy(raw: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """把旧版 policy 结构改写成通用结构（幂等，不修改入参）。
+
+    - plans.a500_batch_*  → plans.batch_buy_*（旧键覆盖新键：只有老客户端才会发旧键，它的值就是用户本意）
+    - plans.gree_code/gree_name/gree_soft_max_pct（单只股票的软上限）
+      → 并入 named_limits；同代码已在 named_limits 里时以 named_limits 为准。
+      旧版 UI 本来就把这两个值同步成一样，所以并入后提示口径不变。
+    """
+    data = dict(raw or {})
+    plans = data.get("plans")
+    if not isinstance(plans, dict):
+        return data
+    plans = dict(plans)
+    for old, new in _LEGACY_PLAN_KEYS.items():
+        if old in plans:
+            plans[new] = plans.pop(old)
+
+    soft_code = str(plans.pop("gree_code", "") or "").strip()
+    soft_name = str(plans.pop("gree_name", "") or "").strip()
+    soft_raw = plans.pop("gree_soft_max_pct", None)
+    try:
+        soft_pct = float(soft_raw) if soft_raw is not None else 0.0
+    except (TypeError, ValueError):
+        soft_pct = 0.0
+    if soft_code and math.isfinite(soft_pct) and soft_pct > 0:
+        limits = [x for x in (data.get("named_limits") or []) if isinstance(x, dict)]
+        if not any(str(x.get("code") or "").strip() == soft_code for x in limits):
+            limits.append({"code": soft_code, "name": soft_name or soft_code, "max_pct": soft_pct})
+            data["named_limits"] = limits
+
+    data["plans"] = plans
+    return data
+
+
+# 一键套用：只改结构尺子，不改优先加仓代码/禁开名单/个股上限等个人设置。
 # targets 三项合计必须 = 100。
 POLICY_PRESETS: Dict[str, Dict[str, Any]] = {
     "defensive": {
@@ -216,15 +261,20 @@ def apply_policy_preset(conn, preset_id: str) -> Dict[str, Any]:
     return {"preset_id": key, "label": preset["label"], "policy": policy}
 
 
+def _sql_literal(value: str) -> str:
+    """DDL 的 DEFAULT 子句不能绑参数，只能内联；按 SQL 规则转义单引号。"""
+    return "'" + str(value).replace("'", "''") + "'"
+
+
 def ensure_discipline_tables(conn) -> None:
     conn.execute(
-        """CREATE TABLE IF NOT EXISTS discipline_drafts (
+        f"""CREATE TABLE IF NOT EXISTS discipline_drafts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             date TEXT NOT NULL,
             code TEXT NOT NULL,
             name TEXT,
             category TEXT,
-            account TEXT DEFAULT '华泰证券',
+            account TEXT DEFAULT {_sql_literal(DEFAULT_ACCOUNT)},
             side TEXT NOT NULL,
             quantity REAL DEFAULT 0,
             price REAL DEFAULT 0,
@@ -300,7 +350,7 @@ def get_policy(conn) -> Dict[str, Any]:
         data = json.loads(raw)
         if not isinstance(data, dict):
             return json.loads(json.dumps(DEFAULT_POLICY))
-        return _deep_merge(DEFAULT_POLICY, data)
+        return _deep_merge(DEFAULT_POLICY, normalize_legacy_policy(data))
     except Exception:
         return json.loads(json.dumps(DEFAULT_POLICY))
 
@@ -308,7 +358,9 @@ def get_policy(conn) -> Dict[str, Any]:
 def set_policy(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError("policy 必须是对象")
-    merged = _deep_merge(get_policy(conn), payload)
+    # 先合并再 normalize：老客户端只发 gree_* 不发 named_limits 时，软上限要追加到已存的上限里，
+    # 而不是用「只含这一项」的列表把已存的整个覆盖掉。
+    merged = normalize_legacy_policy(_deep_merge(get_policy(conn), payload))
 
     for key in (
         "equity_min_pct",
@@ -340,26 +392,36 @@ def set_policy(conn, payload: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError(f"目标权益+固收+存款应约等于 100%（当前 {t_sum:.1f}%）")
     merged["targets"] = targets
 
-    if "preferred_buy_code" in merged:
-        merged["preferred_buy_code"] = str(merged.get("preferred_buy_code") or "").strip()
-    if not merged.get("preferred_buy_code"):
-        raise ValueError("优先加仓代码不能为空")
+    # 优先加仓代码允许留空：留空时权益偏低只提示、不生成买入建议
+    for str_key in ("preferred_buy_code", "preferred_buy_name", "preferred_buy_category", "preferred_buy_account"):
+        if str_key in merged:
+            merged[str_key] = str(merged.get(str_key) or "").strip()
 
     for list_key in ("named_limits", "no_new_codes", "fixed_income_categories", "defensive_extra_categories"):
         if list_key in merged and merged[list_key] is None:
             merged[list_key] = []
 
+    limits = []
+    for lim in merged.get("named_limits") or []:
+        if not isinstance(lim, dict):
+            raise ValueError("个股上限每一项需包含 code / max_pct")
+        code = str(lim.get("code") or "").strip()
+        if not code:
+            continue  # 空行（前端新增后没填）直接丢弃
+        max_pct = _finite(lim.get("max_pct"), f"个股上限 {code}")
+        if max_pct <= 0 or max_pct > 100:
+            raise ValueError(f"个股上限 {code} 需在 0–100 之间")
+        limits.append({"code": code, "name": str(lim.get("name") or "").strip() or code, "max_pct": max_pct})
+    merged["named_limits"] = limits
+
     plans = dict(merged.get("plans") or {})
-    if "a500_batch_target_amount" in plans:
-        plans["a500_batch_target_amount"] = max(0.0, _finite(plans["a500_batch_target_amount"], "plans.a500_batch_target_amount"))
-    if "gree_soft_max_pct" in plans:
-        g = _finite(plans["gree_soft_max_pct"], "plans.gree_soft_max_pct")
-        if g < 0 or g > 100:
-            raise ValueError("格力软上限需在 0–100 之间")
-        plans["gree_soft_max_pct"] = g
-    for k in ("a500_batch_code", "a500_batch_name", "gree_code", "gree_name"):
-        if k in plans and plans[k] is not None:
-            plans[k] = str(plans[k]).strip()
+    if "batch_buy_target_amount" in plans:
+        plans["batch_buy_target_amount"] = max(
+            0.0, _finite(plans["batch_buy_target_amount"] or 0, "plans.batch_buy_target_amount")
+        )
+    for k in ("batch_buy_code", "batch_buy_name"):
+        if k in plans:
+            plans[k] = str(plans[k] or "").strip()
     merged["plans"] = plans
 
     # 结构尺子若与三套预设不一致，标记为 custom（一键套用会写 preset_id）
@@ -395,7 +457,7 @@ def _is_defensive_holding(h: Dict[str, Any], policy: Dict[str, Any]) -> bool:
 
 
 def _latest_accounts_for_codes(
-    conn, codes: List[str], default: str = "华泰证券"
+    conn, codes: List[str], default: str = DEFAULT_ACCOUNT
 ) -> Dict[str, str]:
     """一次查询取多个 code 的「最新账户」，避免每只持仓一条 SQL（N+1）。
 
@@ -441,7 +503,7 @@ def _latest_accounts_for_codes(
     return out
 
 
-def _latest_account_for_code(conn, code: str, default: str = "华泰证券") -> str:
+def _latest_account_for_code(conn, code: str, default: str = DEFAULT_ACCOUNT) -> str:
     """单 code 便捷入口；内部走批量查询，保持原有回退语义。"""
     key = str(code or "").strip()
     if not key:
@@ -450,7 +512,7 @@ def _latest_account_for_code(conn, code: str, default: str = "华泰证券") -> 
 
 
 def _latest_accounts_by_code_fallback(
-    conn, codes: List[str], default: str = "华泰证券"
+    conn, codes: List[str], default: str = DEFAULT_ACCOUNT
 ) -> Dict[str, str]:
     """老 SQLite 兜底：逐 code 查最新账户（旧实现原样，仅作兼容路径）。"""
     out: Dict[str, str] = {}
@@ -475,7 +537,7 @@ def _latest_accounts_by_code_fallback(
 
 def _holding_rows(conn, policy: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     policy = policy or DEFAULT_POLICY
-    pref_acct = str(policy.get("preferred_buy_account") or "华泰证券")
+    pref_acct = str(policy.get("preferred_buy_account") or DEFAULT_ACCOUNT)
     rows = conn.execute(
         """
         SELECT code, name, category, quantity, last_price, avg_cost, diluted_cost, total_dividend
@@ -637,7 +699,7 @@ def build_discipline_report_with_holdings(conn) -> Tuple[
                         "code": code,
                         "name": h.get("name") or code,
                         "category": h.get("category") or "",
-                        "account": h.get("account") or policy.get("preferred_buy_account") or "华泰证券",
+                        "account": h.get("account") or policy.get("preferred_buy_account") or DEFAULT_ACCOUNT,
                         "amount": round(sell_mv, 2),
                         "quantity": round(qty, 4) if qty else 0,
                         "price": price,
@@ -668,7 +730,7 @@ def build_discipline_report_with_holdings(conn) -> Tuple[
                     "code": code,
                     "name": h.get("name") or code,
                     "category": h.get("category") or "",
-                    "account": h.get("account") or "华泰证券",
+                    "account": h.get("account") or DEFAULT_ACCOUNT,
                     "amount": round(sell_mv, 2),
                     "quantity": round(qty, 4) if qty else 0,
                     "price": price,
@@ -691,13 +753,13 @@ def build_discipline_report_with_holdings(conn) -> Tuple[
         "deposit": t_dep - deposit_pct,
     }
 
-    pref_code = str(policy.get("preferred_buy_code") or "159352").strip()
+    pref_code = str(policy.get("preferred_buy_code") or "").strip()
     pref_name = str(policy.get("preferred_buy_name") or pref_code)
     pref_cat = str(policy.get("preferred_buy_category") or "A股ETF")
-    pref_acct = str(policy.get("preferred_buy_account") or "华泰证券")
+    pref_acct = str(policy.get("preferred_buy_account") or DEFAULT_ACCOUNT)
     no_new = {str(c).strip() for c in (policy.get("no_new_codes") or [])}
 
-    if gaps["equity"] > band and total_assets > 0:
+    if gaps["equity"] > band and total_assets > 0 and pref_code:
         need_mv = total_assets * gaps["equity"] / 100.0
         from_cash = min(max(cash, 0), need_mv)
         from_deposit = max(need_mv - from_cash, 0)
@@ -764,7 +826,7 @@ def build_discipline_report_with_holdings(conn) -> Tuple[
             )
             remaining -= sell_mv
 
-    if gaps["deposit"] < -band and gaps["equity"] > 0 and total_assets > 0:
+    if gaps["deposit"] < -band and gaps["equity"] > 0 and total_assets > 0 and pref_code:
         move = min(bank, total_assets * abs(gaps["deposit"]) / 100.0)
         if move >= 1000 and not any(a.get("source") == "rebalance_equity_up" for a in actions):
             actions.append(
@@ -792,98 +854,100 @@ def build_discipline_report_with_holdings(conn) -> Tuple[
 
     filtered_actions.sort(key=lambda x: (int(x.get("priority") or 99), -float(x.get("amount") or 0)))
 
-    # --- personal plans (A500 batch / Gree soft cap) ---
+    # --- plans (batch buy plan / soft caps) ---
     plans = policy.get("plans") or {}
     plan_items: List[Dict[str, Any]] = []
-    a500_code = str(plans.get("a500_batch_code") or pref_code or "159352").strip()
-    a500_name = str(plans.get("a500_batch_name") or pref_name or a500_code)
-    a500_target = float(plans.get("a500_batch_target_amount") or 0)
-    a500_h = next((x for x in holdings if str(x.get("code")) == a500_code), None)
-    a500_mv = float(a500_h["market_value"]) if a500_h else 0.0
-    a500_gap = max(a500_target - a500_mv, 0.0) if a500_target > 0 else 0.0
-    if a500_target > 0:
-        progress_pct = min(max(a500_mv / a500_target * 100.0, 0.0), 999.0) if a500_target else 0.0
-        # 建议下次：剩余分 2～4 笔，优先用证券现金
+    batch_code = str(plans.get("batch_buy_code") or plans.get("a500_batch_code") or pref_code or "").strip()
+    batch_name = str(plans.get("batch_buy_name") or plans.get("a500_batch_name") or pref_name or batch_code)
+    batch_target = float(plans.get("batch_buy_target_amount") or plans.get("a500_batch_target_amount") or 0)
+    batch_h = next((x for x in holdings if str(x.get("code")) == batch_code), None) if batch_code else None
+    batch_mv = float(batch_h["market_value"]) if batch_h else 0.0
+    batch_gap = max(batch_target - batch_mv, 0.0) if batch_target > 0 else 0.0
+    if batch_target > 0 and batch_code:
+        progress_pct = min(max(batch_mv / batch_target * 100.0, 0.0), 999.0) if batch_target else 0.0
         cash_avail = float(totals.get("securities_cash") or 0)
-        if a500_gap >= 100:
-            if a500_gap >= 80000:
-                next_batch = min(max(a500_gap / 4.0, 20000.0), 50000.0)
-            elif a500_gap >= 40000:
-                next_batch = min(max(a500_gap / 3.0, 15000.0), 40000.0)
+        is_a500 = "a500" in batch_name.lower() or batch_code == "159352"
+        plan_code_prefix = "a500_batch" if is_a500 else "batch_buy"
+        if batch_gap >= 100:
+            if batch_gap >= 80000:
+                next_batch = min(max(batch_gap / 4.0, 20000.0), 50000.0)
+            elif batch_gap >= 40000:
+                next_batch = min(max(batch_gap / 3.0, 15000.0), 40000.0)
             else:
-                next_batch = min(a500_gap, max(cash_avail, 10000.0) if cash_avail > 0 else a500_gap)
-            next_batch = round(min(next_batch, a500_gap), 2)
+                next_batch = min(batch_gap, max(cash_avail, 10000.0) if cash_avail > 0 else batch_gap)
+            next_batch = round(min(next_batch, batch_gap), 2)
             plan_items.append(
                 {
-                    "code": "a500_batch",
+                    "code": plan_code_prefix,
                     "level": "info",
-                    "title": f"{a500_name} 分批计划",
+                    "title": f"{batch_name} 分批计划",
                     "text": (
-                        f"目标约 {a500_target:.0f} 元，当前市值约 {a500_mv:.0f}（完成 {progress_pct:.0f}%），"
-                        f"还差约 {a500_gap:.0f}。建议下次大约 {next_batch:.0f} 元"
+                        f"目标约 {batch_target:.0f} 元，当前市值约 {batch_mv:.0f}（完成 {progress_pct:.0f}%），"
+                        f"还差约 {batch_gap:.0f}。建议下次大约 {next_batch:.0f} 元"
                         + (f"（证券现金约 {cash_avail:.0f}）" if cash_avail > 0 else "")
                         + "，分批即可不必一次买完。"
                     ),
-                    "remaining_amount": round(a500_gap, 2),
-                    "current_amount": round(a500_mv, 2),
-                    "target_amount": round(a500_target, 2),
+                    "remaining_amount": round(batch_gap, 2),
+                    "current_amount": round(batch_mv, 2),
+                    "target_amount": round(batch_target, 2),
                     "progress_pct": round(progress_pct, 2),
                     "suggested_next_amount": next_batch,
-                    "symbol": a500_code,
+                    "symbol": batch_code,
                 }
             )
         else:
             plan_items.append(
                 {
-                    "code": "a500_batch_done",
+                    "code": f"{plan_code_prefix}_done",
                     "level": "ok",
-                    "title": f"{a500_name} 分批计划",
-                    "text": f"目标约 {a500_target:.0f} 元，当前市值约 {a500_mv:.0f}（完成 {progress_pct:.0f}%），计划基本到位。",
+                    "title": f"{batch_name} 分批计划",
+                    "text": f"目标约 {batch_target:.0f} 元，当前市值约 {batch_mv:.0f}（完成 {progress_pct:.0f}%），计划基本到位。",
                     "remaining_amount": 0,
-                    "current_amount": round(a500_mv, 2),
-                    "target_amount": round(a500_target, 2),
+                    "current_amount": round(batch_mv, 2),
+                    "target_amount": round(batch_target, 2),
                     "progress_pct": round(progress_pct, 2),
                     "suggested_next_amount": 0,
-                    "symbol": a500_code,
+                    "symbol": batch_code,
                 }
             )
 
-    gree_code = str(plans.get("gree_code") or "000651").strip()
-    gree_name = str(plans.get("gree_name") or "格力电器")
-    gree_soft = float(plans.get("gree_soft_max_pct") or 15)
-    gree_h = next((x for x in holdings if str(x.get("code")) == gree_code), None)
-    if gree_h and total_assets > 0 and gree_soft > 0:
-        gree_share = pct(gree_h["market_value"])
-        if gree_share > gree_soft + 1e-9:
-            target_mv = total_assets * gree_soft / 100.0
-            sell_mv = max(gree_h["market_value"] - target_mv, 0)
-            plan_items.append(
-                {
-                    "code": "gree_reduce",
-                    "level": "warning",
-                    "title": f"{gree_name} 减仓提醒",
-                    "text": (
-                        f"约占总额 {gree_share:.1f}%（软上限 {gree_soft:.0f}%），"
-                        f"建议减约 {sell_mv:.0f} 元到上限附近；是否动手看你自己节奏。"
-                    ),
-                    "remaining_amount": round(sell_mv, 2),
-                    "current_pct": round(gree_share, 2),
-                    "target_pct": gree_soft,
-                    "symbol": gree_code,
-                }
-            )
-        else:
-            plan_items.append(
-                {
-                    "code": "gree_ok",
-                    "level": "ok",
-                    "title": f"{gree_name} 占比",
-                    "text": f"约占 {gree_share:.1f}%，在软上限 {gree_soft:.0f}% 以内。",
-                    "current_pct": round(gree_share, 2),
-                    "target_pct": gree_soft,
-                    "symbol": gree_code,
-                }
-            )
+    gree_code = str(plans.get("gree_code") or "").strip()
+    gree_soft = float(plans.get("gree_soft_max_pct") or 0)
+    if gree_code and gree_soft > 0:
+        gree_name = str(plans.get("gree_name") or gree_code)
+        gree_h = next((x for x in holdings if str(x.get("code")) == gree_code), None)
+        if gree_h and total_assets > 0:
+            gree_share = pct(gree_h["market_value"])
+            if gree_share > gree_soft + 1e-9:
+                target_mv = total_assets * gree_soft / 100.0
+                sell_mv = max(gree_h["market_value"] - target_mv, 0)
+                plan_items.append(
+                    {
+                        "code": "gree_reduce",
+                        "level": "warning",
+                        "title": f"{gree_name} 减仓提醒",
+                        "text": (
+                            f"约占总额 {gree_share:.1f}%（软上限 {gree_soft:.0f}%），"
+                            f"建议减约 {sell_mv:.0f} 元到上限附近；是否动手看你自己节奏。"
+                        ),
+                        "remaining_amount": round(sell_mv, 2),
+                        "current_pct": round(gree_share, 2),
+                        "target_pct": gree_soft,
+                        "symbol": gree_code,
+                    }
+                )
+            else:
+                plan_items.append(
+                    {
+                        "code": "gree_ok",
+                        "level": "ok",
+                        "title": f"{gree_name} 占比",
+                        "text": f"约占 {gree_share:.1f}%，在软上限 {gree_soft:.0f}% 以内。",
+                        "current_pct": round(gree_share, 2),
+                        "target_pct": gree_soft,
+                        "symbol": gree_code,
+                    }
+                )
 
     warn_n = sum(1 for b in breaches if b.get("level") == "warning")
     plan_warn = sum(1 for p in plan_items if p.get("level") == "warning")
@@ -903,12 +967,13 @@ def build_discipline_report_with_holdings(conn) -> Tuple[
     ).fetchone()
     open_draft_count = int(open_drafts["c"] if isinstance(open_drafts, sqlite3.Row) else open_drafts[0])
 
+    pref_hint = f"默认优先加仓 {pref_name}（{pref_code}）；" if pref_code else "可配置优先加仓标的；"
     help_notes = [
         "本页默认只读：点「建议→草稿」不会改账，只有「确认入账」才写真实交易。",
         "买入金额类确认后一般记为「申购待确认」，份额确认后再改成买入。",
         "券商下单仍需你自己操作；这里只帮你记建议和账本草稿。",
         "改参数会影响纪律提醒和再平衡建议，保存后立即生效。",
-        f"默认优先加仓 {pref_name}（{pref_code}）；格力等可设个人上限。",
+        f"{pref_hint}个股可设个人上限。",
     ]
 
     report = {
@@ -1006,7 +1071,7 @@ def create_drafts_from_actions(
         price = float(a.get("price") or 0)
         name = a.get("name") or code
         category = a.get("category") or ""
-        account = a.get("account") or "华泰证券"
+        account = a.get("account") or DEFAULT_ACCOUNT
         reason = a.get("reason") or ""
 
         if existing and not replace_existing:
@@ -1085,7 +1150,7 @@ def update_draft(conn, draft_id: int, payload: Dict[str, Any]) -> Dict[str, Any]
     if "reason" in payload and payload["reason"] is not None:
         fields["reason"] = str(payload["reason"])
     if "account" in payload and payload["account"] is not None:
-        fields["account"] = str(payload["account"] or "华泰证券").strip() or "华泰证券"
+        fields["account"] = str(payload["account"] or DEFAULT_ACCOUNT).strip() or DEFAULT_ACCOUNT
     if "name" in payload and payload["name"] is not None:
         fields["name"] = str(payload["name"] or d.get("code") or "")
     if "category" in payload and payload["category"] is not None:
@@ -1142,7 +1207,7 @@ def confirm_draft(conn, draft_id: int, *, make_backup: bool = True) -> Dict[str,
     code = str(d.get("code") or "").strip()
     name = str(d.get("name") or code)
     category = str(d.get("category") or "") or infer_category(code, name)
-    account = str(d.get("account") or "华泰证券")
+    account = str(d.get("account") or DEFAULT_ACCOUNT)
     amount = float(d.get("amount") or 0)
     qty = float(d.get("quantity") or 0)
     price = float(d.get("price") or 0)

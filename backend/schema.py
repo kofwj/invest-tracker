@@ -31,7 +31,7 @@ except ImportError:
     from dividend_calendar import ensure_dividend_event_tables
 
 
-SCHEMA_VERSION = 20
+SCHEMA_VERSION = 21
 SCHEMA_VERSION_KEY = "schema_version"
 
 
@@ -382,6 +382,61 @@ def migrate_to_v20_dividend_events(conn):
     ensure_dividend_event_tables(conn)
 
 
+LEGACY_DISCIPLINE_DEFAULTS = {
+    "named_limits": [
+        {"code": "000651", "name": "格力电器", "max_pct": 15.0},
+    ],
+    "preferred_buy_code": "159352",
+    "preferred_buy_name": "中证A500ETF",
+    "preferred_buy_category": "A股ETF",
+    "preferred_buy_account": "华泰证券",
+    "no_new_codes": ["000651", "601288", "600028"],
+    "plans": {
+        "batch_buy_target_amount": 200000.0,
+        "batch_buy_code": "159352",
+        "batch_buy_name": "中证A500ETF",
+    },
+}
+
+
+def migrate_to_v21_discipline_defaults(conn):
+    """通用化：把「已有持仓的老库」里的未定义个人字段固化为此前写死的默认值，保持老用户行为不变；全新/空库不注入。"""
+    try:
+        has_holdings = conn.execute(
+            "SELECT COUNT(*) FROM holdings WHERE quantity > 0"
+        ).fetchone()[0] > 0
+    except Exception:
+        return
+    if not has_holdings:
+        return
+    row = conn.execute(
+        "SELECT value FROM settings WHERE key = ?",
+        ("discipline_policy",),
+    ).fetchone()
+    raw = {}
+    if row and row[0]:
+        try:
+            raw = json.loads(row[0])
+        except Exception:
+            raw = {}
+    if not raw.get("preferred_buy_code"):
+        raw["preferred_buy_code"] = LEGACY_DISCIPLINE_DEFAULTS["preferred_buy_code"]
+        raw["preferred_buy_name"] = LEGACY_DISCIPLINE_DEFAULTS["preferred_buy_name"]
+        raw["preferred_buy_category"] = LEGACY_DISCIPLINE_DEFAULTS["preferred_buy_category"]
+        raw["preferred_buy_account"] = LEGACY_DISCIPLINE_DEFAULTS["preferred_buy_account"]
+        if "no_new_codes" not in raw:
+            raw["no_new_codes"] = list(LEGACY_DISCIPLINE_DEFAULTS["no_new_codes"])
+        if "named_limits" not in raw:
+            raw["named_limits"] = list(LEGACY_DISCIPLINE_DEFAULTS["named_limits"])
+        if "plans" not in raw:
+            raw["plans"] = dict(LEGACY_DISCIPLINE_DEFAULTS["plans"])
+        conn.execute(
+            "INSERT INTO settings(key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            ("discipline_policy", json.dumps(raw, ensure_ascii=False)),
+        )
+
+
 MIGRATIONS = [
     (1, migrate_to_v1_core_compat),
     (2, migrate_to_v2_holdings_and_snapshots),
@@ -403,6 +458,7 @@ MIGRATIONS = [
     (18, migrate_to_v18_ai_and_reason_cache),
     (19, migrate_to_v19_ai_call_log_warnings),
     (20, migrate_to_v20_dividend_events),
+    (21, migrate_to_v21_discipline_defaults),
 ]
 
 

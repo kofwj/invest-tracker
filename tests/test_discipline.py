@@ -210,6 +210,18 @@ def test_discipline_update_draft_and_batch_confirm(client, app_module):
 
 
 def test_discipline_report_includes_plans_and_help(client, app_module):
+    client.put(
+        "/discipline/policy",
+        json={
+            "preferred_buy_code": "159352",
+            "preferred_buy_name": "中证A500ETF",
+            "plans": {
+                "batch_buy_code": "159352",
+                "batch_buy_name": "中证A500ETF",
+                "batch_buy_target_amount": 200000.0,
+            },
+        },
+    )
     _seed_gree_heavy_portfolio(client, app_module, cash_base=300000, deposit=800000, qty=100, price=40)
     r = client.get("/discipline/report")
     assert r.status_code == 200
@@ -223,6 +235,7 @@ def test_discipline_report_includes_plans_and_help(client, app_module):
 
 
 def test_discipline_presets_list_and_apply(client, app_module):
+    client.put("/discipline/policy", json={"preferred_buy_code": "159352"})
     listed = client.get("/discipline/presets")
     assert listed.status_code == 200, listed.text
     body = listed.json()
@@ -238,7 +251,7 @@ def test_discipline_presets_list_and_apply(client, app_module):
     assert data["preset_id"] == "defensive"
     assert data["policy"]["targets"]["equity_pct"] == 35
     assert data["policy"]["defensive_min_pct"] == 50
-    # 个人字段应保留默认优先加仓
+    # 个人字段应保留自设优先加仓
     assert data["policy"]["preferred_buy_code"] == "159352"
 
     again = client.get("/discipline/presets")

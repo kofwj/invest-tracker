@@ -51,7 +51,7 @@ def _insert_event(conn, code, name, ex_date, plan="10派1元"):
 def test_schema_v20_creates_table_idempotent(app_module):
     from schema import SCHEMA_VERSION, migrate_to_v20_dividend_events
 
-    assert SCHEMA_VERSION == 20
+    assert SCHEMA_VERSION >= 20
     with app_module.get_db_connection(app_module.DB_PATH) as conn:
         migrate_to_v20_dividend_events(conn)
         migrate_to_v20_dividend_events(conn)

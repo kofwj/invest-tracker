@@ -7,6 +7,7 @@ from pydantic import BaseModel, field_validator
 
 try:
     from .database import db_session, local_today_iso
+    from .cash import DEFAULT_ACCOUNT
     from .csv_utils import (
         TRANSACTION_CSV_COLUMNS,
         TRANSACTION_HEADER_ALIASES,
@@ -23,6 +24,7 @@ try:
     from .holdings import infer_category, recalc_holdings, validate_holding_history, validate_transaction_payload
 except ImportError:
     from database import db_session, local_today_iso
+    from cash import DEFAULT_ACCOUNT
     from csv_utils import (
         TRANSACTION_CSV_COLUMNS,
         TRANSACTION_HEADER_ALIASES,
@@ -119,9 +121,9 @@ def ensure_transaction_columns(conn):
 @router.get("/transactions/template")
 def download_transactions_template():
     rows = [
-        [local_today_iso(), "华泰证券", "601288", "农业银行", "A股权益", "买入", "1000", "6.00", "6000.00", "5.00", "示例：请删除后填写真实交易"],
-        [local_today_iso(), "华泰证券", "f004388", "鹏华丰享", "债基", "申购待确认", "0", "0", "50000.00", "0.00", "场外基金份额未确认时使用"],
-        [local_today_iso(), "华泰证券", "f004388", "鹏华丰享", "债基", "分红再投资", "95.2381", "1.0500", "100.00", "0.00", "示例：100元分红按1.05净值再投"],
+        [local_today_iso(), DEFAULT_ACCOUNT, "601288", "农业银行", "A股权益", "买入", "1000", "6.00", "6000.00", "5.00", "示例：请删除后填写真实交易"],
+        [local_today_iso(), DEFAULT_ACCOUNT, "f004388", "鹏华丰享", "债基", "申购待确认", "0", "0", "50000.00", "0.00", "场外基金份额未确认时使用"],
+        [local_today_iso(), DEFAULT_ACCOUNT, "f004388", "鹏华丰享", "债基", "分红再投资", "95.2381", "1.0500", "100.00", "0.00", "示例：100元分红按1.05净值再投"],
     ]
     return csv_response("transactions_template.csv", TRANSACTION_CSV_COLUMNS, rows)
 
@@ -168,11 +170,11 @@ def export_transactions(
     with db_session(row_factory=sqlite3.Row) as conn:
         where_sql, params = build_transaction_where(code, name, direction, start_date, end_date)
         rows = conn.execute(f"""
-            SELECT date, COALESCE(account, '华泰证券') AS account, code, name, category, direction, quantity, price, amount, fee, remark
+            SELECT date, COALESCE(account, ?) AS account, code, name, category, direction, quantity, price, amount, fee, remark
             FROM transactions
             {where_sql}
             ORDER BY date DESC, id DESC
-        """, params).fetchall()
+        """, [DEFAULT_ACCOUNT, *params]).fetchall()
     data = [[r[k] for k in TRANSACTION_CSV_COLUMNS] for r in rows]
     return csv_response(f"transactions_{local_today_iso()}.csv", TRANSACTION_CSV_COLUMNS, data)
 
@@ -201,7 +203,7 @@ async def import_transactions(file: UploadFile = File(...)):
                     if not name:
                         raise ValueError("名称不能为空")
                     category = row.get("category") or infer_category(code, name)
-                    account = row.get("account") or "华泰证券"
+                    account = row.get("account") or DEFAULT_ACCOUNT
                     quantity = parse_float(row.get("quantity"), 0.0)
                     price = parse_float(row.get("price"), 0.0)
                     amount = parse_float(row.get("amount"), 0.0)
@@ -367,7 +369,7 @@ def add_transaction(trans: TransactionBase, backup: bool = True):
                 trans.code,
                 trans.name,
                 category,
-                trans.account or "华泰证券",
+                trans.account or DEFAULT_ACCOUNT,
                 trans.direction,
                 trans.quantity,
                 trans.price,
