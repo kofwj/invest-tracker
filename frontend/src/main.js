@@ -7,8 +7,13 @@ import 'element-plus/es/components/loading/style/css';
 import 'element-plus/theme-chalk/dark/css-vars.css';
 import App from './App.vue';
 import router from './router/index.js';
+import { storeToRefs } from 'pinia';
+import { pinia } from './stores/index.js';
+import { useThemeStore } from './stores/theme.js';
+import { useAuthStore } from './stores/auth.js';
+import { useNotifyStore } from './stores/notify.js';
+import { useMarketStore } from './stores/market.js';
 import { APP_CTX_KEY } from './composables/useAppCtx.js';
-import { createThemeController } from './composables/theme.js';
 import {
     normalizeText,
     daysUntil,
@@ -55,21 +60,23 @@ const app = createApp({
         // Deferred bootstrap after login unlock (wired below after helpers exist)
         let bootstrapAfterAuth = async () => {};
 
+        const authStore = useAuthStore(pinia);
+        authStore.setOnUnlocked(() => bootstrapAfterAuth());
         const {
             isMasked,
-            toggleMask,
             showLoginOverlay,
             loginLoading,
             loginPassword,
             loginError,
             authEnabled,
+            sessionExpired,
+        } = storeToRefs(authStore);
+        const {
+            toggleMask,
             handleLogin,
             handleLogout,
-            sessionExpired,
             reloadForRelogin,
-        } = createAuthMask({
-            onUnlocked: () => bootstrapAfterAuth(),
-        });
+        } = authStore;
 
         // 路由驱动当前页；activeTab 兼容旧模块跳转
         const goTab = (tab) => {
@@ -395,6 +402,23 @@ const app = createApp({
             nextTick,
         });
 
+        const notifyStore = useNotifyStore(pinia);
+        const {
+            notifyStatus,
+            notifyLogs,
+            notifyLoading,
+            notifyEventDraft,
+            notifyChannelDraft,
+            notifyChannelClear,
+        } = storeToRefs(notifyStore);
+        const {
+            fetchNotifyPanel,
+            saveNotifyPanel,
+            testNotifyPush,
+            pushDepositDueNow,
+            pushDisciplineNow,
+        } = notifyStore;
+
         const {
             fetchMaintenance,
             createDbBackup,
@@ -402,17 +426,6 @@ const app = createApp({
             restoreBackup,
             deleteBackup,
             restoreUploadedBackup,
-            notifyStatus,
-            notifyLogs,
-            notifyLoading,
-            notifyEventDraft,
-            notifyChannelDraft,
-            notifyChannelClear,
-            fetchNotifyPanel,
-            saveNotifyPanel,
-            testNotifyPush,
-            pushDepositDueNow,
-            pushDisciplineNow,
         } = createMaintenanceHelpers({
             maintenanceStatus,
             backups,
@@ -526,28 +539,32 @@ const app = createApp({
             showSyncNotice,
         });
 
-        const marketSummary = ref({});
-        const alertRules = ref([]);
-        const alertEvents = ref([]);
-        const marketLoading = ref(false);
-        const alertChecking = ref(false);
-        const alertEventsLoading = ref(false);
-        const alertEditDialog = ref(false);
-        const triggeredAlerts = ref([]);
-        const alertEventCodeFilter = ref('');
-        const alertEventStartDate = ref('');
-        const alertEventEndDate = ref('');
-        const watchlistDraft = ref([]);
-        const watchlistSaving = ref(false);
-        const alertForm = ref({
-            target_type: 'holding',
-            code: '',
-            name: '',
-            condition: 'above',
-            threshold: 0,
-            enabled: true,
-        });
-
+        const marketStore = useMarketStore(pinia);
+        const {
+            marketSummary,
+            alertRules,
+            alertEvents,
+            marketLoading,
+            alertChecking,
+            alertEventsLoading,
+            alertForm,
+            alertEditDialog,
+            triggeredAlerts,
+            alertEventCodeFilter,
+            alertEventStartDate,
+            alertEventEndDate,
+            watchlistDraft,
+            watchlistSaving,
+            indexRows,
+            watchlistRows,
+            holdingsDayRows,
+            marketSignals,
+            marketHighlights,
+            marketComparisons,
+            marketUpdatedAt,
+            quoteCacheSeconds,
+            alertCooldownMinutes,
+        } = storeToRefs(marketStore);
         const {
             fetchMarketSummary,
             fetchAlertRules,
@@ -566,31 +583,7 @@ const app = createApp({
             addWatchlistRow,
             removeWatchlistRow,
             saveWatchlist,
-            indexRows,
-            watchlistRows,
-            holdingsDayRows,
-            marketSignals,
-            marketHighlights,
-            marketComparisons,
-            marketUpdatedAt,
-            quoteCacheSeconds,
-            alertCooldownMinutes,
-        } = createMarketModule({
-            marketSummary,
-            alertRules,
-            alertEvents,
-            marketLoading,
-            alertChecking,
-            alertEventsLoading,
-            alertForm,
-            alertEditDialog,
-            triggeredAlerts,
-            alertEventCodeFilter,
-            alertEventStartDate,
-            alertEventEndDate,
-            watchlistDraft,
-            watchlistSaving,
-        });
+        } = marketStore;
 
         const disciplineReport = ref({});
         const disciplineDrafts = ref([]);
@@ -759,14 +752,17 @@ const app = createApp({
 
         const { eveningBriefDialog, openEveningBrief } = createBriefHelpers();
 
+        const themeStore = useThemeStore(pinia);
         const {
             themeMode,
             resolvedTheme,
             themeLabel,
+        } = storeToRefs(themeStore);
+        const {
             setThemeMode,
             cycleThemeMode,
             setupThemeListeners,
-        } = createThemeController();
+        } = themeStore;
 
         onMounted(() => {
             setupThemeListeners();
@@ -817,5 +813,6 @@ const app = createApp({
         return appCtx;
     }
 });
+app.use(pinia);
 app.use(router);
 app.mount('#app');
