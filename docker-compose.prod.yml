@@ -81,6 +81,9 @@ services:
     ports:
       - "80:80"
       - "443:443"
+      # HTTP/3（QUIC）：Caddy 在 TLS 下自动监听 443/udp；不映射则浏览器只能走 h2。
+      # udp 打不通只会回退到 TCP，不会影响可用性。
+      - "443:443/udp"
     environment:
       APP_DOMAIN: ${APP_DOMAIN:-invest.example.com}
     volumes:
