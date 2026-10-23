@@ -61,6 +61,11 @@ export default {
       // 回调里不能用 entry.contentRect.height——那是内容盒，不含上下 padding。
       // 顶栏有 11~13px 上下内边距，用内容盒会把二级导航顶进顶栏里一截，
       // 所以统一以 border-box 为准，直接重量一次。
+      // 重复调用（HMR、断点重测）时先断开上一个，避免叠加监听
+      if (this.headerObserver) {
+        this.headerObserver.disconnect();
+        this.headerObserver = null;
+      }
       this.headerObserver = new ResizeObserver(() => {
         apply(el.getBoundingClientRect().height);
       });

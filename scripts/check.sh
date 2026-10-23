@@ -209,6 +209,7 @@ fi
 echo "==> Checking split backend modules"
 required_backend_files=(
   backend/main.py
+  backend/app_paths.py
   backend/database.py
   backend/csv_utils.py
   backend/holdings.py
