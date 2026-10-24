@@ -4,6 +4,7 @@
 **不模拟、不自动下单**。草稿确认后才入账。
 
 变更按日见 [CHANGELOG.md](CHANGELOG.md)。VPS 步骤见 [docs/deploy-vps.md](docs/deploy-vps.md)。
+桌面应用（Tauri 壳、打包与 dev 模式）见 [docs/desktop.md](docs/desktop.md)。
 界面规范与 Figma 上手见 [docs/design/](docs/design/)（`figma-handoff.md` 规范与逐页清单、
 `figma-basics.md` 操作速成、`page-performance-layers.md` 图层树）。
 
@@ -165,6 +166,17 @@ PYTHONPATH=backend python backend/main.py
 cd frontend && npm install && npm run dev
 ```
 
+### 桌面应用（macOS）
+
+打包成原生 `.app`（Tauri 2 外壳 + PyInstaller 侧车），双击即用，不用另起后端：
+
+```bash
+bash scripts/build-desktop.sh     # 产物在 src-tauri/target/release/bundle/
+```
+
+只想调壳本身就在仓库根跑 `./frontend/node_modules/.bin/tauri dev`：前端走 vite 热更新，
+后端按上面的方式自己起在 8000。细节与已知限制见 [docs/desktop.md](docs/desktop.md)。
+
 ---
 
 ## 测试与 CI
@@ -302,6 +314,7 @@ invest-tracker/
   frontend/tests/          vitest
   scripts/                 部署 / 备份 / cron / 隐私检查
   docs/deploy-vps.md
+  docs/desktop.md          桌面壳：结构 / 端口 / 打包 / dev 模式
   docker-compose.yml       本地
   docker-compose.prod.yml  VPS
   .github/workflows/ci.yml

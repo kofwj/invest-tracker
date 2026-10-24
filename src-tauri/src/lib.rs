@@ -13,7 +13,14 @@ struct BackendState {
 }
 
 
-/// 发送轻量 HTTP GET 请求探测 /api/health，不需要引入第三方 HTTP 客户端 crate
+/// 本应用 `/api/health` 独有的字段。同机常驻的其他服务也会返回 `{"status":"ok"}`，
+/// 只认 `status` 会把别人的后端当成自己的、再把窗口导航过去；而本应用数据库探测失败时
+/// 后端返回 503，也不会命中这条签名，判定方向是安全的。
+const HEALTH_SIGNATURE: &str = "\"database\":\"ok\"";
+
+/// 发送轻量 HTTP GET 请求探测 /api/health，不需要引入第三方 HTTP 客户端 crate。
+/// 必须读到连接关闭再判断：uvicorn 把响应头与响应体分两个包发，单次 read 常常只拿到
+/// 响应头，会把活着的后端误判成没起来（进而重复拉起侧车）。
 fn check_health(port: u16) -> bool {
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     if let Ok(mut stream) = TcpStream::connect_timeout(&addr, Duration::from_millis(300)) {
@@ -24,33 +31,47 @@ fn check_health(port: u16) -> bool {
             port
         );
         if stream.write_all(req.as_bytes()).is_ok() {
-            let mut buf = [0u8; 1024];
-            if let Ok(n) = stream.read(&mut buf) {
-                let resp = String::from_utf8_lossy(&buf[..n]);
-                return resp.contains("200 OK") && resp.contains("\"status\":\"ok\"");
+            let mut resp = Vec::new();
+            let mut buf = [0u8; 2048];
+            while resp.len() < 4096 {
+                match stream.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => resp.extend_from_slice(&buf[..n]),
+                    Err(_) => break,
+                }
             }
+            let resp = String::from_utf8_lossy(&resp);
+            return resp.contains("200 OK") && resp.contains(HEALTH_SIGNATURE);
         }
     }
     false
 }
 
-/// 检测端口是否可绑定
-fn is_port_available(port: u16) -> bool {
+/// 端口是否真的空着。不能只看 bind 成功与否：macOS 允许 `127.0.0.1:port` 与 `*:port`
+/// 同时存在，别人绑了通配地址时我们照样能绑成功，于是两个服务挤在同一个端口上（换到别的
+/// 平台又变成直接失败）。先连一下，连得通就说明已经有人在听。
+fn is_port_free(port: u16) -> bool {
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    if TcpStream::connect_timeout(&addr, Duration::from_millis(200)).is_ok() {
+        return false;
+    }
     TcpListener::bind(("127.0.0.1", port)).is_ok()
 }
 
-/// 找到可用端口（默认优先 8000）
+/// 找到可用端口（默认优先 8000）。
+/// 只有确认是本应用的后端才复用该端口；被别的服务占着就往后退，免得复用不相干的服务，
+/// 也免得起两个后端抢同一个端口。
 fn resolve_port() -> u16 {
     if let Ok(env_port) = std::env::var("PORT") {
         if let Ok(p) = env_port.trim().parse::<u16>() {
             return p;
         }
     }
-    if check_health(8000) || is_port_available(8000) {
+    if check_health(8000) {
         return 8000;
     }
-    for p in 8001..8100 {
-        if is_port_available(p) {
+    for p in 8000..8100 {
+        if is_port_free(p) {
             return p;
         }
     }
@@ -183,6 +204,15 @@ pub fn run() {
                         .level(log::LevelFilter::Info)
                         .build(),
                 )?;
+            }
+
+            // 开发态（`tauri dev` / `cargo run`）：窗口由 Tauri 直接指向 `devUrl`（vite dev server，
+            // 带热更新），后端按老办法单独起（`python backend/main.py`，vite 的 `/api` 代理打 8000）。
+            // 这里若照旧拉起侧车再导航，窗口会被从 dev server 赶到侧车托管的静态产物上，热更新等于
+            // 白起；而 vite 代理的目标端口是写死的，侧车一换端口就对不上。
+            if cfg!(dev) {
+                log::info!("开发模式：前端走 devUrl，后端请单独启动；跳过侧车托管与窗口导航。");
+                return Ok(());
             }
 
             // 检查该端口是否已有存活的后端

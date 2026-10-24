@@ -33,11 +33,20 @@ if ! command -v cargo >/dev/null 2>&1; then
 fi
 echo "    Cargo: $(cargo --version)"
 
-# 3. Target triple
+# 3. Tauri CLI（版本锁在 frontend/package.json，别用 npx --yes 现拉最新版，
+#    否则同一个 commit 在不同日期可能装出不兼容的 CLI）
+TAURI_CLI="$ROOT_DIR/frontend/node_modules/.bin/tauri"
+if [ ! -x "$TAURI_CLI" ]; then
+  echo "错误：未找到本地 Tauri CLI，请先安装前端依赖：npm --prefix frontend install" >&2
+  exit 1
+fi
+echo "    Tauri CLI: $("$TAURI_CLI" --version)"
+
+# 4. Target triple
 TARGET_TRIPLE="$(rustc -vV | sed -n 's/host: //p')"
 echo "    Target Triple: $TARGET_TRIPLE"
 
-# 4. Python & PyInstaller
+# 5. Python & PyInstaller
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 PYINSTALLER_BIN=""
 if command -v pyinstaller >/dev/null 2>&1; then
@@ -88,7 +97,7 @@ ls -lh "$BACKEND_SIDECAR"
 
 echo "==> [4/4] 构建 Tauri 桌面应用 (InvestTracker.app)"
 export PATH
-npx --yes @tauri-apps/cli build --bundles app "$@"
+"$TAURI_CLI" build --bundles app "$@"
 
 APP_PATH="src-tauri/target/release/bundle/macos/InvestTracker.app"
 DMG_DIR="src-tauri/target/release/bundle/dmg"
