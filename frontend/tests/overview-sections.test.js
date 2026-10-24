@@ -72,6 +72,9 @@ const STUBS = {
   ElButton: passthrough('ElButton'),
   ElTable: ElTableStub,
   ElTableColumn: ElTableColumnStub,
+  // CalibrationHint 的弹窗无条件挂载（靠 v-model 控制可见），这里只需它别往 DOM 里塞内容：
+  // 弹窗自身的交互由 calibration-hint.test.js 负责，本文件只关心资产段的静态结构。
+  ElDialog: { name: 'ElDialog', setup: () => () => h('div', { class: 'stub-dialog' }) },
 };
 
 const formatMoney = (v, d = 2, s = false) => (
@@ -95,6 +98,7 @@ const flatDashboard = (extra = {}) => ({
   securities_cash: 500,
   bank_balance: 200,
   latest_snapshot_date: '2026-03-06',
+  calibration: null,
   ...extra,
 });
 
@@ -284,6 +288,35 @@ describe('OverviewTab 资产四数字 / 持仓速览 / 脉搏 / 同步备份', (
     const assets = section(host, 'assets').textContent;
     expect(assets).toContain('含分红 1334.50');
     expect(assets).toContain('银行 200.00 · 证券 500.00');
+    app.unmount();
+  });
+
+  it('总资产校准提示挂在资产段里：N 天 / 上次差额 / 平差金额，逾期标红', async () => {
+    const { host, app } = mountOverview({
+      dashboard: ref(flatDashboard({
+        calibration: {
+          level: 'overdue',
+          adjustment: 1234.5,
+          hint: '距上次校准 47 天 · 上次差额 -2,300.00',
+        },
+      })),
+    });
+    await flush();
+
+    // 不只测「渲染了」：日期口径、差额文案、平差金额三样都得露出来，否则等于把差额又藏起来了
+    const hint = section(host, 'assets').querySelector('.ov-cal-hint');
+    expect(hint).toBeTruthy();
+    expect(hint.getAttribute('data-level')).toBe('overdue');
+    expect(hint.textContent).toContain('距上次校准 47 天');
+    expect(hint.querySelector('.ov-cal-adj').textContent).toContain('+1234.50');
+    app.unmount();
+  });
+
+  it('dashboard 没带 calibration 时整块不渲染——接口出问题不能连累首页', async () => {
+    const { host, app } = mountOverview();
+    await flush();
+
+    expect(section(host, 'assets').querySelector('.ov-cal-hint')).toBeNull();
     app.unmount();
   });
 
