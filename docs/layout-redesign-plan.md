@@ -28,7 +28,9 @@
 | observer 幂等清理 + 自检名单补 `app_paths.py` | `c56204d` |
 | 阶段 0 路由命名空间收口（本地拓扑接口挂 `/api`） | 已交付，12 个页签路径实测 `text/html` |
 | 阶段 1 `DataTable` 基础件 + 首个接入 | 已交付，三档视口包裹层几何零影响 |
-| 前端测试 | 27 文件 / 228 项 |
+| 阶段 2 批次 A（总览 / 持仓 / 交易 / 存款，6 张表） | `a544562`，640 档 6 张表全部卡片化 |
+| 阶段 2 批次 B（业绩 / 现金 / 配置 / 券商对账，15 张表） | `2377c9f`，13 张卡片化 + 2 张 selection 表保留表格 |
+| 前端测试 | 29 文件 / 236 项 |
 | 后端测试 | 602 项（阶段 0 新增 24 项，原有 578 项未改） |
 | 媒体查询断点 | 仅 `1100`（3 处）/ `900`（10 处）/ `640`（10 处） |
 
@@ -148,9 +150,9 @@ if not SERVE_FRONTEND:
 方案 B 的前提条件逐条验证过：
 
 1. `tests/conftest.py` 早就把 `FRONTEND_DIST` 固定指向不存在目录，正好落在 else 分支，
-   285 处打根路径的测试一个都不用改。
-2. `backend/main.py:175` 与 `:185` 已经把 `/api/health` 和 `/health` **双注册**——双命名
-   空间在这个项目里已有先例，不是新发明。
+   打根路径的测试一个都不用改。
+2. `backend/main.py` 已经把 `/api/health` 和 `/health` **双注册**——双命名空间在这个项目里
+   已有先例，不是新发明。
 3. 生产镜像的构建上下文是 `./backend`（`docker-compose.prod.yml`），`COPY . .` 只拷后端
    目录，镜像里没有 `frontend/dist`，所以生产必然走 else 分支。
 4. `docker-compose.prod.yml` 的 healthcheck 直连 `http://127.0.0.1:8000/api/health`，不经
@@ -278,7 +280,7 @@ diff 巨大且难评审。所以 `DataTable` 只做「响应式布局切换」�
 
 ---
 
-## 阶段 2：逐页加移动卡片（1.5–2 天）
+## 阶段 2：逐页加移动卡片（1.5–2 天，批次 A / B 已交付）
 
 按使用频次分批，每批独立可交付、可发版。每批里表与其 `#card` 一次做到位（不再单独有「包装」步骤）。
 
@@ -288,20 +290,52 @@ diff 巨大且难评审。所以 `DataTable` 只做「响应式布局切换」�
 | B | `PerformanceTab`、`CashTab`、`AllocationTab`、`BrokerReconcileTab` | 15 / 95 | 分析类，卡片结构统一为「名称 + 核心数值 + 涨跌」三行 |
 | C | `DecisionTab`、`NotifyOpsTab`、`AiOpsTab`、`BackupOpsTab`、`SnapshotPanel`、`AppDialogs` | 16 / 93 | 低频 / 运维 / 弹窗，多数接受横向滚动兜底 |
 
+**A、B 已交付**（`a544562` / `2377c9f`），C 未开始。
+
+### 已交付批次的三档实测
+
+640 档逐页打开，8 个页签全部卡片化、`el-table` 卸载：
+
+| 页签 | 640 档卡片 | 页面里仍以表格呈现的部分 |
+|---|---|---|
+| `/` | 9 | 无 |
+| `/holdings` | 9 | 无 |
+| `/transactions` | 51 | 无 |
+| `/deposits` | 10 | 无 |
+| `/performance` | 34 | `SnapshotPanel` 的 2 张表（批次 C，且在默认收起的折叠区里） |
+| `/cash` | 8 | 无（未配对银证分组无数据，整块未渲染） |
+| `/allocation` | 14 | 纪律草稿表（selection，按计划兜底） |
+| `/broker` | 0 | 无（对账历史为空，走卡片区空态） |
+
+| 检查项 | 结果 |
+|---|---|
+| 横向溢出 | 8 个页签 `scrollWidth - clientWidth` 全为 0；9 张持仓卡片逐张查过，没有内部横向滚动 |
+| 1440 / 900 档（`/holdings` `/cash`） | 卡片 0 张、卡片分支不渲染，表格行数与宽屏一致，包裹层与 `el-table` 矩形完全重合 |
+| 卡片外观 | 外层 `.data-card` 管外观（`padding: 10px 12px` + 1px 边框 + 8px 圆角），内层 `.m-card` 只做纵向排版，**没有双层边框**（实测卡片 179px = 内层 157px + padding + 边框） |
+| `#card` 覆盖 | 21 处 `DataTable` 里 19 处带 `#card`，差的 2 处正是 2 张 selection 表 |
+| 加载态 | 原本挂在 `el-table` 上的 `v-loading` 已移交外壳（`AllocationTab` 再平衡建议）；批次 A/B 其余表本来就没有表级 loading，无回归 |
+| 分页 | 卡片跟服务端分页走、不渲染全量：`/transactions` 每页 100 时 51 张，切到 50 后 50 张、第 2 页 1 张（`filteredTransactions` 拿到的就是当前页切片） |
+| 测试 | 前端 29 文件 / 236 项，`check.sh` All checks passed；后端 602 项不受影响 |
+
+`/performance` 的卡片在默认收起的折叠面板里，`visibleCards = 0` 是收起所致，不是没渲染。
+
 **每批验收标准（三条都要过）**
 
-1. 三档视口（1100 / 900 / 640）实测，沿用同源 iframe 独立视口方案
+1. 三档视口实测，沿用同源 iframe 独立视口方案（批次 A / B 实际用 1440 / 900 / 640；1100 与
+   1440 同属 >900 区间、走同一套 CSS 分支，等价）
 2. 卡片必须覆盖该表的**排序依据字段与首要决策字段**（例如持仓必须有市值和浮盈，不能
    只放名称和代码）
 3. 新增 `<页面>-cards.test.js` 断言窄屏渲染 N 张卡片、关键文案存在；现有测试零回归
 
 **两个不能忘的交互**
 
-- `HoldingsTab.vue:45` 的 `@row-click="showTransactions"` 是手机端查看该持仓历史交易与 K 线的
-  唯一入口。卡片必须自己绑 `@click="showTransactions(row)"`，否则窄屏下这个功能直接消失。
-- 全仓 3 处 `type="selection"`（`AllocationTab:381`、`BrokerReconcileTab:138`、
-  `AppDialogs:306`）**明确不做卡片**，走横向滚动兜底。为极低频的移动端批量操作去封装卡片
-  勾选通信机制不划算。
+- **`HoldingsTab` 持仓表的 `@row-click="showTransactions"` 是手机端查看该持仓历史交易与 K 线的
+  唯一入口。** 卡片必须自己绑 `@click="showTransactions(row)"`，否则窄屏下这个功能直接消失。
+  已交付：卡片根节点绑了 `showTransactions`，K 线按钮单独绑 `openKline` 并用 `@click.stop`
+  挡住冒泡，两个入口都还在。
+- 全仓 3 处 `type="selection"`（`AllocationTab` 的纪律草稿、`BrokerReconcileTab` 的校正建议、
+  `AppDialogs` 的分红草稿）**明确不做卡片**，走横向滚动兜底。为极低频的移动端批量操作去封装
+  卡片勾选通信机制不划算。前两处已随批次 A/B 交付，第三处在批次 C。
 
 **已知细节**：`TransactionsTab` 的 `max-height="500"` 在卡片模式下没有意义；卡片高度交给
 既有分页控制，不引入新的「加载更多」交互。
