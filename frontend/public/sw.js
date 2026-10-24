@@ -54,7 +54,12 @@ self.addEventListener('fetch', (event) => {
           return networkResponse;
         })
         .catch(() => {
-          return caches.match('/index.html');
+          return caches.match('/index.html').then((cached) => {
+            return cached || new Response('离线备用页面不可用', {
+              status: 503,
+              headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+            });
+          });
         })
     );
     return;

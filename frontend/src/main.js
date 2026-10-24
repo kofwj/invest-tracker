@@ -632,8 +632,16 @@ if ('serviceWorker' in navigator) {
     if (isDesktopOrLocal) {
         // 桌面壳或本地直接运行模式：若此前误注册过，主动注销并清理旧缓存，保持磁盘实时性
         navigator.serviceWorker.getRegistrations().then((registrations) => {
+            let unregisteredAny = false;
             for (const registration of registrations) {
                 registration.unregister().catch(() => {});
+                unregisteredAny = true;
+            }
+            // 若确实注销了控制页面的旧 SW，静默 reload 一次使页面彻底脱钩，
+            // 避免旧 SW 在当前生命周期内继续写入 CacheStorage；sessionStorage 防重复刷新。
+            if (unregisteredAny && !sessionStorage.getItem('sw_unregistered_reload')) {
+                sessionStorage.setItem('sw_unregistered_reload', '1');
+                window.location.reload();
             }
         }).catch(() => {});
         if ('caches' in window) {

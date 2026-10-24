@@ -69,9 +69,12 @@ describe('PWA & 移动端主屏幕应用静态配置校验', () => {
         expect(staticAssetsBody).not.toMatch(/['"]\/['"]/);
         expect(staticAssetsBody).not.toMatch(/['"]\/index\.html['"]/);
 
-        // 导航请求（request.mode === 'navigate'）必须先于静态资源优先分支处理
-        const navIndex = swContent.indexOf("request.mode === 'navigate'");
-        const staticAssetIndex = swContent.indexOf("STATIC_ASSETS.includes");
+        // 导航请求（request.mode === 'navigate'）必须先于静态资源优先分支处理（剥离注释比对，避免注释干扰）
+        const codeWithoutComments = swContent
+            .replace(/\/\*[\s\S]*?\*\//g, '')
+            .replace(/\/\/.*/g, '');
+        const navIndex = codeWithoutComments.indexOf("request.mode === 'navigate'");
+        const staticAssetIndex = codeWithoutComments.indexOf("STATIC_ASSETS.includes");
         expect(navIndex).toBeGreaterThan(0);
         expect(staticAssetIndex).toBeGreaterThan(0);
         expect(navIndex, '页面导航判定必须排在静态资源缓存优先分支之前').toBeLessThan(staticAssetIndex);
@@ -82,13 +85,14 @@ describe('PWA & 移动端主屏幕应用静态配置校验', () => {
         expect(swContent).toContain("url.pathname === '/health'");
     });
 
-    it('main.js 遵循 P2 规则：桌面外壳与本地环境跳过 SW 注册并注销旧实例', () => {
+    it('main.js 遵循 P2 规则：桌面外壳与本地环境跳过 SW 注册并注销旧实例与自愈刷新', () => {
         expect(fs.existsSync(mainJsPath)).toBe(true);
         const mainContent = fs.readFileSync(mainJsPath, 'utf-8');
 
         expect(mainContent).toContain('window.__TAURI_INTERNALS__');
         expect(mainContent).toContain("window.location.hostname === '127.0.0.1'");
         expect(mainContent).toContain('registration.unregister()');
+        expect(mainContent).toContain('sw_unregistered_reload');
     });
 
     it('index.html 正确声明 viewport-fit=cover、manifest 与 iOS Safari 全屏配置', () => {
