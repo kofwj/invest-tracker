@@ -37,6 +37,17 @@
 
 ### 修复
 
+- **打包出的 `InvestTracker.app` 双击打开是 404（只有接口，没有页面）。** Tauri 2 把前端产物编进
+  壳二进制，`.app/Contents/` 里看不到 `frontend/dist`；PyInstaller 侧车只在自己所在目录找 dist，
+  找不到就退化成「只提供 API」，而壳在 `/api/health` 就绪后把窗口导航到根路径，正好落在 404 上。
+  `~/Library/Application Support/InvestTracker/data/` 一直是空的——没人真正打开过打包产物，所以没被发现。
+
+  现在前端产物随 `bundle.resources` 打进 `.app/Contents/Resources/frontend/dist`，壳在拉起侧车时
+  用 `resource_dir()` 把它显式写进 `FRONTEND_DIST`；该目录不存在（`cargo run` 开发态）就不设，
+  留给后端按仓库路径自己找，开发流程不变。实测双击启动后 `GET /` 返回 200 `text/html` 与真实首页、
+  `/holdings` 深链回落正常、`Cmd+Q` 退出后侧车进程与端口一并释放。侧车二进制不用重打，
+  改前端只需重打 10MB 量级的壳。
+
 - **本地单进程模式下 `/holdings` `/transactions` `/deposits` 返回裸 JSON 而不是页面。** 这三条
   路径既是前端 history 路由、又是接口路径，接口赢了路由匹配，1.6.0 里「前端 history 路由能直接
   深链」对它们不成立。

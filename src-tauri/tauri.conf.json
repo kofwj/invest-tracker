@@ -40,7 +40,10 @@
     ],
     "externalBin": [
       "binaries/invest-tracker-backend"
-    ]
+    ],
+    "resources": {
+      "../frontend/dist": "frontend/dist"
+    }
   }
 }
 

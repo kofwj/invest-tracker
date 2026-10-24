@@ -204,6 +204,16 @@ pub fn run() {
                     cmd.current_dir(cwd);
                 }
 
+                // Tauri 打包后前端产物落在 .app/Contents/Resources/frontend/dist，
+                // 侧车只在自己所在目录找，找不到就退化成纯 API（窗口打开是 404）。
+                // 这里显式指路；开发模式下该目录不存在，留给后端按仓库路径自己找。
+                if let Ok(resource_dir) = app.path().resource_dir() {
+                    let dist = resource_dir.join("frontend").join("dist");
+                    if dist.is_dir() {
+                        cmd.env("FRONTEND_DIST", &dist);
+                    }
+                }
+
                 match cmd.spawn() {
                     Ok(child) => {
                         log::info!("后端子进程已拉起，PID: {}", child.id());
