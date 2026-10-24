@@ -1,6 +1,6 @@
 [package]
 name = "invest-tracker"
-version = "1.6.0"
+version = "1.7.0"
 description = "InvestTracker Desktop App"
 authors = ["InvestTracker"]
 edition = "2024"
