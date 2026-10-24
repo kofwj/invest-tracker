@@ -244,8 +244,10 @@ for file in "${required_backend_files[@]}"; do
   test -f "$file"
 done
 
+# 前端 dist 是否被找到会改变路由注册位置，这里固定成 VPS 拓扑再断言（与
+# tests/conftest.py:216 同一手法：显式路径不存在时 find_frontend_dist 返回 None）。
 echo "==> Checking backend importability"
-PYTHONPATH=backend "$python_bin" - <<'PY'
+PYTHONPATH=backend FRONTEND_DIST="/nonexistent/invest-tracker-check-no-dist" "$python_bin" - <<'PY'
 import importlib.util
 import sys
 from pathlib import Path
@@ -255,6 +257,16 @@ spec = importlib.util.spec_from_file_location("backend_main_check", path)
 module = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = module
 spec.loader.exec_module(module)
+
+# 这里断言的是 Docker/VPS 拓扑：接口注册在根路径、/api 由中间件剥掉。
+# 本机构建过前端后 frontend/dist 会被 find_frontend_dist 找到，main.py 会把接口
+# 整体挪到 /api 下（见 tests/test_route_prefix.py），下面的根路径断言就会失效。
+# 所以上面用 FRONTEND_DIST 显式指向不存在的目录固定拓扑，这里再兜一道：
+if getattr(module, "API_PREFIX", None) != "":
+    raise SystemExit(
+        "自检必须跑 VPS 拓扑（API_PREFIX 为空），实际为 %r；"
+        "检查 FRONTEND_DIST 是否被清掉了" % (getattr(module, "API_PREFIX", None),)
+    )
 
 required_routes = {
     "/api/health",

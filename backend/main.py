@@ -92,6 +92,14 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Investment Tracker API", lifespan=lifespan)
 
+# ---- 运行形态判定（必须早于 include_router）----
+# 找到前端产物 = 本地单进程：本进程同时提供 API 和页面，接口统一挂 /api 前缀，
+# 把 /holdings /transactions /deposits 这些同名的前端 history 路由让给 SPA 兜底。
+# 找不到 dist = Docker/VPS（nginx 剥前缀）或 pytest，接口仍注册在根路径，与改造前一致。
+_FRONTEND_DIST = find_frontend_dist(PROJECT_DIR)
+SERVE_FRONTEND = _FRONTEND_DIST is not None
+API_PREFIX = "/api" if SERVE_FRONTEND else ""
+
 _cors_origins = (os.environ.get("CORS_ALLOW_ORIGINS") or "").strip()
 _is_prod = os.environ.get("ENV", "").lower() in ("prod", "production")
 if _cors_origins and _cors_origins != "*":
@@ -133,27 +141,32 @@ class StripApiPrefixMiddleware:
         await self.app(scope, receive, send)
 
 
-app.add_middleware(StripApiPrefixMiddleware)
+if not SERVE_FRONTEND:
+    # 本地模式接口本来就注册在 /api 下，不需要再剥前缀；只有生产拓扑（nginx 已剥过、
+    # 但直连后端的调用仍带 /api）才挂。
+    app.add_middleware(StripApiPrefixMiddleware)
 
-app.include_router(auth_router)
-app.include_router(deposits_router, dependencies=[Depends(require_auth)])
-app.include_router(transactions_router, dependencies=[Depends(require_auth)])
-app.include_router(cash_router, dependencies=[Depends(require_auth)])
-app.include_router(snapshots_router, dependencies=[Depends(require_auth)])
-app.include_router(holdings_router, dependencies=[Depends(require_auth)])
-app.include_router(klines_router, dependencies=[Depends(require_auth)])
-app.include_router(fundamentals_router, dependencies=[Depends(require_auth)])
-app.include_router(dividends_router, dependencies=[Depends(require_auth)])
-app.include_router(dashboard_router, dependencies=[Depends(require_auth)])
-app.include_router(performance_router, dependencies=[Depends(require_auth)])
-app.include_router(maintenance_router, dependencies=[Depends(require_auth)])
-app.include_router(market_router, dependencies=[Depends(require_auth)])
-app.include_router(discipline_router, dependencies=[Depends(require_auth)])
-app.include_router(allocation_router, dependencies=[Depends(require_auth)])
-app.include_router(broker_reconcile_router, dependencies=[Depends(require_auth)])
-app.include_router(notify_router, dependencies=[Depends(require_auth)])
-app.include_router(ai_router, dependencies=[Depends(require_auth)])
-app.include_router(cron_router, dependencies=[Depends(require_cron_token)])
+# 本地单进程模式下接口统一挂在 /api 下，把 /holdings 这类前端 history 路由留给
+# SPA 兜底；Docker/VPS 下 API_PREFIX 为空，注册位置与改造前逐字一致。
+app.include_router(auth_router, prefix=API_PREFIX)
+app.include_router(deposits_router, prefix=API_PREFIX, dependencies=[Depends(require_auth)])
+app.include_router(transactions_router, prefix=API_PREFIX, dependencies=[Depends(require_auth)])
+app.include_router(cash_router, prefix=API_PREFIX, dependencies=[Depends(require_auth)])
+app.include_router(snapshots_router, prefix=API_PREFIX, dependencies=[Depends(require_auth)])
+app.include_router(holdings_router, prefix=API_PREFIX, dependencies=[Depends(require_auth)])
+app.include_router(klines_router, prefix=API_PREFIX, dependencies=[Depends(require_auth)])
+app.include_router(fundamentals_router, prefix=API_PREFIX, dependencies=[Depends(require_auth)])
+app.include_router(dividends_router, prefix=API_PREFIX, dependencies=[Depends(require_auth)])
+app.include_router(dashboard_router, prefix=API_PREFIX, dependencies=[Depends(require_auth)])
+app.include_router(performance_router, prefix=API_PREFIX, dependencies=[Depends(require_auth)])
+app.include_router(maintenance_router, prefix=API_PREFIX, dependencies=[Depends(require_auth)])
+app.include_router(market_router, prefix=API_PREFIX, dependencies=[Depends(require_auth)])
+app.include_router(discipline_router, prefix=API_PREFIX, dependencies=[Depends(require_auth)])
+app.include_router(allocation_router, prefix=API_PREFIX, dependencies=[Depends(require_auth)])
+app.include_router(broker_reconcile_router, prefix=API_PREFIX, dependencies=[Depends(require_auth)])
+app.include_router(notify_router, prefix=API_PREFIX, dependencies=[Depends(require_auth)])
+app.include_router(ai_router, prefix=API_PREFIX, dependencies=[Depends(require_auth)])
+app.include_router(cron_router, prefix=API_PREFIX, dependencies=[Depends(require_cron_token)])
 
 
 def check_database_health():
@@ -190,8 +203,8 @@ def proxied_health_check():
 
 
 # ---- 本地单进程模式：一个进程同时提供 API 和前端 ----
-# Docker/VPS 里前端由 nginx 托管；这里找不到 dist 就退化成纯 API，线上行为不变。
-_FRONTEND_DIST = find_frontend_dist(PROJECT_DIR)
+# Docker/VPS 里前端由 nginx 托管；找不到 dist 就退化成纯 API，线上行为不变。
+# _FRONTEND_DIST / SERVE_FRONTEND 已在文件上方算好，这里只负责挂静态托管。
 
 if _FRONTEND_DIST:
     from fastapi import Request

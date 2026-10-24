@@ -26,8 +26,9 @@
 | `v1.6.0` 单进程本地运行 + 平台数据目录 + AGPL-3.0 | 已发布（tag `v1.6.0`） |
 | 应用外壳吸顶 + 断点收敛三档 | `8438d61`，三档实测通过 |
 | observer 幂等清理 + 自检名单补 `app_paths.py` | `c56204d` |
+| 阶段 0 路由命名空间收口（本地拓扑接口挂 `/api`） | 已交付，12 个页签路径实测 `text/html` |
 | 前端测试 | 26 文件 / 220 项 |
-| 后端测试 | 578 项 |
+| 后端测试 | 602 项（阶段 0 新增 24 项，原有 578 项未改） |
 | 媒体查询断点 | 仅 `1100`（3 处）/ `900`（10 处）/ `640`（10 处） |
 
 ---
@@ -106,7 +107,7 @@ grep -o '@media[^{]*{' styles/styles.css | sort | uniq -c
 
 ---
 
-## 阶段 0：路由命名空间收口（0.5 天）
+## 阶段 0：路由命名空间收口（0.5 天，已交付）
 
 ### 问题
 
@@ -154,8 +155,8 @@ if not SERVE_FRONTEND:
 4. `docker-compose.prod.yml` 的 healthcheck 直连 `http://127.0.0.1:8000/api/health`，不经
    nginx；方案 B 下 Docker 模式仍挂中间件，该检查照常通过。
 
-5. **但这条路会踩到自检脚本**：`scripts/check.sh:160` 会先 `npm --prefix frontend run build` 产出
-   `dist`，第 247 行再导入 `main.py` 断言路由表。届时 `SERVE_FRONTEND=True`，而它
+5. **但这条路会踩到自检脚本**：`scripts/check.sh` 会先 `npm --prefix frontend run build` 产出
+   `dist`，随后导入 `main.py` 断言路由表。届时 `SERVE_FRONTEND=True`，而它
    `required_routes` 里的 25 条写的是根路径（`/transactions` `/holdings` `/cron/*` 等），不改
    就会硬失败。改法见下。
 
@@ -167,7 +168,7 @@ if not SERVE_FRONTEND:
 目录，`main.py` 就落回「纯 API」分支：
 
 ```bash
-# scripts/check.sh 第 247 行那段，原来的 PYTHONPATH=backend "$python_bin" - <<'PY'
+# scripts/check.sh 的导入段，原来是 PYTHONPATH=backend "$python_bin" - <<'PY'
 PYTHONPATH=backend FRONTEND_DIST="$tmpdir/no-frontend-dist" "$python_bin" - <<'PY'
 ```
 
@@ -181,15 +182,15 @@ routes`）也能过，但那是让自检同时接受两种拓扑，等于没验�
 | 文件 | 改动 |
 |---|---|
 | `backend/main.py` | `SERVE_FRONTEND` / `API_PREFIX` 判定；19 处 `include_router` 加 `prefix`；中间件改条件挂载 |
-| `tests/test_route_prefix.py`（新增） | monkeypatch `FRONTEND_DIST` 指向临时目录，断言 `/api/holdings` 命中 JSON、`/holdings` 返回 `text/html`、`/api/health` 仍 200 |
-| `scripts/check.sh` | 第 247 行「Checking backend importability」导入前加 `FRONTEND_DIST=…/no-frontend-dist`，使 25 条路由断言对应 VPS 拓扑 |
+| `tests/test_route_prefix.py`（新增 8 个函数 / 24 项） | 复用 `conftest.py` 的 `spa_app` fixture（临时 dist 含 `index.html` + `assets`）：12 个页签路径断言 `text/html`、3 个撞车接口的 `/api/*` 断言 JSON、未知 `/api/*` 断言 404 JSON 且不回落首页、`/health` 与 `/api/health` 双通、`app.user_middleware` 里没有 `StripApiPrefixMiddleware` |
+| `scripts/check.sh` | 「Checking backend importability」导入前固定 `FRONTEND_DIST` 到不存在的目录，并断言 `API_PREFIX` 为空，使 25 条路由断言仍对应 VPS 拓扑 |
 | `CHANGELOG.md` | 记一条修复 |
 
 **验收**
 
 - 本地起服务，12 个页签路径逐个 `curl -sI` 断言 `content-type: text/html`
 - `/api/holdings` `/api/transactions` `/api/deposits` 断言 `application/json`
-- 后端 578 项测试全绿
+- 后端 602 项测试全绿（原有 578 项一字未改，新增 24 项）
 - `bash scripts/check.sh` 全绿——这条最容易漏，它自己会先构建出 `dist`
 - **VPS 无需任何动作**（这是选方案 B 的主要理由）
 
@@ -350,7 +351,7 @@ diff 巨大且难评审。所以 `DataTable` 只做「响应式布局切换」�
 
 | 检查项 | 命令 / 方法 | 通过标准 |
 |---|---|---|
-| 后端单测 | `PYTHONPATH=backend python3 -m pytest -q tests` | 578 项全绿 |
+| 后端单测 | `PYTHONPATH=backend python3 -m pytest -q tests` | 602 项全绿 |
 | 前端单测 | `cd frontend && npx vitest run` | 现有 220 项 + 新增全绿 |
 | 前端构建 | `cd frontend && npm run build` | 成功，无新增 warning |
 | 自检脚本 | `bash scripts/check.sh` | `All checks passed` |
@@ -368,7 +369,7 @@ diff 巨大且难评审。所以 `DataTable` 只做「响应式布局切换」�
 | 风险 | 影响 | 应对 |
 |---|---|---|
 | 阶段 0 漏改某个 `include_router` | 本地模式某接口 404 | 新增测试逐条覆盖 19 个路由；本地起服务后逐个 `curl` |
-| 阶段 0 改了前缀，`check.sh` 自检因 `dist` 已存在而走错分支 | 断言 25 条根路径全缺失，自检硬失败 | 导入前固定 `FRONTEND_DIST`（`check.sh:247`），与 `conftest.py:216` 同一手法 |
+| 阶段 0 改了前缀，`check.sh` 自检因 `dist` 已存在而走错分支 | 断言 25 条根路径全缺失，自检硬失败 | 导入前固定 `FRONTEND_DIST`（`check.sh` 的「Checking backend importability」导入段），与 `conftest.py:216` 同一手法 |
 | `DataTable` 引入后 `el-table` 内部滚动与吸顶冲突 | 表头吸顶错位 | 阶段 1 只包不改，先验证 DOM 无变化；真冲突时去掉表格内的 sticky |
 | 窄屏卡片漏关键字段 | 手机上看不到决策依据 | 每批验收强制检查「排序依据字段 + 首要决策字段」 |
 | 双份 DOM 导致 a11y 重复朗读 | 屏幕阅读器体验差 | 用 `matchMedia` 单份 DOM，不做 CSS `display:none` 切换 |
@@ -383,11 +384,11 @@ diff 巨大且难评审。所以 `DataTable` 只做「响应式布局切换」�
 
 | 编号 | 事项 | 选项 | 建议（依据） | 状态 |
 |---|---|---|---|---|
-| D1 | 阶段 0 走哪个方案 | B（VPS 零动作）/ A（更彻底，要重建容器） | **B**——VPS 零动作、578 项后端测试零改动，代价只是自检脚本加一行环境变量 | 建议 B，待确认 |
-| D2 | 阶段 2 批次 C 的 16 张低频表 | 只做横向滚动兜底 / 也要卡片 | **只做兜底**——运维、配置、弹窗在手机上操作概率极低，横向滚动够用，投入产出比最高 | 建议兜底，待确认 |
-| D3 | 阶段 3 与 4 的顺序 | 先出 `.dmg`（1 天见效）/ 先啃手机端 | **先阶段 3**——后端单进程已打通，桌面壳 1 天能闭环；手机端还卡在账本路线 | 建议先 3，待确认 |
-| D4 | 手机端账本模型 | 中心后端 + PWA / 只读镜像 / 导出导入 / 不做 | **路线 4（中心后端 + 手机 PWA）**——零双账本、零同步代码，拉行情与 AI 简报留在服务器 | 建议路线 4，待确认 |
-| D5 | `deploy/vps` 是否快进 | 落后于 `main`（起点 `6f9390e`，进度看 `git log --oneline deploy/vps..main`） | **可随时快进**——落后的提交只碰前端与文档，不触碰生产拓扑，全量测试已过 | 建议快进，待确认 |
+| D1 | 阶段 0 走哪个方案 | B（VPS 零动作）/ A（更彻底，要重建容器） | **B**——VPS 零动作、原有 578 项后端测试零改动，代价只是自检脚本加一行环境变量 | 已定：B，已实施 |
+| D2 | 阶段 2 批次 C 的 16 张低频表 | 只做横向滚动兜底 / 也要卡片 | **只做兜底**——运维、配置、弹窗在手机上操作概率极低，横向滚动够用，投入产出比最高 | 已定：只做兜底 |
+| D3 | 阶段 3 与 4 的顺序 | 先出 `.dmg`（1 天见效）/ 先啃手机端 | **先阶段 3**——后端单进程已打通，桌面壳 1 天能闭环；手机端还卡在账本路线 | 已定：先阶段 3 |
+| D4 | 手机端账本模型 | 中心后端 + PWA / 只读镜像 / 导出导入 / 不做 | **路线 4（中心后端 + 手机 PWA）**——零双账本、零同步代码，拉行情与 AI 简报留在服务器 | 已定：路线 4 |
+| D5 | `deploy/vps` 是否快进 | 落后于 `main`（起点 `6f9390e`，进度看 `git log --oneline deploy/vps..main`） | **可随时快进**——落后的提交只碰前端与文档，不触碰生产拓扑，全量测试已过 | 已定：随阶段 0 提交快进 |
 
 ---
 

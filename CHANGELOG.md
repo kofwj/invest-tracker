@@ -6,6 +6,24 @@
 ---
 
 
+## [Unreleased]
+
+### 修复
+
+- **本地单进程模式下 `/holdings` `/transactions` `/deposits` 返回裸 JSON 而不是页面。** 这三条
+  路径既是前端 history 路由、又是接口路径，接口赢了路由匹配，1.6.0 里「前端 history 路由能直接
+  深链」对它们不成立。
+
+  现在找到 `frontend/dist` 时（也就是 `python backend/main.py` 这条本地路径），接口统一注册在
+  `/api` 下（`API_PREFIX`），非接口路径交给 SPA 兜底；找不到 dist（Docker/VPS、pytest）时前缀为空，
+  **路由注册位置与 1.6.0 逐字一致**，VPS 不需要重建容器。剥 `/api` 的中间件也改成只在生产拓扑挂载。
+
+- `scripts/check.sh` 的路由断言固定跑 VPS 拓扑（`FRONTEND_DIST` 指向不存在的目录），并额外校验
+  `API_PREFIX` 为空。此前自检先构建前端、再导入 `main.py`，构建产物会让路由挪到 `/api` 下。
+
+- 新增 `tests/test_route_prefix.py`（24 项）：12 个页签路径在单进程模式下必须是 `text/html`、
+  三个撞车接口的 `/api/*` 必须是 JSON、生产拓扑下根路径仍是接口、未知 `/api/*` 不回落成首页。
+
 ## [1.6.0] — 2026-10-23 — 本机直接跑：单进程 + 平台数据目录 + AGPL-3.0
 
 此前只能 Docker 起两个容器（前端 nginx + 后端 uvicorn）。这一版让源码克隆下来就能
