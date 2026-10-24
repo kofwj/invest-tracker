@@ -250,15 +250,32 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 ## 6. 备份建议
 
-应用内“数据维护”页面支持创建、下载、恢复和删除备份。
+应用内「数据维护」页面支持创建、下载、恢复和删除备份，产出文件名形如
+`invest_YYYYmmdd_HHMMSS_<label>_<uuid>.db.bak`。
 
-VPS 上还建议加 cron 定时备份。最简单方式是定时调用应用内备份接口：
+**定时备份用 `scripts/backup_daily.sh`，不要直接 curl 应用内接口。** 前者带轮转，后者不带：
 
 ```cron
-15 2 * * * curl -fsS -X POST http://127.0.0.1:8080/api/maintenance/backups >/dev/null
+15 2 * * * /home/kofwj/invest-tracker/scripts/backup_daily.sh >> /home/kofwj/invest-tracker/backups/backup_daily.log 2>&1
 ```
 
-如果使用 cron，请先在 VPS 上手动验证命令可执行。
+脚本默认保留最近 30 份（`BACKUP_RETAIN=14` 之类可调）。轮转匹配的文件名是 `invest_*.db.bak`，
+所以应用内页面里手工创建的备份也一并被轮转，不会两套各涨各的。
+
+直接 `curl -X POST http://127.0.0.1:8080/api/maintenance/backups` 同样能生成备份，
+但该接口只写文件、不删旧文件（`rotate_backups` 只存在于 `scripts/backup_db.py`，后端不调用它），
+份数会一直涨。定时任务不要走这条路。
+
+装好 cron 后先手动跑一次，确认可执行、也确实生成：
+
+```bash
+cd /home/kofwj/invest-tracker
+scripts/backup_daily.sh
+ls -lh backups/ | tail -5
+```
+
+注意手工 `cp` 或 `sqlite3 .backup` 出来的文件（例如部署前的临时备份）不符合 `invest_*.db.bak`
+前缀，**不会被自动清理**，用完请自行删除。
 
 ## 7. 上线前检查清单
 
