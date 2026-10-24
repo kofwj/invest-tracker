@@ -143,7 +143,7 @@ if not SERVE_FRONTEND:
 | Docker / VPS（无 dist） | `/*` | 挂 | 与现在完全一致，零变化 |
 | pytest（`conftest.py` 把 `FRONTEND_DIST` 固定指向不存在的目录） | `/*` | 挂 | **285 处测试零改动** |
 
-方案 B 之所以划算，是因为四件事已经被验证过：
+方案 B 的前提条件逐条验证过：
 
 1. `tests/conftest.py` 早就把 `FRONTEND_DIST` 固定指向不存在目录，正好落在 else 分支，
    285 处打根路径的测试一个都不用改。
@@ -154,12 +154,35 @@ if not SERVE_FRONTEND:
 4. `docker-compose.prod.yml` 的 healthcheck 直连 `http://127.0.0.1:8000/api/health`，不经
    nginx；方案 B 下 Docker 模式仍挂中间件，该检查照常通过。
 
+5. **但这条路会踩到自检脚本**：`scripts/check.sh:160` 会先 `npm --prefix frontend run build` 产出
+   `dist`，第 247 行再导入 `main.py` 断言路由表。届时 `SERVE_FRONTEND=True`，而它
+   `required_routes` 里的 25 条写的是根路径（`/transactions` `/holdings` `/cron/*` 等），不改
+   就会硬失败。改法见下。
+
+#### 自检脚本必须同步改（已核实可行）
+
+`backend/app_paths.py:191-193` 的判定是
+`return explicit if os.path.isdir(explicit) else None`——`FRONTEND_DIST` 显式指向不存在的
+目录时**直接返回 None，不会回落到仓库 `frontend/dist`**。所以只要在导入前设一个不存在的
+目录，`main.py` 就落回「纯 API」分支：
+
+```bash
+# scripts/check.sh 第 247 行那段，原来的 PYTHONPATH=backend "$python_bin" - <<'PY'
+PYTHONPATH=backend FRONTEND_DIST="$tmpdir/no-frontend-dist" "$python_bin" - <<'PY'
+```
+
+这与 `tests/conftest.py:216` 是同一手法，自检断言的仍是 VPS 实际运行的拓扑；本地 `/api`
+拓扑由下面新增的 pytest 用例覆盖。反过来做（把断言的路径改成 `r in routes or f"/api{r}" in
+routes`）也能过，但那是让自检同时接受两种拓扑，等于没验到「VPS 拓扑没变」，不如固定环境变
+量干净。
+
 **改动清单**
 
 | 文件 | 改动 |
 |---|---|
 | `backend/main.py` | `SERVE_FRONTEND` / `API_PREFIX` 判定；19 处 `include_router` 加 `prefix`；中间件改条件挂载 |
 | `tests/test_route_prefix.py`（新增） | monkeypatch `FRONTEND_DIST` 指向临时目录，断言 `/api/holdings` 命中 JSON、`/holdings` 返回 `text/html`、`/api/health` 仍 200 |
+| `scripts/check.sh` | 第 247 行「Checking backend importability」导入前加 `FRONTEND_DIST=…/no-frontend-dist`，使 25 条路由断言对应 VPS 拓扑 |
 | `CHANGELOG.md` | 记一条修复 |
 
 **验收**
@@ -167,6 +190,7 @@ if not SERVE_FRONTEND:
 - 本地起服务，12 个页签路径逐个 `curl -sI` 断言 `content-type: text/html`
 - `/api/holdings` `/api/transactions` `/api/deposits` 断言 `application/json`
 - 后端 578 项测试全绿
+- `bash scripts/check.sh` 全绿——这条最容易漏，它自己会先构建出 `dist`
 - **VPS 无需任何动作**（这是选方案 B 的主要理由）
 
 ### 方案 A（备选，更彻底）
@@ -186,7 +210,7 @@ if not SERVE_FRONTEND:
 diff 巨大且难评审。所以 `DataTable` 只做「响应式布局切换」，桌面端原样透传：
 
 ```vue
-<DataTable :rows="holdings" row-key="code" empty-text="暂无持仓" label="持仓明细">
+<DataTable :rows="holdings" :loading="loading" row-key="code" empty-text="暂无持仓" label="持仓明细">
   <!-- 宽屏直接透传，一行都不用改 -->
   <el-table :data="holdings"> …原样… </el-table>
 
@@ -202,14 +226,30 @@ diff 巨大且难评审。所以 `DataTable` 只做「响应式布局切换」�
 
 「没有卡片就退回现状」是这个设计的关键：迁移可以停在任何一步，未覆盖的表不会变差。
 
-### 两个实现约束
+### 三条实现约束
 
 1. **用 `matchMedia` 切分支，不做双份 DOM。** 双份 DOM 会让窄屏仍然渲染 el-table，
-   屏幕阅读器读两遍，DOM 体积也翻倍。抽 `composables/useMediaQuery.js`，在
-   `typeof window.matchMedia !== 'function'` 时兜底 `false`（当作宽屏）——jsdom 环境因此
-   默认走表格分支，**现有 220 项前端测试不受影响**。
+   屏幕阅读器读两遍，DOM 体积也翻倍。抽 `composables/useMediaQuery.js`，在 `setup` 里
+   **同步**读初始值，不要等 `onMounted`——虽然纯 SPA 没有 SSR，但延后一拍会让手机首屏闪过
+   一帧被截断的桌面表格：
+
+   ```js
+   const isMobile = ref(
+     typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+       ? window.matchMedia('(max-width: 640px)').matches
+       : false,
+   );
+   ```
+
+   `matchMedia` 不存在时兜底 `false`（当作宽屏）——jsdom 因此默认走表格分支，**现有 220 项
+   前端测试不受影响**。
 2. **切卡片点定 640。** `styles.css` 已有 `@media (max-width: 640px)` 的移动端整体块，
    不新增断点。769–900 平板区间保持现在的表格行为。
+3. **`loading` 交给外壳。** 全仓共 **10 处**真实 `v-loading` 绑定（`grep` 命中 12 行，其中 2 行是
+   `BackupOpsTab` 的注释文字），其中 5 处直接挂在 `<el-table>` 上：`AllocationTab:293`、
+   `BackupOpsTab:42`、`DecisionTab:136/179/364`。窄屏 `el-table` 被卸载后，卡片列表会**完全
+   没有加载态**。所以 `DataTable` 接收 `:loading`，把 `v-loading` 挂在外层容器；迁移时同步
+   摘掉这 5 处 el-table 上的那一份，否则宽屏会出现两层遮罩。
 
 ### 这一步只包不改
 
@@ -226,9 +266,9 @@ diff 巨大且难评审。所以 `DataTable` 只做「响应式布局切换」�
 
 | 批次 | 页面 | 表 / 列 | 说明 |
 |---|---|---|---|
-| A | `HoldingsTab`、`TransactionsTab`、`DepositsTab` | 5 / 42 | 日频操作，投入产出比最高 |
+| A | `HoldingsTab`、`TransactionsTab`、`DepositsTab`、`OverviewTab` | 6 / 47 | 日频操作 + 首页第一屏 |
 | B | `PerformanceTab`、`CashTab`、`AllocationTab`、`BrokerReconcileTab` | 15 / 95 | 分析类，卡片结构统一为「名称 + 核心数值 + 涨跌」三行 |
-| C | `DecisionTab`、`NotifyOpsTab`、`AiOpsTab`、`BackupOpsTab`、`OverviewTab`、`SnapshotPanel`、`AppDialogs` | 17 / 98 | 低频 / 运维 / 弹窗，多数接受横向滚动兜底 |
+| C | `DecisionTab`、`NotifyOpsTab`、`AiOpsTab`、`BackupOpsTab`、`SnapshotPanel`、`AppDialogs` | 16 / 93 | 低频 / 运维 / 弹窗，多数接受横向滚动兜底 |
 
 **每批验收标准（三条都要过）**
 
@@ -236,6 +276,14 @@ diff 巨大且难评审。所以 `DataTable` 只做「响应式布局切换」�
 2. 卡片必须覆盖该表的**排序依据字段与首要决策字段**（例如持仓必须有市值和浮盈，不能
    只放名称和代码）
 3. 新增 `<页面>-cards.test.js` 断言窄屏渲染 N 张卡片、关键文案存在；现有测试零回归
+
+**两个不能忘的交互**
+
+- `HoldingsTab.vue:45` 的 `@row-click="showTransactions"` 是手机端查看该持仓历史交易与 K 线的
+  唯一入口。卡片必须自己绑 `@click="showTransactions(row)"`，否则窄屏下这个功能直接消失。
+- 全仓 3 处 `type="selection"`（`AllocationTab:381`、`BrokerReconcileTab:138`、
+  `AppDialogs:306`）**明确不做卡片**，走横向滚动兜底。为极低频的移动端批量操作去封装卡片
+  勾选通信机制不划算。
 
 **已知细节**：`TransactionsTab` 的 `max-height="500"` 在卡片模式下没有意义；卡片高度交给
 既有分页控制，不引入新的「加载更多」交互。
@@ -270,13 +318,21 @@ diff 巨大且难评审。所以 `DataTable` 只做「响应式布局切换」�
 ### 更要紧的是产品决策
 
 手机端独立 SQLite 会产生**双账本**：手机上记了一笔，桌面上看不到；两边都改了同一笔，
-没有合并规则。可选路线只有三条：
+没有合并规则。可选路线：
 
 1. 手机只读（连同一后端，适合自建服务器用户）
 2. 手机为主机，桌面通过导出 / 导入同步（需要冲突处理规则）
 3. 不做手机端
 
-**这个问题不定，阶段 4 的代码写多少都是白搭。**
+4. **PWA / 响应式 Web 直连中心后端**（推荐）——手机不跑 Python，用浏览器把改造好的卡片界面
+   「添加到主屏幕」，数据始终只有后端那一份。手机离线跑 Python + akshare 在能耗和后台任务
+   （定时拉行情、晚间 AI 简报）上本来就不可行，这条路把它们留在服务器上。
+
+   前提：PWA 可安装要求 HTTPS（`localhost` 除外）。局域网 IP 直连装不上，需要 Tailscale、
+   Caddy 反代或 VPS；离线缓存也只能做到「壳与静态资源可离线，数据必须联网」。
+
+路线 4 把「单机 APK」降级为实验性 PoC：`docs/android-feasibility.md` 的成果依然有效，但不再是
+交付前置条件。**账本路线不定，阶段 4 的代码写多少都是白搭。**
 
 ---
 
@@ -312,6 +368,7 @@ diff 巨大且难评审。所以 `DataTable` 只做「响应式布局切换」�
 | 风险 | 影响 | 应对 |
 |---|---|---|
 | 阶段 0 漏改某个 `include_router` | 本地模式某接口 404 | 新增测试逐条覆盖 19 个路由；本地起服务后逐个 `curl` |
+| 阶段 0 改了前缀，`check.sh` 自检因 `dist` 已存在而走错分支 | 断言 25 条根路径全缺失，自检硬失败 | 导入前固定 `FRONTEND_DIST`（`check.sh:247`），与 `conftest.py:216` 同一手法 |
 | `DataTable` 引入后 `el-table` 内部滚动与吸顶冲突 | 表头吸顶错位 | 阶段 1 只包不改，先验证 DOM 无变化；真冲突时去掉表格内的 sticky |
 | 窄屏卡片漏关键字段 | 手机上看不到决策依据 | 每批验收强制检查「排序依据字段 + 首要决策字段」 |
 | 双份 DOM 导致 a11y 重复朗读 | 屏幕阅读器体验差 | 用 `matchMedia` 单份 DOM，不做 CSS `display:none` 切换 |
@@ -324,13 +381,13 @@ diff 巨大且难评审。所以 `DataTable` 只做「响应式布局切换」�
 
 ## 待拍板事项
 
-| 编号 | 事项 | 选项 | 当前状态 |
-|---|---|---|---|
-| D1 | 阶段 0 走哪个方案 | B（VPS 零动作）/ A（更彻底，要重建容器） | **未定** |
-| D2 | 阶段 2 批次 C 的 17 张低频表 | 只做横向滚动兜底 / 也要卡片 | **未定** |
-| D3 | 阶段 3 与 4 的顺序 | 先出 `.dmg`（1 天见效）/ 先啃手机端 | **未定** |
-| D4 | 手机端账本模型 | 只读镜像 / 导出导入 / 不做 | **未定** |
-| D5 | `deploy/vps` 是否快进 | 现已落后 3 个提交（`6f9390e`） | **未定** |
+| 编号 | 事项 | 选项 | 建议（依据） | 状态 |
+|---|---|---|---|---|
+| D1 | 阶段 0 走哪个方案 | B（VPS 零动作）/ A（更彻底，要重建容器） | **B**——VPS 零动作、578 项后端测试零改动，代价只是自检脚本加一行环境变量 | 建议 B，待确认 |
+| D2 | 阶段 2 批次 C 的 16 张低频表 | 只做横向滚动兜底 / 也要卡片 | **只做兜底**——运维、配置、弹窗在手机上操作概率极低，横向滚动够用，投入产出比最高 | 建议兜底，待确认 |
+| D3 | 阶段 3 与 4 的顺序 | 先出 `.dmg`（1 天见效）/ 先啃手机端 | **先阶段 3**——后端单进程已打通，桌面壳 1 天能闭环；手机端还卡在账本路线 | 建议先 3，待确认 |
+| D4 | 手机端账本模型 | 中心后端 + PWA / 只读镜像 / 导出导入 / 不做 | **路线 4（中心后端 + 手机 PWA）**——零双账本、零同步代码，拉行情与 AI 简报留在服务器 | 建议路线 4，待确认 |
+| D5 | `deploy/vps` 是否快进 | 现已落后 4 个提交（`6f9390e..a2510fb`） | **可随时快进**——这 4 个提交不触碰生产拓扑，全量测试已过 | 建议快进，待确认 |
 
 ---
 
