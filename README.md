@@ -211,21 +211,23 @@ GitHub Actions（`main` / `deploy/vps` / PR）：
 
 ## 发版
 
-版本号有**三处**必须一致：`backend/version.py` 是单一来源，`frontend/public/sw.js` 的
-`CACHE_NAME` 与 `src-tauri/tauri.conf.json` 的 `version` 跟着它走。少改一处 CI 就红——
-`frontend/tests/pwa-static.test.js` 会把 SW 缓存名和 `APP_VERSION` 逐字比对。
+版本号有**四处**必须一致：`backend/version.py` 是单一来源，`frontend/public/sw.js` 的
+`CACHE_NAME`、`src-tauri/tauri.conf.json` 的 `version`、`src-tauri/Cargo.toml` 的 `version`
+跟着它走。前两处被 `frontend/tests/pwa-static.test.js` 逐字比对，少改就红；Cargo 那行没有
+测试盯着，但历史上每次发版都同步，漏了构建日志里还是旧号，翻日志时会以为打错了包。
 
 | 位置 | 改什么 |
 |------|--------|
 | `backend/version.py` | `APP_VERSION = "1.7.3"` |
 | `frontend/public/sw.js` | `const CACHE_NAME = 'invest-tracker-v1.7.3'` |
 | `src-tauri/tauri.conf.json` | `"version": "1.7.3"`（桌面安装包版本） |
+| `src-tauri/Cargo.toml` | `version = "1.7.3"`（crate 版本，构建日志里会打出来） |
 
 功能提交**不**顺手 bump 版本：发版是单独一个 `chore(release)` 提交，否则「哪条改动属于哪个
 版本」会跟着开发节奏漂。
 
 ```bash
-# 1) 三处版本号 + CHANGELOG 的「未发布」段改成正式版本号，单独提交
+# 1) 四处版本号 + CHANGELOG 的「未发布」段改成正式版本号，单独提交
 git commit -am "chore(release): 1.7.3"
 git tag -a v1.7.3 -m "v1.7.3"
 
