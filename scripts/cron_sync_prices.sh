@@ -191,6 +191,28 @@ run_via_curl() {
   run_api_post "/sync-prices"
 }
 
+# 内置节假日表只覆盖到固定年份，过期后交易日判断会静默失真。
+# 把日历覆盖状态写进 cron 日志，避免过期几个月没人发现。
+note_calendar_status() {
+  local payload="${1:-}"
+  [ -n "$payload" ] || return 0
+  local note
+  note="$(printf '%s' "$payload" | python3 -c '
+import json, sys
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    raise SystemExit(0)
+if not (data.get("calendar_stale") or data.get("calendar_expiring")):
+    raise SystemExit(0)
+sys.stdout.write(str(data.get("calendar_note") or "trading calendar needs updating"))
+' 2>/dev/null)" || return 0
+  if [ -n "$note" ]; then
+    echo "[$(ts)] WARN calendar: $note" >&2
+  fi
+  return 0
+}
+
 # Returns 0 if trading day (or force), 1 if should skip snapshot
 should_write_snapshot() {
   if [ "$FORCE_SNAPSHOT" = "1" ]; then
@@ -200,6 +222,7 @@ should_write_snapshot() {
     local out
     if out="$(cron_http GET /cron/trading-day)"; then
       if echo "$out" | python3 -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get("is_trading_day") else 1)' 2>/dev/null; then
+        note_calendar_status "$out"
         return 0
       else
         echo "[$(ts)] skip snapshot: non-trading day ($out)"
@@ -224,6 +247,7 @@ print(json.dumps(st, ensure_ascii=False))
 PY
 )"; then
       if echo "$out" | python3 -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get("is_trading_day") else 1)' 2>/dev/null; then
+        note_calendar_status "$out"
         return 0
       else
         echo "[$(ts)] skip snapshot: non-trading day ($out)"
@@ -249,6 +273,7 @@ with urllib.request.urlopen(urllib.request.Request(base + sys.argv[1], headers=h
 PY
 )"; then
     if echo "$SNAP_DAY" | python3 -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if d.get("is_trading_day") else 1)' 2>/dev/null; then
+      note_calendar_status "$SNAP_DAY"
       return 0
     fi
     echo "[$(ts)] skip snapshot: non-trading day ($SNAP_DAY)"

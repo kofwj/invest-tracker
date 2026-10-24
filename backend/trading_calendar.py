@@ -111,6 +111,61 @@ def _local_today() -> date:
     return date.today()
 
 
+def calendar_coverage_years() -> list:
+    """内置节假日表覆盖的年份，升序。"""
+    return sorted({int(day[:4]) for day in BUILTIN_CLOSED_DAYS})
+
+
+def calendar_staleness(value: Union[str, date, datetime, None] = None) -> dict:
+    """内置节假日表还够用吗？给 health / cron 用的自检。
+
+    背景：`BUILTIN_CLOSED_DAYS` 是硬编码的，越过最后一年之后不会报错，只会
+    **静默退化**——春节、国庆、劳动节都会判成交易日，cron 于是在假期照常跑快照，
+    拿着一份没更新的价格写进当天，净值曲线就此多出几个「和昨天一模一样」的点。
+    这里把「还能用几年」显式化，让过期这件事至少有人能看见。
+
+    - `stale`：已经过期，判定结果就是错的
+    - `expiring`：今年是表里的最后一年，明年就错（该补了）
+    """
+    years = calendar_coverage_years()
+    day = _to_date(value) or _local_today()
+    if not years:
+        return {
+            "covered_years": [],
+            "last_covered_year": None,
+            "checked_year": day.year,
+            "stale": True,
+            "expiring": False,
+            "years_remaining": None,
+            "message": "内置节假日表为空：所有工作日都会被当成交易日",
+        }
+    last = years[-1]
+    stale = day.year > last
+    expiring = day.year == last
+    if stale:
+        message = (
+            f"内置节假日表只覆盖到 {last} 年，当前 {day.year} 年已过期："
+            "节假日会被当成交易日，cron 会在休市日生成快照。"
+            "请更新 BUILTIN_CLOSED_DAYS，或用设置项 market_extra_closed_dates 补日期"
+        )
+    elif expiring:
+        message = (
+            f"内置节假日表覆盖到 {last} 年，今年是最后一年；"
+            "跨年后节假日会被当成交易日，届时需要补表或用 market_extra_closed_dates"
+        )
+    else:
+        message = ""
+    return {
+        "covered_years": years,
+        "last_covered_year": last,
+        "checked_year": day.year,
+        "stale": stale,
+        "expiring": expiring,
+        "years_remaining": last - day.year,
+        "message": message,
+    }
+
+
 def is_a_share_trading_day(
     value: Union[str, date, datetime, None] = None,
     *,
@@ -149,8 +204,14 @@ def trading_day_status(
         reason = "weekend"
     elif iso in closed_day_set(conn):
         reason = "holiday"
+    # 带上日历自检结果：cron 脚本每天调这个接口，日历一过期就能在日志里看到，
+    # 不用等有人翻 health 才发现节假日被当成了交易日。
+    coverage = calendar_staleness(d)
     return {
         "date": iso,
         "is_trading_day": trading,
         "reason": reason if not trading else "trading",
+        "calendar_stale": coverage["stale"],
+        "calendar_expiring": coverage["expiring"],
+        "calendar_note": coverage["message"],
     }

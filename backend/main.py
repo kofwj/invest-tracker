@@ -43,6 +43,7 @@ try:
     from .routers_snapshots import router as snapshots_router
     from .routers_transactions import router as transactions_router
     from .schema import initialize_database, run_startup_migrations  # noqa: F401  (initialize_database is loaded by tests as module attr)
+    from .trading_calendar import calendar_staleness
 except ImportError:  # Allows tests to load this file directly via importlib.
     from auth import require_auth, require_cron_token, router as auth_router
     from cash import set_setting  # noqa: F401  (module-level API used by tests)
@@ -74,6 +75,7 @@ except ImportError:  # Allows tests to load this file directly via importlib.
     from routers_snapshots import router as snapshots_router
     from routers_transactions import router as transactions_router
     from schema import initialize_database, run_startup_migrations  # noqa: F401  (initialize_database is loaded by tests as module attr)
+    from trading_calendar import calendar_staleness
 
 try:
     from .app_paths import find_frontend_dist, migrate_on_first_run
@@ -87,6 +89,10 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     run_startup_migrations()
+    # 硬编码的节假日表过一年就静默失效，启动时说一声，别等着发现快照重复。
+    _calendar = calendar_staleness()
+    if _calendar["message"]:
+        logger.warning(_calendar["message"])
     yield
 
 
@@ -182,6 +188,9 @@ def health_payload():
         "database": db_status,
         "timezone": str(APP_CONFIG.local_timezone),
         "version": APP_VERSION,
+        # 内置节假日表覆盖到哪年、有没有过期。过期后节假日会被判成交易日，
+        # 这里让 /health 一眼能看出来，不用等净值曲线出现重复点才发现。
+        "trading_calendar": calendar_staleness(),
     }
 
 
