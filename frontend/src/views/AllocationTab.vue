@@ -290,6 +290,7 @@
                   <div class="hint">只读建议；可生成草稿，确认后才入账</div>
                 </div>
               </template>
+              <DataTable :rows="actions" row-key="code" label="再平衡建议">
               <el-table :data="actions" stripe size="small" empty-text="暂无建议" v-loading="disciplineLoading" aria-label="再平衡建议">
                 <el-table-column label="方向" width="72">
                   <template #default="s">{{ s.row.side === 'sell' ? '卖出' : '买入' }}</template>
@@ -301,6 +302,7 @@
                 </el-table-column>
                 <el-table-column prop="reason" label="原因" min-width="140" show-overflow-tooltip />
               </el-table>
+              </DataTable>
             </el-card>
           </section>
         </div>
@@ -529,6 +531,7 @@
 
 <script setup>
 import PageShell from '../components/PageShell.vue';
+import DataTable from '../components/DataTable.vue';
 import { formatPercent } from '../utils/index.js';
 import { computed, onMounted, watch, nextTick, ref } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';

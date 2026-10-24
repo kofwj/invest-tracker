@@ -202,6 +202,8 @@ if command -v node >/dev/null 2>&1; then
   node --check frontend/src/modules/holdingCorrections.js
   node --check frontend/src/stores/auth.js
   node --check frontend/src/composables/domainHelpers.js
+  node --check frontend/src/modules/dataTable.js
+  node --check frontend/src/composables/useMediaQuery.js
 else
   echo "node not found; skipping frontend JavaScript syntax check"
 fi
