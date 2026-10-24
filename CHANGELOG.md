@@ -1,11 +1,11 @@
 # 更新日志
 
 格式大致遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)。  
-版本号单一来源 `backend/version.py`；发布流程：改那里 → 本文件记版本 → `git tag vX.Y.Z`。生产部署以分支 `deploy/vps` 为准。
+版本号单一来源 `backend/version.py`；发布流程：改这里 → 同步 `frontend/public/sw.js` 的 `CACHE_NAME` 与 `src-tauri/tauri.conf.json` 的 `version` → 本文件记版本 → `git tag vX.Y.Z` → `gh release create`。生产部署以分支 `deploy/vps` 为准。
 
 ---
 
-## [未发布] — 待发版
+## [1.7.3] — 2026-10-24 — 手机端路线改判、总资产校准平差、流水线心跳
 
 ### 变更：手机端路线定稿为「中心后端 + PWA 终端」
 
@@ -65,7 +65,7 @@ Android 不会让你常驻跑后台任务（这工具的核心增量全在后台
   状态分级/接口往返）与 `tests/test_heartbeat.py`（阈值分级、`never` 也算逾期、只喊缺的那条、
   `notify=False` 只算不发、ping 未配置与失败不炸、`/cron/heartbeat` 鉴权、`/maintenance/status`
   透传），并把 `heartbeat` 加入 `tests/conftest.py` 的模块缓存清理列表。
-- 前端 243 → **247**（31 文件全绿）。新增 `frontend/tests/calibration-hint.test.js`，覆盖 `CalibrationHint.vue` 的空状态首屏保护、差额平差提示、输入弹窗与提交校准接口联动，以及 `BackupOpsTab.vue` 的 Q0 流水线心跳卡片与 dead-man 标记。`template-bindings.test.js`、`a11y-static.test.js` 与 `overview-sections.test.js` 实测全部通过，`vite build` 零 error 编译通过。
+- 前端 243 → **249**（31 文件全绿）。新增 `frontend/tests/calibration-hint.test.js`，覆盖 `CalibrationHint.vue` 的空状态首屏保护、差额平差提示、输入弹窗与提交校准接口联动，以及 `BackupOpsTab.vue` 的 Q0 流水线心跳卡片与 dead-man 标记；`overview-sections.test.js` 另补两条走真实渲染路径的用例（资产段里「N 天 / 上次差额 / 平差金额」三样都在，且 `dashboard` 不带 `calibration` 时整块不渲染）。`template-bindings.test.js`、`a11y-static.test.js` 实测全部通过，`vite build` 零 error 编译通过。
 
 ## [1.7.2] — 2026-10-24 — 备份凭据收权限、节假日表过期不再静默
 

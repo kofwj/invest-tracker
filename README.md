@@ -39,7 +39,7 @@
 | | 结构与目标 | `/allocation` | 看现状 / 设目标 / 处理偏离（目标尺子、配置诊断、纪律与再平衡草稿） |
 | 设置 | 消息推送 | `/ops/notify` | 通道密钥（库优先于 `.env`）、事件路由、试推 |
 | | 证券账户 | `/cash` | 多账户费率、现金校准、银证流水、**银证勾稽** |
-| | 数据备份 | `/ops/backup` | 备份 / 下载 / 恢复 / 上传 |
+| | 数据备份 | `/ops/backup` | 备份 / 下载 / 恢复 / 上传；顶部流水线心跳（哪条多久没成功） |
 
 旧地址仍跳转：`/market` → 今天该看；`/discipline` → 结构与目标；`/maintenance` → 消息推送；
 `/snapshots` → 收益与快照（资产快照已并入）；`/klines` → 持仓明细（K 线已降级为点标的名打开的弹窗）。
@@ -206,6 +206,40 @@ GitHub Actions（`main` / `deploy/vps` / PR）：
 
 - 后端：ruff `F,E9` + pytest
 - 前端：vitest + `npm run build` + `npm audit --omit=dev`
+
+---
+
+## 发版
+
+版本号有**三处**必须一致：`backend/version.py` 是单一来源，`frontend/public/sw.js` 的
+`CACHE_NAME` 与 `src-tauri/tauri.conf.json` 的 `version` 跟着它走。少改一处 CI 就红——
+`frontend/tests/pwa-static.test.js` 会把 SW 缓存名和 `APP_VERSION` 逐字比对。
+
+| 位置 | 改什么 |
+|------|--------|
+| `backend/version.py` | `APP_VERSION = "1.7.3"` |
+| `frontend/public/sw.js` | `const CACHE_NAME = 'invest-tracker-v1.7.3'` |
+| `src-tauri/tauri.conf.json` | `"version": "1.7.3"`（桌面安装包版本） |
+
+功能提交**不**顺手 bump 版本：发版是单独一个 `chore(release)` 提交，否则「哪条改动属于哪个
+版本」会跟着开发节奏漂。
+
+```bash
+# 1) 三处版本号 + CHANGELOG 的「未发布」段改成正式版本号，单独提交
+git commit -am "chore(release): 1.7.3"
+git tag -a v1.7.3 -m "v1.7.3"
+
+# 2) 推源码与标签，再建 GitHub Release（正文直接取 CHANGELOG 里这一段）
+git push origin main && git push origin v1.7.3
+gh release create v1.7.3 --title "v1.7.3 — 一句话标题" --notes-file /tmp/notes.md
+
+# 3) 生产分支快进，VPS 才跟得到
+git push origin main:deploy/vps
+```
+
+桌面包：`bash scripts/build-desktop.sh`（产物在 `src-tauri/target/release/bundle/`）；要挂到
+Release 上就 `gh release upload v1.7.3 <dmg 路径>`。DMG 是通用构建产物、不入库，所以每次发版
+得重新打一个，否则附件永远停在旧版本。
 
 ---
 
