@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # 检查失败时至少告诉人家是哪一行挂的：原先 set -e 直接退出，零提示。
-trap 'status=$?; echo "" >&2; echo "!! 检查失败：scripts/check.sh 第 $LINENO 行（exit $status）" >&2' ERR
+trap 'status=$?; echo "" >&2; echo "!! 检查失败：scripts/check.sh 第 $LINENO 行（exit ${status}）" >&2' ERR
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
