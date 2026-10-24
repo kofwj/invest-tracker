@@ -20,6 +20,7 @@ from app_paths import (
     describe,
     ensure_directories,
     find_frontend_dist,
+    harden_private_file,
     migrate_legacy_into,
     migrate_on_first_run,
     platform_data_root,
@@ -288,3 +289,36 @@ def test_pure_api_mode_has_no_spa_fallback(client):
 
 
 pytestmark = pytest.mark.filterwarnings("ignore::DeprecationWarning")
+
+
+def test_harden_private_file_locks_down_mode(tmp_path):
+    """账本库和备份里有明文凭据，落盘后不能跟着 umask 走 0644。"""
+    target = tmp_path / "secret.db"
+    target.write_text("data", encoding="utf-8")
+    os.chmod(target, 0o644)
+
+    assert harden_private_file(target) is True
+    assert target.stat().st_mode & 0o777 == 0o600
+
+
+def test_harden_private_file_swallows_chmod_failure(tmp_path, monkeypatch):
+    """Windows 上 chmod 只影响只读位：失败必须吞掉，不能把备份流程带崩。"""
+    target = tmp_path / "secret.db"
+    target.write_text("data", encoding="utf-8")
+
+    def _unsupported(*args, **kwargs):
+        raise OSError("chmod not supported on this filesystem")
+
+    monkeypatch.setattr("app_paths.os.chmod", _unsupported)
+
+    assert harden_private_file(target) is False
+
+
+def test_harden_private_file_accepts_str_path(tmp_path):
+    """调用点传的是 str（DB_PATH）和 Path（backup_path）两种，都要吃得下。"""
+    target = tmp_path / "secret.db"
+    target.write_text("data", encoding="utf-8")
+    os.chmod(target, 0o644)
+
+    assert harden_private_file(str(target)) is True
+    assert target.stat().st_mode & 0o777 == 0o600

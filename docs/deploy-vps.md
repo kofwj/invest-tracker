@@ -277,6 +277,20 @@ ls -lh backups/ | tail -5
 注意手工 `cp` 或 `sqlite3 .backup` 出来的文件（例如部署前的临时备份）不符合 `invest_*.db.bak`
 前缀，**不会被自动清理**，用完请自行删除。
 
+**备份里带明文凭据**：库里的 `ai_api_key` 和 `notify_channel_credentials`
+（飞书 `app_secret`、钉钉加签 secret、Telegram bot token、各通道 webhook）都是明文，
+备份是整库副本，所以谁拿到 `.db.bak` 谁就拿到这些密钥。落盘都会收成 `0600`：
+`scripts/backup_db.py` 先按 `0600` 建文件再写，应用内备份是完整性检查通过后立刻
+收紧；属主是跑服务的 uid（容器里是 999），同机其他用户读不到内容。但搬走之后管不到
+——别把 `backups/` 放进网盘同步目录，也别 rsync 到公网机器。确实要外传时先清空：
+
+```bash
+sqlite3 backups/xxx.db.bak "UPDATE settings SET value='' WHERE key IN ('ai_api_key','notify_channel_credentials')"
+```
+
+另外，用 `chown -R` 收拾仓库权限时**不要连 `data/`、`backups/` 一起改属主**——
+容器内后端以 uid 999 写这两个目录，改了会让它写不了账本。
+
 ## 7. 上线前检查清单
 
 - [ ] `.env` 已创建且没有提交到 Git

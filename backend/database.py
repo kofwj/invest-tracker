@@ -7,9 +7,9 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 try:
-    from .app_paths import ensure_directories, resolve_data_paths
+    from .app_paths import ensure_directories, harden_private_file, resolve_data_paths
 except ImportError:  # 扁平导入（uvicorn main:app 时 backend 就是顶层目录）
-    from app_paths import ensure_directories, resolve_data_paths
+    from app_paths import ensure_directories, harden_private_file, resolve_data_paths
 
 
 @dataclass(frozen=True)
@@ -61,8 +61,18 @@ def configure_sqlite_connection(conn: sqlite3.Connection) -> sqlite3.Connection:
     return conn
 
 
+_db_file_perm_fixed = False
+
+
 def open_db(*, row_factory=None):
+    global _db_file_perm_fixed
     conn = sqlite3.connect(DB_PATH)
+    if not _db_file_perm_fixed:
+        # 账本库里有明文凭据（AI API key、推送通道密钥）：sqlite3 建出来的文件
+        # 权限跟着 umask 走、默认 0644，同机任何用户都能读。首次打开时收成
+        # 0600，之后不再重复 chmod（每请求一次 syscall 没必要）。
+        harden_private_file(DB_PATH)
+        _db_file_perm_fixed = True
     configure_sqlite_connection(conn)
     if row_factory is None:
         row_factory = sqlite3.Row

@@ -97,3 +97,44 @@ def test_backup_db_with_retain_rotates(backup_mod, tmp_path):
     # newest 1 kept, 2 old rotated away
     assert remaining == [target.name]
     assert backup_mod._is_backup_file(target.name)
+
+
+def _make_source_db(tmp_path):
+    import sqlite3
+
+    db = tmp_path / "data" / "invest.db"
+    db.parent.mkdir()
+    conn = sqlite3.connect(str(db))
+    conn.execute("CREATE TABLE t (x INTEGER)")
+    conn.commit()
+    conn.close()
+    return db
+
+
+def test_backup_db_writes_owner_only_file(backup_mod, tmp_path):
+    """备份是整库副本，里面有明文凭据：必须是 0600，不能跟着 umask 走。"""
+    db = _make_source_db(tmp_path)
+    b = tmp_path / "backups"
+    b.mkdir()
+
+    target = backup_mod.backup_db(db, b)
+
+    assert target.exists()
+    assert target.stat().st_mode & 0o777 == 0o600
+
+
+def test_backup_db_permission_does_not_follow_umask(backup_mod, tmp_path):
+    """umask 放宽到 0 也不能让备份变成 0666 —— 默认 touch 就会。"""
+    import os
+
+    db = _make_source_db(tmp_path)
+    b = tmp_path / "backups"
+    b.mkdir()
+
+    previous = os.umask(0o000)
+    try:
+        target = backup_mod.backup_db(db, b)
+    finally:
+        os.umask(previous)
+
+    assert target.stat().st_mode & 0o777 == 0o600

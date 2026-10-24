@@ -295,6 +295,18 @@ python3 scripts/restore_db.py backups/你的备份.db
 
 不想让持仓金额离开本机，就别开 `AI_ENABLED`；另外两处只发代码、或只发你自己配的目标地址。
 
+### 备份里有明文凭据
+
+`settings` 表里存着明文密钥：`ai_api_key`，以及 `notify_channel_credentials`
+里的飞书 `app_secret`、钉钉加签 secret、Telegram bot token、各通道 webhook 地址。
+**备份是整库副本，谁拿到 `.db.bak` 谁就拿到了这些密钥。**
+
+程序落盘时会把账本库和备份收成 `0600`（仅属主可读写），但搬走之后管不到：
+
+- 备份同步到网盘、塞进 Git、发给别人 = 交出凭据；要外传就先清空这几项
+- 换机恢复备份后，去「设置 → 消息推送 / AI」核对密钥是否还有效
+- 提 issue 想附样本库时，用 `sqlite3 库文件 "UPDATE settings SET value='' WHERE key IN ('ai_api_key','notify_channel_credentials')"` 再打包
+
 ---
 
 ## 仓库结构

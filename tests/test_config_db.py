@@ -120,3 +120,16 @@ def test_database_initialization_migrates_missing_transaction_account(app_module
     assert 'category' in cols
     assert 'account' in cols
     assert row['account'] == '华泰证券'
+
+
+def test_database_file_is_owner_only(app_module, client):
+    """账本库里存着明文凭据（AI API key、推送通道 secret），权限必须是 0600。
+
+    sqlite3 建出来的文件权限跟着 umask 走、默认 0644 —— 同机任何用户都能读。
+    open_db() 首次打开时会收成 0600，这条测试盯着那段逻辑别被删掉。
+    """
+    import os
+
+    path = str(app_module.DB_PATH)
+    assert os.path.exists(path)
+    assert os.stat(path).st_mode & 0o777 == 0o600

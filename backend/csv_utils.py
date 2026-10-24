@@ -9,8 +9,10 @@ from fastapi import HTTPException
 from fastapi.responses import Response
 
 try:
+    from .app_paths import harden_private_file
     from .database import BACKUP_DIR, LOCAL_TZ, db_session
 except ImportError:
+    from app_paths import harden_private_file
     from database import BACKUP_DIR, LOCAL_TZ, db_session
 
 
@@ -162,7 +164,11 @@ def _safe_backup_label(label: str):
 
 
 def create_safety_backup(label: str):
-    """Create an integrity-checked SQLite backup before risky data mutations."""
+    """Create an integrity-checked SQLite backup before risky data mutations.
+
+    备份是整库副本，里面带着明文凭据（AI API key、推送通道密钥），所以落盘
+    后立刻收成 0600 —— 默认 umask 给的 0644 会让同机任何用户读到这些值。
+    """
     backup_dir = BACKUP_DIR
     os.makedirs(backup_dir, exist_ok=True)
     base_ts = datetime.now(LOCAL_TZ).strftime("%Y%m%d_%H%M%S_%f")
@@ -173,6 +179,7 @@ def create_safety_backup(label: str):
         ok = dst.execute("PRAGMA integrity_check").fetchone()[0]
     if ok != "ok":
         raise HTTPException(status_code=500, detail=f"操作前备份完整性检查失败：{ok}")
+    harden_private_file(backup_path)
     return backup_path
 
 

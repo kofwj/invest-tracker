@@ -25,7 +25,7 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Mapping, Optional
+from typing import Mapping, Optional, Union
 
 APP_DIR_NAME = "InvestTracker"
 DB_FILENAME = "invest.db"
@@ -96,6 +96,24 @@ def _copy_sqlite(src: Path, dst: Path) -> None:
     finally:
         src_conn.close()
     os.replace(tmp, dst)
+
+
+def harden_private_file(path: Union[str, Path], *, mode: int = 0o600) -> bool:
+    """把落盘文件收紧到仅属主可读写；返回是否真的改过权限。
+
+    为什么要做：账本库和备份里存着明文凭据（`ai_api_key`、飞书 app_secret、
+    钉钉加签 secret、Telegram bot token、各 webhook），而 `sqlite3.connect()`
+    建出来的文件权限跟着 umask 走，默认 0644 —— 同机任何用户都能读，备份
+    一旦被同步到网盘/发出去，凭据就跟着出去了。这里只收权限、不碰内容。
+
+    Windows 上 `chmod` 只影响只读位，失败直接吞掉：那是权限模型差异，
+    不该让备份/建库流程挂掉。
+    """
+    try:
+        os.chmod(str(path), mode)
+        return True
+    except OSError:
+        return False
 
 
 def _park_legacy(legacy: Path, stamp: Optional[str] = None) -> None:

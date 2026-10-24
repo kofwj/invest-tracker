@@ -252,6 +252,8 @@ async def restore_uploaded_backup(file: UploadFile = File(...)):
     BACKUP_PATH.mkdir(parents=True, exist_ok=True)
     ts = datetime.now(LOCAL_TZ).strftime("%Y%m%d_%H%M%S")
     upload_path = BACKUP_PATH / f"uploaded_{ts}_{original_name}"
+    # 上传的备份同样带明文凭据：先用 0600 建出来再写，避免写完才收紧的窗口期。
+    upload_path.touch(mode=0o600, exist_ok=True)
 
     size = 0
     try:

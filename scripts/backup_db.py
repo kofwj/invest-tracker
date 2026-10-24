@@ -65,6 +65,11 @@ def backup_db(source: Path, backup_dir: Path, label: str | None = None, retain: 
         safe_label = f"_{safe}" if safe else ""
     target = backup_dir / f"invest_{ts}{safe_label}.db.bak"
 
+    # 备份是整库副本，里面有明文凭据（AI API key、推送通道密钥）：先按 0600
+    # 建出来再交给 SQLite 写。默认 umask 的 0644 会让同机其他用户读到这些值，
+    # 备份一旦被同步到网盘或发给别人，凭据就跟着出去了。
+    target.touch(mode=0o600, exist_ok=True)
+
     # SQLite backup API: consistent backup even if DB is readable/live.
     with sqlite3.connect(str(source)) as src, sqlite3.connect(str(target)) as dst:
         src.backup(dst)
