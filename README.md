@@ -216,12 +216,17 @@ GitHub Actions（`main` / `deploy/vps` / PR）：
 跟着它走。前两处被 `frontend/tests/pwa-static.test.js` 逐字比对，少改就红；Cargo 那行没有
 测试盯着，但历史上每次发版都同步，漏了构建日志里还是旧号，翻日志时会以为打错了包。
 
+注意 `Cargo.lock`：CI 跑的是 `cargo check --locked`，改了 `Cargo.toml` 不改 lock 会直接报
+*cannot update the lock file because `--locked` was passed*。把 lock 里 `invest-tracker` 那条
+的 `version` 手工改掉即可（`cargo check --locked` 本地跑一遍就能确认），不用整库 `cargo update`。
+
 | 位置 | 改什么 |
 |------|--------|
 | `backend/version.py` | `APP_VERSION = "1.7.3"` |
 | `frontend/public/sw.js` | `const CACHE_NAME = 'invest-tracker-v1.7.3'` |
 | `src-tauri/tauri.conf.json` | `"version": "1.7.3"`（桌面安装包版本） |
 | `src-tauri/Cargo.toml` | `version = "1.7.3"`（crate 版本，构建日志里会打出来） |
+| `src-tauri/Cargo.lock` | `name = "invest-tracker"` 那条下面的 `version` 也要跟着改 |
 
 功能提交**不**顺手 bump 版本：发版是单独一个 `chore(release)` 提交，否则「哪条改动属于哪个
 版本」会跟着开发节奏漂。
