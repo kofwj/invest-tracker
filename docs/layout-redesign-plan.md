@@ -342,17 +342,16 @@ diff 巨大且难评审。所以 `DataTable` 只做「响应式布局切换」�
 
 ---
 
-## 阶段 3：桌面壳（1 天）
+## 阶段 3：桌面壳（1 天，已交付）
 
-后端已能单进程托管 dist，壳只需要包一层。
+后端单进程托管 dist，通过 Tauri 2 外壳包裹，实现原生 macOS 桌面运行体验。已交付：
 
-| 方案 | 体积 | 成本 | 风险 |
-|---|---|---|---|
-| Tauri 2 + 后端 sidecar | ~10MB + 后端 | 中 | 需 PyInstaller 打后端、代码签名、首次启动数据目录已就绪 |
-| pywebview | 小 | 低 | macOS 尚可，跨平台表现不一致 |
+1. **架构方案**：Tauri 2 + PyInstaller 独立二进制侧车（`invest-tracker-backend`）。
+2. **源码结构**：新增 `src-tauri/`（含 Tauri 2 配置文件 `tauri.conf.json`、`Cargo.toml`、`src/lib.rs`、`src/main.rs` 及多规格高清应用图标）。
+3. **原生窗口**：默认尺寸 1280x860（居中，最小支持 380x600 以便调试移动端卡片布局）。
+4. **生命周期与优雅退出**：Rust 主线程探测端口、并发拉起后端并以无阻塞轮询验证 `/api/health` 探针后导航；窗口销毁或退出应用（`Cmd+Q`）时自动向后端发送 SIGTERM 优雅退出，确保 SQLite WAL 完整落盘。
+5. **一键构建脚本**：新增 `scripts/build-desktop.sh` 串联前端构建、PyInstaller 侧车打包与 Tauri release 构建，一键生成 `InvestTracker.app` 与 DMG 安装镜像。
 
-建议 Tauri 2：Rust 工具链已在本机跑通过（`docs/android-feasibility.md` 里的 pydantic-core
-交叉编译 spike）。
 
 ---
 

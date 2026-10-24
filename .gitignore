@@ -40,3 +40,11 @@ frontend/.vite/
 # Caddy runtime data for VPS deployment
 caddy/data/
 caddy/config/
+
+# Tauri
+src-tauri/target/
+src-tauri/binaries/
+dist/
+build/
+*.spec
+
