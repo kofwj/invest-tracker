@@ -85,48 +85,76 @@
           <span>录交易或同步价后这里会出现前几只。也可直接去明细页。</span>
           <el-button size="small" type="primary" plain @click="goTab('holdings')">去持仓明细</el-button>
         </div>
-        <el-table
-          aria-label="持仓速览"
+        <DataTable
           v-else
-          :data="holdingsPreview"
-          stripe
-          size="small"
-          class="holdings-table overview-holdings-table table-clickable"
-          style="width: 100%"
+          :rows="holdingsPreview"
+          row-key="code"
           empty-text="暂无持仓"
-          @row-click="onRowClick"
+          label="持仓速览"
         >
-          <el-table-column label="标的" min-width="168" fixed="left" align="left" header-align="left">
-            <template #default="scope">
-              <div class="asset-cell">
-                <div class="asset-cell-name">{{ scope.row.name }}</div>
-                <div class="asset-cell-code">{{ scope.row.code }} · {{ scope.row.category || '未分类' }}</div>
+          <el-table
+            aria-label="持仓速览"
+            :data="holdingsPreview"
+            stripe
+            size="small"
+            class="holdings-table overview-holdings-table table-clickable"
+            style="width: 100%"
+            empty-text="暂无持仓"
+            @row-click="onRowClick"
+          >
+            <el-table-column label="标的" min-width="168" fixed="left" align="left" header-align="left">
+              <template #default="scope">
+                <div class="asset-cell">
+                  <div class="asset-cell-name">{{ scope.row.name }}</div>
+                  <div class="asset-cell-code">{{ scope.row.code }} · {{ scope.row.category || '未分类' }}</div>
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column label="最新价" min-width="96" align="right" header-align="right">
+              <template #default="scope">
+                <span class="num-cell">{{ formatMoney(scope.row.last_price, 4) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="市值" min-width="112" align="right" header-align="right">
+              <template #default="scope">
+                <span class="num-cell">{{ formatMoney(Number(scope.row.quantity || 0) * Number(scope.row.last_price || 0)) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="持仓浮盈" min-width="112" align="right" header-align="right">
+              <template #default="scope">
+                <span class="num-cell" :class="holdingFloatProfit(scope.row) >= 0 ? 'num-up' : 'num-down'">
+                  {{ formatMoney(holdingFloatProfit(scope.row), 2, true) }}
+                </span>
+              </template>
+            </el-table-column>
+            <el-table-column label="分红" min-width="104" align="right" header-align="right">
+              <template #default="scope">
+                <span class="num-cell">{{ formatMoney(scope.row.total_dividend) }}</span>
+              </template>
+            </el-table-column>
+          </el-table>
+
+          <template #card="{ row }">
+            <div class="m-card m-card-clickable" @click="onRowClick(row)">
+              <div class="m-card-row">
+                <div class="m-card-title">{{ row.name }}</div>
+                <div class="m-card-val-main num-cell">
+                  {{ formatMoney(Number(row.quantity || 0) * Number(row.last_price || 0)) }}
+                </div>
               </div>
-            </template>
-          </el-table-column>
-          <el-table-column label="最新价" min-width="96" align="right" header-align="right">
-            <template #default="scope">
-              <span class="num-cell">{{ formatMoney(scope.row.last_price, 4) }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="市值" min-width="112" align="right" header-align="right">
-            <template #default="scope">
-              <span class="num-cell">{{ formatMoney(Number(scope.row.quantity || 0) * Number(scope.row.last_price || 0)) }}</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="持仓浮盈" min-width="112" align="right" header-align="right">
-            <template #default="scope">
-              <span class="num-cell" :class="holdingFloatProfit(scope.row) >= 0 ? 'num-up' : 'num-down'">
-                {{ formatMoney(holdingFloatProfit(scope.row), 2, true) }}
-              </span>
-            </template>
-          </el-table-column>
-          <el-table-column label="分红" min-width="104" align="right" header-align="right">
-            <template #default="scope">
-              <span class="num-cell">{{ formatMoney(scope.row.total_dividend) }}</span>
-            </template>
-          </el-table-column>
-        </el-table>
+              <div class="m-card-row m-card-sub">
+                <div>{{ row.code }} · {{ row.category || '未分类' }}</div>
+                <div :class="holdingFloatProfit(row) >= 0 ? 'num-up' : 'num-down'" class="num-cell">
+                  {{ formatMoney(holdingFloatProfit(row), 2, true) }}
+                </div>
+              </div>
+              <div class="m-card-meta">
+                <span>最新价 <span class="num-cell">{{ formatMoney(row.last_price, 4) }}</span></span>
+                <span>分红 <span class="num-cell">{{ formatMoney(row.total_dividend) }}</span></span>
+              </div>
+            </div>
+          </template>
+        </DataTable>
       </div>
     </section>
 
@@ -215,6 +243,7 @@
 import { computed, onMounted } from 'vue';
 import { ArrowUpRight } from 'lucide-vue-next';
 import SnapshotReminder from '../components/SnapshotReminder.vue';
+import DataTable from '../components/DataTable.vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 import { formatPercent } from '../utils/index.js';
 

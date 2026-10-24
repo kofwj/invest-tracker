@@ -226,7 +226,8 @@
                     </el-row>
                     
                     <!-- 交易记录表格 -->
-                    <el-table :data="filteredTransactions" stripe size="small" class="transaction-table" style="width: 100%" max-height="500" aria-label="交易流水">
+                    <DataTable :rows="filteredTransactions" row-key="id" label="交易流水">
+                      <el-table :data="filteredTransactions" stripe size="small" class="transaction-table" style="width: 100%" max-height="500" aria-label="交易流水">
                         <el-table-column prop="date" label="日期" width="108" sortable align="left" header-align="left" fixed="left"></el-table-column>
                         <el-table-column label="标的" min-width="148" align="left" header-align="left">
                             <template #default="scope">
@@ -263,7 +264,42 @@
                                 <el-button type="danger" link size="small" :loading="transDeleting === scope.row" @click="onDeleteTransaction(scope.row)">删除</el-button>
                             </template>
                         </el-table-column>
-                    </el-table>
+                      </el-table>
+
+                      <template #card="{ row }">
+                        <div class="m-card">
+                          <div class="m-card-row">
+                            <div style="display: flex; align-items: center; gap: 6px; min-width: 0;">
+                              <el-tag size="small" :type="row.direction === '买入' ? 'danger' : (row.direction === '卖出' ? 'success' : (row.direction === '申购待确认' ? 'info' : (row.direction === '分红再投资' ? 'primary' : 'warning')))">
+                                {{ row.direction }}
+                              </el-tag>
+                              <span class="m-card-title">{{ row.name }}</span>
+                            </div>
+                            <span class="num-cell m-card-sub">{{ row.date }}</span>
+                          </div>
+
+                          <div class="m-card-row m-card-sub">
+                            <div>{{ row.code }} · {{ row.category || '未分类' }}</div>
+                            <div>{{ row.account }}</div>
+                          </div>
+
+                          <div class="m-card-trans-numbers">
+                            <span class="m-card-amount num-cell">{{ formatMoney(row.amount) }}</span>
+                            <span class="m-card-price-qty num-cell">{{ formatMoney(row.price, 4) }} × {{ row.quantity?.toLocaleString() }}</span>
+                            <span v-if="Number(row.fee || 0) > 0" class="m-card-fee num-cell">手续费 {{ formatMoney(row.fee) }}</span>
+                          </div>
+
+                          <div v-if="row.remark" class="m-card-remark">
+                            备注：{{ row.remark }}
+                          </div>
+
+                          <div class="m-card-actions">
+                            <el-button type="primary" link size="small" @click="openTransEditDialog(row)">编辑</el-button>
+                            <el-button type="danger" link size="small" :loading="transDeleting === row" @click="onDeleteTransaction(row)">删除</el-button>
+                          </div>
+                        </div>
+                      </template>
+                    </DataTable>
                     
                     <div style="margin-top: 12px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
                         <span style="color: var(--app-muted);">当前页 {{ filteredTransactions.length }} 条 / 共 {{ transPage.total }} 条记录</span>
@@ -284,6 +320,7 @@
 
 <script setup>
 import PageShell from '../components/PageShell.vue';
+import DataTable from '../components/DataTable.vue';
 import { onMounted, ref } from 'vue';
 import api from '../api/index.js';
 import { useAppCtx } from '../composables/useAppCtx.js';

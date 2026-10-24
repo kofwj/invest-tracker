@@ -70,20 +70,35 @@
                         </el-col>
                         <el-col :span="12">
                             <el-card shadow="never" header="到期分布">
-                                <el-table :data="depositMaturityBuckets" size="small" style="width:100%;" aria-label="存款到期分布">
-                                    <el-table-column prop="bucket" label="期限"></el-table-column>
-                                    <el-table-column label="金额" align="right" header-align="right">
-                                        <template #default="scope">{{ formatMoney(scope.row.amount) }}</template>
-                                    </el-table-column>
-                                    <el-table-column label="占比" width="90" align="right" header-align="right">
-                                        <template #default="scope">{{ scope.row.percentage.toFixed(1) }}%</template>
-                                    </el-table-column>
-                                </el-table>
+                                <DataTable :rows="depositMaturityBuckets" row-key="bucket" label="存款到期分布">
+                                    <el-table :data="depositMaturityBuckets" size="small" style="width:100%;" aria-label="存款到期分布">
+                                        <el-table-column prop="bucket" label="期限"></el-table-column>
+                                        <el-table-column label="金额" align="right" header-align="right">
+                                            <template #default="scope">{{ formatMoney(scope.row.amount) }}</template>
+                                        </el-table-column>
+                                        <el-table-column label="占比" width="90" align="right" header-align="right">
+                                            <template #default="scope">{{ scope.row.percentage.toFixed(1) }}%</template>
+                                        </el-table-column>
+                                    </el-table>
+                                    <template #card="{ row }">
+                                        <div class="m-card" style="padding: 6px 4px;">
+                                            <div class="m-card-row">
+                                                <span class="m-card-title" style="font-size: 13px;">{{ row.bucket }}</span>
+                                                <span class="m-card-val-main num-cell" style="font-size: 13px;">{{ formatMoney(row.amount) }}</span>
+                                            </div>
+                                            <div class="m-card-row m-card-sub">
+                                                <span>占比</span>
+                                                <span class="num-cell">{{ row.percentage.toFixed(1) }}%</span>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </DataTable>
                             </el-card>
                         </el-col>
                     </el-row>
 
-                    <el-table :data="depositRows" stripe size="small" class="deposit-table" style="width: 100%" aria-label="存款明细">
+                    <DataTable :rows="depositRows" row-key="id" label="存款明细">
+                      <el-table :data="depositRows" stripe size="small" class="deposit-table" style="width: 100%" aria-label="存款明细">
                         <el-table-column prop="bank_name" label="银行" min-width="100" align="left" header-align="left" fixed="left"></el-table-column>
                         <el-table-column label="金额" min-width="110" align="right" header-align="right">
                             <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.amount) }}</span></template>
@@ -142,12 +157,77 @@
                                 <el-button type="danger" link size="small" :loading="depositDeleting === scope.row" @click="onDeleteDeposit(scope.row)">删除</el-button>
                             </template>
                         </el-table-column>
-                    </el-table>
+                      </el-table>
+
+                      <template #card="{ row, index }">
+                        <div class="m-card">
+                          <div class="m-card-row">
+                            <div class="m-card-title">{{ row.bank_name }}</div>
+                            <div class="m-card-val-main num-cell">
+                              {{ formatMoney(row.amount) }}
+                            </div>
+                          </div>
+
+                          <div class="m-card-row m-card-sub">
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                              <el-tag
+                                v-if="row.daysLeft === null"
+                                type="info"
+                                effect="light"
+                                size="small"
+                              >—</el-tag>
+                              <el-tag
+                                v-else-if="row.daysLeft < 0"
+                                type="danger"
+                                effect="dark"
+                                size="small"
+                              >已到期</el-tag>
+                              <el-tag
+                                v-else
+                                :type="row.daysLeft <= 30 ? 'danger' : (row.daysLeft <= 90 ? 'warning' : 'info')"
+                                effect="light"
+                                size="small"
+                              >{{ row.daysLeft }}天</el-tag>
+                              <span>{{ row.due_date ? `到期 ${row.due_date}` : '未填到期' }}</span>
+                            </div>
+                            <div class="num-cell">年化 {{ Number(row.interest_rate || 0).toFixed(2) }}%</div>
+                          </div>
+
+                          <div class="m-card-metrics">
+                            <div class="m-card-metric-item">
+                              <div class="m-card-metric-label">整期利息</div>
+                              <div class="m-card-metric-val num-cell">
+                                {{ row.term_interest == null ? '—' : formatMoney(row.term_interest) }}
+                              </div>
+                            </div>
+                            <div class="m-card-metric-item">
+                              <div class="m-card-metric-label">到期前利息</div>
+                              <div class="m-card-metric-val num-cell">
+                                {{ row.remaining_interest == null ? '—' : formatMoney(row.remaining_interest) }}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div class="m-card-meta">
+                            <span>起存日 <span :class="row.missing_start_date ? 'num-warn' : ''">{{ row.start_date || '待填' }}</span></span>
+                            <span>占比 <span class="num-cell">{{ row.percentage.toFixed(1) }}%</span></span>
+                            <span>年利息 <span class="num-cell">{{ formatMoney(row.annual_interest) }}</span></span>
+                            <span v-if="row.remark">备注 {{ row.remark }}</span>
+                          </div>
+
+                          <div class="m-card-actions">
+                            <el-button type="primary" link size="small" @click="openDepositDialog(row, index)">编辑</el-button>
+                            <el-button type="danger" link size="small" :loading="depositDeleting === row" @click="onDeleteDeposit(row)">删除</el-button>
+                          </div>
+                        </div>
+                      </template>
+                    </DataTable>
                 </PageShell>
 </template>
 
 <script setup>
 import PageShell from '../components/PageShell.vue';
+import DataTable from '../components/DataTable.vue';
 import { ref } from 'vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 const { dashboard, depositRows, depositSummary, depositBankBreakdown, depositMaturityBuckets, downloadDepositsTemplate, exportDeposits, importDeposits, openDepositDialog, deleteDeposit, formatMoney, pct } = useAppCtx();

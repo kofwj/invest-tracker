@@ -25,14 +25,26 @@
           : '部分标的上次抓取失败，日历可能不完整。'"
         style="margin-bottom: 8px;"
       />
-      <el-table :data="dividendCalendar" size="small" style="width:100%;" aria-label="除权除息日程">
-        <el-table-column prop="name" label="标的" min-width="120"></el-table-column>
-        <el-table-column prop="ex_date" label="除权除息日" width="120"></el-table-column>
-        <el-table-column label="还剩" width="88">
-          <template #default="scope">{{ dividendDaysLabel(scope.row.days_left) }}</template>
-        </el-table-column>
-        <el-table-column prop="plan_text" label="方案" min-width="160"></el-table-column>
-      </el-table>
+      <DataTable :rows="dividendCalendar" row-key="name" empty-text="暂无除权除息日程" label="除权除息日程">
+        <el-table :data="dividendCalendar" size="small" style="width:100%;" aria-label="除权除息日程">
+          <el-table-column prop="name" label="标的" min-width="120"></el-table-column>
+          <el-table-column prop="ex_date" label="除权除息日" width="120"></el-table-column>
+          <el-table-column label="还剩" width="88">
+            <template #default="scope">{{ dividendDaysLabel(scope.row.days_left) }}</template>
+          </el-table-column>
+          <el-table-column prop="plan_text" label="方案" min-width="160"></el-table-column>
+        </el-table>
+        <template #card="{ row }">
+          <div class="m-card">
+            <div class="m-card-row">
+              <span class="m-card-title">{{ row.name }}</span>
+              <el-tag size="small" type="info">{{ dividendDaysLabel(row.days_left) }}</el-tag>
+            </div>
+            <div class="m-card-sub">除权除息日：{{ row.ex_date }}</div>
+            <div style="color: var(--app-text); font-size: 12px; margin-top: 2px;">{{ row.plan_text }}</div>
+          </div>
+        </template>
+      </DataTable>
       <div v-if="dividendCalendarFetchedAt" style="margin-top: 8px; color: var(--el-text-color-secondary); font-size: 12px;">
         数据抓取于 {{ dividendCalendarFetchedAt }}
       </div>
@@ -42,123 +54,180 @@
       <span>去交易页录入买入，或先同步价格核对。空仓时这里保持干净。</span>
       <el-button size="small" type="primary" plain @click="goTab('transactions')">去交易</el-button>
     </div>
-    <el-table v-else :data="holdings" stripe size="small" class="holdings-table table-clickable" style="width: 100%" @row-click="showTransactions" aria-label="持仓明细">
-      <el-table-column label="标的" min-width="148" fixed="left" align="left" header-align="left">
-        <template #default="scope">
-          <div class="asset-cell">
-            <div class="asset-cell-name">
-              <el-button link class="asset-name-link" :title="`查看 ${scope.row.name} 的 K 线与基本面`" @click.stop="openKline(scope.row)">{{ scope.row.name }}</el-button>
+    <DataTable v-else :rows="holdings" row-key="code" empty-text="当前没有持仓" label="持仓明细">
+      <el-table :data="holdings" stripe size="small" class="holdings-table table-clickable" style="width: 100%" @row-click="showTransactions" aria-label="持仓明细">
+        <el-table-column label="标的" min-width="148" fixed="left" align="left" header-align="left">
+          <template #default="scope">
+            <div class="asset-cell">
+              <div class="asset-cell-name">
+                <el-button link class="asset-name-link" :title="`查看 ${scope.row.name} 的 K 线与基本面`" @click.stop="openKline(scope.row)">{{ scope.row.name }}</el-button>
+              </div>
+              <div class="asset-cell-code">{{ scope.row.code }} · {{ scope.row.category || '未分类' }}</div>
             </div>
-            <div class="asset-cell-code">{{ scope.row.code }} · {{ scope.row.category || '未分类' }}</div>
-          </div>
-        </template>
-      </el-table-column>
-      <el-table-column label="数量" min-width="96" align="right" header-align="right">
-        <template #default="scope"><span class="num-cell">{{ Number(scope.row.quantity || 0).toLocaleString('zh-CN') }}</span></template>
-      </el-table-column>
-      <el-table-column label="普通成本" min-width="96" align="right" header-align="right">
-        <template #header>
-          <el-tooltip content="普通成本：剩余持仓按平均成本结转后的买入成本，不扣历史卖出回款。" placement="top">
-            <span>普通成本</span>
-          </el-tooltip>
-        </template>
-        <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.avg_cost, 4) }}</span></template>
-      </el-table-column>
-      <el-table-column label="摊薄成本" min-width="96" align="right" header-align="right">
-        <template #header>
-          <el-tooltip content="券商口径：累计买入成本 - 卖出回款 - 累计分红，再除以剩余持仓；可能为负。" placement="top">
-            <span>摊薄成本</span>
-          </el-tooltip>
-        </template>
-        <template #default="scope">
-          <span class="num-cell" :class="Number(scope.row.diluted_cost || 0) < 0 ? 'num-down' : ''">{{ formatMoney(scope.row.diluted_cost, 4) }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="最新价" min-width="118" align="right" header-align="right">
-        <template #default="scope">
-          <span class="num-cell">{{ formatMoney(scope.row.last_price, 4) }}</span>
-          <el-tooltip v-if="isManualPrice(scope.row.code)" content="价格是手动填的，还没被真实行情覆盖" placement="top">
-            <el-tag size="small" type="warning" class="manual-price-tag">人工价</el-tag>
-          </el-tooltip>
-        </template>
-      </el-table-column>
-      <el-table-column label="市值" min-width="110" align="right" header-align="right">
-        <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.quantity * scope.row.last_price) }}</span></template>
-      </el-table-column>
-      <el-table-column label="持仓浮盈" min-width="108" align="right" header-align="right">
-        <template #header>
-          <el-tooltip content="持仓浮盈 = (最新价 − 普通成本) × 数量 + 累计分红；只看当前剩余持仓，不含历史卖出已实现盈亏。" placement="top">
-            <span>持仓浮盈</span>
-          </el-tooltip>
-        </template>
-        <template #default="scope">
-          <span class="num-cell" :class="(holdingFloatProfit(scope.row) >= 0 ) ? 'num-up' : 'num-down'">
-            {{ formatMoney(holdingFloatProfit(scope.row), 2, true) }}
-          </span>
-        </template>
-      </el-table-column>
-      <el-table-column label="全周期盈亏" min-width="108" align="right" header-align="right">
-        <template #header>
-          <el-tooltip content="全周期盈亏 ≈ (最新价 − 摊薄成本) × 数量；含历史买卖已实现与分红摊薄，接近券商「累计盈亏」。" placement="top">
-            <span>全周期盈亏</span>
-          </el-tooltip>
-        </template>
-        <template #default="scope">
-          <span class="num-cell" :class="(holdingLifetimeProfit(scope.row) >= 0 ) ? 'num-up' : 'num-down'">
-            {{ formatMoney(holdingLifetimeProfit(scope.row), 2, true) }}
-          </span>
-        </template>
-      </el-table-column>
-      <el-table-column label="浮盈率" min-width="84" align="right" header-align="right">
-        <template #header>
-          <el-tooltip content="持仓浮盈 / (普通成本 × 数量)" placement="top">
-            <span>浮盈率</span>
-          </el-tooltip>
-        </template>
-        <template #default="scope">
-          <span class="num-cell" :class="(holdingFloatProfitRate(scope.row) ?? 0) >= 0 ? 'num-up' : 'num-down'">
-            {{ holdingFloatProfitRate(scope.row) === null ? '—' : formatPercent(holdingFloatProfitRate(scope.row)) }}
-          </span>
-        </template>
-      </el-table-column>
-      <el-table-column label="全周期收益率" min-width="100" align="right" header-align="right">
-        <template #header>
-          <el-tooltip content="全周期盈亏 / (摊薄成本 × 数量)；净投入≤0 时不展示。" placement="top">
-            <span>全周期收益率</span>
-          </el-tooltip>
-        </template>
-        <template #default="scope">
-          <span class="num-cell" :class="(holdingLifetimeProfitRate(scope.row) ?? 0) >= 0 ? 'num-up' : 'num-down'">
-            {{ holdingLifetimeProfitRate(scope.row) === null ? '—' : formatPercent(holdingLifetimeProfitRate(scope.row)) }}
-          </span>
-        </template>
-      </el-table-column>
-      <el-table-column label="预计年化" width="88" align="right" header-align="right">
-        <template #default="scope">
-          <el-button link class="num-cell" title="点击修改预期年化收益" @click.stop="openExpectedReturnDialog(scope.row)">{{ scope.row.expected_return == null ? '—' : formatPercent(scope.row.expected_return, 1) }}</el-button>
-        </template>
-      </el-table-column>
-      <el-table-column label="近一年" width="88" align="right" header-align="right">
-        <template #header>
-          <el-tooltip content="标的自身过去一年价格/净值回溯收益，不等于你的账户实际持有收益。" placement="top">
-            <span>近一年</span>
-          </el-tooltip>
-        </template>
-        <template #default="scope">
-          <el-tooltip :content="scope.row.trailing_return_1y_source || '暂无数据，请同步近一年收益率'" placement="top">
-            <span class="num-cell" :class="(Number(scope.row.trailing_return_1y || 0) >= 0 ) ? 'num-up' : 'num-down'">
-              {{ formatPercent(scope.row.trailing_return_1y) }}
+          </template>
+        </el-table-column>
+        <el-table-column label="数量" min-width="96" align="right" header-align="right">
+          <template #default="scope"><span class="num-cell">{{ Number(scope.row.quantity || 0).toLocaleString('zh-CN') }}</span></template>
+        </el-table-column>
+        <el-table-column label="普通成本" min-width="96" align="right" header-align="right">
+          <template #header>
+            <el-tooltip content="普通成本：剩余持仓按平均成本结转后的买入成本，不扣历史卖出回款。" placement="top">
+              <span>普通成本</span>
+            </el-tooltip>
+          </template>
+          <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.avg_cost, 4) }}</span></template>
+        </el-table-column>
+        <el-table-column label="摊薄成本" min-width="96" align="right" header-align="right">
+          <template #header>
+            <el-tooltip content="券商口径：累计买入成本 - 卖出回款 - 累计分红，再除以剩余持仓；可能为负。" placement="top">
+              <span>摊薄成本</span>
+            </el-tooltip>
+          </template>
+          <template #default="scope">
+            <span class="num-cell" :class="Number(scope.row.diluted_cost || 0) < 0 ? 'num-down' : ''">{{ formatMoney(scope.row.diluted_cost, 4) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="最新价" min-width="118" align="right" header-align="right">
+          <template #default="scope">
+            <span class="num-cell">{{ formatMoney(scope.row.last_price, 4) }}</span>
+            <el-tooltip v-if="isManualPrice(scope.row.code)" content="价格是手动填的，还没被真实行情覆盖" placement="top">
+              <el-tag size="small" type="warning" class="manual-price-tag">人工价</el-tag>
+            </el-tooltip>
+          </template>
+        </el-table-column>
+        <el-table-column label="市值" min-width="110" align="right" header-align="right">
+          <template #default="scope"><span class="num-cell">{{ formatMoney(scope.row.quantity * scope.row.last_price) }}</span></template>
+        </el-table-column>
+        <el-table-column label="持仓浮盈" min-width="108" align="right" header-align="right">
+          <template #header>
+            <el-tooltip content="持仓浮盈 = (最新价 − 普通成本) × 数量 + 累计分红；只看当前剩余持仓，不含历史卖出已实现盈亏。" placement="top">
+              <span>持仓浮盈</span>
+            </el-tooltip>
+          </template>
+          <template #default="scope">
+            <span class="num-cell" :class="(holdingFloatProfit(scope.row) >= 0 ) ? 'num-up' : 'num-down'">
+              {{ formatMoney(holdingFloatProfit(scope.row), 2, true) }}
             </span>
-          </el-tooltip>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="130" align="center" header-align="center" fixed="right">
-        <template #default="scope">
-          <el-button type="warning" link @click.stop="openHoldingCorrectionDialog(scope.row)">校正</el-button>
-          <el-button type="primary" link :loading="priceEditing" @click.stop="onChangePrice(scope.row)">改价</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+          </template>
+        </el-table-column>
+        <el-table-column label="全周期盈亏" min-width="108" align="right" header-align="right">
+          <template #header>
+            <el-tooltip content="全周期盈亏 ≈ (最新价 − 摊薄成本) × 数量；含历史买卖已实现与分红摊薄，接近券商「累计盈亏」。" placement="top">
+              <span>全周期盈亏</span>
+            </el-tooltip>
+          </template>
+          <template #default="scope">
+            <span class="num-cell" :class="(holdingLifetimeProfit(scope.row) >= 0 ) ? 'num-up' : 'num-down'">
+              {{ formatMoney(holdingLifetimeProfit(scope.row), 2, true) }}
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column label="浮盈率" min-width="84" align="right" header-align="right">
+          <template #header>
+            <el-tooltip content="持仓浮盈 / (普通成本 × 数量)" placement="top">
+              <span>浮盈率</span>
+            </el-tooltip>
+          </template>
+          <template #default="scope">
+            <span class="num-cell" :class="(holdingFloatProfitRate(scope.row) ?? 0) >= 0 ? 'num-up' : 'num-down'">
+              {{ holdingFloatProfitRate(scope.row) === null ? '—' : formatPercent(holdingFloatProfitRate(scope.row)) }}
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column label="全周期收益率" min-width="100" align="right" header-align="right">
+          <template #header>
+            <el-tooltip content="全周期盈亏 / (摊薄成本 × 数量)；净投入≤0 时不展示。" placement="top">
+              <span>全周期收益率</span>
+            </el-tooltip>
+          </template>
+          <template #default="scope">
+            <span class="num-cell" :class="(holdingLifetimeProfitRate(scope.row) ?? 0) >= 0 ? 'num-up' : 'num-down'">
+              {{ holdingLifetimeProfitRate(scope.row) === null ? '—' : formatPercent(holdingLifetimeProfitRate(scope.row)) }}
+            </span>
+          </template>
+        </el-table-column>
+        <el-table-column label="预计年化" width="88" align="right" header-align="right">
+          <template #default="scope">
+            <el-button link class="num-cell" title="点击修改预期年化收益" @click.stop="openExpectedReturnDialog(scope.row)">{{ scope.row.expected_return == null ? '—' : formatPercent(scope.row.expected_return, 1) }}</el-button>
+          </template>
+        </el-table-column>
+        <el-table-column label="近一年" width="88" align="right" header-align="right">
+          <template #header>
+            <el-tooltip content="标的自身过去一年价格/净值回溯收益，不等于你的账户实际持有收益。" placement="top">
+              <span>近一年</span>
+            </el-tooltip>
+          </template>
+          <template #default="scope">
+            <el-tooltip :content="scope.row.trailing_return_1y_source || '暂无数据，请同步近一年收益率'" placement="top">
+              <span class="num-cell" :class="(Number(scope.row.trailing_return_1y || 0) >= 0 ) ? 'num-up' : 'num-down'">
+                {{ formatPercent(scope.row.trailing_return_1y) }}
+              </span>
+            </el-tooltip>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="130" align="center" header-align="center" fixed="right">
+          <template #default="scope">
+            <el-button type="warning" link @click.stop="openHoldingCorrectionDialog(scope.row)">校正</el-button>
+            <el-button type="primary" link :loading="priceEditing" @click.stop="onChangePrice(scope.row)">改价</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <template #card="{ row }">
+        <div class="m-card m-card-clickable" @click="showTransactions(row)">
+          <div class="m-card-row">
+            <div class="m-card-asset-head">
+              <el-button link class="asset-name-link m-card-title" :title="`查看 ${row.name} 的 K 线与基本面`" @click.stop="openKline(row)">
+                {{ row.name }}
+              </el-button>
+              <el-tooltip v-if="isManualPrice(row.code)" content="价格是手动填的，还没被真实行情覆盖" placement="top">
+                <el-tag size="small" type="warning" class="manual-price-tag">人工价</el-tag>
+              </el-tooltip>
+            </div>
+            <div class="m-card-val-main num-cell">
+              {{ formatMoney(row.quantity * row.last_price) }}
+            </div>
+          </div>
+
+          <div class="m-card-row m-card-sub">
+            <div>{{ row.code }} · {{ row.category || '未分类' }}</div>
+            <div class="num-cell">最新价 {{ formatMoney(row.last_price, 4) }}</div>
+          </div>
+
+          <div class="m-card-metrics">
+            <div class="m-card-metric-item">
+              <div class="m-card-metric-label">持仓浮盈 (浮盈率)</div>
+              <div class="m-card-metric-val num-cell" :class="holdingFloatProfit(row) >= 0 ? 'num-up' : 'num-down'">
+                {{ formatMoney(holdingFloatProfit(row), 2, true) }}
+                <span class="m-card-metric-rate">({{ holdingFloatProfitRate(row) === null ? '—' : formatPercent(holdingFloatProfitRate(row)) }})</span>
+              </div>
+            </div>
+            <div class="m-card-metric-item">
+              <div class="m-card-metric-label">全周期盈亏 (收益率)</div>
+              <div class="m-card-metric-val num-cell" :class="holdingLifetimeProfit(row) >= 0 ? 'num-up' : 'num-down'">
+                {{ formatMoney(holdingLifetimeProfit(row), 2, true) }}
+                <span class="m-card-metric-rate">({{ holdingLifetimeProfitRate(row) === null ? '—' : formatPercent(holdingLifetimeProfitRate(row)) }})</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="m-card-meta">
+            <span>持仓 <span class="num-cell">{{ Number(row.quantity || 0).toLocaleString('zh-CN') }}</span></span>
+            <span>普通成本 <span class="num-cell">{{ formatMoney(row.avg_cost, 4) }}</span></span>
+            <span>摊薄成本 <span class="num-cell" :class="Number(row.diluted_cost || 0) < 0 ? 'num-down' : ''">{{ formatMoney(row.diluted_cost, 4) }}</span></span>
+            <span>分红 <span class="num-cell">{{ formatMoney(row.total_dividend) }}</span></span>
+            <span v-if="row.trailing_return_1y != null">近一年 <span class="num-cell" :class="Number(row.trailing_return_1y || 0) >= 0 ? 'num-up' : 'num-down'">{{ formatPercent(row.trailing_return_1y) }}</span></span>
+          </div>
+
+          <div class="m-card-actions">
+            <el-button link size="small" type="primary" @click.stop="openKline(row)">K线/基本面</el-button>
+            <el-button link size="small" type="warning" @click.stop="openHoldingCorrectionDialog(row)">校正</el-button>
+            <el-button link size="small" type="primary" :loading="priceEditing" @click.stop="onChangePrice(row)">改价</el-button>
+            <el-button link size="small" @click.stop="openExpectedReturnDialog(row)">预计年化 {{ row.expected_return == null ? '—' : formatPercent(row.expected_return, 1) }}</el-button>
+          </div>
+        </div>
+      </template>
+    </DataTable>
 
     <!-- K线弹窗（决策 D3：从「分析」组整页降级成点标的名打开；v-if 惰性挂载，没点过就不渲染） -->
     <KlineDialog v-if="klineMounted" v-model="klineVisible" :code="klineCode" />
@@ -168,6 +237,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import PageShell from '../components/PageShell.vue';
+import DataTable from '../components/DataTable.vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import KlineDialog from '../components/KlineDialog.vue';
 import api from '../api/index.js';
