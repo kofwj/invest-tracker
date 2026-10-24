@@ -33,7 +33,7 @@
 | 阶段 3 本地桌面外壳（Tauri 2 + 侧车） | `5ad6633`，已产出 `InvestTracker.app` 与 `.dmg` |
 | 阶段 4 移动端 PWA 与主屏幕原生化 | `267c05e`，Manifest + iOS Safari + Safe Area + SW |
 | 阶段 5 版本发布 | `v1.7.0` |
-| 前端测试 | 30 文件 / 241 项 |
+| 前端测试 | 30 文件 / 243 项 |
 | 后端测试 | 602 项（阶段 0 新增 24 项，原有 578 项未改） |
 | 媒体查询断点 | 仅 `1100`（3 处）/ `900`（10 处）/ `640`（10 处） |
 
@@ -362,11 +362,11 @@ diff 巨大且难评审。所以 `DataTable` 只做「响应式布局切换」�
 
 按决策 D4 落地路线 4（中心后端 + 手机 PWA），单中心账本零冲突。已交付：
 
-1. **Web App Manifest**：`frontend/public/manifest.webmanifest`，包含 `display: standalone`、多规格图标与主题色，支持 Android Chrome「安装应用」提示。
+1. **Web App Manifest**：`frontend/public/manifest.webmanifest`，包含 `display: standalone`、多规格图标与主题色，支持 Android Chrome「安装应用」提示（注：浏览器安全标准要求 PWA 必须处于 HTTPS 安全上下文，局域网 `http://IP` 直连不可安装）。
 2. **iOS Safari 原生化**：`index.html` 接入 `apple-mobile-web-app-capable`、`apple-touch-icon`、`apple-mobile-web-app-status-bar-style` 与 `viewport-fit=cover`，支持添加到 iPhone 主屏幕全屏运行。
 3. **刘海屏与安全区**：`styles.css` 接入 `env(safe-area-inset-*)`，顶栏、二级导航与主容器自适应贴合，去除移动端触摸灰框。
-4. **Service Worker 外壳**：`frontend/public/sw.js` 缓存应用外壳与静态资源，严密保证 `/api/*` 财务接口一律直连网络不缓存。
-5. **配套测试**：新增 `frontend/tests/pwa-static.test.js`（5 项）。
+4. **Service Worker 外壳与网络优先**：`frontend/public/sw.js` 页面导航严格网络优先，与服务端 `no-store` 对齐；严密保证 `/api/*` 财务接口一律直连网络不缓存；桌面壳（Tauri）与本地环境主动跳过 SW 注册并注销清理旧缓存。
+5. **配套测试**：新增 `frontend/tests/pwa-static.test.js`（含 `CACHE_NAME` 与 `APP_VERSION` 强制对齐断言）。
 
 注：独立离线手机客户端（单机 APK 模式）在后续版本再行规划评估。
 

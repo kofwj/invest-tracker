@@ -419,8 +419,6 @@ html.dark .stat-label::after { background: rgba(255,255,255,0.08); }
   position: sticky;
   top: var(--app-shell-header-h, 60px);
   z-index: var(--z-sticky);
-
-
 }
 /* 吸顶时把左右留白一并盖住，否则内容会从 content-shell 内边距的缝隙里透出来 */
 .page-shell-header::before {

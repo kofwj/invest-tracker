@@ -620,11 +620,36 @@ app.use(pinia);
 app.use(router);
 app.mount('#app');
 
-// 生产环境下注册 Service Worker，支持 PWA 离线外壳与安装至主屏幕
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js').catch((err) => {
-            console.warn('PWA service worker registration failed:', err);
+// 生产环境下注册 Service Worker，支持移动端/Web PWA 离线外壳与安装至主屏幕。
+// 本地开发、单进程本地直接运行或 Tauri 桌面外壳环境跳过注册，避免本地磁盘代码与 SW 缓存产生版本滞后。
+const isDesktopOrLocal =
+    typeof window !== 'undefined' &&
+    (window.__TAURI_INTERNALS__ !== undefined ||
+     window.location.hostname === '127.0.0.1' ||
+     window.location.hostname === 'localhost');
+
+if ('serviceWorker' in navigator) {
+    if (isDesktopOrLocal) {
+        // 桌面壳或本地直接运行模式：若此前误注册过，主动注销并清理旧缓存，保持磁盘实时性
+        navigator.serviceWorker.getRegistrations().then((registrations) => {
+            for (const registration of registrations) {
+                registration.unregister().catch(() => {});
+            }
+        }).catch(() => {});
+        if ('caches' in window) {
+            caches.keys().then((keys) => {
+                for (const key of keys) {
+                    if (key.startsWith('invest-tracker-')) {
+                        caches.delete(key).catch(() => {});
+                    }
+                }
+            }).catch(() => {});
+        }
+    } else if (import.meta.env.PROD) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js').catch((err) => {
+                console.warn('PWA service worker registration failed:', err);
+            });
         });
-    });
+    }
 }
