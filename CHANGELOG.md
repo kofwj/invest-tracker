@@ -5,6 +5,45 @@
 
 ---
 
+## [1.7.2] — 2026-10-24 — 备份凭据收权限、节假日表过期不再静默
+
+### 安全
+
+- **账本库和备份是 0644，同机任何用户都能读。** `settings` 表里存着明文凭据：`ai_api_key`，
+  以及 `notify_channel_credentials` 里的飞书 `app_secret`、钉钉加签 secret、Telegram bot token、
+  各通道 webhook。`sqlite3.connect()` 建出来的文件权限跟着 umask 走、默认 `0644`；备份是整库
+  副本，同步到网盘或被转发一次，密钥就跟着出去了。
+
+  新增 `app_paths.harden_private_file()` 把落盘文件收成 `0600`，四个入口都接上：`open_db()` 首次
+  打开账本库时收紧（模块级标志，不每请求一次 syscall）、`create_safety_backup()` 在完整性检查
+  通过后收紧、`scripts/backup_db.py` 与上传备份则**先按 `0600` 建文件再写**，不留「写完才收紧」
+  的窗口期。Windows 上 `chmod` 只影响只读位，失败直接吞掉——那是权限模型差异，不该让备份/建库
+  流程挂掉。
+
+  实测（umask 022）：`backup_db.py` 产出 `-rw-------`，`create_safety_backup` 产出 `0600`；把
+  umask 放宽到 `0` 再跑，备份仍是 `0600`（默认 `touch` 那版会变 `0666`）。
+
+- README 新增「备份里有明文凭据」，`docs/deploy-vps.md` §6 补同样提示与 sqlite3 清空命令，并
+  写明 `chown -R` 别把 `data/`、`backups/` 带上——容器内后端以 uid 999 写这两个目录。
+
+### 新增
+
+- **内置节假日表过期后静默失效。** `BUILTIN_CLOSED_DAYS` 是硬编码的，只覆盖到 2027 年，越过后
+  不抛错、只静默退化：春节、国庆重新算成交易日，cron 于是在休市日照常生成快照，净值曲线多出几个
+  「和昨天一模一样」的点，而且没有任何地方会提示。
+
+  新增 `trading_calendar.calendar_staleness()`，报覆盖年份、还剩几年、已过期（`stale`）还是今年
+  是最后一年（`expiring`），并附一句能照着做的说明。它接进四个地方：`trading_day_status()`（cron
+  每天调的接口自带体检）、`/api/health` 的 `trading_calendar` 块、`lifespan` 启动日志（放在
+  `yield` 之前），以及 `scripts/cron_sync_prices.sh` 的三个交易日判断分支——那三处原本成功时完全
+  静默，现在过期会往 cron 日志里补一行 WARN。
+
+### 测试
+
+- 后端 602 → **617**。新增 15 条覆盖：权限（含 umask 设为 0 仍须 0600、`chmod` 失败必须不抛、
+  `str` 与 `Path` 两种入参）、账本库实际权限、日历四态（正常/即将过期/已过期/空表）、日历每次重算
+  而不缓存、`trading_day_status` 与 `/api/health` 的字段透传。
+- 把这七处修复逐个改回缺陷形态做变异测试，**7/7 全部被拦住**——测试不是摆设。
 
 ## [1.7.1] — 2026-10-24 — Service Worker 导航策略修正与桌面端脱钩
 
