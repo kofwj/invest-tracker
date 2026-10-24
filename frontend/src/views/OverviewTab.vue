@@ -49,6 +49,8 @@
             <div class="ov-metric-label">现在总资产</div>
             <div class="ov-metric-value" :title="formatMoney(dash.total_assets)">{{ formatMoney(dash.total_assets) }}</div>
             <div class="ov-metric-sub">市值 {{ formatMoney(dash.total_market_value) }} + 现金存款 {{ formatMoney(cashAndBank) }}</div>
+            <!-- 距上次校准 N 天 · 上次差额 Y 元；点开填实测总额，差额落成可见平差 -->
+            <CalibrationHint />
           </div>
           <div class="ov-metric">
             <div class="ov-metric-label">持仓浮盈</div>
@@ -243,6 +245,7 @@
 import { computed, onMounted } from 'vue';
 import { ArrowUpRight } from 'lucide-vue-next';
 import SnapshotReminder from '../components/SnapshotReminder.vue';
+import CalibrationHint from '../components/CalibrationHint.vue';
 import DataTable from '../components/DataTable.vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 import { formatPercent } from '../utils/index.js';

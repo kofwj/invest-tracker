@@ -376,6 +376,35 @@ chmod +x scripts/cron_sync_prices.sh
 若已配置 `DB_PATH`/`BACKUP_DIR`，脚本自动读取；否则默认 `data/invest.db` → `backups/`。
 （旧方式：curl 备份接口，或 `python3 scripts/backup_db.py --label daily`，现均可加 `--retain N` 轮转。）
 
+### 心跳：确认它们真的在跑
+
+cron 被删、脚本挂掉、容器起不来，日志里都不会有动静。后端给三条流水线各记一个「上次成功时间」
+（`settings.heartbeat:<job>:last_ok_at`），超过阈值没成功就走消息推送的**运维**通道报警：
+
+| job | 默认阈值 | 上报点 |
+|-----|----------|--------|
+| `backup` | 30 小时 | `backup_daily.sh` 跑完 → `POST /cron/heartbeat` |
+| `sync_prices` | 96 小时 | 同步函数内部（cron HTTP / docker 直调 / 页面手动同步都算） |
+| `snapshot` | 96 小时 | `/cron/snapshot` 或脚本内联的 docker 调用 |
+
+「从来没成功过」也算逾期——刚部署完忘了配 crontab 正是最该被喊出来的情况。检查挂在 cron 本来
+就会调的 `--notify-events` 上，**crontab 不用改**；运维页 `/ops/backup` 顶部也能直接看到三条的颜色。
+
+上报要 `CRON_API_TOKEN`；没配就只在日志里打一行 `heartbeat skip`，备份本身照跑。
+
+要连整机宕机一起覆盖，再挂外部 dead-man（healthchecks.io 免费档够用）：
+
+```env
+HEARTBEAT_BACKUP_URL=https://hc-ping.com/<uuid>
+HEARTBEAT_SYNC_PRICES_URL=https://hc-ping.com/<uuid>
+HEARTBEAT_SNAPSHOT_URL=https://hc-ping.com/<uuid>
+```
+
+**只在成功时 ping，失败刻意不 ping**：让外部服务的超时规则自己报警，比再发一个「失败」信号更简单
+也更不漏（进程被 kill 时根本没机会发请求）。配好后先在 healthchecks 里把 Period/Grace 设成
+略小于上表阈值（例如备份 Period 1 天、Grace 6 小时），手动跑一次脚本确认对方收到 ping。
+阈值本身可用 `HEARTBEAT_<JOB>_MAX_AGE_HOURS` 覆盖。
+
 ## 10. Docker 构建缓存清理
 
 多次 `docker compose … --build` 会在小盘上堆积 **Build Cache**（数 GB）。

@@ -9,6 +9,7 @@ try:
     from . import database as database_module
     from .database import LOCAL_TZ, db_session
     from .csv_utils import create_safety_backup, csv_response
+    from .total_asset_calibration import apply_calibration, calibration_status
     from .dashboard import build_dashboard
     from .snapshots import (
         create_snapshot_record,
@@ -33,6 +34,7 @@ except ImportError:
         snapshots_summary_data,
         stale_price_detail,
     )
+    from total_asset_calibration import apply_calibration, calibration_status
 
 router = APIRouter()
 
@@ -50,6 +52,11 @@ class SnapshotSchema(BaseModel):
 
 class ReconcileSchema(BaseModel):
     date: dt_date
+    manual_total_assets: float
+    note: Optional[str] = None
+
+
+class CalibrationSchema(BaseModel):
     manual_total_assets: float
     note: Optional[str] = None
 
@@ -111,6 +118,35 @@ def save_snapshot_reconcile(payload: ReconcileSchema):
 def get_snapshot_reconcile():
     with db_session(row_factory=sqlite3.Row) as conn:
         return latest_reconcile_with_gap(conn)
+
+
+@router.post("/snapshots/reconcile/apply")
+def apply_total_asset_calibration(payload: CalibrationSchema):
+    """把「实测总资产」吸收成一条可见的记账平差。
+
+    持仓差异归券商 CSV 导入、证券现金差异归现金校准，这里只吃「合起来对不上」的那部分。
+    """
+    with db_session(row_factory=sqlite3.Row) as conn:
+        displayed = float(build_dashboard(conn).get("total_assets") or 0.0)
+        try:
+            result = apply_calibration(
+                conn,
+                payload.manual_total_assets,
+                displayed_total_assets=displayed,
+                note=payload.note or "",
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        conn.commit()
+        # 校准后回读：让前端直接拿到对齐后的总资产，不必自己再算一遍
+        result["total_assets"] = build_dashboard(conn).get("total_assets")
+    return result
+
+
+@router.get("/snapshots/reconcile/total-assets")
+def get_total_asset_calibration():
+    with db_session(row_factory=sqlite3.Row) as conn:
+        return calibration_status(conn)
 
 
 SNAPSHOT_CSV_COLUMNS = [

@@ -293,6 +293,7 @@ import sqlite3
 try:
     from database import db_session, local_today_iso
     from dashboard import build_dashboard
+    from heartbeat import record_and_ping
     from snapshots import create_snapshot_record, resolve_snapshot_price_state
 except Exception as e:
     print(json.dumps({"status": "error", "stage": "import_snapshot", "detail": str(e)}), file=sys.stderr)
@@ -304,6 +305,14 @@ with db_session(row_factory=sqlite3.Row) as conn:
     # 否则会沿用旧价算出的数字直接进每日收益（并污染 TWR/今年/收益尺）。
     state = resolve_snapshot_price_state(conn, today)
     if state["is_stale"]:
+        # 心跳也要记（同 /cron/snapshot）：被闸门拦下算没跑成，不刷 last_ok_at，
+        # 否则价格源悄悄挂掉时曲线只是停在旧日期上，没有任何人被告知。
+        record_and_ping(
+            conn,
+            "snapshot",
+            ok=False,
+            detail=f"price_stale price_date={state['price_date']}",
+        )
         print(json.dumps({
             "status": "skipped",
             "reason": "price_stale",
@@ -312,6 +321,7 @@ with db_session(row_factory=sqlite3.Row) as conn:
         sys.exit(0)
     dash = build_dashboard(conn)
     snapshot_id, action = create_snapshot_record(conn, today, dash)
+    record_and_ping(conn, "snapshot", ok=True, detail=f"action={action} id={snapshot_id}")
     conn.commit()
 print(json.dumps({
     "status": "success",

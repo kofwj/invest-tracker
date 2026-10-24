@@ -140,6 +140,10 @@ const api = {
     compactSnapshots: () => axios.post(API + '/snapshots/compact'),
     saveReconcile: (payload) => axios.post(API + '/snapshots/reconcile', payload),
     getReconcile: () => axios.get(API + '/snapshots/reconcile'),
+    // 总资产校准：把「实测总额 - 看板」的差额吃成一笔可见的记账平差
+    // （后端 backend/total_asset_calibration.py，不摊回持仓/流水）
+    applyTotalAssetCalibration: (payload) => axios.post(API + '/snapshots/reconcile/apply', payload || {}),
+    getTotalAssetCalibration: () => axios.get(API + '/snapshots/reconcile/total-assets'),
 
     maintenanceStatus: () => axios.get(API + '/maintenance/status'),
     listBackups: () => axios.get(API + '/maintenance/backups'),

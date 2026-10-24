@@ -24,6 +24,33 @@
       </div>
     </div>
 
+    <!-- Q0 流水线心跳：备份 / 行情 / 快照「最近一次成功」是不是还新鲜 -->
+    <el-card shadow="never" class="ops-card">
+      <template #header>
+        <div class="ops-card-head">
+          <div>
+            <div class="ops-section-title"><span class="ops-q">Q0</span>流水线还在跑吗（心跳）</div>
+            <div class="ops-hint">看的是「上次成功是多久之前」，不是「今天有没有报错」——没人看日志时，逾期会走消息推送的运维通道喊人。</div>
+          </div>
+          <div class="ops-card-actions">
+            <el-tag size="small" :type="heartbeatSummary.tone" effect="light">{{ heartbeatSummary.text }}</el-tag>
+            <el-button size="small" @click="fetchMaintenance" :loading="maintenanceLoading">刷新</el-button>
+          </div>
+        </div>
+      </template>
+      <ul class="hb-list">
+        <li v-for="row in heartbeats" :key="row.job" class="hb-row" :class="'hb-' + row.tone">
+          <span class="hb-dot" aria-hidden="true"></span>
+          <span class="hb-label">{{ row.label }}</span>
+          <span class="hb-text">{{ row.text }}</span>
+          <span v-if="row.external_url" class="hb-flag">外部 dead-man 已配</span>
+        </li>
+        <li v-if="!heartbeats.length" class="hb-row hb-ok">
+          <span class="hb-text">还没有心跳数据：跑一次备份或行情同步就会出现（后端版本较旧时这里会一直是空的）。</span>
+        </li>
+      </ul>
+    </el-card>
+
     <!-- Q1 有哪些备份、能下载 / 恢复哪一份 -->
     <el-card shadow="never" class="ops-card">
       <template #header>
@@ -153,6 +180,45 @@ const latestBackupShort = computed(() => {
   if (name.length <= 18) return name;
   return `${name.slice(0, 8)}…${name.slice(-6)}`;
 });
+
+// 流水线心跳（backend/heartbeat.py）：看「上次成功多久之前」，不是「有没有报错」。
+// 后端没升级时 maintenanceStatus.heartbeats 不存在 → 空列表 + 一句解释，不报错。
+function heartbeatAgeText(row) {
+  const hours = Number(row?.age_hours);
+  if (!Number.isFinite(hours)) return '';
+  if (hours < 1) return '刚刚';
+  if (hours < 48) return `${Math.round(hours)} 小时前`;
+  return `${(hours / 24).toFixed(1)} 天前`;
+}
+
+function heartbeatText(row) {
+  const max = Number(row?.max_age_hours);
+  const limit = Number.isFinite(max) ? `阈值 ${Math.round(max)} 小时` : '阈值未知';
+  if (!row?.last_ok_at) return `还没有任何成功记录（${limit}）`;
+  const detail = row.last_detail ? ` · 最近一次：${row.last_detail}` : '';
+  return `上次成功 ${row.last_ok_at}（${heartbeatAgeText(row)}；${limit}）${detail}`;
+}
+
+const heartbeats = computed(() => {
+  const jobs = Array.isArray(maintenanceStatus.value?.heartbeats?.jobs)
+    ? maintenanceStatus.value.heartbeats.jobs
+    : [];
+  return jobs.map((row) => {
+    let tone = 'ok';
+    if (row.level === 'overdue' || row.level === 'never') tone = 'danger';
+    else if (row.level === 'due') tone = 'warn';
+    return { ...row, tone, text: heartbeatText(row) };
+  });
+});
+
+const heartbeatSummary = computed(() => {
+  if (!heartbeats.value.length) return { tone: 'info', text: '暂无心跳数据' };
+  const bad = heartbeats.value.filter((row) => row.tone === 'danger').length;
+  if (bad) return { tone: 'danger', text: `${bad} 条逾期` };
+  const soon = heartbeats.value.filter((row) => row.tone === 'warn').length;
+  if (soon) return { tone: 'warning', text: `${soon} 条接近逾期` };
+  return { tone: 'success', text: '全部正常' };
+});
 </script>
 
 <style scoped>
@@ -190,4 +256,33 @@ const latestBackupShort = computed(() => {
 .ops-card + .ops-card { margin-top: 16px; }
 .ops-card :deep(.el-card__body) { padding: 18px 20px; }
 .ops-card :deep(.el-input__wrapper) { min-height: 40px; }
+
+/* —— 流水线心跳 —— */
+.hb-list { list-style: none; margin: 0; padding: 0; }
+.hb-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 0;
+  font-size: 13px;
+  border-bottom: 1px dashed var(--app-hairline);
+  flex-wrap: wrap;
+}
+.hb-row:last-child { border-bottom: none; }
+.hb-label { font-weight: 600; color: var(--app-text); min-width: 88px; }
+.hb-text { color: var(--app-soft); }
+.hb-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--app-soft); flex: 0 0 auto; }
+.hb-ok .hb-dot { background: #2f9e44; }
+.hb-warn .hb-dot { background: #f08c00; }
+.hb-danger .hb-dot { background: #e03131; }
+.hb-danger .hb-text { color: #e03131; }
+.hb-warn .hb-text { color: #f08c00; }
+.hb-flag {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--app-soft);
+  border: 1px solid var(--app-hairline);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
 </style>

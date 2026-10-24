@@ -5,6 +5,68 @@
 
 ---
 
+## [未发布] — 待发版
+
+### 变更：手机端路线定稿为「中心后端 + PWA 终端」
+
+`docs/android-feasibility.md` 原来的结论是「Android 上跑 Python 后端、打一个自包含 APK」。实验做通了，
+但**路线本身否掉了**：现在开篇就是一句话结论——不在手机上跑后端，不在手机上放 SQLite，
+手机只是 PWA 终端，服务器是唯一的账本。
+
+否掉的理由按「会不会真的毁掉这个工具」排序写在最前面：两份 SQLite 就是两本账（直接毁掉对账）、
+Android 不会让你常驻跑后台任务（这工具的核心增量全在后台）、双向同步等于自己写一套 CRDT、
+端侧能力上限本来就低。原有实测数据（pandas/akshare 剥离、pydantic-core 交叉编译）整体降为附录，
+留着是为了以后不要有人拿这些数据重新踩一遍。**本次只改文档，不动代码。**
+
+### 新增：总资产校准（净值对不对的最后一道）
+
+持仓对账管股数与成本、现金校准管证券现金，两样都对了，合起来仍可能和券商 App 的**总资产**对不上：
+打新冻结、在途资金、汇率折算、某笔漏记的流水，单看哪一条都查不出来。原先 `/snapshots/reconcile`
+只把差额**记一笔**，没有任何吸收动作，于是「差在哪」永远悬着，也没有任何地方提示它正在变旧。
+
+- 新增 `backend/total_asset_calibration.py` 与表 `total_asset_calibrations`（schema **v22**）：
+  差额记成一条**独立平差余额**（`settings.total_assets_adjustment`），不摊回持仓、不摊回流水，
+  所以「从哪天开始歪的」留在原地，一眼能看出来。
+- 平差参与 `portfolio_totals.compute_portfolio_totals()` 的 `total_assets`，看板与 `daily_snapshots`
+  同时对齐实盘——否则就是「看板对齐了、净值曲线还差着」的第二本账。
+- 重新校准自动收敛：`新平差 = 旧平差 + (实测 − 显示)`；显示值本身含旧平差，不会重复叠加。
+- 接口：`POST /snapshots/reconcile/apply`、`GET /snapshots/reconcile/total-assets`；dashboard 返回
+  新增 `total_assets_adjustment` 与 `calibration`（`days_since / last_gap / level / hint / stale_days`）。
+- 前端新增 `CalibrationHint.vue`，挂在总览「现在总资产」下面：**距上次校准 N 天 · 上次差额 Y 元**，
+  超过 30 天标黄、再久标红；点开填实测总资产，实时预览差额，提交后刷新看板。
+- 校准状态在 dashboard 里走 `_safe_calibration_status()` 兜底：一条提示读不出来，不能让首页 500。
+
+### 新增：流水线心跳（失败会自己喊，不用等周末才发现）
+
+前三道防线都默认「任务跑了」：备份失败写 stderr、行情失败返回 500、快照被价格闸门拦下返回 `skipped`。
+可真实失效是**根本没跑**——cron 被删、脚本挂掉、容器起不来，日志里一片安静，等到周末想看净值才发现
+周三起就没快照了。
+
+- 新增 `backend/heartbeat.py`：每条流水线记 `settings.heartbeat:<job>:last_ok_at`，阈值按「多久没成功
+  算出事」定——`backup` 30 小时（容一次失败重跑）、`sync_prices` / `snapshot` 96 小时（扛四天长假），
+  可用 `HEARTBEAT_<JOB>_MAX_AGE_HOURS` 覆盖。
+- 两条命：**对外 dead-man**（成功才 ping `HEARTBEAT_<JOB>_URL`，失败刻意不 ping，让外部服务超时自己
+  报警，进程被 kill 也漏不掉）+ **对内逾期检查**（挂 `/cron/notify-events`，逾期走 notify 的 `ops`
+  通道喊人，没配外部 URL 也能用，crontab 不用改）。
+- 「从来没成功过」也算逾期：刚部署完忘配 crontab 正是最该被喊出来的场景，靠 notify 的冷却兜频率。
+- 上报点刻意下沉到**函数层**而不是 router 层：`_sync_prices_impl()` 记一次，cron HTTP、docker 直调、
+  页面手动同步、curl 回退全部自动覆盖，避免哪条路径漏记。`record_and_ping()` 先 commit 再 ping，
+  5s 网络超时不压在调用方的写事务里。
+- 脚本侧：`scripts/backup_daily.sh` 成功/失败各上报一次（失败还会透传退出码），失败时
+  `report_heartbeat false "daily exit=N"`；`scripts/cron_sync_prices.sh` 的内联 docker 调用与
+  `/cron/snapshot` 的价格闸门对齐，stale 记 `ok=false`。未配 `CRON_API_TOKEN` 时打一行
+  `heartbeat skip`，不影响备份。上报走 `POST /cron/heartbeat`，脚本零后端 import。
+- `/maintenance/status` 增 `heartbeats` 块，运维页（`/ops/backup`）顶部列出三条的颜色与外链配置状态。
+  读取包在 try 里，心跳读失败不能让运维页 500。
+
+### 测试
+
+- 后端 617 → **636**。新增 `tests/test_total_asset_calibration.py`（首次校准/收敛/平差参与总额/
+  状态分级/接口往返）与 `tests/test_heartbeat.py`（阈值分级、`never` 也算逾期、只喊缺的那条、
+  `notify=False` 只算不发、ping 未配置与失败不炸、`/cron/heartbeat` 鉴权、`/maintenance/status`
+  透传），并把 `heartbeat` 加入 `tests/conftest.py` 的模块缓存清理列表。
+- 前端 243 → **247**（31 文件全绿）。新增 `frontend/tests/calibration-hint.test.js`，覆盖 `CalibrationHint.vue` 的空状态首屏保护、差额平差提示、输入弹窗与提交校准接口联动，以及 `BackupOpsTab.vue` 的 Q0 流水线心跳卡片与 dead-man 标记。`template-bindings.test.js`、`a11y-static.test.js` 与 `overview-sections.test.js` 实测全部通过，`vite build` 零 error 编译通过。
+
 ## [1.7.2] — 2026-10-24 — 备份凭据收权限、节假日表过期不再静默
 
 ### 安全

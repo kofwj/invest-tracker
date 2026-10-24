@@ -186,6 +186,16 @@ def maintenance_status():
     backups = sorted(BACKUP_PATH.glob("*.bak"), key=lambda p: p.stat().st_mtime, reverse=True)
     latest = backups[0] if backups else None
     db = Path(DB_PATH)
+    # 心跳读失败不能让整个运维页变 500 —— 备份状态本身还是有效的。
+    try:
+        try:
+            from .heartbeat import heartbeat_status
+        except ImportError:
+            from heartbeat import heartbeat_status
+        with db_session() as conn:
+            heartbeats = heartbeat_status(conn)
+    except Exception:
+        heartbeats = {"checked_at": None, "jobs": [], "overdue": [], "ok": True}
     return {
         "db_path": str(db),
         "db_exists": db.exists(),
@@ -194,6 +204,8 @@ def maintenance_status():
         "latest_backup_at": datetime.fromtimestamp(latest.stat().st_mtime, LOCAL_TZ).replace(tzinfo=None).isoformat(timespec="seconds") if latest else None,
         "backup_count": len(backups),
         "backup_dir": str(BACKUP_PATH),
+        # 流水线心跳（见 heartbeat.py）：ops 页据此显示「上次成功多久之前」。
+        "heartbeats": heartbeats,
     }
 
 

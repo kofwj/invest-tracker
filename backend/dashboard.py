@@ -1,8 +1,10 @@
 try:
     from .portfolio_totals import compute_portfolio_totals
+    from .total_asset_calibration import CALIBRATION_STALE_DAYS, calibration_status
     from .snapshots import latest_price_sync_at, manual_price_codes as _manual_price_codes
 except ImportError:
     from portfolio_totals import compute_portfolio_totals
+    from total_asset_calibration import CALIBRATION_STALE_DAYS, calibration_status
     from snapshots import latest_price_sync_at, manual_price_codes as _manual_price_codes
 
 # Re-export for older imports / tests that may reference this name.
@@ -15,6 +17,21 @@ def _safe_manual_price_codes(conn):
         return list(_manual_price_codes(conn) or [])
     except Exception:
         return []
+
+def _safe_calibration_status(conn):
+    """校准状态；读不出来就退化成「未校准」，dashboard 不能因为提醒文案而 500。"""
+    try:
+        return calibration_status(conn)
+    except Exception:
+        return {
+            "adjustment": 0.0,
+            "has_history": False,
+            "days_since": None,
+            "last_gap": None,
+            "stale_days": CALIBRATION_STALE_DAYS,
+            "level": "never",
+            "hint": "",
+        }
 
 
 def build_dashboard(conn):
@@ -53,6 +70,11 @@ def build_dashboard(conn):
         "pending_purchase": totals["pending_purchase"],
         "pending_count": totals["pending_count"],
         "total_assets": totals["total_assets"],
+        # 记账平差：用户「实测总资产」与账面差额的累计余额（默认 0），
+        # 单独列出来，前端在总资产旁边标一句「其中平差 ±X」，不藏进任何分项里。
+        "total_assets_adjustment": totals.get("total_assets_adjustment", 0.0),
+        # 校准状态：距上次校准多少天、上次差额多少，供看板提醒「该对账了」
+        "calibration": _safe_calibration_status(conn),
         "total_profit": totals["total_profit"],
         "lifetime_profit": totals["lifetime_profit"],
         "holdings_count": totals["holdings_count"],

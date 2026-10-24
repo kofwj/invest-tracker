@@ -401,6 +401,28 @@ def _sync_prices_impl(backup: bool = False):
             conn2.commit()
     except Exception as kline_exc:
         logger.warning("kline incremental sync after price sync failed: %s", kline_exc, exc_info=True)
+    # 心跳（见 heartbeat.py）：让「行情流水线悄悄停了」变得可发现。
+    # 判据是「这一轮到底有没有把新鲜价弄进来」，不是 HTTP 200：
+    # 一只都取不到价（价格源整段挂掉）时不刷 last_ok_at，96h 后 check_heartbeats 会喊人；
+    # 空仓（rows 为空）算成功 —— 没东西可同步不是故障。
+    # 写在这里（而不是某个 router）是因为 cron、docker 直调、页面手动同步都会走到这里。
+    try:
+        try:
+            from .heartbeat import record_and_ping as _record_heartbeat
+        except ImportError:
+            from heartbeat import record_and_ping as _record_heartbeat
+        with db_session() as hb_conn:
+            _record_heartbeat(
+                hb_conn,
+                "sync_prices",
+                ok=(not rows) or (updated + unchanged) > 0,
+                detail=(
+                    f"checked={len(rows)} updated={updated} "
+                    f"unchanged={unchanged} failed={len(failed)}"
+                ),
+            )
+    except Exception as hb_exc:  # 心跳写不进去不能反过来把同步结果变成失败
+        logger.warning("price sync heartbeat failed: %s", hb_exc)
     return {
         "status": "success",
         "updated": updated,

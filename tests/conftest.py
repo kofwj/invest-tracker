@@ -77,6 +77,7 @@ def clear_backend_module_cache():
         'broker_reconcile',
         'routers_broker_reconcile',
         'portfolio_helpers',
+        'total_asset_calibration',
         'notify',
         'routers_notify',
         'routers_cron',

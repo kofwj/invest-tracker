@@ -14,6 +14,7 @@ try:
     from .snapshots import ensure_snapshot_columns, ensure_portfolio_cash_flows_table, ensure_reconcile_table
     from .ai_client import ensure_ai_tables
     from .reason_cache import ensure_reason_tables
+    from .total_asset_calibration import ensure_total_asset_calibration_table
     from .dividend_calendar import ensure_dividend_event_tables
 except ImportError:
     from cash import ensure_cash_base, set_setting, ensure_cash_flow_indexes
@@ -27,11 +28,12 @@ except ImportError:
     from broker_reconcile import ensure_broker_reconcile_history_table
     from snapshots import ensure_snapshot_columns, ensure_portfolio_cash_flows_table, ensure_reconcile_table
     from ai_client import ensure_ai_tables
+    from total_asset_calibration import ensure_total_asset_calibration_table
     from reason_cache import ensure_reason_tables
     from dividend_calendar import ensure_dividend_event_tables
 
 
-SCHEMA_VERSION = 21
+SCHEMA_VERSION = 22
 SCHEMA_VERSION_KEY = "schema_version"
 
 
@@ -437,6 +439,11 @@ def migrate_to_v21_discipline_defaults(conn):
         )
 
 
+def migrate_to_v22_total_asset_calibration(conn):
+    """总资产校准历史表（账实平差）。幂等：CREATE TABLE IF NOT EXISTS。"""
+    ensure_total_asset_calibration_table(conn)
+
+
 MIGRATIONS = [
     (1, migrate_to_v1_core_compat),
     (2, migrate_to_v2_holdings_and_snapshots),
@@ -459,6 +466,7 @@ MIGRATIONS = [
     (19, migrate_to_v19_ai_call_log_warnings),
     (20, migrate_to_v20_dividend_events),
     (21, migrate_to_v21_discipline_defaults),
+    (22, migrate_to_v22_total_asset_calibration),
 ]
 
 

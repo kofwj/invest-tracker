@@ -7,8 +7,10 @@ from __future__ import annotations
 
 try:
     from .cash import calculated_securities_cash, ensure_cash_base
+    from .total_asset_calibration import total_asset_adjustment
 except ImportError:
     from cash import calculated_securities_cash, ensure_cash_base
+    from total_asset_calibration import total_asset_adjustment
 
 PENDING_DIRECTIONS = ("申购待确认", "待确认申购")
 
@@ -112,7 +114,10 @@ def compute_portfolio_totals(conn, *, holdings=None):
     bank_balance = bank_balance_total(conn)
     pending_purchase, pending_count = pending_purchase_stats(conn)
     securities_cash, cash_base, tx_flow = calculated_securities_cash(conn)
-    total_assets = market_value + bank_balance + securities_cash + pending_purchase
+    # 记账平差：用户「实测总资产」与账面差额的累计余额（默认 0，老库行为不变）。
+    # 放在最后相加，是为了让上面每一行仍是「算出来的」，平差永远是独立可见的一项。
+    adjustment = total_asset_adjustment(conn)
+    total_assets = market_value + bank_balance + securities_cash + pending_purchase + adjustment
 
     cat_mv = compute_category_market_values(holdings)
 
@@ -127,6 +132,7 @@ def compute_portfolio_totals(conn, *, holdings=None):
         "pending_purchase": pending_purchase,
         "pending_count": pending_count,
         "total_assets": total_assets,
+        "total_assets_adjustment": adjustment,
         "total_profit": total_profit,
         "lifetime_profit": lifetime_profit,
         "category_market_value": cat_mv,

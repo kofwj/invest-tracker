@@ -44,6 +44,7 @@ test -f frontend/src/components/AppHeader.vue
 test -f frontend/src/components/HomeDashboard.vue
 test -f frontend/src/components/AppDialogs.vue
 test -f frontend/src/components/LoginOverlay.vue
+test -f frontend/src/components/CalibrationHint.vue
 # 分析组收敛后「资产快照」并入「收益与快照」：这里断言"已并入"，而不是"文件还在"
 grep -q '快照明细' frontend/src/views/PerformanceTab.vue
 test -f frontend/src/views/AllocationTab.vue
@@ -241,6 +242,8 @@ required_backend_files=(
   backend/ai_brief.py
   backend/dividend_calendar.py
   backend/routers_cron.py
+  backend/heartbeat.py
+  backend/total_asset_calibration.py
 )
 for file in "${required_backend_files[@]}"; do
   test -f "$file"
