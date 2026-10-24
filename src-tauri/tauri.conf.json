@@ -5,8 +5,8 @@
   "identifier": "com.investtracker.desktop",
   "build": {
     "frontendDist": "../frontend/dist",
-    "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:8080",
+    "beforeDevCommand": "mkdir -p dist && npm run dev",
     "beforeBuildCommand": "npm run build"
 
   },

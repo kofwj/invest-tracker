@@ -43,10 +43,30 @@
   `~/Library/Application Support/InvestTracker/data/` 一直是空的——没人真正打开过打包产物，所以没被发现。
 
   现在前端产物随 `bundle.resources` 打进 `.app/Contents/Resources/frontend/dist`，壳在拉起侧车时
-  用 `resource_dir()` 把它显式写进 `FRONTEND_DIST`；该目录不存在（`cargo run` 开发态）就不设，
-  留给后端按仓库路径自己找，开发流程不变。实测双击启动后 `GET /` 返回 200 `text/html` 与真实首页、
-  `/holdings` 深链回落正常、`Cmd+Q` 退出后侧车进程与端口一并释放。侧车二进制不用重打，
-  改前端只需重打 10MB 量级的壳。
+  用 `resource_dir()` 把它显式写进 `FRONTEND_DIST`（打包后就是 `Contents/Resources/frontend/dist`，
+  `cargo run` 时是 `target/debug/frontend/dist`；目录不在就不设，留给后端按仓库路径自己找）。
+  实测双击启动后 `GET /` 返回 200 `text/html` 与真实首页、`/holdings` 深链回落正常、`Cmd+Q`
+  退出后侧车进程与端口一并释放。侧车二进制不用重打，改前端只需重打 10MB 量级的壳。
+
+  代价是 `bundle.resources` 一旦声明，`tauri-build` 就要求该路径在**编译期**存在：干净 clone（还没
+  构建过前端）上 `cargo check`、`tauri dev` 会直接以「resource path `../frontend/dist` doesn't exist」
+  失败。所以 `beforeDevCommand` 先 `mkdir -p dist` 占位，`beforeBuildCommand` 本来就会真构建。
+  实测空目录即可满足校验，`cargo check` 正常通过。
+
+- **`tauri dev` 里 `devUrl` 的端口和 vite 对不上，一直卡在等待 dev server。** `devUrl` 写的是 5173，
+  而 `frontend/vite.config.js` 的 `server.port` 是 8080：`beforeDevCommand` 每次把 vite 起在 8080，
+  Tauri 这边反复打印「Waiting for your frontend dev server to start on http://localhost:5173/」空等。
+  此前只跑过 `tauri build`（不读 `devUrl`），所以一直没暴露。改成 8080 后 `tauri dev` 正常启动，
+  实测窗口内 `/api/*` 请求全部 200。
+
+- **CI 增加 `desktop` job，Rust 改动不再是无人区。** 此前 `.github/workflows/` 与 `scripts/check.sh`
+  都没有一行 `cargo`，`cargo check`、`tauri.conf.json` 的 JSON 合法性、`externalBin` /
+  `resources` 的路径是否正确全靠人肉——上面那个 404 正好属于这一类，CI 拦不住。
+
+  新 job 跑在 `macos-latest`（与唯一的分发平台一致，也不用装 Linux 的 webkit 依赖），步骤是：
+  按 host triple 放一个空侧车文件、`mkdir -p frontend/dist`、校验 `tauri.conf.json` 语法、
+  `cargo check --locked`。占位只为了让 `tauri-build` 的路径校验通过，`cargo check` 不读内容，
+  真产物仍由 `scripts/build-desktop.sh` 打。
 
 - **本地单进程模式下 `/holdings` `/transactions` `/deposits` 返回裸 JSON 而不是页面。** 这三条
   路径既是前端 history 路由、又是接口路径，接口赢了路由匹配，1.6.0 里「前端 history 路由能直接

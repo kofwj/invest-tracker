@@ -60,3 +60,24 @@ jobs:
         run: npm run build
       - name: Production dependency audit (0 vulnerabilities enforced)
         run: npm audit --omit=dev
+
+  desktop:
+    name: Desktop shell (cargo check)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      # tauri-build 会校验 externalBin 与 resources 声明的路径是否真的存在：干净 clone 里
+      # src-tauri/binaries/ 被 gitignore、frontend/dist 也得先构建过，两样都缺时 cargo check
+      # 直接以「resource path ... doesn't exist」失败。这里只放空文件与空目录占位
+      # （cargo check 不读内容），真正的产物仍由 scripts/build-desktop.sh 打。
+      - name: 准备 cargo check 需要的路径占位
+        run: |
+          triple="$(rustc -vV | sed -n 's/host: //p')"
+          mkdir -p frontend/dist src-tauri/binaries
+          : > "src-tauri/binaries/invest-tracker-backend-$triple"
+          echo "target triple: $triple"
+      - name: 校验 tauri.conf.json 语法
+        run: python3 -c "import json; json.load(open('src-tauri/tauri.conf.json')); print('tauri.conf.json ok')"
+      - name: cargo check
+        working-directory: src-tauri
+        run: cargo check --locked
