@@ -1,135 +1,96 @@
-# Invest Tracker · 真仓账本
+<h1 align="center">Invest Tracker · 真仓账本</h1>
 
-个人真仓记账：持仓、交易、银证现金、存款、日快照、收益与纪律。  
-**不模拟、不自动下单**。草稿确认后才入账。
+<p align="center">
+  <strong>严肃的个人真仓记账：本地唯一账本，不给别人管，更不让数字变旧。</strong>
+</p>
 
-变更按日见 [CHANGELOG.md](CHANGELOG.md)。VPS 步骤见 [docs/deploy-vps.md](docs/deploy-vps.md)。
-桌面应用（Tauri 壳、打包与 dev 模式）见 [docs/desktop.md](docs/desktop.md)。
-界面规范与 Figma 上手见 [docs/design/](docs/design/)（`figma-handoff.md` 规范与逐页清单、
-`figma-basics.md` 操作速成、`page-performance-layers.md` 图层树）。
+<p align="center">
+  持仓对账 · 银证勾稽 · 总资产校准平差 · 收益日快照 · 纪律预警 · 双轨心跳监控<br />
+  <strong>不模拟、不自动下单、不写双本账</strong>。草稿确认后入账，手机只做 PWA 终端。
+</p>
 
----
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python" />
+  <img src="https://img.shields.io/badge/Vue-3-4FC08D?style=for-the-badge&logo=vuedotjs&logoColor=white" alt="Vue 3" />
+  <img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/SQLite-WAL%20(v22)-003B57?style=for-the-badge&logo=sqlite&logoColor=white" alt="SQLite" />
+  <img src="https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" />
+  <img src="https://img.shields.io/badge/PWA-Ready-5A0FC8?style=for-the-badge&logo=pwa&logoColor=white" alt="PWA" />
+  <img src="https://img.shields.io/badge/License-AGPL--3.0-1f6feb?style=for-the-badge" alt="AGPL-3.0" />
+</p>
 
-## 它做什么
+<p align="center">
+  <img src="https://img.shields.io/github/stars/kofwj/invest-tracker?style=flat-square&color=ffd33d&logo=github" alt="Stars" />
+  <img src="https://img.shields.io/github/forks/kofwj/invest-tracker?style=flat-square&color=8957e5&logo=github" alt="Forks" />
+  <img src="https://img.shields.io/github/last-commit/kofwj/invest-tracker?style=flat-square&color=3fb950&logo=github" alt="Last commit" />
+  <img src="https://img.shields.io/badge/Tests-636%20backend%20%7C%20249%20frontend-3fb950?style=flat-square" alt="Tests" />
+</p>
 
-本地或 VPS 上一份自己的账：
-
-- **记清楚**：买了什么、证券现金多少、存款何时到期
-- **对得上**：券商持仓 CSV/Excel 对账；银证流水 vs 组合投入/取出勾稽；总资产实测校准（差额单独立账）
-- **看得懂**：今日贡献粗估、对大盘强弱、仓位是否偏离目标
-- **管得住**：纪律破线、再平衡草稿、价格预警、短通知
-
-**不是** 量化回测，也不是自动交易，更不会替你把银证转入写成组合投入。
-
----
-
-## 页面
-
-顶栏四组。默认进 **今日总览**。
-
-| 组 | 页 | 路径 | 做什么 |
-|----|----|------|--------|
-| 总览 | 今日总览 | `/` | 今天赚了多少 / 本月 / 今年 + 待办；资产与仓位；曲线与持仓预览；距上次总资产校准几天 / 上次差额 |
-| 日常 | 持仓明细 | `/holdings` | 当前仓、家底、近一年收益、持仓校正、手动改价；**点标的名看 K 线与基本面**；顶部「除权除息日历」列近 30 天已排期的除权除息 |
-| | 交易录入/管理 | `/transactions` | 买卖/分红/草稿确认入账 |
-| | 银行存款 | `/deposits` | 到期分布；年 / 到期前 / 整期利息 |
-| | 券商对账 | `/broker` | 上传券商持仓表 → 差异 → 确认后写入持仓校正；预览/应用会留历史 |
-| 分析 | 今天该看 | `/decision` | 市场结论、持仓今日贡献、破线条数（明细在结构与目标）、观察与预警 |
-| | 收益与快照 | `/performance` | 逐日收益 + 快照明细 + 人工对账 + 风险 + 组合投入/取出（原「收益分析」与「资产快照」已合并到这一页） |
-| | 结构与目标 | `/allocation` | 看现状 / 设目标 / 处理偏离（目标尺子、配置诊断、纪律与再平衡草稿） |
-| 设置 | 消息推送 | `/ops/notify` | 通道密钥（库优先于 `.env`）、事件路由、试推 |
-| | 证券账户 | `/cash` | 多账户费率、现金校准、银证流水、**银证勾稽** |
-| | 数据备份 | `/ops/backup` | 备份 / 下载 / 恢复 / 上传；顶部流水线心跳（哪条多久没成功） |
-
-旧地址仍跳转：`/market` → 今天该看；`/discipline` → 结构与目标；`/maintenance` → 消息推送；
-`/snapshots` → 收益与快照（资产快照已并入）；`/klines` → 持仓明细（K 线已降级为点标的名打开的弹窗）。
-
-金额打码：`?mask=1` 或 `?screenshot=1`。主题：白天 / 夜间 / 跟随系统。
+<p align="center">
+  <strong>简体中文</strong> · <a href="CHANGELOG.md">更新日志</a> · <a href="docs/deploy-vps.md">VPS 部署</a> · <a href="docs/desktop.md">桌面版指南</a> · <a href="docs/android-feasibility.md">手机端路线</a>
+</p>
 
 ---
 
-## 核心口径
+> [!NOTE]
+> 这是个人严肃真仓记账工具。坚持**中心唯一账本原则**：数据落在本地 SQLite（或个人私有 VPS），手机端作为 PWA 客户端访问，不在端侧做双向写入与 CRDT 同步，确保资产数字永远对齐。
 
-三套数字本来就不会相等。对华泰等「累计盈亏」，优先看全周期。
+## 这是什么
 
-| 口径 | 算法 | 用在哪 |
-|------|------|--------|
-| 持仓浮盈 | `(现价 − 普通成本) × 数量 + 累计分红` | 当前仓 |
-| 全周期盈亏 | `(现价 − 摊薄成本) × 数量` | 接近券商累计盈亏 |
-| 整户总账 | `总资产 − 组合外部净投入` | 收益与快照；依赖组合资金流水 |
-| 今日贡献 | `涨跌% × 市值` | 盘中参考，**不入账** |
+不是那种把模拟盘当真仓的玩具，不是自动下单的黑盒量化软件，更不是多端各自存一份 SQLite 的同步噩梦。
 
-### 日期与时区
+它是属于你自己的**真仓财务底座**：
 
-- 全局只有一把"今天"：`APP_TIMEZONE`（默认 `Asia/Shanghai`）。后端与前端都按它算日期，
-  交易时段（9:30 / 11:30 / 13:00 / 15:00）的判定同理 —— 换机器、换浏览器时区都不会改变
-  "今天是哪天"（前端启动时从 `/api/health` 取该时区；取不到则用默认值）。
-- 选历史区间看收益时，以**该区间末的最后一条快照**为期末（日期、资产、现金流同一口径）；
-  `end_date` ≥ 今天按当前口径（实时总资产、含今日流水）；该日期之前没有任何快照时整体回退当前口径（不会拿今天的资产配历史现金流）。
-- 月度收益已剔除区间内的外部投入/取出，转入不会被算成"当月收益"。
-- 同一天的现金流水与快照以 `created_at` 判先后：快照之后转入的钱不算收益；老数据缺
-  `created_at` 时按旧口径（同日流水都算作快照之后的现金流）处理。
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                        中心唯一账本 (VPS / 本地服务)                    │
+│   SQLite (WAL, schema v22) ── 真实资产与历史快照的单一真相来源        │
+└───────────┬────────────────────────────────────────────────┬───────────┘
+            │                                                │
+   ┌────────┴───────────────────────────┐           ┌────────┴──────────────┐
+   │ 终端接入 (只读呈现 / 确认动账)     │           │ 定时流水线 (Cron / 监控)│
+   ├────────────────────────────────────┤           ├───────────────────────┤
+   │ • 桌面端 (Tauri 2 原生打包)        │           │ • 15:20 交易日行情同步│
+   │ • 浏览器 (PC 宽屏三栏工作台)       │           │ • 16:40 净值快照+闸门 │
+   │ • 手机端 (PWA 离线底座+网络优先)   │           │ • 02:15 账本自动备份  │
+   └────────────────────────────────────┘           └───────────┬───────────┘
+                                                                │
+                                            ┌───────────────────┴───────────┐
+                                            │ 双轨心跳 (失败自报警)         │
+                                            │ • 对外: dead-man URL ping     │
+                                            │ • 对内: 飞书/钉钉/企微/TG 逾期 │
+                                            └───────────────────────────────┘
+```
 
-### 交易怎么动账
-
-| 方向 | 持仓 | 证券现金 |
-|------|------|----------|
-| 买入 | +数量 | −金额 − 费 |
-| 卖出 | −数量 | +金额 − 费 |
-| 分红 | 不变 | +现金 |
-| 分红再投资 | +份额 | 不变（金额记累计分红） |
-| 申购待确认 | 不进正式持仓 | −现金 |
-
-费率在「证券账户」按账户、按品种设；录入时只是估算，**以券商成交单为准**。
-
-### 两套现金流水
-
-| 流水 | 记什么 | 在哪维护 |
-|------|--------|----------|
-| 银证流水 `cash_flows` | 银证转入/转出、现金校准 | 证券账户 |
-| 组合流水 `portfolio_cash_flows` | 投入 / 取出（金额为正） | 收益与快照 |
-
-银证转入 **不会** 自动生成组合投入。收益与快照有建议草稿；证券账户页会按 **同日、同额、同方向** 勾稽（容差 0.05），只标差、不入账。
-
-### 券商对账
-
-1. 券商 App 导出持仓 CSV / Excel（识别「证券代码 / 数量 / 成本价」等列）
-2. 可选填券商证券现金
-3. 上传预览差异；勾选后确认框会列出将改写的数量与成本
-4. 写入「持仓校正」（先自动备份，再重扫）
-
-每次预览和应用各留一条历史（schema v13 `broker_reconcile_runs`）。
-
-### 总资产校准（净值对不对的最后一道）
-
-持仓对账管「股数与成本」，现金校准管「证券现金」，两样都对了，合起来仍可能和券商 App 里的
-**总资产**对不上：打新冻结、在途资金、跨境汇率、某笔漏记的流水，单看哪一条都查不出来。
-
-- 总览「现在总资产」底下有一行小字：**距上次校准 N 天 · 上次差额 Y 元**，点它填券商 App 里的实测总资产；
-- 差额记成一条**独立的平差余额**（`total_asset_calibrations`，schema v22），不摊回持仓、不摊回流水，
-  所以「从哪天开始歪的」留在原地，一眼能看出来；
-- 平差参与 `total_assets` 计算，看板与日终快照同时对齐实盘，不会出现「看板对了、净值曲线还差着」；
-- 重新校准自动收敛：`新平差 = 旧平差 + (实测 − 显示)`，显示值已含旧平差，不会重复叠加。
-
-超过 30 天没校准标黄、再久标红，但它只是提醒，不影响任何计算。
-
-### 存款利息
-
-单利、365 天。
-
-| 字段 | 含义 |
-|------|------|
-| 预计年利息 | 本金 × 年利率 |
-| 到期前利息 | 本金 × 利率 × 剩余天数 / 365；已到期为 0 |
-| 整期利息 | 起存日 → 到期日；缺起存日显示 — |
+- **记清楚**：买了什么、证券现金多少、存款何时到期。
+- **对得上**：
+  - **券商对账**：导入券商 CSV / Excel 比对持仓股数与成本；
+  - **银证勾稽**：银证转账流水 vs 组合外部资金投入同日同向同额自动勾稽；
+  - **总资产校准平差**：实盘与账面总资产差额单独立账，看得见哪天开始歪的，不毁坏历史持仓。
+- **看得懂**：今日贡献粗估、对大盘强弱、仓位是否偏离目标。
+- **管得住**：纪律破线、再平衡草稿、价格预警、短通知推送。
+- **静默失败克星**：流水线自带心跳；一旦没跑成，自动通过消息通知甚至外部 dead-man 开关（如 healthchecks.io）把人喊醒。
 
 ---
 
-## 快速启动
+## 快速开始
 
-### 本地运行（单进程，最省事）
+### 推荐：Docker 部署（VPS / 局域网）
 
-不需要 Docker：后端一个进程同时提供接口和页面，一个端口。
+一行启动，开箱即用：
+
+```bash
+git clone https://github.com/kofwj/invest-tracker.git
+cd invest-tracker
+cp .env.example .env
+docker compose up -d --build
+# → 前端 http://localhost:8080 | 后端 API http://localhost:8000
+```
+
+<details>
+<summary>本地单进程运行（最省事，不用 Docker）</summary>
+
+不需要 Docker：后端一个进程同时提供接口和前端页面，占用一个端口：
 
 ```bash
 git clone https://github.com/kofwj/invest-tracker.git && cd invest-tracker
@@ -139,256 +100,231 @@ cd frontend && npm install && npm run build && cd ..
 python backend/main.py
 ```
 
-浏览器会自动打开 <http://127.0.0.1:8000>（`INVEST_TRACKER_NO_BROWSER=1` 可关掉自动打开）。
+浏览器会自动打开 <http://127.0.0.1:8000>（`INVEST_TRACKER_NO_BROWSER=1` 可关闭自动打开）。
 
-只想自己在本机用，上面就够了。要让同一局域网的手机 / 平板访问，
-用 `HOST=0.0.0.0 PORT=8000 python backend/main.py`，并且**务必**同时设
-`INVEST_TRACKER_PASSWORD`（开了鉴权后跨域默认关闭，同源直接用没问题）。
-
-没有 `frontend/dist` 时后端只提供 API（改前端仍走下面的本机开发流程）。
-数据库和备份**不在仓库目录里**，见「数据在主机的哪里」。
-
-### Docker（VPS / 多机访问）
-
+同一局域网设备（如手机）访问：
 ```bash
-cp .env.example .env
-docker compose up -d --build
+HOST=0.0.0.0 PORT=8000 INVEST_TRACKER_PASSWORD=你的密码 python backend/main.py
 ```
+</details>
 
-| | 地址 |
-|--|------|
-| 前端 | http://localhost:8080 |
-| API | http://localhost:8000 |
-| 健康检查 | http://localhost:8000/api/health |
+<details>
+<summary>本地全栈开发环境</summary>
 
-```bash
-make up / make down / make logs / make test / make check
-```
-
-开发 Compose 会给后端装测试依赖（`INSTALL_DEV=true`），所以 `make test` 能直接跑 pytest。
-
-### 本机开发
+前后端分离调试热更新：
 
 ```bash
+# 后端
 python3 -m venv venv && source venv/bin/activate
 pip install -r backend/requirements-dev.txt
 PYTHONPATH=backend python backend/main.py
-```
 
-```bash
+# 前端 (开新终端)
 cd frontend && npm install && npm run dev
+# → 前端开发页 http://localhost:5173
 ```
+</details>
 
-### 桌面应用（macOS）
+<details>
+<summary>macOS 原生桌面应用（Tauri 2 壳 + PyInstaller 侧车）</summary>
 
-打包成原生 `.app`（Tauri 2 外壳 + PyInstaller 侧车），双击即用，不用另起后端：
+双击即用，内置 Python 独立后端，不污染系统环境：
 
 ```bash
 bash scripts/build-desktop.sh     # 产物在 src-tauri/target/release/bundle/
 ```
+细节与限制见 [docs/desktop.md](docs/desktop.md)。
+</details>
 
-只想调壳本身就在仓库根跑 `./frontend/node_modules/.bin/tauri dev`：前端走 vite 热更新，
-后端按上面的方式自己起在 8000。细节与已知限制见 [docs/desktop.md](docs/desktop.md)。
+<details>
+<summary>手机端 PWA 终端使用</summary>
 
----
+不推荐在手机跑后台服务或放 SQLite（见 [docs/android-feasibility.md](docs/android-feasibility.md)）。
 
-## 测试与 CI
-
-```bash
-# 后端
-PYTHONPATH=backend python3 -m pytest tests/ -q
-
-# 前端单测 + 生产构建
-cd frontend && npm test && npm run build
-```
-
-GitHub Actions（`main` / `deploy/vps` / PR）：
-
-- 后端：ruff `F,E9` + pytest
-- 前端：vitest + `npm run build` + `npm audit --omit=dev`
+手机浏览器打开你的部署地址（需 HTTPS），在菜单中选择 **「添加到主屏幕」**，即可像原生 App 一样全屏沉浸使用（网络优先，离线时保留安全底座）。
+</details>
 
 ---
 
-## 发版
+## 怎么用
 
-版本号有**四处**必须一致：`backend/version.py` 是单一来源，`frontend/public/sw.js` 的
-`CACHE_NAME`、`src-tauri/tauri.conf.json` 的 `version`、`src-tauri/Cargo.toml` 的 `version`
-跟着它走。前两处被 `frontend/tests/pwa-static.test.js` 逐字比对，少改就红；Cargo 那行没有
-测试盯着，但历史上每次发版都同步，漏了构建日志里还是旧号，翻日志时会以为打错了包。
+顶栏分为四组，默认进入 **今日总览**。进系统后从上往下看：
 
-注意 `Cargo.lock`：CI 跑的是 `cargo check --locked`，改了 `Cargo.toml` 不改 lock 会直接报
-*cannot update the lock file because `--locked` was passed*。把 lock 里 `invest-tracker` 那条
-的 `version` 手工改掉即可（`cargo check --locked` 本地跑一遍就能确认），不用整库 `cargo update`。
+| 组别 | 页面 | 路由 | 核心功能 |
+|------|------|------|----------|
+| **总览** | **今日总览** | `/` | 今天赚了多少 / 本月 / 今年 + 待办；资产分布与仓位比例；净值曲线；总资产校准状态提醒 |
+| **日常** | **持仓明细** | `/holdings` | 当前持仓、成本与浮盈、持仓校正、手动改价；**点标的名看 K 线与基本面**；顶部「除权除息日历」列近 30 天排期 |
+| | **交易录入** | `/transactions` | 买入 / 卖出 / 分红 / 草稿确认入账（草稿确认前绝自动动账） |
+| | **银行存款** | `/deposits` | 存款明细、到期分布；预计年利息 / 到期前利息 / 整期利息 |
+| | **券商对账** | `/broker` | 导入券商持仓表 → 差异对比 → 确认后写入持仓校正（留存历史记录） |
+| **分析** | **今天该看** | `/decision` | 市场结论、持仓今日贡献、破线条数、自选观察与预警 |
+| | **收益与快照** | `/performance` | 逐日收益率曲线 + 快照明细 + 风险指标 + 组合资金投入/取出记录 |
+| | **结构与目标** | `/allocation` | 看现状 / 设目标 / 处理偏离（目标尺子、配置诊断、纪律与再平衡草稿） |
+| **设置** | **消息推送** | `/ops/notify` | 通道密钥配置（飞书 / 钉钉 / 企微 / Telegram）、事件路由、一键测试 |
+| | **证券账户** | `/cash` | 多账户费率、现金校准、银证流水、**银证流水与组合投入自动勾稽** |
+| | **数据备份** | `/ops/backup` | 备份 / 下载 / 恢复 / 上传；**顶部 Q0 流水线心跳卡片（哪条多久没成功）** |
 
-| 位置 | 改什么 |
-|------|--------|
-| `backend/version.py` | `APP_VERSION = "1.7.3"` |
-| `frontend/public/sw.js` | `const CACHE_NAME = 'invest-tracker-v1.7.3'` |
-| `src-tauri/tauri.conf.json` | `"version": "1.7.3"`（桌面安装包版本） |
-| `src-tauri/Cargo.toml` | `version = "1.7.3"`（crate 版本，构建日志里会打出来） |
-| `src-tauri/Cargo.lock` | `name = "invest-tracker"` 那条下面的 `version` 也要跟着改 |
-
-功能提交**不**顺手 bump 版本：发版是单独一个 `chore(release)` 提交，否则「哪条改动属于哪个
-版本」会跟着开发节奏漂。
-
-```bash
-# 1) 四处版本号 + CHANGELOG 的「未发布」段改成正式版本号，单独提交
-git commit -am "chore(release): 1.7.3"
-git tag -a v1.7.3 -m "v1.7.3"
-
-# 2) 推源码与标签，再建 GitHub Release（正文直接取 CHANGELOG 里这一段）
-git push origin main && git push origin v1.7.3
-gh release create v1.7.3 --title "v1.7.3 — 一句话标题" --notes-file /tmp/notes.md
-
-# 3) 生产分支快进，VPS 才跟得到
-git push origin main:deploy/vps
-```
-
-桌面包：`bash scripts/build-desktop.sh`（产物在 `src-tauri/target/release/bundle/`）；要挂到
-Release 上就 `gh release upload v1.7.3 <dmg 路径>`。DMG 是通用构建产物、不入库，所以每次发版
-得重新打一个，否则附件永远停在旧版本。
+*快捷功能*：
+- **金额打码**：URL 追加 `?mask=1` 或 `?screenshot=1` 隐藏敏感金额。
+- **界面主题**：白天 / 夜间 / 跟随系统。
+- **路由重定向**：`/market` → `/decision`；`/discipline` → `/allocation`；`/maintenance` → `/ops/notify`；`/snapshots` → `/performance`；`/klines` → `/holdings`。
 
 ---
 
-## 生产部署
+## 核心口径与对账设计
 
-`main` 是源码真相；每次推 `main` 后 **fast-forward** `deploy/vps`。VPS 只跟 `deploy/vps`，不要在该分支上独自提交。
+记账的底线是数字对得上。三套数字本来就不会相等：
+
+### 1. 三套收益口径
+
+| 口径 | 算法 | 用在哪 | 适用场景 |
+|------|------|--------|----------|
+| **持仓浮盈** | `(现价 − 普通成本) × 数量 + 累计分红` | 当前仓 | 看当前持仓赚钱还是亏钱 |
+| **全周期盈亏** | `(现价 − 摊薄成本) × 数量` | 收益与明细 | 最接近华泰等券商的「累计盈亏」 |
+| **整户总账** | `总资产 − 组合外部净投入` | 收益与快照 | 站在投资者口袋角度算真金白银绝对回报 |
+| *今日贡献* | `涨跌% × 市值` | 盘中决策 | **仅供盘中参考，不入账** |
+
+### 2. 日期与时区
+
+- 全局只有一把"今天"：`APP_TIMEZONE`（默认 `Asia/Shanghai`）。换机器、换浏览器时区都不会漂移。
+- 选历史区间看收益时，以**该区间末的最后一条快照**为期末（日期、资产、现金流同一口径）。
+- 月度收益剔除区间内的外部投入/取出，转入的钱不会被算成"当月投资收益"。
+- 同一天的现金流水与快照以 `created_at` 判定先后：快照之后转入的钱不计入当日收益。
+
+### 3. 交易动账规则
+
+| 方向 | 持仓变动 | 证券现金变动 | 备注 |
+|------|----------|--------------|------|
+| **买入** | +数量 | −金额 − 费用 | |
+| **卖出** | −数量 | +金额 − 费用 | |
+| **分红** | 不变 | +现金 | 增加可用现金 |
+| **分红再投资** | +份额 | 不变 | 增加份额，金额计入累计分红 |
+| **申购待确认** | 不进正式持仓 | −现金 | 确认份额后转为正式持仓 |
+
+### 4. 两套现金流水与自动勾稽
+
+| 流水类别 | 记录内容 | 维护页面 |
+|----------|----------|----------|
+| **银证流水** `cash_flows` | 银证转入/转出、现金校准 | 证券账户 (`/cash`) |
+| **组合流水** `portfolio_cash_flows` | 外部真金白银投入 / 取出 | 收益与快照 (`/performance`) |
+
+银证转入 **不会** 自动伪造为投资组合投入。证券账户页会按 **同日、同额、同方向（容差 0.05）** 自动勾稽，只标差、不入账，杜绝虚增收益。
+
+### 5. 总资产校准平差（净值对齐的最后一道）
+
+持仓管股数与成本，现金校准管证券现金，两样都对了，仍可能因打新冻结、在途资金、汇率折算与券商 App **总资产**有微小出入：
+
+- 总览「现在总资产」下方展示：**距上次校准 N 天 · 上次差额 Y 元**。
+- 差额记成一条**独立的平差余额**（表 `total_asset_calibrations`，schema **v22**），不摊回持仓、不摊回流水，「从哪天开始歪的」留在原地。
+- 平差自动计入 `total_assets`，看板与日终快照同时对齐实盘，消除两本账。
+- 重新校准自动收敛：`新平差 = 旧平差 + (实测 − 显示)`，显示值已含旧平差，不会重复叠加。
+
+### 6. 流水线心跳监控（失败会自己喊）
+
+最危险的失效是**任务根本没跑**（crontab 丢失、服务器断电、容器挂掉）：
+
+| 流水线任务 | 触发方式 | 默认超时阈值 |
+|------------|----------|--------------|
+| `backup` | `scripts/backup_daily.sh` 备份脚本 | 30 小时（容一次重跑） |
+| `sync_prices` | `/cron/sync-prices`、手动同步、Docker 直调 | 96 小时（抗四天长假） |
+| `snapshot` | `/cron/snapshot` 日终快照 | 96 小时 |
+
+- **对内逾期检查**：挂在 `/cron/notify-events` 上，超时自动走消息推送的 `ops` 通道报警，**无需改动 crontab**。运维页顶部实时标色。
+- **对外 dead-man 报警**：成功时 ping `HEARTBEAT_<JOB>_URL`（如 healthchecks.io），失败刻意不 ping，整机宕机外部监控也会超时自报警。
+
+---
+
+## 诚实的局限
+
+- **绝不碰实盘自动交易**：不托管交易账号密码，不提供自动下单 API。所有交易录入均为草稿确认制，确保资金安全。
+- **公共行情源有一定延迟**：行情抓取依赖公开接口（akshare 等），盘中分时估算仅作参考，日终快照以收盘清算价为准；节假日按内置与更新日历休市。
+- **单账本原则拒绝端侧双向写入**：不在手机本地跑 Python 后端或 SQLite 数据库。手机只做 PWA 终端，服务器是唯一真理来源，避免两份数据库产生冲突（见 [docs/android-feasibility.md](docs/android-feasibility.md)）。
+- **备份副本包含敏感配置**：备份文件受操作系统权限 `0600` 保护。若将 `.db.bak` 发送给他人或上传公共平台，必须先清除 `settings` 表中的推送 Token 与 AI Key。
+
+---
+
+## 生产部署与定时任务
+
+生产环境以 `deploy/vps` 分支为准，`main` 是源码真相：
 
 ```bash
 git pull origin deploy/vps
 ./scripts/deploy_vps.sh
-# 或：docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-完整清单、HTTPS、GitHub OAuth、Cloudflare Tunnel： [docs/deploy-vps.md](docs/deploy-vps.md)。
+公网建议安全配置：
+1. 启用 `INVEST_TRACKER_PASSWORD` 页面门锁，或配置 Caddy + oauth2-proxy GitHub 单用户授权。
+2. 配置 `CRON_API_TOKEN` 保护定时任务端点。
+3. 限制 `CORS_ALLOW_ORIGINS=https://你的域名`。
 
-公网至少做一件：
-
-- 设 `INVEST_TRACKER_PASSWORD`（应用内门锁），和/或
-- 走 Caddy → oauth2-proxy GitHub 登录（只放行一个 GitHub 用户）
-
-生产建议再设：
-
-```env
-CRON_API_TOKEN=          # python3 -c 'import secrets; print(secrets.token_hex(24))'
-CORS_ALLOW_ORIGINS=https://your-domain
-```
-
-未配 cron token 时，定时脚本仍会回退 `docker exec` / 登录 HTTP，旧部署不会立刻断。
-
-### 定时任务
-
-`scripts/cron_sync_prices.sh` 优先打 `POST /cron/*`（头 `X-Cron-Token`）。  
-登录 Bearer **不能** 调 `/cron/*`；cron token **不能** 调用户接口。
+### 推荐 Crontab 定时配置
 
 ```cron
+# 交易日 15:20 同步行情
 20 15 * * 1-5 /path/to/invest-tracker/scripts/cron_sync_prices.sh >> /path/to/invest-tracker/backups/cron_sync_prices.log 2>&1
+
+# 交易日 16:40 生成日终资产快照并检查告警
 40 16 * * 1-5 /path/to/invest-tracker/scripts/cron_sync_prices.sh --snapshot --check-alerts >> /path/to/invest-tracker/backups/cron_sync_prices.log 2>&1
+
+# 每日 02:15 账本自动备份与心跳上报
 15 2  * * *   /path/to/invest-tracker/scripts/backup_daily.sh >> /path/to/invest-tracker/backups/backup_daily.log 2>&1
 ```
 
-常用开关：`--snapshot`、`--check-alerts`、`--notify-alerts`、`--notify-events`、`--force-snapshot`。  
-配好 token 后，手动试跑日志里应出现 `cron-http sync ok`。
-
-#### 流水线心跳（别等周末才发现周三就没跑）
-
-前三道防线都假设「任务跑了」：备份失败写 stderr、行情失败返回 500、快照被价格闸门拦下返回
-`skipped`。可真实失效是**根本没跑**——cron 被删、脚本挂掉、容器起不来，日志里一片安静。
-
-后端对每条流水线记一个「上次成功时间」，超过阈值没成功就走消息推送的**运维**通道喊人：
-
-| job | 对应 | 默认阈值 |
-|-----|------|----------|
-| `backup` | `scripts/backup_daily.sh` | 30 小时（容一次失败重跑） |
-| `sync_prices` | 行情同步（`/cron/sync-prices`、页面手动同步、docker 直调） | 96 小时（扛四天长假） |
-| `snapshot` | 日终快照 | 96 小时 |
-
-「从来没成功过」也算逾期——新服务器忘了配 crontab 正是最该被喊出来的情况。检查挂在
-`/cron/notify-events` 上，所以**不用改 crontab**；运维页（`/ops/backup`）顶部也会列这三条的颜色。
-
-要连整机宕机也漏不掉，再配一条外部 dead-man（[healthchecks.io](https://healthchecks.io) 之类）：
-
-```env
-HEARTBEAT_BACKUP_URL=https://hc-ping.com/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-HEARTBEAT_SYNC_PRICES_URL=
-HEARTBEAT_SNAPSHOT_URL=
-```
-
-**成功才 ping，失败刻意不 ping**——让外部服务的超时规则自己报警，比额外发一个「失败」信号更简单，
-也不会漏（进程被杀时根本没机会发任何请求）。阈值可用 `HEARTBEAT_<JOB>_MAX_AGE_HOURS` 覆盖。
-脚本上报走 `POST /cron/heartbeat`（复用 `CRON_API_TOKEN`），没有 token 时打一行 `heartbeat skip` 跳过，
-不影响备份本身。
-
 ---
 
-## 消息推送
-
-只发短通知（飞书 / 钉钉 / 企微 / Telegram），和 Hermes 长报告分开。
-
-优先在 **设置 → 消息推送** 填密钥（存库，不回填明文；留空=不改，勾清除=删库值）。`.env` 的 `NOTIFY_*` 只作服务器兜底。
-
-飞书支持两种：**Webhook**（机器人）或 **自建应用**（app_id + app_secret + 接收人 open_id，走消息 API）。配了自建应用就忽略 Webhook。
-
-事件：价格预警、晚间简报、存款到期、纪律破线、运维、试推。
-
-除权除息提醒复用「存款到期」通道：定时任务先刷新本地日历（持仓 ∪ 自选）再推送，
-除权除息前 7 天内与过期 7 天内每天最多一条；抓取失败只标记状态、不清空已存事件。
-
----
-
-## 数据与安全
+## 数据与隐私安全
 
 ```bash
-bash scripts/privacy_check.sh
-python3 scripts/backup_db.py --label manual
-python3 scripts/restore_db.py backups/你的备份.db
+bash scripts/privacy_check.sh                     # 提交开源前隐私自检
+python3 scripts/backup_db.py --label manual       # 手动备份账本
+python3 scripts/restore_db.py backups/你的备份.db  # 恢复账本
 ```
 
-- `data/`、`backups/`、`.env` 不进 Git
-- 可用 `DB_PATH`、`BACKUP_DIR`、`APP_TIMEZONE`（决定「今天」、交易时段判定与前端默认日期）、`CORS_ALLOW_ORIGINS` 覆盖
-- 库 schema 版本见 `backend/schema.py`（当前 **v21**）；启动时自动迁移
-- 上传上限：普通 CSV 20MB，券商 Excel 50MB；导出 CSV 会清洗公式注入前缀
+### 1. 数据存放在哪
 
-### 数据在主机的哪里
+单进程本地运行时，账本存储在系统标准数据目录（**不在仓库代码目录，`git clean` 删不掉**）：
+- **macOS**: `~/Library/Application Support/InvestTracker/data/invest.db`
+- **Windows**: `%APPDATA%\InvestTracker\data\invest.db`
+- **Linux**: `${XDG_DATA_HOME:-~/.local/share}/InvestTracker/data/invest.db`
 
-单进程本地运行时，账本默认放在系统标准数据目录里（**不在仓库目录**，`git clean` 删不掉）：
+优先级：`DB_PATH` > `INVEST_TRACKER_HOME` > 系统默认路径。
 
-| 系统 | 位置 |
-|------|------|
-| macOS | `~/Library/Application Support/InvestTracker/data/invest.db` |
-| Windows | `%APPDATA%\InvestTracker\data\invest.db` |
-| Linux | `${XDG_DATA_HOME:-~/.local/share}/InvestTracker/data/invest.db` |
+### 2. 联网行为透明说明
 
-备份在同根的 `backups/`。三条覆盖规则，优先级从高到低：
+| 出网请求 | 携带内容 | 默认状态 |
+|----------|----------|----------|
+| **行情 / K 线 / 基本面** | 仅发送股票/基金代码，**不发持仓与金额** | 开启 |
+| **消息推送** (`/ops/notify`) | 仅推送到你自己配置的 Webhook 或机器人 | 需手动配置 |
+| **AI 投资简报** (`AI_ENABLED`) | **会把持仓明细和盈亏金额发送给所配的大模型服务** | **默认关闭** |
 
-- `DB_PATH` / `BACKUP_DIR`：最高优先（Docker、VPS、测试都走这条，行为和以前完全一样）
-- `INVEST_TRACKER_HOME=/some/dir`：换掉整个根目录（便携安装、一个目录一套账）
-- 首次启动时，如果仓库里还留着旧的 `data/invest.db`，会复制一份到上面那个位置，
-  旧文件改名成 `invest.db.migrated-<时间戳>` **留档不删**——迁错了改回名字就能退。
+---
 
-### 数据会去哪（联网行为）
+## 测试与发版
 
-离线也能记账。下面是仅有的三处主动出网：
+严谨的质量自检体系保证每次重构与迁移万无一失：
 
-| 出网 | 发什么 | 默认 |
-|------|--------|------|
-| 行情 / K 线 / 基本面（akshare 等） | 只发股票代码，不发持仓、不发金额 | 开（点开或定时同步时） |
-| AI 简报 / 周报（`AI_ENABLED`） | **会把持仓明细和当日盈亏金额**发给所配的模型服务 | **关** |
-| 消息推送（`/ops/notify`） | 推到你自己配的 webhook / 机器人 | 关 |
+```bash
+# 后端单测
+PYTHONPATH=backend pytest -q tests/               # 636 passed
 
-不想让持仓金额离开本机，就别开 `AI_ENABLED`；另外两处只发代码、或只发你自己配的目标地址。
+# 前端单测与编译
+cd frontend && npm test && npm run build          # 249 passed, 31 文件全绿
 
-### 备份里有明文凭据
+# 全仓库健康与路由拓扑自检
+bash scripts/check.sh                             # All checks passed
+```
 
-`settings` 表里存着明文密钥：`ai_api_key`，以及 `notify_channel_credentials`
-里的飞书 `app_secret`、钉钉加签 secret、Telegram bot token、各通道 webhook 地址。
-**备份是整库副本，谁拿到 `.db.bak` 谁就拿到了这些密钥。**
+### 发版同步核对表
 
-程序落盘时会把账本库和备份收成 `0600`（仅属主可读写），但搬走之后管不到：
+版本号单一来源为 `backend/version.py`，发布时以下位置需保持对齐：
 
-- 备份同步到网盘、塞进 Git、发给别人 = 交出凭据；要外传就先清空这几项
-- 换机恢复备份后，去「设置 → 消息推送 / AI」核对密钥是否还有效
-- 提 issue 想附样本库时，用 `sqlite3 库文件 "UPDATE settings SET value='' WHERE key IN ('ai_api_key','notify_channel_credentials')"` 再打包
+| 文件 | 键值 | 说明 |
+|------|------|------|
+| [backend/version.py](backend/version.py) | `APP_VERSION = "1.7.3"` | 单一真相来源 |
+| [frontend/public/sw.js](frontend/public/sw.js) | `const CACHE_NAME = 'invest-tracker-v1.7.3'` | PWA 缓存控制 |
+| [src-tauri/tauri.conf.json](src-tauri/tauri.conf.json) | `"version": "1.7.3"` | 桌面安装包版本 |
+| [src-tauri/Cargo.toml](src-tauri/Cargo.toml) | `version = "1.7.3"` | Rust crate 版本 |
+| [src-tauri/Cargo.lock](src-tauri/Cargo.lock) | `version = "1.7.3"` (`invest-tracker`) | 保证 `cargo check --locked` 通过 |
 
 ---
 
@@ -396,59 +332,41 @@ python3 scripts/restore_db.py backups/你的备份.db
 
 ```text
 invest-tracker/
-    app_paths.py           数据目录解析 / 首次启动迁移 / dist 定位
-    schema.py              版本迁移（当前 v21）
-    routers_*.py           HTTP
-    routers_cron.py        /cron/* ，独立 token
-    broker_reconcile.py    券商对账 + 银证勾稽
-  frontend/src/
-    views/                 各页
-    modules/               业务逻辑（非组件）
-    components/            PageShell / MetricCard / 顶栏 / 弹窗
-  tests/                   pytest
-  frontend/tests/          vitest
-  scripts/                 部署 / 备份 / cron / 隐私检查
-  docs/deploy-vps.md
-  docs/desktop.md          桌面壳：结构 / 端口 / 打包 / dev 模式
-  docker-compose.yml       本地
-  docker-compose.prod.yml  VPS
-  .github/workflows/ci.yml
-  LICENSE                  AGPL-3.0
-  # 运行时数据不在仓库里：默认落在系统数据目录，见「数据在主机的哪里」
+├── backend/
+│   ├── app_paths.py           # 数据目录解析 / 迁移逻辑
+│   ├── schema.py              # SQLite 数据库版本迁移 (v22)
+│   ├── heartbeat.py           # 流水线心跳与 dead-man 机制
+│   ├── total_asset_calibration.py # 总资产校准与平差立账
+│   ├── broker_reconcile.py    # 券商持仓对账与银证勾稽
+│   ├── routers_*.py           # FastAPI 业务路由
+│   └── routers_cron.py        # /cron/* 独立 Token 鉴权接口
+├── frontend/
+│   ├── src/views/             # 业务页面 (总览 / 持仓 / 收益等)
+│   ├── src/components/        # PageShell、CalibrationHint、MetricCard 等
+│   └── tests/                 # Vitest 前端单元测试 (249 项)
+├── tests/                     # Pytest 后端测试套件 (636 项)
+├── scripts/                   # 部署 / 备份 / 心跳 / 自检脚本
+├── src-tauri/                 # Tauri 2 原生桌面壳
+└── docs/                      # 架构决策与运维文档
 ```
 
 ---
 
 ## 常见问题
 
-**页面空白 / 弹窗没反应**  
-硬刷新。确认前端已 rebuild。弹窗依赖 `appCtx` 里的 dialog state，不只是 open 函数。
+**Q: 页面显示空白或弹窗无反应？**  
+A: 执行强力刷新（Ctrl+F5 / Cmd+Shift+R），确认前端已完成构建。
 
-**数字对不上券商**  
-先看口径表。全周期 ≠ 持仓浮盈 ≠ 整户总账。持仓对不上就走 `/broker`；银证和组合投入对不上看证券账户页勾稽。
+**Q: 记账数字与券商 App 对不上？**  
+A: 请核对「核心口径」部分，券商常见的“累计盈亏”通常对应本系统的“全周期盈亏”。持仓股数与成本有出入请使用 `/broker` 对账，整户总资产微小出入使用「总资产校准」平差。
 
-**backend unhealthy**
-
-```bash
-curl -fsS http://localhost:8000/api/health
-```
-
-**本地 pytest 环境不对**  
-用装了依赖的解释器，或走 `make test`（容器内）。
-
-**公网 CORS / 定时同步失败**  
-生产把 `CORS_ALLOW_ORIGINS` 写成域名。cron 配 `CRON_API_TOKEN` 后看日志是否 `cron-http sync ok`。
+**Q: 怎么进行数据迁移或还原？**  
+A: 只要将备份的 `.db` 文件放入对应数据目录并命名为 `invest.db`，重启服务即可自动完成迁移。
 
 ---
 
 ## 许可证
 
-[AGPL-3.0](LICENSE)（GNU Affero General Public License v3.0）。
+本项目基于 [AGPL-3.0 License](LICENSE)（GNU Affero General Public License v3.0）开源。
 
-简单说：你可以随便用、随便改、自己跑；但**改完要是给别人用（包括部署成网站给别人访问），就得把改后的源码一起开源**。AGPL 相比 GPL 多管住"软件即服务"这一层，正好对上一个能被公网访问的记账后端。
-
-商用、闭源分发、或者想让改动的部分不开源，单独谈授权。
-
----
-
-公开仓库前先跑 `scripts/privacy_check.sh`，确认没把真实持仓、备份和密钥传上去。`data/`、`backups/`、`.env` 已在 `.gitignore` 里，别用 `git add -f` 手动塞进去。
+你可以自由使用、修改与部署。若将修改后的版本作为网络服务提供给他人访问，必须同样开源其修改后的全部源代码。商业闭源使用请单独洽谈授权。
