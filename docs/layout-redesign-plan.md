@@ -355,35 +355,18 @@ diff 巨大且难评审。所以 `DataTable` 只做「响应式布局切换」�
 
 ---
 
-## 阶段 4：手机端（3–5 天，方案未定）
+## 阶段 4：手机端（PWA 路线已交付，独立客户端延后）
 
-### 前置技术验证（都还没做）
+按决策 D4 落地路线 4（中心后端 + 手机 PWA），单中心账本零冲突。已交付：
 
-`docs/android-feasibility.md` 已证明 pydantic-core 能交叉编译，但下面这些完全没验证：
+1. **Web App Manifest**：`frontend/public/manifest.webmanifest`，包含 `display: standalone`、多规格图标与主题色，支持 Android Chrome「安装应用」提示。
+2. **iOS Safari 原生化**：`index.html` 接入 `apple-mobile-web-app-capable`、`apple-touch-icon`、`apple-mobile-web-app-status-bar-style` 与 `viewport-fit=cover`，支持添加到 iPhone 主屏幕全屏运行。
+3. **刘海屏与安全区**：`styles.css` 接入 `env(safe-area-inset-*)`，顶栏、二级导航与主容器自适应贴合，去除移动端触摸灰框。
+4. **Service Worker 外壳**：`frontend/public/sw.js` 缓存应用外壳与静态资源，严密保证 `/api/*` 财务接口一律直连网络不缓存。
+5. **配套测试**：新增 `frontend/tests/pwa-static.test.js`（5 项）。
 
-- `getrandom` 在 bionic 上的符号解析（API 28+，需 shim 或抬 minSdk）
-- uvicorn 事件循环在 Android 上能否稳定跑
-- SQLite WAL 在 Android 应用沙盒里的行为
-- 本机无 JDK，`sdkmanager` 不可用，打包前要先装
+注：独立离线手机客户端（单机 APK 模式）在后续版本再行规划评估。
 
-### 更要紧的是产品决策
-
-手机端独立 SQLite 会产生**双账本**：手机上记了一笔，桌面上看不到；两边都改了同一笔，
-没有合并规则。可选路线：
-
-1. 手机只读（连同一后端，适合自建服务器用户）
-2. 手机为主机，桌面通过导出 / 导入同步（需要冲突处理规则）
-3. 不做手机端
-
-4. **PWA / 响应式 Web 直连中心后端**（推荐）——手机不跑 Python，用浏览器把改造好的卡片界面
-   「添加到主屏幕」，数据始终只有后端那一份。手机离线跑 Python + akshare 在能耗和后台任务
-   （定时拉行情、晚间 AI 简报）上本来就不可行，这条路把它们留在服务器上。
-
-   前提：PWA 可安装要求 HTTPS（`localhost` 除外）。局域网 IP 直连装不上，需要 Tailscale、
-   Caddy 反代或 VPS；离线缓存也只能做到「壳与静态资源可离线，数据必须联网」。
-
-路线 4 把「单机 APK」降级为实验性 PoC：`docs/android-feasibility.md` 的成果依然有效，但不再是
-交付前置条件。**账本路线不定，阶段 4 的代码写多少都是白搭。**
 
 ---
 

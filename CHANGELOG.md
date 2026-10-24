@@ -10,6 +10,12 @@
 
 ### 新增
 
+- **阶段 4：移动端 PWA 与「添加到主屏幕」原生化体验。** 按拍板方案（中心后端 + 手机 PWA，单中心账本零冲突）：
+  1. **Web App Manifest**：新增 `frontend/public/manifest.webmanifest`，声明 `display: standalone`、多规格图标（192x192、512x512 及 maskable 自适应图标）与主题色彩，支持 Android Chrome 弹出安装应用提示。
+  2. **iOS Safari 原生化适配**：`index.html` 增加 `apple-mobile-web-app-capable`、`apple-touch-icon`、`apple-mobile-web-app-status-bar-style` 与 `viewport-fit=cover`，添加到 iOS 主屏幕时全屏沉浸呈现，无浏览器地址栏和底部操作条。
+  3. **安全区（Safe Area Insets）**：`styles.css` 全面适配 iPhone 刘海屏/灵动岛与底部横条（`env(safe-area-inset-*)`），吸顶顶栏、二级导航与主容器内边距均自适应贴合，避免遮挡，并去除移动端默认点击灰框。
+  4. **Service Worker 外壳缓存**：新增 `frontend/public/sw.js` 实现离线 App Shell 快速启动与静态资源渐进缓存；严密保证对所有 `/api/*` 财务接口一律直连网络、绝对不缓存，杜绝财务账本数据过时风险。配套静态校验测试 `tests/pwa-static.test.js`。
+
 - **阶段 3：基于 Tauri 2 的本地桌面应用外壳与侧车托管。** 新增 `src-tauri/` 桌面工程与 `scripts/build-desktop.sh` 一键打包脚本：
   1. **架构**：Tauri 2 桌面壳 + PyInstaller 独立二进制侧车（`invest-tracker-backend`），单进程托管前端 SPA 产物（`frontend/dist`）与所有 `/api` 接口，零外部服务依赖。
   2. **原生体验与数据隔离**：原生 macOS 窗口默认 1280x860（居中显示，支持最小 380x600 以便调试移动端卡片布局），数据安全沿用 `platform_data_root()`（`~/Library/Application Support/InvestTracker/data/invest.db`），零污染仓库源码。

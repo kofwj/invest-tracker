@@ -3,11 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <title>Invest Tracker · 真仓账本</title>
+    <!-- PWA & 移动端主屏幕应用配置 -->
+    <link rel="manifest" href="/manifest.webmanifest">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="投资看板">
+    <meta name="application-name" content="投资看板">
+    <meta name="theme-color" content="#2f6f7e" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0d1114" media="(prefers-color-scheme: dark)">
     <!-- 首屏前应用主题，避免总览先闪黑/闪白 -->
     <style id="theme-boot"></style>
+
     <script>
       (function () {
         try {

@@ -619,3 +619,12 @@ const app = createApp({
 app.use(pinia);
 app.use(router);
 app.mount('#app');
+
+// 生产环境下注册 Service Worker，支持 PWA 离线外壳与安装至主屏幕
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch((err) => {
+            console.warn('PWA service worker registration failed:', err);
+        });
+    });
+}
