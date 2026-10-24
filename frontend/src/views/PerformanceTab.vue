@@ -148,6 +148,7 @@
         <el-collapse class="perf-detail-collapse">
           <el-collapse-item name="daily" title="每日明细（逐日盈亏）">
 
+        <DataTable :rows="dailyTableRows" row-key="date" label="每日收益">
         <el-table :data="dailyTableRows" size="small" stripe max-height="320" style="margin-top:10px;" aria-label="每日收益">
           <el-table-column label="日期" width="140">
             <template #default="s">
@@ -199,6 +200,38 @@
             </template>
           </el-table-column>
         </el-table>
+        <template #card="{ row }">
+          <div class="m-card">
+            <div class="m-card-row">
+              <div class="m-card-title">
+                <span>{{ row.date }}</span>
+                <el-tag v-if="row.isToday" size="small" style="margin-left: 6px;">实时</el-tag>
+              </div>
+              <div class="m-card-val-main">{{ formatMoney(row.assets) }}</div>
+            </div>
+            <div class="m-card-metrics">
+              <div class="m-card-metric">
+                <span class="m-card-metric-label">当日盈亏</span>
+                <span class="m-card-metric-val" :class="row.change >= 0 ? 'perf-up' : 'perf-down'">
+                  {{ formatMoney(row.change, 2, true) }}
+                </span>
+              </div>
+              <div class="m-card-metric">
+                <span class="m-card-metric-label">当日涨跌</span>
+                <span class="m-card-metric-val" :class="row.change >= 0 ? 'perf-up' : 'perf-down'">
+                  {{ row.pct != null ? formatPercent(row.pct, 2) : '—' }}
+                </span>
+              </div>
+            </div>
+            <div v-if="row.isToday || row.isGap || row.priceStale || row.unpricedCount" class="m-card-meta" style="margin-top:6px;gap:6px;">
+              <el-tag v-if="row.isToday" size="small" :type="row.stale ? 'warning' : 'success'">未收盘</el-tag>
+              <el-tag v-else-if="row.isGap" size="small" type="warning">间隔 {{ row.daysGap }} 天</el-tag>
+              <el-tag v-if="row.priceStale" size="small" type="warning">价格未更新</el-tag>
+              <el-tag v-if="row.unpricedCount" size="small" type="info">缺价 {{ row.unpricedCount }} 只</el-tag>
+            </div>
+          </div>
+        </template>
+        </DataTable>
           </el-collapse-item>
         </el-collapse>
       </template>
@@ -248,6 +281,7 @@
           </div>
       <div v-if="perfFlowSuggestions.length" style="margin-bottom:12px;">
         <div class="perf-contrib-sub" style="margin-bottom:8px;">建议草稿</div>
+        <DataTable :rows="perfFlowSuggestions" row-key="id" label="资金流水建议草稿">
         <el-table :data="perfFlowSuggestions" size="small" stripe aria-label="资金流水建议草稿">
           <el-table-column prop="date" label="日期" width="110" />
           <el-table-column prop="flow_type" label="类型" width="70" />
@@ -261,6 +295,22 @@
             </template>
           </el-table-column>
         </el-table>
+        <template #card="{ row }">
+          <div class="m-card">
+            <div class="m-card-row">
+              <div class="m-card-title">
+                <el-tag :type="row.flow_type === '投入' ? 'danger' : 'success'" size="small">{{ row.flow_type }}</el-tag>
+                <span style="margin-left:6px;">{{ row.date }}</span>
+              </div>
+              <div class="m-card-val-main">{{ formatMoney(row.amount) }}</div>
+            </div>
+            <div v-if="row.remark" class="m-card-sub" style="margin-top:4px;">{{ row.remark }}</div>
+            <div class="m-card-actions">
+              <el-button type="primary" size="small" text :loading="perfSuggestionApplying" @click="onApplyPerfFlowSuggestion(row)">记入</el-button>
+            </div>
+          </div>
+        </template>
+        </DataTable>
       </div>
       <el-form :inline="true" size="small" style="margin-bottom: 12px;">
         <el-form-item label="日期">
@@ -286,6 +336,7 @@
           <el-button v-if="perfFlowEditId" @click="cancelPerfFlowEdit">取消</el-button>
         </el-form-item>
       </el-form>
+      <DataTable :rows="perfFlows" row-key="id" label="组合资金流水">
       <el-table :data="perfFlows" stripe size="small" style="width:100%;" aria-label="组合资金流水">
         <el-table-column prop="date" label="日期" width="110" />
         <el-table-column prop="flow_type" label="类型" width="70">
@@ -305,6 +356,26 @@
           </template>
         </el-table-column>
       </el-table>
+      <template #card="{ row }">
+        <div class="m-card">
+          <div class="m-card-row">
+            <div class="m-card-title">
+              <el-tag :type="row.flow_type === '投入' ? 'danger' : 'success'" size="small">{{ row.flow_type }}</el-tag>
+              <span style="margin-left:6px;">{{ row.date }}</span>
+            </div>
+            <div class="m-card-val-main">{{ formatMoney(row.amount) }}</div>
+          </div>
+          <div class="m-card-meta" style="margin-top:4px;">
+            <span v-if="row.source">来源：{{ row.source }}</span>
+            <span v-if="row.remark">备注：{{ row.remark }}</span>
+          </div>
+          <div class="m-card-actions">
+            <el-button type="primary" size="small" text @click="startPerfFlowEdit(row)">编辑</el-button>
+            <el-button type="danger" size="small" text :loading="perfFlowDeleting === row.id" :disabled="perfFlowDeleting !== null" @click="onDeletePerfFlow(row.id)">删除</el-button>
+          </div>
+        </div>
+      </template>
+      </DataTable>
         </el-collapse-item>
       </el-collapse>
     </div>
@@ -314,6 +385,7 @@
 
 <script setup>
 import PageShell from '../components/PageShell.vue';
+import DataTable from '../components/DataTable.vue';
 import SnapshotReminder from '../components/SnapshotReminder.vue';
 import SnapshotPanel from '../components/SnapshotPanel.vue';
 import { ref, computed, onMounted, watch } from 'vue';

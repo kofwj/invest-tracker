@@ -89,6 +89,7 @@
                   <div class="hint">假设粗估，不是预测：只动权益市值，固收/存款/现金不变</div>
                 </div>
               </template>
+              <DataTable :rows="storyScenarios" row-key="label" empty-text="暂无" label="权益情景粗估">
               <el-table :data="storyScenarios" size="small" stripe empty-text="暂无" aria-label="权益情景粗估">
                 <el-table-column prop="label" label="情景" min-width="120" />
                 <el-table-column label="粗估盈亏" min-width="110" align="right" header-align="right">
@@ -104,9 +105,27 @@
                   </template>
                 </el-table-column>
               </el-table>
+              <template #card="{ row }">
+                <div class="m-card">
+                  <div class="m-card-row">
+                    <div class="m-card-title">{{ row.label }}</div>
+                    <div class="m-card-val-main">{{ formatMoney(row.estimated_total_assets) }}</div>
+                  </div>
+                  <div class="m-card-metrics" style="margin-top: 6px;">
+                    <div class="m-card-metric">
+                      <span class="m-card-metric-label">粗估盈亏</span>
+                      <span class="m-card-metric-val" :class="Number(row.estimated_pnl) >= 0 ? 'num-up' : 'num-down'">
+                        {{ formatMoney(row.estimated_pnl, 0, true) }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </template>
+              </DataTable>
             </el-card>
 
             <el-card shadow="never" class="merge-card" header="资产大类汇总">
+              <DataTable :rows="macroAllocationAnalysis" row-key="group" label="资产大类汇总">
               <el-table :data="macroAllocationAnalysis" stripe size="small" class="allocation-table" style="width: 100%" aria-label="资产大类汇总">
                 <el-table-column prop="group" label="大类" width="80" align="center" header-align="center" />
                 <el-table-column label="金额" min-width="110" align="right" header-align="right">
@@ -128,6 +147,30 @@
                   </template>
                 </el-table-column>
               </el-table>
+              <template #card="{ row }">
+                <div class="m-card">
+                  <div class="m-card-row">
+                    <div class="m-card-title">
+                      <span>{{ row.group }}</span>
+                      <el-tag size="small" style="margin-left: 6px;">{{ Number(row.percentage || 0).toFixed(1) }}%</el-tag>
+                    </div>
+                    <div class="m-card-val-main">{{ formatMoney(row.amount) }}</div>
+                  </div>
+                  <div class="m-card-metrics" style="margin-top: 6px;">
+                    <div class="m-card-metric">
+                      <span class="m-card-metric-label">持仓浮盈</span>
+                      <span class="m-card-metric-val" :class="(row.profit >= 0) ? 'num-up' : 'num-down'">
+                        {{ formatMoney(row.profit, 2, true) }}
+                      </span>
+                    </div>
+                    <div class="m-card-metric">
+                      <span class="m-card-metric-label">预计年化</span>
+                      <span class="m-card-metric-val" style="font-weight: 700;">{{ row.expected_return?.toFixed(2) }}%</span>
+                    </div>
+                  </div>
+                </div>
+              </template>
+              </DataTable>
             </el-card>
           </section>
         </div><!-- /merge-grid -->
@@ -290,8 +333,8 @@
                   <div class="hint">只读建议；可生成草稿，确认后才入账</div>
                 </div>
               </template>
-              <DataTable :rows="actions" row-key="code" label="再平衡建议">
-              <el-table :data="actions" stripe size="small" empty-text="暂无建议" v-loading="disciplineLoading" aria-label="再平衡建议">
+              <DataTable :rows="actions" :loading="disciplineLoading" row-key="code" empty-text="暂无建议" label="再平衡建议">
+              <el-table :data="actions" stripe size="small" empty-text="暂无建议" aria-label="再平衡建议">
                 <el-table-column label="方向" width="72">
                   <template #default="s">{{ s.row.side === 'sell' ? '卖出' : '买入' }}</template>
                 </el-table-column>
@@ -302,6 +345,21 @@
                 </el-table-column>
                 <el-table-column prop="reason" label="原因" min-width="140" show-overflow-tooltip />
               </el-table>
+              <template #card="{ row }">
+                <div class="m-card">
+                  <div class="m-card-row">
+                    <div class="m-card-title">
+                      <el-tag :type="row.side === 'sell' ? 'danger' : 'success'" size="small">
+                        {{ row.side === 'sell' ? '卖出' : '买入' }}
+                      </el-tag>
+                      <span style="margin-left: 6px;">{{ row.name }}</span>
+                      <span class="m-card-sub" style="margin-left: 6px;">{{ row.code }}</span>
+                    </div>
+                    <div class="m-card-val-main">{{ formatMoney(row.amount) }}</div>
+                  </div>
+                  <div v-if="row.reason" class="m-card-sub" style="margin-top: 4px;">{{ row.reason }}</div>
+                </div>
+              </template>
               </DataTable>
             </el-card>
           </section>
@@ -314,6 +372,7 @@
               <span class="section-title">细分类别明细（点开看）</span>
             </template>
         <el-card shadow="never" class="merge-card" header="细分类别明细">
+          <DataTable :rows="allocationAnalysis" row-key="category" label="细分类别明细">
           <el-table :data="allocationAnalysis" stripe size="small" class="allocation-table" style="width: 100%" aria-label="细分类别明细">
             <el-table-column prop="category" label="资产类别" width="110" align="center" header-align="center" fixed="left" />
             <el-table-column label="市值/金额" min-width="120" align="right" header-align="right">
@@ -350,6 +409,36 @@
               </template>
             </el-table-column>
           </el-table>
+          <template #card="{ row }">
+            <div class="m-card">
+              <div class="m-card-row">
+                <div class="m-card-title">
+                  <span>{{ row.category }}</span>
+                  <el-tag size="small" style="margin-left: 6px;">{{ row.percentage?.toFixed(1) }}%</el-tag>
+                </div>
+                <div class="m-card-val-main">{{ formatMoney(row.market_value) }}</div>
+              </div>
+              <div class="m-card-metrics" style="margin-top: 6px;">
+                <div class="m-card-metric">
+                  <span class="m-card-metric-label">持仓浮盈</span>
+                  <span class="m-card-metric-val" :class="(row.profit >= 0 ) ? 'num-up' : 'num-down'">
+                    {{ formatMoney(row.profit, 2, true) }} ({{ formatPercent(row.profit_rate, 2) }})
+                  </span>
+                </div>
+                <div class="m-card-metric">
+                  <span class="m-card-metric-label">全周期盈亏</span>
+                  <span class="m-card-metric-val" :class="((row.lifetime_profit || 0) >= 0 ) ? 'num-up' : 'num-down'">
+                    {{ formatMoney(row.lifetime_profit || 0, 2, true) }}
+                  </span>
+                </div>
+              </div>
+              <div class="m-card-meta" style="margin-top: 4px;">
+                <span>标的数：{{ row.count }}</span>
+                <span v-if="row.expected_annual_return != null">预计年化：{{ row.expected_annual_return?.toFixed(1) }}%</span>
+              </div>
+            </div>
+          </template>
+          </DataTable>
         </el-card>
 
           </el-collapse-item>
@@ -371,13 +460,13 @@
               </div>
             </div>
           </template>
+          <DataTable :rows="disciplineDrafts" :loading="disciplineDraftLoading" row-key="id" empty-text="暂无草稿" label="纪律草稿">
           <el-table
             aria-label="纪律草稿"
             :data="disciplineDrafts"
             stripe
             size="small"
             empty-text="暂无草稿"
-            v-loading="disciplineDraftLoading"
             @selection-change="onDraftSelectionChange"
           >
             <el-table-column type="selection" width="44" fixed="left" />
@@ -402,6 +491,7 @@
               </template>
             </el-table-column>
           </el-table>
+          </DataTable>
         </el-card>
 
           </el-collapse-item>

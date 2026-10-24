@@ -122,6 +122,7 @@
       </el-form>
 
       <div class="ops-section-title cash-sub-title">其他调整（现金校准留下的痕迹）</div>
+      <DataTable :rows="adjustRows" row-key="id" empty-text="暂无其他调整" label="其他调整流水">
       <el-table :data="adjustRows" stripe size="small" class="cash-table" style="width: 100%" empty-text="暂无其他调整" aria-label="其他调整流水">
         <el-table-column prop="date" label="日期" width="108" align="left" header-align="left" />
         <el-table-column prop="flow_type" label="类型" width="100">
@@ -140,6 +141,25 @@
           </template>
         </el-table-column>
       </el-table>
+      <template #card="{ row }">
+        <div class="m-card">
+          <div class="m-card-row">
+            <div class="m-card-title">
+              <el-tag size="small" :type="cashFlowTagType(row.flow_type)">{{ row.flow_type }}</el-tag>
+              <span style="margin-left: 6px;">{{ row.date }}</span>
+            </div>
+            <div class="m-card-val-main" :class="(Number(row.amount || 0) >= 0) ? 'num-up' : 'num-down'">
+              {{ formatMoney(row.amount, 2, true) }}
+            </div>
+          </div>
+          <div v-if="row.remark" class="m-card-sub" style="margin-top: 4px;">{{ row.remark }}</div>
+          <div class="m-card-actions">
+            <el-button type="primary" link size="small" @click="openCashFlowEditDialog(row)">编辑</el-button>
+            <el-button type="danger" link size="small" :loading="cashFlowDeleting === row" @click="onDeleteCashFlow(row)">删除</el-button>
+          </div>
+        </div>
+      </template>
+      </DataTable>
       <div class="ops-hint" style="margin-top:10px;">这些行同时出现在下面的「证券资金流水」里，类型筛「现金校准」就能只看它们。</div>
     </el-card>
 
@@ -235,6 +255,7 @@
         <el-button @click="queryCashFlows">查询</el-button>
         <el-button @click="resetCashFlowQuery">重置</el-button>
       </div>
+      <DataTable :rows="cashFlows" row-key="id" label="证券资金流水">
       <el-table :data="cashFlows" stripe size="small" class="cash-table" style="width: 100%" aria-label="证券资金流水">
         <el-table-column prop="date" label="日期" width="108" align="left" header-align="left" fixed="left"></el-table-column>
         <el-table-column prop="account" label="账户" width="100" align="left" header-align="left"></el-table-column>
@@ -256,6 +277,36 @@
           </template>
         </el-table-column>
       </el-table>
+      <template #card="{ row }">
+        <div class="m-card">
+          <div class="m-card-row">
+            <div class="m-card-title">
+              <el-tag size="small" :type="cashFlowTagType(row.flow_type)">{{ row.flow_type }}</el-tag>
+              <span v-if="row.account" style="margin-left: 6px;">{{ row.account }}</span>
+              <span class="m-card-meta" style="margin-left: 6px;">{{ row.date }}</span>
+            </div>
+            <div class="m-card-val-main" :class="(Number(row.amount || 0) >= 0 ) ? 'num-up' : 'num-down'">
+              {{ formatMoney(row.amount, 2, true) }}
+            </div>
+          </div>
+          <div v-if="row.balance_before != null || row.balance_after != null" class="m-card-metrics" style="margin-top:6px;">
+            <div class="m-card-metric">
+              <span class="m-card-metric-label">调整前</span>
+              <span class="m-card-metric-val">{{ formatMoney(row.balance_before) }}</span>
+            </div>
+            <div class="m-card-metric">
+              <span class="m-card-metric-label">调整后</span>
+              <span class="m-card-metric-val">{{ formatMoney(row.balance_after) }}</span>
+            </div>
+          </div>
+          <div v-if="row.remark" class="m-card-sub" style="margin-top:4px;">{{ row.remark }}</div>
+          <div class="m-card-actions">
+            <el-button type="primary" link size="small" @click="openCashFlowEditDialog(row)">编辑</el-button>
+            <el-button type="danger" link size="small" :loading="cashFlowDeleting === row" @click="onDeleteCashFlow(row)">删除</el-button>
+          </div>
+        </div>
+      </template>
+      </DataTable>
     </el-card>
 
     <!-- Q4 银证和组合投入对得上吗 -->
@@ -300,6 +351,7 @@
       <template v-if="hasUnmatchedRows">
         <template v-if="unmatchedBankRows.length">
           <div class="ops-hint" style="margin-bottom: 8px">未配对银证 {{ cashAudit.unmatched_bank_count || unmatchedBankRows.length }} 笔</div>
+          <DataTable :rows="unmatchedBankRows" row-key="id" label="未配对银证流水">
           <el-table :data="unmatchedBankRows" stripe size="small" style="width: 100%; margin-bottom: 12px" aria-label="未配对银证流水">
             <el-table-column prop="date" label="日期" width="110" />
             <el-table-column prop="flow_type" label="类型" width="100" />
@@ -308,9 +360,23 @@
             </el-table-column>
             <el-table-column prop="remark" label="备注" show-overflow-tooltip />
           </el-table>
+          <template #card="{ row }">
+            <div class="m-card">
+              <div class="m-card-row">
+                <div class="m-card-title">
+                  <el-tag size="small">{{ row.flow_type }}</el-tag>
+                  <span style="margin-left: 6px;">{{ row.date }}</span>
+                </div>
+                <div class="m-card-val-main">{{ formatMoney(row.amount, 2, true) }}</div>
+              </div>
+              <div v-if="row.remark" class="m-card-sub" style="margin-top: 4px;">{{ row.remark }}</div>
+            </div>
+          </template>
+          </DataTable>
         </template>
         <template v-if="unmatchedPortfolioRows.length">
           <div class="ops-hint" style="margin-bottom: 8px">未配对组合流水 {{ cashAudit.unmatched_portfolio_count || unmatchedPortfolioRows.length }} 笔</div>
+          <DataTable :rows="unmatchedPortfolioRows" row-key="id" label="未配对组合流水">
           <el-table :data="unmatchedPortfolioRows" stripe size="small" style="width: 100%" aria-label="未配对组合流水">
             <el-table-column prop="date" label="日期" width="110" />
             <el-table-column prop="flow_type" label="类型" width="100" />
@@ -319,6 +385,19 @@
             </el-table-column>
             <el-table-column prop="remark" label="备注" show-overflow-tooltip />
           </el-table>
+          <template #card="{ row }">
+            <div class="m-card">
+              <div class="m-card-row">
+                <div class="m-card-title">
+                  <el-tag size="small">{{ row.flow_type }}</el-tag>
+                  <span style="margin-left: 6px;">{{ row.date }}</span>
+                </div>
+                <div class="m-card-val-main">{{ formatMoney(row.amount, 2, true) }}</div>
+              </div>
+              <div v-if="row.remark" class="m-card-sub" style="margin-top: 4px;">{{ row.remark }}</div>
+            </div>
+          </template>
+          </DataTable>
         </template>
       </template>
     </el-card>
@@ -327,6 +406,7 @@
 
 <script setup>
 import PageShell from '../components/PageShell.vue';
+import DataTable from '../components/DataTable.vue';
 import { computed, ref } from 'vue';
 import { ElMessageBox } from 'element-plus';
 import { useAppCtx } from '../composables/useAppCtx.js';

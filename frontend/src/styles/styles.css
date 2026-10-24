@@ -1509,7 +1509,8 @@ html.dark .perf-contrib-table.el-table th.el-table__cell {
   background: var(--app-bg1);
   border-radius: 6px;
 }
-.m-card-metric-item {
+.m-card-metric-item,
+.m-card-metric {
   min-width: 0;
 }
 .m-card-metric-label {

@@ -83,8 +83,14 @@
           :closable="false"
           style="margin-bottom: 12px"
         />
-        <el-table
+        <DataTable
           v-else
+          :rows="brokerResult.diffs"
+          row-key="code"
+          empty-text="无差异"
+          label="券商与系统持仓差异明细"
+        >
+        <el-table
           :data="brokerResult.diffs"
           stripe
           size="small"
@@ -123,9 +129,47 @@
             <template #default="s">{{ (s.row.reasons || []).join('；') }}</template>
           </el-table-column>
         </el-table>
+        <template #card="{ row }">
+          <div class="m-card">
+            <div class="m-card-row">
+              <div class="m-card-title">
+                <span>{{ row.name || row.code }}</span>
+                <span class="m-card-sub" style="margin-left: 6px;">{{ row.code }}</span>
+              </div>
+              <el-tag :type="statusType(row.status)" size="small">{{ statusLabel(row.status) }}</el-tag>
+            </div>
+            <div class="m-card-metrics" style="margin-top: 6px;">
+              <div class="m-card-metric">
+                <span class="m-card-metric-label">券商/系统数量</span>
+                <span class="m-card-metric-val">{{ row.broker_quantity ?? '—' }} / {{ row.app_quantity ?? '—' }}</span>
+              </div>
+              <div class="m-card-metric">
+                <span class="m-card-metric-label">数量差</span>
+                <span class="m-card-metric-val" :class="Number(row.quantity_diff || 0) === 0 ? 'num-muted' : 'num-warn'">
+                  {{ row.quantity_diff }}
+                </span>
+              </div>
+            </div>
+            <div class="m-card-metrics" style="margin-top: 4px;">
+              <div class="m-card-metric">
+                <span class="m-card-metric-label">券商成本</span>
+                <span class="m-card-metric-val">{{ row.broker_avg_cost ?? '—' }}</span>
+              </div>
+              <div class="m-card-metric">
+                <span class="m-card-metric-label">系统成本</span>
+                <span class="m-card-metric-val">{{ row.app_avg_cost ?? '—' }}</span>
+              </div>
+            </div>
+            <div v-if="row.reasons && row.reasons.length" class="m-card-sub" style="margin-top: 6px;">
+              {{ row.reasons.join('；') }}
+            </div>
+          </div>
+        </template>
+        </DataTable>
 
         <div v-if="brokerResult.suggestions?.length" class="broker-suggest-block">
           <div class="broker-suggest-title">校正建议（以券商为准；仅系统有的会建议数量改为 0）</div>
+          <DataTable :rows="brokerResult.suggestions" row-key="code" label="券商对账校正建议明细">
           <el-table
             :data="brokerResult.suggestions"
             stripe
@@ -149,6 +193,7 @@
             </el-table-column>
             <el-table-column prop="remark" label="备注" min-width="120" show-overflow-tooltip />
           </el-table>
+          </DataTable>
         </div>
       </template>
     </el-card>
@@ -163,6 +208,7 @@
           <el-button size="small" @click="fetchBrokerHistory">刷新</el-button>
         </div>
       </template>
+      <DataTable :rows="brokerHistory" row-key="id" empty-text="还没有对账记录" label="券商对账历史记录">
       <el-table :data="brokerHistory" stripe size="small" empty-text="还没有对账记录" style="width: 100%" aria-label="券商对账历史记录">
         <el-table-column label="时间" width="170" fixed="left">
           <template #default="s">{{ s.row.created_at || '—' }}</template>
@@ -188,6 +234,37 @@
         <el-table-column prop="summary_text" label="摘要" min-width="220" show-overflow-tooltip />
         <el-table-column prop="codes" label="代码" min-width="140" show-overflow-tooltip />
       </el-table>
+      <template #card="{ row }">
+        <div class="m-card">
+          <div class="m-card-row">
+            <div class="m-card-title">
+              <el-tag size="small" :type="row.kind === 'apply' ? 'warning' : 'info'">
+                {{ row.kind === 'apply' ? '应用' : '预览' }}
+              </el-tag>
+              <span style="margin-left: 6px; font-size: 13px;">{{ row.created_at || '—' }}</span>
+            </div>
+            <div class="m-card-meta">
+              <span v-if="row.as_of_date">锚点: {{ row.as_of_date }}</span>
+            </div>
+          </div>
+          <div class="m-card-metrics" style="margin-top: 6px;">
+            <div class="m-card-metric">
+              <span class="m-card-metric-label">差异/写入</span>
+              <span class="m-card-metric-val">{{ row.diff_count ?? 0 }} / {{ row.applied_count ?? 0 }}</span>
+            </div>
+            <div class="m-card-metric">
+              <span class="m-card-metric-label">现金</span>
+              <span class="m-card-metric-val">{{ row.cash_status || '—' }}</span>
+            </div>
+          </div>
+          <div v-if="row.summary_text" class="m-card-sub" style="margin-top: 6px;">{{ row.summary_text }}</div>
+          <div v-if="row.filename || row.codes" class="m-card-meta" style="margin-top: 4px;">
+            <span v-if="row.filename">文件: {{ row.filename }}</span>
+            <span v-if="row.codes">代码: {{ row.codes }}</span>
+          </div>
+        </div>
+      </template>
+      </DataTable>
     </el-card>
   </PageShell>
 </template>
@@ -195,6 +272,7 @@
 <script setup>
 import { onMounted, ref } from 'vue';
 import PageShell from '../components/PageShell.vue';
+import DataTable from '../components/DataTable.vue';
 import { useAppCtx } from '../composables/useAppCtx.js';
 
 const {
