@@ -6,6 +6,62 @@
 ---
 
 
+## [1.7.1] — 2026-10-24 — Service Worker 导航策略修正与桌面端脱钩
+
+### 修复
+
+- **装了 PWA 的浏览器拿不到新版本，`/` 和 `/index.html` 被缓存优先接走。** 1.7.0 的 `sw.js` 把
+  `/`、`/index.html` 都放进了 `STATIC_ASSETS`，而静态资源那段分支写在导航分支前面、判定先命中——
+  于是所有导航请求都走了「缓存优先」，后面那段「网络优先」的 `navigate` 处理**永远不可达**。
+  结果正好是它想避免的事：nginx 给 `index.html` 配的 `no-store` 被 SW 的缓存架空，发版后用户要刷
+  两次才看到新壳。
+
+  现在 `/` 与 `/index.html` 退出 `STATIC_ASSETS`（这张名单只留不可变图标与 manifest），`navigate`
+  判定提到静态分支之前，一律先 `fetch`，仅在离线时回落预缓存 HTML；缓存里连预存页都没有时返回 503
+  文案页，不再 `respondWith(undefined)` 抛网络错误。`/api/*` 与所有非 GET 请求照旧直连网络。
+
+  在 vm 沙箱里跑真实的 `sw.js` 实测：online 时 `navigate /`、`/index.html`、`/holdings` 三条全部落到
+  `network`，`/api/holdings` 与 POST 是 `pass-through`；切到 offline，导航回落 `cache`，
+  没进名单也没缓存过的 `/assets/*` 是 `undefined`（由上面那条 503 兜底接住）。
+
+- **桌面壳里也注册了 Service Worker。** `main.js` 无条件 `register('/sw.js')`，Tauri 壳内嵌的
+  `http://tauri.localhost` 同样算安全上下文，于是 `.app` 跑起来会在 WebKit 数据目录里生成
+  `ServiceWorkers/*.sqlite3` 以及 `Scripts/V1/…`、`Records` 共 9 个文件、约 123 KB。桌面端页面是随包
+  分发的本地产物，不存在「发版要刷缓存」的问题，SW 在这里只有坏处。
+
+  现在 Tauri 壳（`window.__TAURI_INTERNALS__`）与 `127.0.0.1` / `localhost` 直接跳过注册，并对已存在
+  的注册调 `unregister()`、清掉本应用缓存。注销成功后静默 `location.reload()` 一次才算彻底脱钩——
+  旧 controller 会继续接管当轮页面，不 reload 的话这次访问仍由旧 SW 服务；用 `sessionStorage` 打标记
+  防循环。实测重打 `.app`、把 `~/Library/WebKit/com.investtracker.desktop` 整体移走后启动，
+  `ServiceWorkers` 目录不再出现，`CacheStorage` 只剩一个 `salt` 占位。
+
+- **`manifest.webmanifest` 里的 `maskable` 会裁掉图标内容。** 图标本身没按安全区（内缩约 10%）排版，
+  声明 `purpose: maskable` 后 Android 按圆形/水滴形裁切会把边缘文字切掉。去掉声明，按 `any` 呈现。
+
+### 变更
+
+- `CACHE_NAME` 随版本升到 `invest-tracker-v1.7.1`。`activate` 里那句 `key !== CACHE_NAME` 这才真正
+  有东西可删——1.7.0 期间留下的旧缓存（含已被替换掉的哈希 chunk）会在升级后自动清空。
+
+- `frontend/nginx.conf` 补齐 PWA 需要的 MIME 与缓存头：`types{}` 增加
+  `application/manifest+json webmanifest`，新增 `location = /sw.js` 配 `Cache-Control "no-cache"`——
+  `sw.js` 要是走强缓存，浏览器连「有新版本」都发现不了。起真实 nginx 容器实测：
+  `manifest.webmanifest` 返回 `application/manifest+json`、`sw.js` 是 `no-cache`、`index.html` 是
+  `no-store`、`/assets/*.js` 是 `max-age=31536000, immutable`，各尺寸图标 `image/png` 全部正确。
+
+- 文档补上 PWA 安装的前提：浏览器要求安全上下文，**HTTPS 或 localhost 才能装**，局域网 HTTP 直连
+  只当普通网页打开。
+
+### 测试
+
+- `frontend/tests/pwa-static.test.js` 新增三档断言：静态名单里不得出现 `/` 与 `/index.html`；
+  `navigate` 判定必须排在静态缓存分支之前（比对前先剥掉注释，免得被注释干扰）；`CACHE_NAME` 与
+  `backend/version.py` 的 `APP_VERSION` 必须逐字对齐，漏改版本会直接失败。
+- 三次变异验证，确认这几条测试真拦得住：把 `/index.html` 放回 `STATIC_ASSETS`、把 `CACHE_NAME` 改成
+  `v1.6.9`、真实交换导航与静态两条分支的顺序——三者都失败。顺带发现 `indexOf` 这类断言能被「插一行
+  注释」骗过，但真把分支交换还是会拦住，属可接受的边界。
+- vitest 30 个文件 243 项、pytest 602 项通过；`npm audit --omit=dev` 0 漏洞。
+
 ## [1.7.0] — 2026-10-24 — 移动端响应式卡片、PWA 主屏幕原生化与桌面外壳
 
 ### 新增

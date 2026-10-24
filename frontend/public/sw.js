@@ -1,5 +1,5 @@
 // Invest Tracker Service Worker
-const CACHE_NAME = 'invest-tracker-v1.7.0';
+const CACHE_NAME = 'invest-tracker-v1.7.1';
 const STATIC_ASSETS = [
   '/manifest.webmanifest',
   '/favicon.ico',
